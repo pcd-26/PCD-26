@@ -28,10 +28,10 @@ course.
 
 ## Assignment Index
 
-- [Assignment 1](./assignment_1/README.md)
-- [Assignment 2](./assignment_2/README.md)
-- [Assignment 3](./assignment_3/README.md)
-- [Assignment 4](./assignment_4/README.md)
+- [Assignment 1](./assignment-1/README.md)
+- [Assignment 2](./assignment-2/README.md)
+- [Assignment 3](./assignment-3/README.md)
+- [Assignment 4](./assignment-4/README.md)
 
 ### Oral Discussion
 
