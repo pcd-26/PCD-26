@@ -1,0 +1,33 @@
+package pcd.poool.model.physics.config;
+
+import java.util.ArrayList;
+import java.util.List;
+import pcd.poool.model.common.math.P2d;
+import pcd.poool.model.common.math.V2d;
+import pcd.poool.model.physics.Ball;
+import pcd.poool.model.physics.BoardConf;
+import pcd.poool.model.physics.Boundary;
+
+public class MinimalBoardConf implements BoardConf {
+
+	@Override
+	public Ball getPlayerBall() {
+    	return new Ball(new P2d(0, 0), 0.06, 1, new V2d(0,0.5)); 
+	}
+
+	@Override
+	public List<Ball> getSmallBalls() {		
+        var balls = new ArrayList<Ball>();
+    	var b1 = new Ball(new P2d(0, 0.5), 0.05, 0.75, new V2d(0,0));
+    	var b2 = new Ball(new P2d(0.05, 0.55), 0.025, 0.25, new V2d(0,0));
+    	balls.add(b1);
+    	balls.add(b2);
+    	return balls;
+	}
+
+	@Override
+	public Boundary getBoardBoundary() {
+        return new Boundary(-1.5,-1.0,1.5,1.0);
+	}
+
+}
