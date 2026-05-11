@@ -10,6 +10,7 @@ The assignment is about concurrent programming based on message passing, synchro
 ### Exercise #1 - *Smart Home Alarm System* 
 
 - [Description](https://github.com/nicolasfara/seminar-pcd-actor-pekko-code/blob/master/assignment_3_smart_home_alarm.md) by N. Farabegoli
+- [Description local file](assignment_3_smart_home_alarm.md)
 - To be implemented using Apache Pekko, used as reference framework in lab 
   - alternatively, you may use any other actor-based framework or platform: in that case, ask teachers before proceeding
 
