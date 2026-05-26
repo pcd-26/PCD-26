@@ -1,5 +1,6 @@
 {
     "conventionalCommits.scopes": [
-        "assignment-1"
+        "assignment-1",
+        "assignment-4"
     ]
 }
