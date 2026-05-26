@@ -16,6 +16,9 @@ public record V2d(double x, double y)  {
 
     public V2d getNormalized(){
         double module=(double)Math.sqrt(x*x+y*y);
+        if (module == 0) {
+            return new V2d(0, 0);
+        }
         return new V2d(x/module,y/module);
     }
 
