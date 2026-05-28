@@ -43,6 +43,7 @@ public class ActiveController<T> extends Thread {
             cmdBuffer.put(cmd);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            log("interrupted while enqueueing command; command was not queued");
         }
     }
 
