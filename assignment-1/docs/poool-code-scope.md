@@ -15,5 +15,5 @@
 - sketch02 counter demo artifacts
 - sketch bootstrap/demo launchers
 
-They remain in their original `pcd.sketch01` / `pcd.sketch02` locations.
+They remain under `assignment-1/reference/sketch01` and `assignment-1/reference/sketch02`, outside the Maven source tree.
 

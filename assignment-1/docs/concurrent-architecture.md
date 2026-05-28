@@ -13,7 +13,7 @@ Final-delivery code under `pcd.poool` reuses mainly:
 - from `pcd.sketch01`: physics/domain + board view artifacts (`Ball`, `Board`, `BoardConf`, board configs, `Boundary`, `P2d`, `V2d`, `ViewModel`, `View`, `ViewFrame`, `RenderSynch`)
 - from `pcd.sketch02`: concurrency/controller pattern artifacts (`Cmd`, `ActiveController`, `BoundedBuffer`, `BoundedBufferImpl`)
 
-Non-final demo artifacts remain in their original locations (`pcd.sketch01` / `pcd.sketch02`) and are not part of the `pcd.poool` final-delivery scope.
+Non-final demo artifacts remain under `assignment-1/reference/sketch01` and `assignment-1/reference/sketch02`; they are not part of the Maven build or the `pcd.poool` final-delivery scope.
 
 Conceptual baseline from `sketch-01`:
 - main loop that updates board state and renders frames
