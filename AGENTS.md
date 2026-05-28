@@ -33,6 +33,21 @@ Run the Maven test suite before considering a code change complete:
 mvn -f assignment-1/pom.xml test
 ```
 
+## Documentation Policy
+
+Keep documentation aligned with the code.
+
+- Update README, architecture notes, TODO lists, or scope documents whenever a
+  code change affects behavior, structure, commands, execution modes, or
+  delivery scope.
+- Add or update Javadocs for public APIs when the contract is not obvious from
+  the signature.
+- Add code comments only where they clarify non-trivial decisions, algorithms,
+  synchronization assumptions, numerical choices, or domain rules.
+- Avoid comments that merely repeat what the code says.
+- When a change does not require documentation updates, mention why in the final
+  response if the reason is not obvious.
+
 ## Assignment 1 Structure
 
 Keep final-delivery code under:
@@ -61,3 +76,21 @@ adapted, tested, and documented as part of the delivery scope.
 - When adding concurrency, document ownership of shared state and the intended
   synchronization strategy.
 
+## Engineering Quality
+
+Maintain high software engineering quality throughout the project.
+
+- Avoid magic strings and unexplained magic numbers. Use named constants,
+  enums, value objects, or configuration objects when a literal carries domain
+  meaning.
+- Apply SOLID principles where they improve clarity and maintainability.
+- Follow the Single Responsibility Principle: each class/module should have one
+  clear reason to change.
+- Follow DRY: remove meaningful duplication, but do not introduce abstractions
+  before they make the code simpler.
+- Prefer explicit domain names over vague names such as `data`, `manager`, or
+  `handler` when a more precise concept exists.
+- Keep public APIs small, intentional, and documented when their use is not
+  obvious.
+- Preserve deterministic behavior in physics and tests unless randomness is
+  explicitly part of the requirement and controlled by a seed.

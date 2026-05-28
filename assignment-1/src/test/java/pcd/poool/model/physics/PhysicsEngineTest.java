@@ -2,6 +2,7 @@ package pcd.poool.model.physics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ class PhysicsEngineTest {
         board.updateState(16);
 
         assertTrue(board.isPlayerBallPocketed());
+        assertNull(board.getPlayerBall());
         assertEquals(1, board.getPocketedSmallBalls());
         assertTrue(board.getBalls().isEmpty());
     }

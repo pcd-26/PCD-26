@@ -1,6 +1,7 @@
 package pcd.poool.benchmark;
 
 import pcd.poool.model.physics.Board;
+import pcd.poool.model.physics.PhysicsDefaults;
 import pcd.poool.model.physics.config.MassiveBoardConf;
 
 /**
@@ -9,7 +10,8 @@ import pcd.poool.model.physics.config.MassiveBoardConf;
 public class PhysicsBenchmark {
 
     private static final int DEFAULT_STEPS = 600;
-    private static final long STEP_MILLIS = 16;
+    private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
+    private static final String OUTPUT_FORMAT = "steps=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f%n";
 
     public static void main(String[] args) {
         int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
@@ -18,13 +20,13 @@ public class PhysicsBenchmark {
 
         long start = System.nanoTime();
         for (int i = 0; i < steps; i++) {
-            board.updateState(STEP_MILLIS);
+            board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
         }
         long elapsed = System.nanoTime() - start;
 
-        double elapsedMillis = elapsed / 1_000_000.0;
+        double elapsedMillis = elapsed / NANOS_PER_MILLISECOND;
         double avgStepMillis = elapsedMillis / steps;
-        System.out.printf("steps=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f%n",
+        System.out.printf(OUTPUT_FORMAT,
                 steps,
                 board.getBalls().size(),
                 elapsedMillis,

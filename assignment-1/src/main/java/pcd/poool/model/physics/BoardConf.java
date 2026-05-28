@@ -17,7 +17,7 @@ public interface BoardConf {
 	default List<Hole> getHoles() {
 		var bounds = getBoardBoundary();
 		return List.of(
-				new Hole(new P2d(bounds.x0(), bounds.y1()), 0.12),
-				new Hole(new P2d(bounds.x1(), bounds.y1()), 0.12));
+				new Hole(new P2d(bounds.x0(), bounds.y1()), PhysicsDefaults.DEFAULT_HOLE_RADIUS),
+				new Hole(new P2d(bounds.x1(), bounds.y1()), PhysicsDefaults.DEFAULT_HOLE_RADIUS));
 	}
 }
