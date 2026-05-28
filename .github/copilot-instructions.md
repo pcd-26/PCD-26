@@ -1,0 +1,21 @@
+# Copilot Code Review Instructions
+
+- Reply in Italian during pull request reviews.
+- At the beginning of the review, use a single colored emoji to indicate the overall effectiveness of the pull request with respect to the declared scope, the assignment requirements, and the engineering quality of the changes: green if the pull request is solid, yellow if it is acceptable but needs improvements, red if it has major issues.
+- Verify that code, names, technical messages, and code comments are written in English.
+- Identify which assignment is affected by the pull request and compare the changes against the corresponding `README.md`.
+- Verify that the pull request is consistent with its declared scope: it does not need to complete the whole assignment, but it must not contradict the final requirements.
+- Report any change that makes it harder to satisfy the assignment requirements or the university project delivery expectations.
+- Comment on code quality: clarity, naming, modularity, duplication, testability, error handling, and simplicity.
+- Comment on the engineering quality of the choices: architectural consistency, separation of responsibilities, reasonable extensibility, and trade-offs.
+- Evaluate whether the programming paradigm required by the assignment is respected in the modified code.
+- Report improper uses of the required paradigm, such as shared memory where it is forbidden, busy waiting, fragile synchronization, overly coupled actors/processes, or unmanaged threads.
+- Propose concrete changes when you find a problem, preferably with suggestions that can be applied directly to the pull request.
+- When appropriate, suggest code changes, refactorings, or review suggestions as you normally would in a pull request review.
+- Clearly distinguish between blocking issues, recommended improvements, and minor observations.
+- Verify that the pull request does not break the expected delivery structure: `src`, `doc`, and `report.pdf` when applicable.
+- Check that code, build, and dependencies remain reproducible from a clean repository checkout.
+- Report local paths, temporary files, unnecessary binaries, credentials, or personal configuration committed to the repository.
+- If the pull request changes parts that are already documented in the report, verify that the documentation is updated or point out that it will need to be updated.
+- If the pull request introduces or changes relevant behavior, check that tests, demos, examples, or a clear justification are provided.
+- Avoid purely cosmetic comments; prioritize correctness, requirements, engineering quality, concurrency/distribution aspects, reproducibility, and university project delivery.
