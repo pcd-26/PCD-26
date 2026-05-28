@@ -1,6 +1,7 @@
 package pcd.poool.view.board;
 
 import java.util.ArrayList;
+import java.util.List;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.physics.Board;
 
@@ -24,10 +25,10 @@ public class ViewModel {
 		}
 		this.framePerSec = framePerSec;
 		var p = board.getPlayerBall();
-		player = new BallViewInfo(p.getPos(), p.getRadius());
+		player = p == null ? null : new BallViewInfo(p.getPos(), p.getRadius());
 	}
 	
-	public synchronized ArrayList<BallViewInfo> getBalls(){
+	public synchronized List<BallViewInfo> getBalls(){
 		var copy = new ArrayList<BallViewInfo>();
 		copy.addAll(balls);
 		return copy;

@@ -5,8 +5,6 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import javax.swing.*;
 import pcd.poool.view.RenderSynch;
 
@@ -24,14 +22,7 @@ public class ViewFrame extends JFrame {
         setResizable(false);
         panel = new VisualiserPanel(w,h);
         getContentPane().add(panel);
-        addWindowListener(new WindowAdapter(){
-			public void windowClosing(WindowEvent ev){
-				System.exit(-1);
-			}
-			public void windowClosed(WindowEvent ev){
-				System.exit(-1);
-			}
-		});
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     }
      
     public void render(){
@@ -67,22 +58,25 @@ public class ViewFrame extends JFrame {
 
         @Override
         protected void paintComponent(Graphics g){
-            super.paintComponent(g);
-    		Graphics2D g2 = (Graphics2D) g;
-    		
-    		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-    		          RenderingHints.VALUE_ANTIALIAS_ON);
-    		g2.setRenderingHint(RenderingHints.KEY_RENDERING,
-    		          RenderingHints.VALUE_RENDER_QUALITY);
-            
-    		g2.setColor(Color.LIGHT_GRAY);
-		    g2.setStroke(new BasicStroke(1));
-    		g2.drawLine(ox,0,ox,oy*2);
-    		g2.drawLine(0,oy,ox*2,oy);
-    		g2.setColor(Color.BLACK);
-    		
-    		    g2.setStroke(new BasicStroke(1));
-	    		for (var b: model.getBalls()) {
+        	long frame = frameToNotify;
+        	try {
+	            super.paintComponent(g);
+	    		Graphics2D g2 = (Graphics2D) g;
+	    		var balls = model.getBalls();
+	    		
+	    		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+	    		          RenderingHints.VALUE_ANTIALIAS_ON);
+	    		g2.setRenderingHint(RenderingHints.KEY_RENDERING,
+	    		          RenderingHints.VALUE_RENDER_QUALITY);
+	            
+	    		g2.setColor(Color.LIGHT_GRAY);
+			    g2.setStroke(new BasicStroke(1));
+	    		g2.drawLine(ox,0,ox,oy*2);
+	    		g2.drawLine(0,oy,ox*2,oy);
+	    		g2.setColor(Color.BLACK);
+	    		
+			    g2.setStroke(new BasicStroke(1));
+	    		for (var b: balls) {
 	    			var p = b.pos();
 	            	int x0 = (int)(ox + p.x()*delta);
 	                int y0 = (int)(oy - p.y()*delta);
@@ -90,8 +84,8 @@ public class ViewFrame extends JFrame {
 	                int radiusY = (int)(b.radius()*delta);
 	                g2.drawOval(x0 - radiusX,y0 - radiusY,radiusX*2,radiusY*2);
 	    		}
-	
-    		    g2.setStroke(new BasicStroke(3));
+		
+			    g2.setStroke(new BasicStroke(3));
 	    		var pb = model.getPlayerBall();
 	    		if (pb != null) {
 					var p1 = pb.pos();
@@ -101,13 +95,13 @@ public class ViewFrame extends JFrame {
 	                int radiusY = (int)(pb.radius()*delta);
 	                g2.drawOval(x0 - radiusX,y0 - radiusY,radiusX*2,radiusY*2);
 	    		}
-    		    
-    		    g2.setStroke(new BasicStroke(1));
-	    		g2.drawString("Num small balls: " + model.getBalls().size(), 20, 40);
+			    
+			    g2.setStroke(new BasicStroke(1));
+	    		g2.drawString("Num small balls: " + balls.size(), 20, 40);
 	    		g2.drawString("Frame per sec: " + model.getFramePerSec(), 20, 60);
-
-	    		sync.notifyFrameRendered(frameToNotify);
-    		
+        	} finally {
+	    		sync.notifyFrameRendered(frame);
+        	}
         }
         
     }
