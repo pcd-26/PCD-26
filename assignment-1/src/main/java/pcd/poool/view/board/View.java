@@ -1,5 +1,6 @@
 package pcd.poool.view.board;
 
+import javax.swing.SwingUtilities;
 
 public class View {
 
@@ -8,7 +9,7 @@ public class View {
 	
 	public View(ViewModel model, int w, int h) {
 		frame = new ViewFrame(model, w, h);	
-		frame.setVisible(true);
+		SwingUtilities.invokeLater(() -> frame.setVisible(true));
 		this.viewModel = model;
 	}
 		
