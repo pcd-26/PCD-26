@@ -1,0 +1,64 @@
+name: Assignment 1 Delivery Package
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: Build Assignment-01 zip
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build and test assignment-1
+        working-directory: assignment-1
+        run: mvn -B clean verify
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base zip unzip
+
+      - name: Build report PDF
+        working-directory: assignment-1/report
+        run: pdflatex -interaction=nonstopmode -halt-on-error -jobname=report main.tex
+
+      - name: Create delivery package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf package Assignment-01.zip
+          mkdir -p package/Assignment-01/src package/Assignment-01/doc
+
+          cp -R assignment-1/src/main package/Assignment-01/src/main
+          cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
+
+          (cd package && zip -r ../Assignment-01.zip Assignment-01)
+
+      - name: Check package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unzip -l Assignment-01.zip
+          test -f package/Assignment-01/doc/report.pdf
+          test -d package/Assignment-01/src/main
+
+      - name: Upload delivery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Assignment-01
+          path: Assignment-01.zip
