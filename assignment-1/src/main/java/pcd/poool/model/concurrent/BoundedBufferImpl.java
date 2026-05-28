@@ -13,6 +13,9 @@ public class BoundedBufferImpl<Item> implements BoundedBuffer<Item> {
 	private int maxSize;
 
 	public BoundedBufferImpl(int size) {
+		if (size <= 0) {
+			throw new IllegalArgumentException("size must be > 0");
+		}
 		buffer = new LinkedList<Item>();
 		maxSize = size;
 	}
