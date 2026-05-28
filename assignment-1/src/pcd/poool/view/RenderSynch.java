@@ -19,8 +19,11 @@ public class RenderSynch {
 		return f;
 	}
 
-	public synchronized void notifyFrameRendered() {
-		lastFrameRendered++;
+	public synchronized void notifyFrameRendered(long frame) {
+		if (frame <= lastFrameRendered) {
+			return;
+		}
+		lastFrameRendered = frame;
 		notifyAll();
 	}
 	
