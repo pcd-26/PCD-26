@@ -1,0 +1,47 @@
+name: Assignment 1 Maven CI
+
+on:
+  pull_request:
+    paths:
+      - "assignment-1/**"
+      - ".github/workflows/assignment-1-maven.yml"
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - "assignment-1/**"
+      - ".github/workflows/assignment-1-maven.yml"
+  workflow_dispatch:
+    inputs:
+      test_selector:
+        description: "Optional Maven -Dtest selector, for example BoardTest or BoardTest#initializesFromConfig"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    name: Build and test assignment-1
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build and test
+        working-directory: assignment-1
+        env:
+          TEST_SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.test_selector || '' }}
+        run: |
+          if [ -n "$TEST_SELECTOR" ]; then
+            mvn -B clean test -Dtest="$TEST_SELECTOR"
+          else
+            mvn -B clean verify
+          fi
