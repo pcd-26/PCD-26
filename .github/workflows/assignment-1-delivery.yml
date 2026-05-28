@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  package:
-    name: Build Assignment-01 zip
+  test:
+    name: Test assignment-1
     runs-on: ubuntu-latest
 
     steps:
@@ -28,6 +28,15 @@ jobs:
       - name: Build and test assignment-1
         working-directory: assignment-1
         run: mvn -B clean verify
+
+  package:
+    name: Build Assignment-01 zip
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install packaging tools
         run: |
@@ -85,15 +94,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f "$RELEASE_TAG" "$GITHUB_SHA"
-          git push -f origin "refs/tags/$RELEASE_TAG"
+          release_stamp="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" Assignment-01.zip --clobber
-          else
-            gh release create "$RELEASE_TAG" Assignment-01.zip \
-              --title "Assignment Delivery Packages" \
-              --notes "Automated delivery packages generated from main after the corresponding assignment tests passed."
+            gh release delete "$RELEASE_TAG" --cleanup-tag --yes
           fi
+
+          gh release create "$RELEASE_TAG" Assignment-01.zip \
+            --target "$GITHUB_SHA" \
+            --title "Latest Assignment Delivery Packages" \
+            --notes "Regenerated from main on ${release_stamp} after the corresponding assignment tests passed."
