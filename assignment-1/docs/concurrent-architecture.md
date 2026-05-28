@@ -34,10 +34,10 @@ Conceptual baseline from `sketch-02`:
 - manages state transitions (`WAITING_INPUT`, `SIMULATING`, `TURN_RESOLUTION`, `GAME_OVER`)
 - coordinates input, bot, physics, and GUI
 
-2. `PhysicsEngine` (active)
-- runs physics at fixed ticks
-- handles collisions
-- publishes consistent physics snapshots
+2. `PhysicsEngine` (passive service, executed by a runner/loop)
+- computes deterministic physics steps when called
+- handles movement, friction, wall bounces, holes, and collisions
+- does not own a thread by itself
 
 3. `InputHandler` (active/event-driven)
 - acquires input and translates it into commands
@@ -129,6 +129,46 @@ logic, such as collision resolution inside `Ball` or physics integration inside
 `Board`, can remain regular domain methods. Commands are mainly useful for
 external asynchronous requests that may come from different threads, such as
 user input, bot actions, reset, pause, resume, or turn-management events.
+
+### 3.4 Physics execution strategy
+`PhysicsEngine` is intentionally not a `Thread`. It is a synchronous,
+deterministic service:
+
+```text
+physicsEngine.step(board, dt)
+```
+
+This keeps the physics computation reusable across all required assignment
+variants. The execution strategy decides when and where the engine is called:
+
+- sequential version: the main/game loop calls `PhysicsEngine.step(...)`
+- platform-thread version: a dedicated physics loop thread may call it at fixed
+  ticks
+- task-based version: an `ExecutorService` may run physics steps or selected
+  physics phases as tasks
+
+`Cmd` is best suited for discrete asynchronous requests:
+
+- kick
+- reset
+- pause/resume
+- bot shot
+- turn-management event
+
+Physics stepping is different: it is a continuous periodic process. It could be
+wrapped in a command such as `PhysicsStepCmd`, but that should be treated as an
+execution choice, not as a domain requirement. The preferred separation is:
+
+```text
+Cmd = external/discrete request
+PhysicsEngine = deterministic step computation
+Runner/Loop = scheduling and threading policy
+```
+
+The important rule is ownership. The board/physics state must have a single
+writer at any given time: either the sequential loop, a physics thread, or a
+serialized task/controller. The system should avoid allowing arbitrary threads
+to call `PhysicsEngine.step(...)` on the same board concurrently.
 
 ## 4. Synchronization and shared state
 

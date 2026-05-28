@@ -6,12 +6,15 @@ package pcd.poool.view;
  */
 public class RenderSynch {
 
+	private static final long FIRST_FRAME = 0;
+	private static final long NO_FRAME_RENDERED = -1;
+
 	private long nextFrameToRender;
 	private long lastFrameRendered;
 	
 	public RenderSynch() {
-		nextFrameToRender = 0;
-		lastFrameRendered = -1;
+		nextFrameToRender = FIRST_FRAME;
+		lastFrameRendered = NO_FRAME_RENDERED;
 	}
 	public synchronized long nextFrameToRender() {
 		long f = nextFrameToRender;

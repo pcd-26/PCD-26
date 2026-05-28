@@ -12,9 +12,6 @@ public class Ball {
     private V2d vel;
     private final double radius;
     private final double mass;
-    
-    private static final double FRICTION_FACTOR = 0.25; 	/* 0 minimum */
-    private static final double RESTITUTION_FACTOR = 1; 
 
     public Ball(P2d pos, double radius, double mass, V2d vel){
        this.pos = pos;
@@ -28,16 +25,9 @@ public class Ball {
     }
 
     public void updateState(long dt, Boundary bounds){
-        double speed = vel.abs();
-        double dt_scaled = dt*0.001;
-    	if (speed > 0.001) {
-            double dec    = FRICTION_FACTOR * dt_scaled;
-            double factor = Math.max(0, speed - dec) / speed;
-            vel = vel.mul(factor);
-        } else {
-        	vel = new V2d(0,0);
-        }
-        pos = pos.sum(vel.mul(dt_scaled));
+        double dt_scaled = dt * PhysicsDefaults.SECONDS_PER_MILLISECOND;
+        applyFriction(dt_scaled);
+        move(dt_scaled);
      	applyBoundaryConstraints(bounds);
     }
     
@@ -45,12 +35,6 @@ public class Ball {
     	this.vel = vel;
     }
 
-    /**
-     * 
-     * Keep the ball inside the boundaries, updating the velocity in the case of bounces
-     * 
-     * @param ctx
-     */
     private void applyBoundaryConstraints(Boundary bounds){
         if (pos.x() + radius > bounds.x1()){
             pos = new P2d(bounds.x1() - radius, pos.y());
@@ -68,83 +52,73 @@ public class Ball {
     }
 
     /**
-     * 
-     * Resolving collision between 2 balls, updating their position and velocity
-     * 
-     * @param a
-     * @param b
+     * Resolves one elastic collision and removes geometric overlap.
+     *
+     * <p>The method is deterministic for coincident centers: it chooses the
+     * positive X axis as the separation normal, avoiding undefined normals.
      */
     public static void resolveCollision(Ball a, Ball b) {
-        
-    	/* check if there is a collision */
-    	
-    	/* compute dv = b.pos - a.pos vector */
-
     	double dx   = b.pos.x() - a.pos.x();
         double dy   = b.pos.y() - a.pos.y();
         double dist = Math.hypot(dx, dy);
         double minD = a.radius + b.radius;
-        
-        /* 
-         * There is a collision if the distance between the two balls is less than the sum of the radii 
-         * 
-         */
+
         if (dist < minD)  {
-            if (dist <= 1e-9) {
-                dx = 1e-9;
+            if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
+                dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
                 dy = 0.0;
-                dist = 1e-9;
+                dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
             }
 
-	        /* 
-	         * Collision case - what to do:
-	         * 
-	         * 1) solve overlaps, moving balls 
-	         * 2) update velocities
-	         * 
-	         */
-	        
-        	/* dvn = V2d(nx,ny) = dv unit vector */
-    
         	double nx = dx / dist;
 	        double ny = dy / dist;
-	
-	        /* 
-	         * 
-	         * Update positions to solve overlaps, moving balls along dvn
-	         * - the displacements is proportional to the mass
-	         * 
-	         */
-	        double overlap = minD - dist;
-	        double totalM  = a.mass + b.mass;
-	
-	        double a_factor = overlap * (b.mass / totalM);
-	        double a_deltax = nx * a_factor; 
-	        double a_deltay = ny * a_factor; 
-	        
-	        a.pos = new P2d(a.getPos().x() - a_deltax, a.getPos().y() - a_deltay);
-	        
-	        double b_factor = overlap * (a.mass / totalM);
-	        double b_deltax = nx * b_factor; 
-	        double b_deltay = ny * b_factor; 
-	
-	        b.pos = new P2d(b.getPos().x() + b_deltax, b.getPos().y() + b_deltay);
-	
-	        /* Update velocities  */
-	        
-	        /* relative speed along the normal vector*/
-	
-	        double dvx = b.vel.x() - a.vel.x();
-	        double dvy = b.vel.y() - a.vel.y(); 
-	        double dvn = dvx * nx + dvy * ny;
-	
-	        if (dvn <= 0) { /* if not already separating, update velocities */
-	        	
-	        	double imp = -(1 + RESTITUTION_FACTOR) * dvn / (1.0/a.getMass() + 1.0/b.getMass());        
-	        	a.vel = new V2d(a.vel.x() - (imp / a.mass) * nx, a.vel.y() - (imp / a.mass) * ny);                
-	        	b.vel = new V2d(b.vel.x() + (imp / b.mass) * nx, b.vel.y() + (imp / b.mass) * ny);
-	        }
+            separateOverlap(a, b, nx, ny, minD - dist);
+            applyElasticImpulse(a, b, nx, ny);
         }
+    }
+
+    private void applyFriction(double dtScaled) {
+        double speed = vel.abs();
+        if (speed > PhysicsDefaults.REST_SPEED_THRESHOLD) {
+            double deceleration = PhysicsDefaults.FRICTION_DECELERATION * dtScaled;
+            double factor = Math.max(0, speed - deceleration) / speed;
+            vel = vel.mul(factor);
+        } else {
+            vel = new V2d(0, 0);
+        }
+    }
+
+    private void move(double dtScaled) {
+        pos = pos.sum(vel.mul(dtScaled));
+    }
+
+    private static void separateOverlap(Ball a, Ball b, double nx, double ny, double overlap) {
+        double totalMass = a.mass + b.mass;
+
+        double aDisplacement = overlap * (b.mass / totalMass);
+        a.pos = new P2d(
+                a.getPos().x() - nx * aDisplacement,
+                a.getPos().y() - ny * aDisplacement);
+
+        double bDisplacement = overlap * (a.mass / totalMass);
+        b.pos = new P2d(
+                b.getPos().x() + nx * bDisplacement,
+                b.getPos().y() + ny * bDisplacement);
+    }
+
+    private static void applyElasticImpulse(Ball a, Ball b, double nx, double ny) {
+        double relativeVelocityX = b.vel.x() - a.vel.x();
+        double relativeVelocityY = b.vel.y() - a.vel.y();
+        double relativeVelocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+
+        if (relativeVelocityAlongNormal > 0) {
+            return;
+        }
+
+        double impulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityAlongNormal
+                / (1.0 / a.getMass() + 1.0 / b.getMass());
+        a.vel = new V2d(a.vel.x() - (impulse / a.mass) * nx, a.vel.y() - (impulse / a.mass) * ny);
+        b.vel = new V2d(b.vel.x() + (impulse / b.mass) * nx, b.vel.y() + (impulse / b.mass) * ny);
     }
 
     
@@ -165,7 +139,7 @@ public class Ball {
     }
 
     public boolean isMoving() {
-        return vel.abs() > 0.001;
+        return vel.abs() > PhysicsDefaults.REST_SPEED_THRESHOLD;
     }
 
 }

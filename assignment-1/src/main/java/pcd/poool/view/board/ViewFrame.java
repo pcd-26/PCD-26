@@ -6,9 +6,24 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import javax.swing.*;
+import pcd.poool.model.common.math.P2d;
 import pcd.poool.view.RenderSynch;
 
 public class ViewFrame extends JFrame {
+
+    private static final String WINDOW_TITLE = "Poool";
+    private static final int WINDOW_DECORATION_HEIGHT = 25;
+    private static final long NO_FRAME_TO_NOTIFY = -1;
+    private static final int AXIS_STROKE_WIDTH = 1;
+    private static final int HOLE_STROKE_WIDTH = 2;
+    private static final int SMALL_BALL_STROKE_WIDTH = 1;
+    private static final int PLAYER_BALL_STROKE_WIDTH = 3;
+    private static final int HUD_X = 20;
+    private static final int HUD_BALL_COUNT_Y = 40;
+    private static final int HUD_FPS_Y = 60;
+    private static final String SMALL_BALL_COUNT_LABEL = "Num small balls: ";
+    private static final String FPS_LABEL = "Frame per sec: ";
+    private static final int CIRCLE_DIAMETER_FACTOR = 2;
     
     private VisualiserPanel panel;
     private ViewModel model;
@@ -17,8 +32,8 @@ public class ViewFrame extends JFrame {
     public ViewFrame(ViewModel model, int w, int h){
     	this.model = model;
     	this.sync = new RenderSynch();
-    	setTitle("Poool");
-        setSize(w,h + 25);
+    	setTitle(WINDOW_TITLE);
+        setSize(w, h + WINDOW_DECORATION_HEIGHT);
         setResizable(false);
         panel = new VisualiserPanel(w,h);
         getContentPane().add(panel);
@@ -43,12 +58,12 @@ public class ViewFrame extends JFrame {
         private int ox;
         private int oy;
         private int delta;
-        private volatile long frameToNotify = -1;
+        private volatile long frameToNotify = NO_FRAME_TO_NOTIFY;
         
         public VisualiserPanel(int w, int h){
-            setSize(w,h + 25);
-            ox = w/2;
-            oy = h/2;
+            setSize(w, h + WINDOW_DECORATION_HEIGHT);
+            ox = w / CIRCLE_DIAMETER_FACTOR;
+            oy = h / CIRCLE_DIAMETER_FACTOR;
             delta = Math.min(ox, oy);
         }
 
@@ -70,48 +85,53 @@ public class ViewFrame extends JFrame {
 	    		          RenderingHints.VALUE_RENDER_QUALITY);
 	            
 	    		g2.setColor(Color.LIGHT_GRAY);
-			    g2.setStroke(new BasicStroke(1));
-	    		g2.drawLine(ox,0,ox,oy*2);
-	    		g2.drawLine(0,oy,ox*2,oy);
+			    g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
+	    		g2.drawLine(ox, 0, ox, oy * CIRCLE_DIAMETER_FACTOR);
+	    		g2.drawLine(0, oy, ox * CIRCLE_DIAMETER_FACTOR, oy);
 	    		g2.setColor(Color.BLACK);
-	    		g2.setStroke(new BasicStroke(2));
+	    		g2.setStroke(new BasicStroke(HOLE_STROKE_WIDTH));
 	    		for (var h: model.getHoles()) {
-	    			var p = h.center();
-	            	int x0 = (int)(ox + p.x()*delta);
-	                int y0 = (int)(oy - p.y()*delta);
-	                int radiusX = (int)(h.radius()*delta);
-	                int radiusY = (int)(h.radius()*delta);
-	                g2.fillOval(x0 - radiusX,y0 - radiusY,radiusX*2,radiusY*2);
+	                fillCircle(g2, h.center(), h.radius());
 	    		}
 	    		
-			    g2.setStroke(new BasicStroke(1));
+			    g2.setStroke(new BasicStroke(SMALL_BALL_STROKE_WIDTH));
 	    		for (var b: balls) {
-	    			var p = b.pos();
-	            	int x0 = (int)(ox + p.x()*delta);
-	                int y0 = (int)(oy - p.y()*delta);
-	                int radiusX = (int)(b.radius()*delta);
-	                int radiusY = (int)(b.radius()*delta);
-	                g2.drawOval(x0 - radiusX,y0 - radiusY,radiusX*2,radiusY*2);
+	                drawCircle(g2, b.pos(), b.radius());
 	    		}
 		
-			    g2.setStroke(new BasicStroke(3));
+			    g2.setStroke(new BasicStroke(PLAYER_BALL_STROKE_WIDTH));
 	    		var pb = model.getPlayerBall();
 	    		if (pb != null) {
-					var p1 = pb.pos();
-		        	int x0 = (int)(ox + p1.x()*delta);
-		            int y0 = (int)(oy - p1.y()*delta);
-	                int radiusX = (int)(pb.radius()*delta);
-	                int radiusY = (int)(pb.radius()*delta);
-	                g2.drawOval(x0 - radiusX,y0 - radiusY,radiusX*2,radiusY*2);
+	                drawCircle(g2, pb.pos(), pb.radius());
 	    		}
 			    
-			    g2.setStroke(new BasicStroke(1));
-	    		g2.drawString("Num small balls: " + balls.size(), 20, 40);
-	    		g2.drawString("Frame per sec: " + model.getFramePerSec(), 20, 60);
+			    g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
+	    		g2.drawString(SMALL_BALL_COUNT_LABEL + balls.size(), HUD_X, HUD_BALL_COUNT_Y);
+	    		g2.drawString(FPS_LABEL + model.getFramePerSec(), HUD_X, HUD_FPS_Y);
         	} finally {
 	    		sync.notifyFrameRendered(frame);
         	}
         }
+
+        private void drawCircle(Graphics2D g2, P2d center, double radius) {
+            var circle = toScreenCircle(center, radius);
+            g2.drawOval(circle.x(), circle.y(), circle.diameter(), circle.diameter());
+        }
+
+        private void fillCircle(Graphics2D g2, P2d center, double radius) {
+            var circle = toScreenCircle(center, radius);
+            g2.fillOval(circle.x(), circle.y(), circle.diameter(), circle.diameter());
+        }
+
+        private ScreenCircle toScreenCircle(P2d center, double radius) {
+            int screenX = (int) (ox + center.x() * delta);
+            int screenY = (int) (oy - center.y() * delta);
+            int screenRadius = (int) (radius * delta);
+            int diameter = screenRadius * CIRCLE_DIAMETER_FACTOR;
+            return new ScreenCircle(screenX - screenRadius, screenY - screenRadius, diameter);
+        }
         
     }
+
+    private record ScreenCircle(int x, int y, int diameter) {}
 }

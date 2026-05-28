@@ -4,7 +4,7 @@
 
 ## Included
 - `pcd.poool.model.common.math`: `P2d`, `V2d`
-- `pcd.poool.model.physics`: `Boundary`, `Hole`, `Ball`, `Board`, `BoardConf`, `PhysicsEngine`
+- `pcd.poool.model.physics`: `Boundary`, `Hole`, `Ball`, `Board`, `BoardConf`, `PhysicsDefaults`, `PhysicsEngine`, `SpatialCollisionDetector`
 - `pcd.poool.model.physics.config`: `MinimalBoardConf`, `LargeBoardConf`, `MassiveBoardConf`
 - `pcd.poool.model.concurrent`: `BoundedBuffer`, `BoundedBufferImpl`
 - `pcd.poool.view`: `RenderSynch`

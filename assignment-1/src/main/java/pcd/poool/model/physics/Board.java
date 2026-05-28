@@ -1,6 +1,8 @@
 package pcd.poool.model.physics;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import pcd.poool.model.common.math.P2d;
 
 /**
@@ -37,6 +39,9 @@ public class Board {
         physicsEngine.step(this, dt);
     }
     
+    /**
+     * Returns immutable rendering data instead of exposing mutable ball objects.
+     */
     public synchronized List<BallSnapshot> getBalls(){
     	if (balls == null) {
     		return Collections.emptyList();
@@ -49,7 +54,7 @@ public class Board {
     }
     
     public synchronized BallSnapshot getPlayerBall() {
-    	if (playerBall == null) {
+    	if (playerBall == null || playerBallPocketed) {
     		return null;
     	}
     	return new BallSnapshot(playerBall.getPos(), playerBall.getRadius());
@@ -68,7 +73,7 @@ public class Board {
     }
 
     public synchronized boolean areBallsMoving() {
-        if (playerBall != null && playerBall.isMoving()) {
+        if (playerBall != null && !playerBallPocketed && playerBall.isMoving()) {
             return true;
         }
         return balls.stream().anyMatch(Ball::isMoving);
@@ -99,6 +104,10 @@ public class Board {
         if (holes.isEmpty()) {
             return;
         }
+        /*
+         * Game-level scoring will later decide who earns a point. The physics
+         * layer only removes pocketed balls and records that the event happened.
+         */
         if (playerBall != null && !playerBallPocketed && isInsideHole(playerBall)) {
             playerBallPocketed = true;
         }
