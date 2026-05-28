@@ -39,7 +39,10 @@ public class Board {
     }
     
     public List<Ball> getBalls(){
-    	return balls;
+    	if (balls == null) {
+    		return Collections.emptyList();
+    	}
+    	return Collections.unmodifiableList(new ArrayList<>(balls));
     }
     
     public Ball getPlayerBall() {
