@@ -44,9 +44,15 @@ jobs:
           set -euo pipefail
 
           rm -rf package Assignment-01.zip
-          mkdir -p package/Assignment-01/src package/Assignment-01/doc
+          mkdir -p package/Assignment-01
 
-          cp -R assignment-1/src/main package/Assignment-01/src/main
+          cp -R assignment-1/. package/Assignment-01
+          rm -rf \
+            package/Assignment-01/docs \
+            package/Assignment-01/report \
+            package/Assignment-01/target
+
+          mkdir -p package/Assignment-01/doc
           cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
 
           (cd package && zip -r ../Assignment-01.zip Assignment-01)
@@ -58,7 +64,12 @@ jobs:
 
           unzip -l Assignment-01.zip
           test -f package/Assignment-01/doc/report.pdf
+          test -f package/Assignment-01/pom.xml
           test -d package/Assignment-01/src/main
+          test -d package/Assignment-01/src/test
+          test ! -d package/Assignment-01/report
+          test ! -d package/Assignment-01/docs
+          test ! -d package/Assignment-01/target
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
