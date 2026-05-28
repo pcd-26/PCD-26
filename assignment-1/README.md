@@ -75,7 +75,10 @@ The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assi
 
 The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to
 `main` and can also be started manually. It builds the report PDF and uploads an
-`Assignment-01.zip` artifact with the delivery structure required below.
+`Assignment-01.zip` artifact with the delivery structure required below. On
+`main`, it also publishes the same zip as a GitHub Release asset under the
+shared rolling `assignments-latest` tag, where each assignment is uploaded as a
+separate zip asset.
 
 
 
