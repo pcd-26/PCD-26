@@ -73,6 +73,10 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.PhysicsBenchmark 600
 
 The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
 
+The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to
+`main` and can also be started manually. It builds the report PDF and uploads an
+`Assignment-01.zip` artifact with the delivery structure required below.
+
 
 
 ### The deliverable
