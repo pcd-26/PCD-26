@@ -74,6 +74,15 @@ public class ViewFrame extends JFrame {
 	    		g2.drawLine(ox,0,ox,oy*2);
 	    		g2.drawLine(0,oy,ox*2,oy);
 	    		g2.setColor(Color.BLACK);
+	    		g2.setStroke(new BasicStroke(2));
+	    		for (var h: model.getHoles()) {
+	    			var p = h.center();
+	            	int x0 = (int)(ox + p.x()*delta);
+	                int y0 = (int)(oy - p.y()*delta);
+	                int radiusX = (int)(h.radius()*delta);
+	                int radiusY = (int)(h.radius()*delta);
+	                g2.fillOval(x0 - radiusX,y0 - radiusY,radiusX*2,radiusY*2);
+	    		}
 	    		
 			    g2.setStroke(new BasicStroke(1));
 	    		for (var b: balls) {
