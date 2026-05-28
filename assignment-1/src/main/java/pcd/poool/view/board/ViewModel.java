@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.physics.Board;
 
-record BallViewInfo(P2d pos, double radius) {}
-
 public class ViewModel {
+
+	public static record BallViewInfo(P2d pos, double radius) {}
 
 	private ArrayList<BallViewInfo> balls;
 	private BallViewInfo player;
