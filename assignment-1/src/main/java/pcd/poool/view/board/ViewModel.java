@@ -8,13 +8,16 @@ import pcd.poool.model.physics.Board;
 public class ViewModel {
 
 	public static record BallViewInfo(P2d pos, double radius) {}
+	public static record HoleViewInfo(P2d center, double radius) {}
 
 	private ArrayList<BallViewInfo> balls;
+	private ArrayList<HoleViewInfo> holes;
 	private BallViewInfo player;
 	private int framePerSec;
 	
 	public ViewModel() {
 		balls = new ArrayList<BallViewInfo>();
+		holes = new ArrayList<HoleViewInfo>();
 		framePerSec = 0;
 	}
 	
@@ -22,6 +25,10 @@ public class ViewModel {
 		balls.clear();
 		for (var b: board.getBalls()) {
 			balls.add(new BallViewInfo(b.pos(), b.radius()));
+		}
+		holes.clear();
+		for (var h: board.getHoles()) {
+			holes.add(new HoleViewInfo(h.center(), h.radius()));
 		}
 		this.framePerSec = framePerSec;
 		var p = board.getPlayerBall();
@@ -41,6 +48,10 @@ public class ViewModel {
 
 	public synchronized BallViewInfo getPlayerBall() {
 		return player;
+	}
+
+	public synchronized List<HoleViewInfo> getHoles() {
+		return new ArrayList<HoleViewInfo>(holes);
 	}
 	
 }

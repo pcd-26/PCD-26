@@ -10,35 +10,31 @@ public class Board {
 
     public static record BallSnapshot(P2d pos, double radius) {}
 
-    private List<Ball> balls;    
+    private final PhysicsEngine physicsEngine;
+    private List<Ball> balls;
     private Ball playerBall;
     private Boundary bounds;
+    private List<Hole> holes;
+    private int pocketedSmallBalls;
+    private boolean playerBallPocketed;
     
-    public Board(){} 
+    public Board(){
+        physicsEngine = new PhysicsEngine();
+        balls = new ArrayList<>();
+        holes = List.of();
+    }
     
     public void init(BoardConf conf) {
-    	balls = conf.getSmallBalls();    	
-    	playerBall = conf.getPlayerBall(); 
+    	balls = new ArrayList<>(conf.getSmallBalls());
+    	playerBall = conf.getPlayerBall();
     	bounds = conf.getBoardBoundary();
+        holes = new ArrayList<>(conf.getHoles());
+        pocketedSmallBalls = 0;
+        playerBallPocketed = false;
     }
     
     public synchronized void updateState(long dt) {
-
-    	playerBall.updateState(dt, this);
-    	
-    	for (var b: balls) {
-    		b.updateState(dt, this);
-    	}       	
-    	
-    	for (int i = 0; i < balls.size() - 1; i++) {
-            for (int j = i + 1; j < balls.size(); j++) {
-                Ball.resolveCollision(balls.get(i), balls.get(j));
-            }
-        }
-    	for (var b: balls) {
-    		Ball.resolveCollision(playerBall, b);
-    	} 
-    	   	    	
+        physicsEngine.step(this, dt);
     }
     
     public synchronized List<BallSnapshot> getBalls(){
@@ -58,8 +54,69 @@ public class Board {
     	}
     	return new BallSnapshot(playerBall.getPos(), playerBall.getRadius());
     }
+
+    public synchronized List<Hole> getHoles() {
+        return Collections.unmodifiableList(new ArrayList<>(holes));
+    }
+
+    public synchronized int getPocketedSmallBalls() {
+        return pocketedSmallBalls;
+    }
+
+    public synchronized boolean isPlayerBallPocketed() {
+        return playerBallPocketed;
+    }
+
+    public synchronized boolean areBallsMoving() {
+        if (playerBall != null && playerBall.isMoving()) {
+            return true;
+        }
+        return balls.stream().anyMatch(Ball::isMoving);
+    }
     
     public Boundary getBounds(){
         return bounds;
+    }
+
+    synchronized Ball getPlayerBallEntity() {
+        return playerBallPocketed ? null : playerBall;
+    }
+
+    synchronized List<Ball> getSmallBallEntities() {
+        return balls;
+    }
+
+    synchronized List<Ball> getCollisionBalls() {
+        var allBalls = new ArrayList<Ball>();
+        if (playerBall != null && !playerBallPocketed) {
+            allBalls.add(playerBall);
+        }
+        allBalls.addAll(balls);
+        return allBalls;
+    }
+
+    synchronized void applyHoleInteractions() {
+        if (holes.isEmpty()) {
+            return;
+        }
+        if (playerBall != null && !playerBallPocketed && isInsideHole(playerBall)) {
+            playerBallPocketed = true;
+        }
+        var iterator = balls.iterator();
+        while (iterator.hasNext()) {
+            if (isInsideHole(iterator.next())) {
+                iterator.remove();
+                pocketedSmallBalls++;
+            }
+        }
+    }
+
+    private boolean isInsideHole(Ball ball) {
+        for (var hole : holes) {
+            if (hole.contains(ball.getPos())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

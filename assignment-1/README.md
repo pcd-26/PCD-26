@@ -63,6 +63,14 @@ Specific JUnit 5 tests can be added under `assignment-1/src/test/java` and run w
 mvn -f assignment-1/pom.xml -Dtest=ClassName test
 ```
 
+The sequential physics engine can also be benchmarked independently after
+compilation:
+
+```bash
+mvn -f assignment-1/pom.xml test
+java -cp assignment-1/target/classes pcd.poool.benchmark.PhysicsBenchmark 600
+```
+
 The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
 
 
