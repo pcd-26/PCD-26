@@ -31,6 +31,7 @@ public class MassiveBoardConf implements BoardConf {
     	return balls;
 	}
 
+	@Override
 	public Boundary getBoardBoundary() {
         return new Boundary(-1.5,-1.0,1.5,1.0);
 	}
