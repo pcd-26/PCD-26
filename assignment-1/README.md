@@ -49,6 +49,22 @@ The `assignment-01`folder in the repo includes two sketches that could be used a
 - [`sketch01`](./sketch-01.md) is an example of main loop using a sequential approach to implement the dynamics of the bouncing balls, as requested in the game
 - [`sketch02`](./sketch-02.md) is an example of a GUI program with asynchronous input from the keyboard, architected using MVC
 
+### Build and Tests
+
+Assignment 1 uses Maven with Java 17. Run the full build locally with:
+
+```bash
+mvn -f assignment-1/pom.xml clean verify
+```
+
+Specific JUnit 5 tests can be added under `assignment-1/src/test/java` and run with:
+
+```bash
+mvn -f assignment-1/pom.xml -Dtest=ClassName test
+```
+
+The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
+
 
 
 ### The deliverable
