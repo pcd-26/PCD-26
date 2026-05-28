@@ -5,7 +5,16 @@ import pcd.poool.model.concurrent.BoundedBufferImpl;
 
 /**
  * Generic active controller based on a producer/consumer queue.
- * Producers enqueue commands, this thread consumes and executes them.
+ *
+ * <p>External producers enqueue {@link Cmd} instances through
+ * {@link #notifyNewCmd(Cmd)}. This thread is the single consumer: it takes
+ * commands from the bounded buffer and executes them one at a time on the
+ * configured target object.
+ *
+ * <p>The target can be a model object, such as a board, or a higher-level
+ * service that owns the game state. This pattern keeps asynchronous inputs
+ * ordered and avoids having multiple producer threads mutate the same state
+ * directly.
  *
  * @param <T> target state/service type updated by commands
  */
