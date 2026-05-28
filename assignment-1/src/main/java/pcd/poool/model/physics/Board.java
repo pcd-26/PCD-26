@@ -1,11 +1,14 @@
 package pcd.poool.model.physics;
 
 import java.util.*;
+import pcd.poool.model.common.math.P2d;
 
 /**
  * Mutable board state used by the physics loop.
  */
 public class Board {
+
+    public static record BallSnapshot(P2d pos, double radius) {}
 
     private List<Ball> balls;    
     private Ball playerBall;
@@ -19,7 +22,7 @@ public class Board {
     	bounds = conf.getBoardBoundary();
     }
     
-    public void updateState(long dt) {
+    public synchronized void updateState(long dt) {
 
     	playerBall.updateState(dt, this);
     	
@@ -38,18 +41,25 @@ public class Board {
     	   	    	
     }
     
-    public List<Ball> getBalls(){
+    public synchronized List<BallSnapshot> getBalls(){
     	if (balls == null) {
     		return Collections.emptyList();
     	}
-    	return Collections.unmodifiableList(new ArrayList<>(balls));
+    	var snapshots = new ArrayList<BallSnapshot>();
+    	for (var ball: balls) {
+    		snapshots.add(new BallSnapshot(ball.getPos(), ball.getRadius()));
+    	}
+    	return Collections.unmodifiableList(snapshots);
     }
     
-    public Ball getPlayerBall() {
-    	return playerBall;
+    public synchronized BallSnapshot getPlayerBall() {
+    	if (playerBall == null) {
+    		return null;
+    	}
+    	return new BallSnapshot(playerBall.getPos(), playerBall.getRadius());
     }
     
-    public  Boundary getBounds(){
+    public Boundary getBounds(){
         return bounds;
     }
 }

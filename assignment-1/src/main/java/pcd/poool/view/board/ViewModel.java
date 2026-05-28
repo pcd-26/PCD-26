@@ -21,11 +21,11 @@ public class ViewModel {
 	public synchronized void update(Board board, int framePerSec) {
 		balls.clear();
 		for (var b: board.getBalls()) {
-			balls.add(new BallViewInfo(b.getPos(), b.getRadius()));
+			balls.add(new BallViewInfo(b.pos(), b.radius()));
 		}
 		this.framePerSec = framePerSec;
 		var p = board.getPlayerBall();
-		player = p == null ? null : new BallViewInfo(p.getPos(), p.getRadius());
+		player = p == null ? null : new BallViewInfo(p.pos(), p.radius());
 	}
 	
 	public synchronized List<BallViewInfo> getBalls(){
