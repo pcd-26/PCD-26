@@ -78,7 +78,9 @@ The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to
 `Assignment-01.zip` artifact with the delivery structure required below. On
 `main`, it also publishes the same zip as a GitHub Release asset under the
 shared rolling `assignments-latest` tag, where each assignment is uploaded as a
-separate zip asset.
+separate zip asset. The package includes the assignment project files needed to
+build and inspect the solution, excluding internal documentation, the LaTeX
+report source directory, and build outputs.
 
 
 
