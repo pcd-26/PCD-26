@@ -35,12 +35,16 @@ public class ViewFrame extends JFrame {
     }
      
     public void render(){
+		if (SwingUtilities.isEventDispatchThread()) {
+			throw new IllegalStateException("render() must not be called on the EDT");
+		}
 		long nf = sync.nextFrameToRender();
+		panel.setFrameToNotify(nf);
         panel.repaint();
 		try {
 			sync.waitForFrameRendered(nf);
 		} catch (InterruptedException ex) {
-			ex.printStackTrace();
+			Thread.currentThread().interrupt();
 		}
     }
         
@@ -48,12 +52,17 @@ public class ViewFrame extends JFrame {
         private int ox;
         private int oy;
         private int delta;
+        private volatile long frameToNotify = -1;
         
         public VisualiserPanel(int w, int h){
             setSize(w,h + 25);
             ox = w/2;
             oy = h/2;
             delta = Math.min(ox, oy);
+        }
+
+        public void setFrameToNotify(long frame) {
+        	frameToNotify = frame;
         }
 
         @Override
@@ -97,7 +106,7 @@ public class ViewFrame extends JFrame {
 	    		g2.drawString("Num small balls: " + model.getBalls().size(), 20, 40);
 	    		g2.drawString("Frame per sec: " + model.getFramePerSec(), 20, 60);
 
-	    		sync.notifyFrameRendered();
+	    		sync.notifyFrameRendered(frameToNotify);
     		
         }
         
