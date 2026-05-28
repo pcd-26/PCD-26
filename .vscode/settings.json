@@ -2,5 +2,43 @@
     "conventionalCommits.scopes": [
         "assignment-1",
         "assignment-4"
+    ],
+    "latex-workshop.latex.autoBuild.run": "onSave",
+    "latex-workshop.latex.autoClean.run": "onBuilt",
+    "latex-workshop.latex.clean.fileTypes": [
+        "*.aux",
+        "*.log",
+        "*.out",
+        "*.toc"
+    ],
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "pdflatex report",
+            "tools": [
+                "pdflatex-report",
+                "clean-report-temporary-files"
+            ]
+        }
+    ],
+    "latex-workshop.latex.tools": [
+        {
+            "name": "pdflatex-report",
+            "command": "pdflatex",
+            "args": [
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                "-jobname=report",
+                "%DOC%"
+            ]
+        },
+        {
+            "name": "clean-report-temporary-files",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-Command",
+                "Remove-Item -LiteralPath '%DIR%\\report.aux','%DIR%\\report.log','%DIR%\\report.out','%DIR%\\report.toc' -Force -ErrorAction SilentlyContinue; exit 0"
+            ]
+        }
     ]
 }
