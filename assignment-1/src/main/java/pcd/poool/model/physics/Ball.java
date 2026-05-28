@@ -10,8 +10,8 @@ public class Ball {
     
     private P2d pos;
     private V2d vel;
-    private double radius;
-    private double mass;   
+    private final double radius;
+    private final double mass;
     
     private static final double FRICTION_FACTOR = 0.25; 	/* 0 minimum */
     private static final double RESTITUTION_FACTOR = 1; 
@@ -24,6 +24,10 @@ public class Ball {
     }
 
     public void updateState(long dt, Board ctx){
+        updateState(dt, ctx.getBounds());
+    }
+
+    public void updateState(long dt, Boundary bounds){
         double speed = vel.abs();
         double dt_scaled = dt*0.001;
     	if (speed > 0.001) {
@@ -34,7 +38,7 @@ public class Ball {
         	vel = new V2d(0,0);
         }
         pos = pos.sum(vel.mul(dt_scaled));
-     	applyBoundaryConstraints(ctx);
+     	applyBoundaryConstraints(bounds);
     }
     
     public void kick(V2d vel) {
@@ -47,8 +51,7 @@ public class Ball {
      * 
      * @param ctx
      */
-    private void applyBoundaryConstraints(Board ctx){
-        Boundary bounds = ctx.getBounds();
+    private void applyBoundaryConstraints(Boundary bounds){
         if (pos.x() + radius > bounds.x1()){
             pos = new P2d(bounds.x1() - radius, pos.y());
             vel = vel.getSwappedX();
@@ -86,7 +89,12 @@ public class Ball {
          * There is a collision if the distance between the two balls is less than the sum of the radii 
          * 
          */
-        if (dist < minD && dist > 1e-6)  {
+        if (dist < minD)  {
+            if (dist <= 1e-9) {
+                dx = 1e-9;
+                dy = 0.0;
+                dist = 1e-9;
+            }
 
 	        /* 
 	         * Collision case - what to do:
@@ -154,6 +162,10 @@ public class Ball {
     
     public double getRadius() {
     	return radius;
+    }
+
+    public boolean isMoving() {
+        return vel.abs() > 0.001;
     }
 
 }
