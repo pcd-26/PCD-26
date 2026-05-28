@@ -64,6 +64,72 @@ Conceptual baseline from `sketch-02`:
 - `PhysicsEngine -> GUIRenderer` (snapshot)
 - `GameController -> GUIRenderer` (logical state)
 
+### 3.3 Command-based controller pattern
+The current controller foundation is based on a combination of the Command
+pattern and the Active Object pattern.
+
+`Cmd<T>` represents a request to perform an action on a target object of type
+`T`. The command stores the parameters of the action, but does not execute the
+action immediately. Execution happens only when the active controller consumes
+the command from its queue.
+
+Example conceptual flow:
+
+```text
+keyboard input / bot decision / GUI event
+        |
+        v
+      Cmd<T>
+        |
+        v
+ ActiveController<T>
+        |
+        v
+   target model/service
+```
+
+For example, a future `KickPlayerCmd` should not need to own or directly expose
+the player ball. It can be a `Cmd<Board>` that stores the desired velocity and,
+when executed, calls a board-level operation such as `board.kickPlayer(velocity)`.
+The `Board` then applies the change to its internal `playerBall`.
+
+This keeps the ownership clear:
+
+- producers such as the input handler and the bot create commands
+- the active controller serializes command execution
+- model objects are modified through a controlled entry point
+- the view observes model snapshots instead of driving game logic directly
+
+The resulting path is:
+
+```text
+InputHandler/Bot/View event
+        |
+        v
+      command
+        |
+        v
+ controller queue
+        |
+        v
+ ActiveController.run()
+        |
+        v
+ command.execute(target)
+        |
+        v
+ model state update
+        |
+        v
+ ViewModel snapshot -> View rendering
+```
+
+Not every internal operation must be represented as a command. Internal model
+logic, such as collision resolution inside `Ball` or physics integration inside
+`Board`, can remain regular domain methods. Commands are mainly useful for
+external asynchronous requests that may come from different threads, such as
+user input, bot actions, reset, pause, resume, or turn-management events.
+
 ## 4. Synchronization and shared state
 
 ### 4.1 Ownership rules
