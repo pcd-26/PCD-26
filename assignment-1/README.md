@@ -71,6 +71,26 @@ mvn -f assignment-1/pom.xml test
 java -cp assignment-1/target/classes pcd.poool.benchmark.PhysicsBenchmark 600
 ```
 
+The playable sequential baseline uses the physics engine as its computational
+core and can be launched with:
+
+```bash
+mvn -f assignment-1/pom.xml test
+java -cp assignment-1/target/classes pcd.poool.SequentialPoool
+```
+
+The human player can click the board to kick the blue cue ball toward the chosen
+point when the game is waiting for a human shot. Arrow keys are also supported,
+including quick diagonal combinations such as UP+RIGHT. The red bot ball is
+controlled by a simple deterministic sequential strategy. The HUD shows the
+remaining small balls, frame rate, score, turn/status, and average physics step
+time. A baseline metric for the integrated sequential game loop can be collected
+with:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.SequentialGameBenchmark 600
+```
+
 The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
 
 The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to

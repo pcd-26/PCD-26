@@ -1,7 +1,9 @@
 package pcd.poool.view.board;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
+import pcd.poool.model.common.math.V2d;
 
 public class View {
 
@@ -10,16 +12,21 @@ public class View {
 	
 	public View(ViewModel model, int w, int h) {
 		this.viewModel = model;
-		displayFrame(model, w, h);
+		displayFrame(model, w, h, null);
 	}
 
-	private void displayFrame(ViewModel model, int w, int h) {
+	public View(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
+		this.viewModel = model;
+		displayFrame(model, w, h, shotHandler);
+	}
+
+	private void displayFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
 		if (SwingUtilities.isEventDispatchThread()) {
-			createAndShowFrame(model, w, h);
+			createAndShowFrame(model, w, h, shotHandler);
 			return;
 		}
 		try {
-			SwingUtilities.invokeAndWait(() -> createAndShowFrame(model, w, h));
+			SwingUtilities.invokeAndWait(() -> createAndShowFrame(model, w, h, shotHandler));
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("Interrupted while showing view", ex);
@@ -28,8 +35,8 @@ public class View {
 		}
 	}
 
-	private void createAndShowFrame(ViewModel model, int w, int h) {
-		frame = new ViewFrame(model, w, h);	
+	private void createAndShowFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
+		frame = new ViewFrame(model, w, h, shotHandler);	
 		frame.setVisible(true);
 	}
 		
