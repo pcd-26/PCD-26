@@ -73,6 +73,16 @@ class SequentialGameTest {
         assertTrue(preview.abs() > 0.0);
     }
 
+    @Test
+    void smallBallPocketedAfterSmallBallCollisionDoesNotScore() {
+        var game = new SequentialGame(new IndirectPocketConf());
+
+        assertTrue(game.shootHuman(new V2d(1.6, 0)));
+        runUntilNotMoving(game, 500);
+
+        assertEquals(0, game.snapshot().humanScore());
+    }
+
     private void runUntilNotMoving(SequentialGame game, int maxSteps) {
         for (int i = 0; i < maxSteps && game.snapshot().status() == GameStatus.BALLS_MOVING; i++) {
             game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
@@ -114,6 +124,36 @@ class SequentialGameTest {
         @Override
         public Ball getPlayerBall() {
             return new Ball(new P2d(0.85, 0), 0.05, 1.0, new V2d(0, 0));
+        }
+    }
+
+    private static class IndirectPocketConf implements BoardConf {
+
+        @Override
+        public Boundary getBoardBoundary() {
+            return new Boundary(-1, -1, 1, 1);
+        }
+
+        @Override
+        public Ball getPlayerBall() {
+            return new Ball(new P2d(-0.45, 0), 0.05, 1.0, new V2d(0, 0));
+        }
+
+        @Override
+        public Ball getBotBall() {
+            return new Ball(new P2d(0, -0.75), 0.05, 1.0, new V2d(0, 0));
+        }
+
+        @Override
+        public List<Ball> getSmallBalls() {
+            return List.of(
+                    new Ball(new P2d(-0.10, 0), 0.05, 1.0, new V2d(0, 0)),
+                    new Ball(new P2d(0.28, 0), 0.05, 1.0, new V2d(-0.25, 0)));
+        }
+
+        @Override
+        public List<Hole> getHoles() {
+            return List.of(new Hole(new P2d(0.85, 0), 0.12));
         }
     }
 }
