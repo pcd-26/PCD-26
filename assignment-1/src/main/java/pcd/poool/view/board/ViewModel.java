@@ -10,11 +10,13 @@ public class ViewModel {
 
 	public static record BallViewInfo(P2d pos, double radius) {}
 	public static record HoleViewInfo(P2d center, double radius) {}
+	public static record ShotPreviewInfo(P2d from, P2d to, double intensity) {}
 
 	private ArrayList<BallViewInfo> balls;
 	private ArrayList<HoleViewInfo> holes;
 	private BallViewInfo player;
 	private BallViewInfo bot;
+	private ShotPreviewInfo shotPreview;
 	private int framePerSec;
 	private GameSnapshot game;
 	
@@ -66,6 +68,18 @@ public class ViewModel {
 
 	public synchronized GameSnapshot getGame() {
 		return game;
+	}
+
+	public synchronized void setShotPreview(P2d from, P2d to, double intensity) {
+		shotPreview = new ShotPreviewInfo(from, to, intensity);
+	}
+
+	public synchronized void clearShotPreview() {
+		shotPreview = null;
+	}
+
+	public synchronized ShotPreviewInfo getShotPreview() {
+		return shotPreview;
 	}
 
 	public synchronized List<HoleViewInfo> getHoles() {

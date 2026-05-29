@@ -31,4 +31,24 @@ class ViewFrameTest {
         assertEquals(ViewFrame.SHOT_IMPULSE, shot.x(), EPSILON);
         assertEquals(0.0, shot.y(), EPSILON);
     }
+
+    @Test
+    void mouseDragDistanceControlsShotIntensity() {
+        var shortShot = ViewFrame.mouseShotImpulse(new P2d(0, 0), new P2d(0.1, 0));
+        var longShot = ViewFrame.mouseShotImpulse(new P2d(0, 0), new P2d(0.6, 0));
+
+        assertEquals(0.1 / ViewFrame.MAX_MOUSE_DRAG_DISTANCE * ViewFrame.MAX_MOUSE_SHOT_IMPULSE,
+                shortShot.abs(),
+                EPSILON);
+        assertEquals(0.6 / ViewFrame.MAX_MOUSE_DRAG_DISTANCE * ViewFrame.MAX_MOUSE_SHOT_IMPULSE,
+                longShot.abs(),
+                EPSILON);
+    }
+
+    @Test
+    void mouseShotIntensityIsCapped() {
+        var shot = ViewFrame.mouseShotImpulse(new P2d(0, 0), new P2d(10, 0));
+
+        assertEquals(ViewFrame.MAX_MOUSE_SHOT_IMPULSE, shot.abs(), EPSILON);
+    }
 }
