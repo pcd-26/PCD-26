@@ -162,6 +162,7 @@ public class Board {
     synchronized void recordCollision(Ball first, Ball second) {
         recordDirectCueTouch(first, second, Player.HUMAN);
         recordDirectCueTouch(first, second, Player.BOT);
+        clearSmallBallScoringOnIndirectTouch(first, second);
     }
 
     private void recordDirectCueTouch(Ball first, Ball second, Player player) {
@@ -173,6 +174,13 @@ public class Board {
             lastDirectCueTouch.put(second, player);
         } else if (second == cueBall && balls.contains(first)) {
             lastDirectCueTouch.put(first, player);
+        }
+    }
+
+    private void clearSmallBallScoringOnIndirectTouch(Ball first, Ball second) {
+        if (balls.contains(first) && balls.contains(second)) {
+            lastDirectCueTouch.remove(first);
+            lastDirectCueTouch.remove(second);
         }
     }
 
