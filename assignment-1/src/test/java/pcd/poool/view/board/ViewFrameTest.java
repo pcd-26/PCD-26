@@ -1,9 +1,11 @@
 package pcd.poool.view.board;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
+import pcd.poool.model.game.Player;
 
 class ViewFrameTest {
 
@@ -50,5 +52,13 @@ class ViewFrameTest {
         var shot = ViewFrame.mouseShotImpulse(new P2d(0, 0), new P2d(10, 0));
 
         assertEquals(ViewFrame.MAX_MOUSE_SHOT_IMPULSE, shot.abs(), EPSILON);
+    }
+
+    @Test
+    void botPreviewLocksHumanAimingInput() {
+        var model = new ViewModel();
+        model.setShotPreview(new P2d(0, 0), new P2d(1, 0), 1.0, Player.BOT);
+
+        assertTrue(ViewFrame.isBotAiming(model));
     }
 }

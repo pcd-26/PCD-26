@@ -2,7 +2,6 @@ package pcd.poool.benchmark;
 
 import java.util.Locale;
 import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.game.GameStatus;
 import pcd.poool.model.game.SequentialGame;
 import pcd.poool.model.physics.PhysicsDefaults;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
@@ -20,7 +19,7 @@ public class SequentialGameBenchmark {
 
         for (int i = 0; i < steps && !game.snapshot().isFinished(); i++) {
             game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
-            if (game.snapshot().status() == GameStatus.WAITING_FOR_BOT_SHOT) {
+            if (game.canBotShoot()) {
                 game.shootBot();
             }
         }
