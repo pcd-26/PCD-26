@@ -116,6 +116,7 @@ public class ViewFrame extends JFrame {
             @Override
             public void keyPressed(KeyEvent event) {
                 if (event.getKeyCode() == KeyEvent.VK_R && restartHandler != null) {
+                    resetInputState(humanAimingStopHandler);
                     restartHandler.run();
                     event.consume();
                     return;
@@ -247,6 +248,16 @@ public class ViewFrame extends JFrame {
         if (shot.abs() > 0) {
             shotHandler.accept(shot);
         }
+        humanKeyboardActive = false;
+        stopHumanAiming(humanAimingStopHandler);
+        model.clearShotPreview();
+        panel.repaint();
+    }
+
+    private void resetInputState(Runnable humanAimingStopHandler) {
+        shotTimer.stop();
+        pressedShotDirections = 0;
+        humanDragActive = false;
         humanKeyboardActive = false;
         stopHumanAiming(humanAimingStopHandler);
         model.clearShotPreview();
@@ -429,7 +440,7 @@ public class ViewFrame extends JFrame {
             if (game.gameOverReason() == GameOverReason.BOT_CUE_BALL_POCKETED) {
                 return "Bot cue ball was pocketed";
             }
-            return "Final score  Human " + game.humanScore() + " - Bot " + game.botScore();
+            return "Final score: Human " + game.humanScore() + " - Bot " + game.botScore();
         }
 
         private void drawCentered(Graphics2D g2, String text, int y) {
