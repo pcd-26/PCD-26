@@ -12,9 +12,17 @@ import pcd.poool.model.game.Player;
 
 /**
  * Mutable board state used by the physics loop.
+ *
+ * <p>The board owns the physical entities and records low-level events needed
+ * by game rules, such as cue balls being pocketed and small balls that are
+ * eligible to score. Higher-level lifecycle decisions remain in
+ * {@code SequentialGame}.
  */
 public class Board {
 
+    /**
+     * Immutable ball data used by rendering and tests.
+     */
     public static record BallSnapshot(P2d pos, double radius) {}
 
     private final PhysicsEngine physicsEngine;
@@ -37,6 +45,11 @@ public class Board {
         lastDirectCueTouch = new HashMap<>();
     }
     
+    /**
+     * Reinitializes this board from a configuration.
+     *
+     * @param conf board layout and initial ball entities
+     */
     public void init(BoardConf conf) {
     	balls = new ArrayList<>(conf.getSmallBalls());
     	playerBall = conf.getPlayerBall();
@@ -50,6 +63,11 @@ public class Board {
         lastDirectCueTouch.clear();
     }
     
+    /**
+     * Advances the board physics by the given elapsed time.
+     *
+     * @param dt elapsed time in milliseconds
+     */
     public synchronized void updateState(long dt) {
         physicsEngine.step(this, dt);
     }
@@ -90,12 +108,28 @@ public class Board {
         return pocketedSmallBalls;
     }
 
+    /**
+     * Consumes all pending score events regardless of player.
+     *
+     * <p>This legacy aggregate form is kept for tests and compatibility. Game
+     * rules should prefer {@link #consumePendingScoredSmallBalls(Player)}.
+     */
     public synchronized int consumePendingScoredSmallBalls() {
         int scored = pendingScoredSmallBalls.values().stream().mapToInt(Integer::intValue).sum();
         pendingScoredSmallBalls.clear();
         return scored;
     }
 
+    /**
+     * Consumes pending small-ball score events for one player.
+     *
+     * <p>A score is pending only when that player's cue ball directly touched
+     * the small ball and the ball reached a hole before any small-small
+     * collision invalidated that direct cause.
+     *
+     * @param player score owner
+     * @return number of newly scored balls for the player
+     */
     public synchronized int consumePendingScoredSmallBalls(Player player) {
         var scored = pendingScoredSmallBalls.remove(player);
         return scored == null ? 0 : scored;
@@ -119,11 +153,21 @@ public class Board {
         return balls.stream().anyMatch(Ball::isMoving);
     }
 
+    /**
+     * @param player cue-ball owner
+     * @return whether the player's cue ball exists and is stopped
+     */
     public synchronized boolean canKick(Player player) {
         var cueBall = getCueBallEntity(player);
         return cueBall != null && !cueBall.isMoving();
     }
 
+    /**
+     * Assigns a new velocity to a player's cue ball if it is still on the board.
+     *
+     * @param player cue-ball owner
+     * @param velocity new cue-ball velocity
+     */
     public synchronized void kick(Player player, V2d velocity) {
         var cueBall = getCueBallEntity(player);
         if (cueBall != null) {

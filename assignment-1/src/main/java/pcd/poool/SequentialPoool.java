@@ -9,6 +9,14 @@ import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
 
+/**
+ * Playable sequential entry point for Poool.
+ *
+ * <p>The program runs physics, bot policy, input coordination, view-model
+ * updates, and rendering from a single loop. Player actions remain
+ * game-asynchronous through independent cue-ball readiness, while aiming is
+ * serialized by a lightweight owner so human and bot previews cannot overlap.
+ */
 public class SequentialPoool {
 
     private static final int VIEW_WIDTH = 1200;
@@ -110,10 +118,20 @@ public class SequentialPoool {
         return preview != null && preview.player() == Player.HUMAN;
     }
 
+    /**
+     * Attempts to acquire the UI aiming owner.
+     *
+     * <p>This is intentionally separate from game turns: the game has
+     * independent player readiness, but preview/aiming interaction is exclusive
+     * so that the human and bot cannot overwrite each other's shot preview.
+     */
     static boolean tryStartAiming(AtomicReference<Player> aimingOwner, Player player) {
         return aimingOwner.compareAndSet(null, player) || aimingOwner.get() == player;
     }
 
+    /**
+     * Releases the UI aiming owner only if it is held by the given player.
+     */
     static void stopAiming(AtomicReference<Player> aimingOwner, Player player) {
         aimingOwner.compareAndSet(player, null);
     }
