@@ -21,6 +21,16 @@ import pcd.poool.model.game.GameStatus;
 import pcd.poool.model.game.Player;
 import pcd.poool.view.RenderSynch;
 
+/**
+ * Swing frame responsible for rendering the board and translating user input
+ * into shot commands.
+ *
+ * <p>Mouse input uses press-drag-release semantics: press starts aiming, drag
+ * updates the preview, and release submits the shot. Keyboard arrows use a
+ * short combination window so diagonal input can be shown and fired as a single
+ * shot. The frame does not mutate the game directly; accepted shots are sent to
+ * the handler supplied by the runner.
+ */
 public class ViewFrame extends JFrame {
 
     private static final String WINDOW_TITLE = "Poool";
@@ -183,6 +193,9 @@ public class ViewFrame extends JFrame {
         }
     }
 
+    /**
+     * @return whether the current preview is owned by the bot
+     */
     static boolean isBotAiming(ViewModel viewModel) {
         var preview = viewModel.getShotPreview();
         return preview != null && preview.player() == Player.BOT;
@@ -250,6 +263,9 @@ public class ViewFrame extends JFrame {
         };
     }
 
+    /**
+     * Converts currently pressed arrow directions into a fixed-magnitude shot.
+     */
     static V2d shotImpulseFor(boolean up, boolean down, boolean left, boolean right) {
         double x = 0;
         double y = 0;
@@ -268,6 +284,9 @@ public class ViewFrame extends JFrame {
         return new V2d(x, y).getNormalized().mul(SHOT_IMPULSE);
     }
 
+    /**
+     * Converts the internal keyboard direction bit mask into a shot vector.
+     */
     static V2d keyboardShotImpulse(int directions) {
         return shotImpulseFor(
                 (directions & UP_DIRECTION) != 0,
@@ -276,14 +295,24 @@ public class ViewFrame extends JFrame {
                 (directions & RIGHT_DIRECTION) != 0);
     }
 
+    /**
+     * Creates a fixed-strength impulse toward a target point.
+     */
     static V2d shotImpulseToward(P2d from, P2d target) {
         return target.sub(from).getNormalized().mul(SHOT_IMPULSE);
     }
 
+    /**
+     * Creates a mouse shot whose strength depends on drag distance.
+     */
     static V2d mouseShotImpulse(P2d from, P2d target) {
         return target.sub(from).getNormalized().mul(mouseShotIntensity(from, target));
     }
 
+    /**
+     * Maps mouse drag distance to shot strength, capped at the configured
+     * maximum so very long drags remain controllable.
+     */
     static double mouseShotIntensity(P2d from, P2d target) {
         double distance = target.sub(from).abs();
         double normalized = Math.min(distance, MAX_MOUSE_DRAG_DISTANCE) / MAX_MOUSE_DRAG_DISTANCE;
