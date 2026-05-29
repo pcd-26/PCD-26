@@ -3,6 +3,7 @@ package pcd.poool.view.board;
 import java.util.ArrayList;
 import java.util.List;
 import pcd.poool.model.common.math.P2d;
+import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.physics.Board;
 
 public class ViewModel {
@@ -13,7 +14,9 @@ public class ViewModel {
 	private ArrayList<BallViewInfo> balls;
 	private ArrayList<HoleViewInfo> holes;
 	private BallViewInfo player;
+	private BallViewInfo bot;
 	private int framePerSec;
+	private GameSnapshot game;
 	
 	public ViewModel() {
 		balls = new ArrayList<BallViewInfo>();
@@ -33,6 +36,13 @@ public class ViewModel {
 		this.framePerSec = framePerSec;
 		var p = board.getPlayerBall();
 		player = p == null ? null : new BallViewInfo(p.pos(), p.radius());
+		var b = board.getBotBall();
+		bot = b == null ? null : new BallViewInfo(b.pos(), b.radius());
+	}
+
+	public synchronized void update(Board board, GameSnapshot game, int framePerSec) {
+		update(board, framePerSec);
+		this.game = game;
 	}
 	
 	public synchronized List<BallViewInfo> getBalls(){
@@ -48,6 +58,14 @@ public class ViewModel {
 
 	public synchronized BallViewInfo getPlayerBall() {
 		return player;
+	}
+
+	public synchronized BallViewInfo getBotBall() {
+		return bot;
+	}
+
+	public synchronized GameSnapshot getGame() {
+		return game;
 	}
 
 	public synchronized List<HoleViewInfo> getHoles() {

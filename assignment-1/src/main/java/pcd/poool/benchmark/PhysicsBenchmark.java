@@ -1,5 +1,6 @@
 package pcd.poool.benchmark;
 
+import java.util.Locale;
 import pcd.poool.model.physics.Board;
 import pcd.poool.model.physics.PhysicsDefaults;
 import pcd.poool.model.physics.config.MassiveBoardConf;
@@ -26,7 +27,7 @@ public class PhysicsBenchmark {
 
         double elapsedMillis = elapsed / NANOS_PER_MILLISECOND;
         double avgStepMillis = elapsedMillis / steps;
-        System.out.printf(OUTPUT_FORMAT,
+        System.out.printf(Locale.US, OUTPUT_FORMAT,
                 steps,
                 board.getBalls().size(),
                 elapsedMillis,
