@@ -2,9 +2,10 @@ package pcd.poool.model.physics;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.Player;
@@ -23,17 +24,17 @@ public class Board {
     private Boundary bounds;
     private List<Hole> holes;
     private int pocketedSmallBalls;
-    private int pendingScoredSmallBalls;
+    private final Map<Player, Integer> pendingScoredSmallBalls;
     private boolean playerBallPocketed;
     private boolean botBallPocketed;
-    private Player activePlayer;
-    private final Set<Ball> scoreEligibleBalls;
+    private final Map<Ball, Player> lastDirectCueTouch;
     
     public Board(){
         physicsEngine = new PhysicsEngine();
         balls = new ArrayList<>();
         holes = List.of();
-        scoreEligibleBalls = new HashSet<>();
+        pendingScoredSmallBalls = new EnumMap<>(Player.class);
+        lastDirectCueTouch = new HashMap<>();
     }
     
     public void init(BoardConf conf) {
@@ -43,11 +44,10 @@ public class Board {
     	bounds = conf.getBoardBoundary();
         holes = new ArrayList<>(conf.getHoles());
         pocketedSmallBalls = 0;
-        pendingScoredSmallBalls = 0;
+        pendingScoredSmallBalls.clear();
         playerBallPocketed = false;
         botBallPocketed = false;
-        activePlayer = null;
-        scoreEligibleBalls.clear();
+        lastDirectCueTouch.clear();
     }
     
     public synchronized void updateState(long dt) {
@@ -91,9 +91,14 @@ public class Board {
     }
 
     public synchronized int consumePendingScoredSmallBalls() {
-        int scored = pendingScoredSmallBalls;
-        pendingScoredSmallBalls = 0;
+        int scored = pendingScoredSmallBalls.values().stream().mapToInt(Integer::intValue).sum();
+        pendingScoredSmallBalls.clear();
         return scored;
+    }
+
+    public synchronized int consumePendingScoredSmallBalls(Player player) {
+        var scored = pendingScoredSmallBalls.remove(player);
+        return scored == null ? 0 : scored;
     }
 
     public synchronized boolean isPlayerBallPocketed() {
@@ -114,10 +119,9 @@ public class Board {
         return balls.stream().anyMatch(Ball::isMoving);
     }
 
-    public synchronized void prepareTurn(Player player) {
-        activePlayer = player;
-        scoreEligibleBalls.clear();
-        pendingScoredSmallBalls = 0;
+    public synchronized boolean canKick(Player player) {
+        var cueBall = getCueBallEntity(player);
+        return cueBall != null && !cueBall.isMoving();
     }
 
     public synchronized void kick(Player player, V2d velocity) {
@@ -156,14 +160,19 @@ public class Board {
     }
 
     synchronized void recordCollision(Ball first, Ball second) {
-        var activeCueBall = activePlayer == null ? null : getCueBallEntity(activePlayer);
-        if (activeCueBall == null) {
+        recordDirectCueTouch(first, second, Player.HUMAN);
+        recordDirectCueTouch(first, second, Player.BOT);
+    }
+
+    private void recordDirectCueTouch(Ball first, Ball second, Player player) {
+        var cueBall = getCueBallEntity(player);
+        if (cueBall == null) {
             return;
         }
-        if (first == activeCueBall && balls.contains(second)) {
-            scoreEligibleBalls.add(second);
-        } else if (second == activeCueBall && balls.contains(first)) {
-            scoreEligibleBalls.add(first);
+        if (first == cueBall && balls.contains(second)) {
+            lastDirectCueTouch.put(second, player);
+        } else if (second == cueBall && balls.contains(first)) {
+            lastDirectCueTouch.put(first, player);
         }
     }
 
@@ -187,8 +196,9 @@ public class Board {
             if (isInsideHole(ball)) {
                 iterator.remove();
                 pocketedSmallBalls++;
-                if (scoreEligibleBalls.remove(ball)) {
-                    pendingScoredSmallBalls++;
+                var scorer = lastDirectCueTouch.remove(ball);
+                if (scorer != null) {
+                    pendingScoredSmallBalls.merge(scorer, 1, Integer::sum);
                 }
             }
         }

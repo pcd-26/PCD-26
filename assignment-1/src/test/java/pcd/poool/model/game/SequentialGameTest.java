@@ -26,17 +26,17 @@ class SequentialGameTest {
         var snapshot = game.snapshot();
         assertEquals(1, snapshot.humanScore());
         assertEquals(0, snapshot.botScore());
-        assertEquals(Player.BOT, snapshot.currentPlayer());
-        assertEquals(GameStatus.WAITING_FOR_BOT_SHOT, snapshot.status());
+        assertTrue(snapshot.humanCanShoot());
+        assertTrue(snapshot.botCanShoot());
+        assertEquals(GameStatus.RUNNING, snapshot.status());
     }
 
     @Test
-    void rejectsHumanShotWhileItIsNotHumanTurn() {
+    void humanAndBotCanShootIndependentlyWhenTheirCueBallsAreStopped() {
         var game = new SequentialGame(new DirectScoringConf());
-        game.shootHuman(new V2d(1.6, 0));
-        runUntilNotMoving(game, 400);
 
-        assertFalse(game.shootHuman(new V2d(0, 1.0)));
+        assertTrue(game.shootHuman(new V2d(1.6, 0)));
+        assertTrue(game.shootBot());
     }
 
     @Test
@@ -48,6 +48,7 @@ class SequentialGameTest {
         var snapshot = game.snapshot();
         assertEquals(GameStatus.FINISHED, snapshot.status());
         assertEquals(Player.BOT, snapshot.winner());
+        assertEquals(GameOverReason.HUMAN_CUE_BALL_POCKETED, snapshot.gameOverReason());
     }
 
     @Test
@@ -58,6 +59,18 @@ class SequentialGameTest {
 
         assertEquals(1, game.snapshot().simulatedSteps());
         assertTrue(game.snapshot().averageStepMillis() >= 0.0);
+    }
+
+    @Test
+    void botShotCanBePreviewedBeforeItIsExecuted() {
+        var game = new SequentialGame(new DirectScoringConf());
+        game.shootHuman(new V2d(1.6, 0));
+        runUntilNotMoving(game, 400);
+
+        var preview = game.previewBotShot();
+
+        assertTrue(game.snapshot().botCanShoot());
+        assertTrue(preview.abs() > 0.0);
     }
 
     private void runUntilNotMoving(SequentialGame game, int maxSteps) {

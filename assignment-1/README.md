@@ -72,7 +72,9 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.PhysicsBenchmark 600
 ```
 
 The playable sequential baseline uses the physics engine as its computational
-core and can be launched with:
+core. It runs in one thread but models the two players independently: the human
+and the bot can each kick their own cue ball whenever that specific ball is
+stopped, without enforced turn alternation. It can be launched with:
 
 ```bash
 mvn -f assignment-1/pom.xml test
@@ -80,13 +82,17 @@ java -cp assignment-1/target/classes pcd.poool.SequentialPoool
 ```
 
 The human player can press, drag, and release the mouse on the board to kick the
-blue cue ball toward the release point when the game is waiting for a human
-shot. The visible shot vector previews direction and power; longer drags produce
-stronger shots up to a capped impulse. Arrow keys are also supported, including
-quick diagonal combinations such as UP+RIGHT. The red bot ball is controlled by
-a simple deterministic sequential strategy. The HUD shows the remaining small
-balls, frame rate, score, turn/status, and average physics step time. A baseline
-metric for the integrated sequential game loop can be collected with:
+blue cue ball toward the release point when the human ball is available. The
+visible shot vector previews direction and power; longer drags produce
+stronger shots up to a capped impulse. The solid segment shows the selected
+impulse, while the dashed continuation previews the shot direction. Arrow keys
+are also supported, including quick diagonal combinations such as UP+RIGHT. The
+red bot ball is controlled by a simple deterministic sequential strategy and
+shows the same preview vector shortly before shooting. The HUD shows the
+remaining small balls, frame rate, score, player readiness, and average physics step
+time. When the game ends, a full-screen overlay shows the winner and final
+score; press R to start a new game. A baseline metric for the integrated
+sequential game loop can be collected with:
 
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.SequentialGameBenchmark 600

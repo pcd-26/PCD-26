@@ -11,9 +11,9 @@ public class SequentialGame {
     private static final V2d FALLBACK_BOT_SHOT = new V2d(0.35, -1.0).getNormalized().mul(BOT_SHOT_SPEED);
 
     private final Board board;
-    private Player currentPlayer;
     private GameStatus status;
     private Player winner;
+    private GameOverReason gameOverReason;
     private int humanScore;
     private int botScore;
     private long elapsedMillis;
@@ -23,8 +23,7 @@ public class SequentialGame {
     public SequentialGame(BoardConf conf) {
         board = new Board();
         board.init(conf);
-        currentPlayer = Player.HUMAN;
-        status = GameStatus.WAITING_FOR_HUMAN_SHOT;
+        status = GameStatus.RUNNING;
     }
 
     public synchronized boolean shootHuman(V2d velocity) {
@@ -35,16 +34,27 @@ public class SequentialGame {
         return shoot(Player.BOT, chooseBotShot());
     }
 
+    public synchronized V2d previewBotShot() {
+        if (!canBotShoot()) {
+            return new V2d(0, 0);
+        }
+        return chooseBotShot();
+    }
+
+    public synchronized boolean canHumanShoot() {
+        return canShoot(Player.HUMAN);
+    }
+
+    public synchronized boolean canBotShoot() {
+        return canShoot(Player.BOT);
+    }
+
     public synchronized boolean shoot(Player player, V2d velocity) {
-        if (status == GameStatus.FINISHED || status == GameStatus.BALLS_MOVING || player != currentPlayer) {
+        if (!canShoot(player) || velocity.abs() < MIN_SHOT_SPEED) {
             return false;
         }
-        if (velocity.abs() < MIN_SHOT_SPEED) {
-            return false;
-        }
-        board.prepareTurn(player);
         board.kick(player, velocity);
-        status = GameStatus.BALLS_MOVING;
+        updateRunningStatus();
         return true;
     }
 
@@ -62,20 +72,22 @@ public class SequentialGame {
         elapsedMillis += dtMillis;
         simulatedSteps++;
 
+        humanScore += board.consumePendingScoredSmallBalls(Player.HUMAN);
+        botScore += board.consumePendingScoredSmallBalls(Player.BOT);
+
         if (board.isPlayerBallPocketed()) {
-            finish(Player.BOT);
+            finish(Player.BOT, GameOverReason.HUMAN_CUE_BALL_POCKETED);
             return;
         }
         if (board.isBotBallPocketed()) {
-            finish(Player.HUMAN);
+            finish(Player.HUMAN, GameOverReason.BOT_CUE_BALL_POCKETED);
             return;
-        }
-        if (status == GameStatus.BALLS_MOVING && !board.areBallsMoving()) {
-            settleTurn();
         }
         if (board.getBalls().isEmpty()) {
             finishByScore();
+            return;
         }
+        updateRunningStatus();
     }
 
     public synchronized Board board() {
@@ -86,25 +98,22 @@ public class SequentialGame {
         return new GameSnapshot(
                 humanScore,
                 botScore,
-                currentPlayer,
                 status,
                 winner,
+                gameOverReason,
+                canHumanShoot(),
+                canBotShoot(),
                 elapsedMillis,
                 simulatedSteps,
                 averageStepMillis());
     }
 
-    private void settleTurn() {
-        int scored = board.consumePendingScoredSmallBalls();
-        if (currentPlayer == Player.HUMAN) {
-            humanScore += scored;
-        } else {
-            botScore += scored;
-        }
-        currentPlayer = currentPlayer.opponent();
-        status = currentPlayer == Player.HUMAN
-                ? GameStatus.WAITING_FOR_HUMAN_SHOT
-                : GameStatus.WAITING_FOR_BOT_SHOT;
+    private boolean canShoot(Player player) {
+        return status != GameStatus.FINISHED && board.canKick(player);
+    }
+
+    private void updateRunningStatus() {
+        status = board.areBallsMoving() ? GameStatus.BALLS_MOVING : GameStatus.RUNNING;
     }
 
     private V2d chooseBotShot() {
@@ -117,18 +126,19 @@ public class SequentialGame {
         return target.sub(botBall.pos()).getNormalized().mul(BOT_SHOT_SPEED);
     }
 
-    private void finish(Player winner) {
+    private void finish(Player winner, GameOverReason reason) {
         this.winner = winner;
+        this.gameOverReason = reason;
         status = GameStatus.FINISHED;
     }
 
     private void finishByScore() {
         if (humanScore > botScore) {
-            finish(Player.HUMAN);
+            finish(Player.HUMAN, GameOverReason.SMALL_BALLS_CLEARED);
         } else if (botScore > humanScore) {
-            finish(Player.BOT);
+            finish(Player.BOT, GameOverReason.SMALL_BALLS_CLEARED);
         } else {
-            finish(null);
+            finish(null, GameOverReason.SMALL_BALLS_CLEARED);
         }
     }
 

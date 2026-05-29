@@ -4,13 +4,14 @@ import java.util.ArrayList;
 import java.util.List;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.game.GameSnapshot;
+import pcd.poool.model.game.Player;
 import pcd.poool.model.physics.Board;
 
 public class ViewModel {
 
 	public static record BallViewInfo(P2d pos, double radius) {}
 	public static record HoleViewInfo(P2d center, double radius) {}
-	public static record ShotPreviewInfo(P2d from, P2d to, double intensity) {}
+	public static record ShotPreviewInfo(P2d from, P2d to, double intensity, Player player) {}
 
 	private ArrayList<BallViewInfo> balls;
 	private ArrayList<HoleViewInfo> holes;
@@ -71,7 +72,11 @@ public class ViewModel {
 	}
 
 	public synchronized void setShotPreview(P2d from, P2d to, double intensity) {
-		shotPreview = new ShotPreviewInfo(from, to, intensity);
+		setShotPreview(from, to, intensity, Player.HUMAN);
+	}
+
+	public synchronized void setShotPreview(P2d from, P2d to, double intensity, Player player) {
+		shotPreview = new ShotPreviewInfo(from, to, intensity, player);
 	}
 
 	public synchronized void clearShotPreview() {

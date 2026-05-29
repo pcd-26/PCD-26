@@ -12,21 +12,49 @@ public class View {
 	
 	public View(ViewModel model, int w, int h) {
 		this.viewModel = model;
-		displayFrame(model, w, h, null);
+		displayFrame(model, w, h, null, null, null);
 	}
 
 	public View(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
 		this.viewModel = model;
-		displayFrame(model, w, h, shotHandler);
+		displayFrame(model, w, h, shotHandler, null, null);
 	}
 
-	private void displayFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
+	public View(ViewModel model, int w, int h, Consumer<V2d> shotHandler, Runnable restartHandler) {
+		this.viewModel = model;
+		displayFrame(model, w, h, shotHandler, restartHandler, null);
+	}
+
+	public View(
+			ViewModel model,
+			int w,
+			int h,
+			Consumer<V2d> shotHandler,
+			Runnable restartHandler,
+			Consumer<Boolean> humanAimingHandler) {
+		this.viewModel = model;
+		displayFrame(model, w, h, shotHandler, restartHandler, humanAimingHandler);
+	}
+
+	private void displayFrame(
+			ViewModel model,
+			int w,
+			int h,
+			Consumer<V2d> shotHandler,
+			Runnable restartHandler,
+			Consumer<Boolean> humanAimingHandler) {
 		if (SwingUtilities.isEventDispatchThread()) {
-			createAndShowFrame(model, w, h, shotHandler);
+			createAndShowFrame(model, w, h, shotHandler, restartHandler, humanAimingHandler);
 			return;
 		}
 		try {
-			SwingUtilities.invokeAndWait(() -> createAndShowFrame(model, w, h, shotHandler));
+			SwingUtilities.invokeAndWait(() -> createAndShowFrame(
+					model,
+					w,
+					h,
+					shotHandler,
+					restartHandler,
+					humanAimingHandler));
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("Interrupted while showing view", ex);
@@ -35,8 +63,14 @@ public class View {
 		}
 	}
 
-	private void createAndShowFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
-		frame = new ViewFrame(model, w, h, shotHandler);	
+	private void createAndShowFrame(
+			ViewModel model,
+			int w,
+			int h,
+			Consumer<V2d> shotHandler,
+			Runnable restartHandler,
+			Consumer<Boolean> humanAimingHandler) {
+		frame = new ViewFrame(model, w, h, shotHandler, restartHandler, humanAimingHandler);	
 		frame.setVisible(true);
 	}
 		
