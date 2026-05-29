@@ -79,13 +79,14 @@ mvn -f assignment-1/pom.xml test
 java -cp assignment-1/target/classes pcd.poool.SequentialPoool
 ```
 
-The human player can click the board to kick the blue cue ball toward the chosen
-point when the game is waiting for a human shot. Arrow keys are also supported,
-including quick diagonal combinations such as UP+RIGHT. The red bot ball is
-controlled by a simple deterministic sequential strategy. The HUD shows the
-remaining small balls, frame rate, score, turn/status, and average physics step
-time. A baseline metric for the integrated sequential game loop can be collected
-with:
+The human player can press, drag, and release the mouse on the board to kick the
+blue cue ball toward the release point when the game is waiting for a human
+shot. The visible shot vector previews direction and power; longer drags produce
+stronger shots up to a capped impulse. Arrow keys are also supported, including
+quick diagonal combinations such as UP+RIGHT. The red bot ball is controlled by
+a simple deterministic sequential strategy. The HUD shows the remaining small
+balls, frame rate, score, turn/status, and average physics step time. A baseline
+metric for the integrated sequential game loop can be collected with:
 
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.SequentialGameBenchmark 600

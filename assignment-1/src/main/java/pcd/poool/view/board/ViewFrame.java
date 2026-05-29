@@ -5,6 +5,7 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.geom.Line2D;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -26,6 +27,7 @@ public class ViewFrame extends JFrame {
     private static final int SMALL_BALL_STROKE_WIDTH = 1;
     private static final int PLAYER_BALL_STROKE_WIDTH = 3;
     private static final int BOT_BALL_STROKE_WIDTH = 3;
+    private static final int SHOT_PREVIEW_STROKE_WIDTH = 3;
     private static final int HUD_X = 20;
     private static final int HUD_BALL_COUNT_Y = 40;
     private static final int HUD_FPS_Y = 60;
@@ -35,6 +37,9 @@ public class ViewFrame extends JFrame {
     private static final String SMALL_BALL_COUNT_LABEL = "Num small balls: ";
     private static final String FPS_LABEL = "Frame per sec: ";
     static final double SHOT_IMPULSE = 1.4;
+    static final double MAX_MOUSE_SHOT_IMPULSE = 2.4;
+    static final double MAX_MOUSE_DRAG_DISTANCE = 0.9;
+    private static final double MIN_MOUSE_SHOT_IMPULSE = 0.05;
     private static final int SHOT_COMBO_WINDOW_MILLIS = 80;
     private static final int UP_DIRECTION = 1;
     private static final int DOWN_DIRECTION = 2;
@@ -83,8 +88,21 @@ public class ViewFrame extends JFrame {
         });
         panel.addMouseListener(new MouseAdapter() {
             @Override
+            public void mousePressed(MouseEvent event) {
+                updateMousePreview(event);
+            }
+
+            @Override
             public void mouseReleased(MouseEvent event) {
-                fireMouseShot(event, shotHandler);
+                fireMouseShotOnRelease(event, shotHandler);
+                model.clearShotPreview();
+                panel.repaint();
+            }
+        });
+        panel.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent event) {
+                updateMousePreview(event);
             }
         });
         setFocusable(true);
@@ -92,14 +110,25 @@ public class ViewFrame extends JFrame {
         SwingUtilities.invokeLater(this::requestFocusInWindow);
     }
 
-    private void fireMouseShot(MouseEvent event, Consumer<V2d> shotHandler) {
+    private void updateMousePreview(MouseEvent event) {
         var player = model.getPlayerBall();
         if (player == null) {
             return;
         }
         var target = panel.toBoardPoint(event.getX(), event.getY());
-        var shot = shotImpulseToward(player.pos(), target);
-        if (shot.abs() > 0) {
+        double intensity = mouseShotIntensity(player.pos(), target);
+        model.setShotPreview(player.pos(), target, intensity);
+        panel.repaint();
+    }
+
+    private void fireMouseShotOnRelease(MouseEvent event, Consumer<V2d> shotHandler) {
+        var player = model.getPlayerBall();
+        if (player == null) {
+            return;
+        }
+        var target = panel.toBoardPoint(event.getX(), event.getY());
+        var shot = mouseShotImpulse(player.pos(), target);
+        if (shot.abs() >= MIN_MOUSE_SHOT_IMPULSE) {
             shotHandler.accept(shot);
         }
     }
@@ -146,6 +175,16 @@ public class ViewFrame extends JFrame {
 
     static V2d shotImpulseToward(P2d from, P2d target) {
         return target.sub(from).getNormalized().mul(SHOT_IMPULSE);
+    }
+
+    static V2d mouseShotImpulse(P2d from, P2d target) {
+        return target.sub(from).getNormalized().mul(mouseShotIntensity(from, target));
+    }
+
+    static double mouseShotIntensity(P2d from, P2d target) {
+        double distance = target.sub(from).abs();
+        double normalized = Math.min(distance, MAX_MOUSE_DRAG_DISTANCE) / MAX_MOUSE_DRAG_DISTANCE;
+        return normalized * MAX_MOUSE_SHOT_IMPULSE;
     }
 
     public void render(){
@@ -226,9 +265,44 @@ public class ViewFrame extends JFrame {
 	    		g2.drawString(SMALL_BALL_COUNT_LABEL + balls.size(), HUD_X, HUD_BALL_COUNT_Y);
 	    		g2.drawString(FPS_LABEL + model.getFramePerSec(), HUD_X, HUD_FPS_Y);
                 drawGameHud(g2);
+                drawShotPreview(g2);
         	} finally {
 	    		sync.notifyFrameRendered(frame);
         	}
+        }
+
+        private void drawShotPreview(Graphics2D g2) {
+            var preview = model.getShotPreview();
+            if (preview == null) {
+                return;
+            }
+            var start = toScreenPoint(preview.from());
+            var end = toScreenPoint(preview.to());
+            g2.setColor(new Color(30, 90, 210));
+            g2.setStroke(new BasicStroke(SHOT_PREVIEW_STROKE_WIDTH));
+            g2.draw(new Line2D.Double(start.x(), start.y(), end.x(), end.y()));
+            drawArrowHead(g2, start, end);
+            g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
+            g2.drawString(String.format("Power: %.0f%%",
+                    100 * preview.intensity() / MAX_MOUSE_SHOT_IMPULSE),
+                    end.x() + 8, end.y() - 8);
+        }
+
+        private void drawArrowHead(Graphics2D g2, ScreenPoint start, ScreenPoint end) {
+            double angle = Math.atan2(end.y() - start.y(), end.x() - start.x());
+            int arrowLength = 14;
+            double leftAngle = angle + Math.PI * 0.8;
+            double rightAngle = angle - Math.PI * 0.8;
+            g2.draw(new Line2D.Double(
+                    end.x(),
+                    end.y(),
+                    end.x() + Math.cos(leftAngle) * arrowLength,
+                    end.y() + Math.sin(leftAngle) * arrowLength));
+            g2.draw(new Line2D.Double(
+                    end.x(),
+                    end.y(),
+                    end.x() + Math.cos(rightAngle) * arrowLength,
+                    end.y() + Math.sin(rightAngle) * arrowLength));
         }
 
         private void drawGameHud(Graphics2D g2) {
@@ -261,11 +335,14 @@ public class ViewFrame extends JFrame {
         }
 
         private ScreenCircle toScreenCircle(P2d center, double radius) {
-            int screenX = (int) (ox + center.x() * delta);
-            int screenY = (int) (oy - center.y() * delta);
+            var point = toScreenPoint(center);
             int screenRadius = (int) (radius * delta);
             int diameter = screenRadius * CIRCLE_DIAMETER_FACTOR;
-            return new ScreenCircle(screenX - screenRadius, screenY - screenRadius, diameter);
+            return new ScreenCircle(point.x() - screenRadius, point.y() - screenRadius, diameter);
+        }
+
+        private ScreenPoint toScreenPoint(P2d point) {
+            return new ScreenPoint((int) (ox + point.x() * delta), (int) (oy - point.y() * delta));
         }
 
         private P2d toBoardPoint(int screenX, int screenY) {
@@ -275,4 +352,5 @@ public class ViewFrame extends JFrame {
     }
 
     private record ScreenCircle(int x, int y, int diameter) {}
+    private record ScreenPoint(int x, int y) {}
 }
