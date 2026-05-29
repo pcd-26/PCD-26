@@ -20,6 +20,14 @@ class ViewFrameTest {
     }
 
     @Test
+    void keyboardDirectionMaskCreatesSameDiagonalImpulse() {
+        var shot = ViewFrame.keyboardShotImpulse(1 | 8);
+
+        assertEquals(ViewFrame.SHOT_IMPULSE, shot.abs(), EPSILON);
+        assertEquals(shot.x(), shot.y(), EPSILON);
+    }
+
+    @Test
     void oppositeDirectionsCancelEachOther() {
         var shot = ViewFrame.shotImpulseFor(true, true, false, false);
 

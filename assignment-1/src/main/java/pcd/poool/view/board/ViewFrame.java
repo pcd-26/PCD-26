@@ -44,6 +44,7 @@ public class ViewFrame extends JFrame {
     static final double SHOT_IMPULSE = 1.4;
     static final double MAX_MOUSE_SHOT_IMPULSE = 2.4;
     static final double MAX_MOUSE_DRAG_DISTANCE = 0.9;
+    private static final double KEYBOARD_PREVIEW_SCALE = 0.35;
     private static final double MIN_MOUSE_SHOT_IMPULSE = 0.05;
     private static final int SHOT_COMBO_WINDOW_MILLIS = 80;
     private static final int UP_DIRECTION = 1;
@@ -116,6 +117,7 @@ public class ViewFrame extends JFrame {
                     return;
                 }
                 pressedShotDirections |= direction;
+                updateKeyboardPreview();
                 shotTimer.restart();
                 event.consume();
             }
@@ -178,6 +180,23 @@ public class ViewFrame extends JFrame {
         return preview != null && preview.player() == Player.BOT;
     }
 
+    private void updateKeyboardPreview() {
+        var player = model.getPlayerBall();
+        if (player == null) {
+            return;
+        }
+        var shot = keyboardShotImpulse(pressedShotDirections);
+        if (shot.abs() == 0) {
+            return;
+        }
+        model.setShotPreview(
+                player.pos(),
+                player.pos().sum(shot.mul(KEYBOARD_PREVIEW_SCALE)),
+                shot.abs(),
+                Player.HUMAN);
+        panel.repaint();
+    }
+
     private void updateMousePreview(MouseEvent event) {
         var player = model.getPlayerBall();
         if (player == null) {
@@ -202,15 +221,13 @@ public class ViewFrame extends JFrame {
     }
 
     private void fireShot(Consumer<V2d> shotHandler) {
-        var shot = shotImpulseFor(
-                (pressedShotDirections & UP_DIRECTION) != 0,
-                (pressedShotDirections & DOWN_DIRECTION) != 0,
-                (pressedShotDirections & LEFT_DIRECTION) != 0,
-                (pressedShotDirections & RIGHT_DIRECTION) != 0);
+        var shot = keyboardShotImpulse(pressedShotDirections);
         pressedShotDirections = 0;
         if (shot.abs() > 0) {
             shotHandler.accept(shot);
         }
+        model.clearShotPreview();
+        panel.repaint();
     }
 
     private int directionFor(int keyCode) {
@@ -239,6 +256,14 @@ public class ViewFrame extends JFrame {
             x += 1;
         }
         return new V2d(x, y).getNormalized().mul(SHOT_IMPULSE);
+    }
+
+    static V2d keyboardShotImpulse(int directions) {
+        return shotImpulseFor(
+                (directions & UP_DIRECTION) != 0,
+                (directions & DOWN_DIRECTION) != 0,
+                (directions & LEFT_DIRECTION) != 0,
+                (directions & RIGHT_DIRECTION) != 0);
     }
 
     static V2d shotImpulseToward(P2d from, P2d target) {
