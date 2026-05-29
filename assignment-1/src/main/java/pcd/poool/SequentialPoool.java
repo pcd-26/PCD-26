@@ -20,7 +20,7 @@ public class SequentialPoool {
     public static void main(String[] args) {
         var gameRef = new AtomicReference<>(newGame());
         var restartRequested = new AtomicBoolean(false);
-        var humanAiming = new AtomicBoolean(false);
+        var aimingOwner = new AtomicReference<Player>();
         var viewModel = new ViewModel();
         var view = new View(
                 viewModel,
@@ -28,7 +28,8 @@ public class SequentialPoool {
                 VIEW_HEIGHT,
                 velocity -> gameRef.get().shootHuman(velocity),
                 () -> restartRequested.set(true),
-                humanAiming::set);
+                () -> tryStartAiming(aimingOwner, Player.HUMAN),
+                () -> stopAiming(aimingOwner, Player.HUMAN));
 
         long startTime = System.currentTimeMillis();
         long lastUpdateTime = startTime;
@@ -39,7 +40,7 @@ public class SequentialPoool {
             long now = System.currentTimeMillis();
             if (restartRequested.getAndSet(false)) {
                 gameRef.set(newGame());
-                humanAiming.set(false);
+                aimingOwner.set(null);
                 viewModel.clearShotPreview();
                 startTime = now;
                 lastUpdateTime = now;
@@ -54,24 +55,26 @@ public class SequentialPoool {
             if (!game.snapshot().isFinished()) {
                 game.step(elapsed);
             }
-            if (humanAiming.get()) {
-                waitingForBotSince = 0;
-            } else if (game.canBotShoot()) {
+            if (game.canBotShoot()) {
                 if (waitingForBotSince == 0) {
-                    waitingForBotSince = now;
+                    if (tryStartAiming(aimingOwner, Player.BOT)) {
+                        waitingForBotSince = now;
+                    }
                 } else if (now - waitingForBotSince >= BOT_THINK_TIME_MILLIS) {
                     game.shootBot();
                     viewModel.clearShotPreview();
+                    stopAiming(aimingOwner, Player.BOT);
                     waitingForBotSince = 0;
                 }
             } else {
+                stopAiming(aimingOwner, Player.BOT);
                 waitingForBotSince = 0;
             }
 
             renderedFrames++;
             int framePerSec = framePerSec(renderedFrames, startTime, now);
             viewModel.update(game.board(), game.snapshot(), framePerSec);
-            updateBotShotPreview(game, viewModel, humanAiming.get());
+            updateBotShotPreview(game, viewModel, aimingOwner.get());
             view.render();
             sleepFrame();
         }
@@ -89,8 +92,8 @@ public class SequentialPoool {
         return (int) (renderedFrames * 1000 / elapsed);
     }
 
-    private static void updateBotShotPreview(SequentialGame game, ViewModel viewModel, boolean humanAiming) {
-        if (!game.canBotShoot() || humanAiming) {
+    private static void updateBotShotPreview(SequentialGame game, ViewModel viewModel, Player aimingOwner) {
+        if (!game.canBotShoot() || aimingOwner != Player.BOT) {
             return;
         }
         var bot = game.board().getBotBall();
@@ -105,6 +108,14 @@ public class SequentialPoool {
     static boolean isHumanAiming(ViewModel viewModel) {
         var preview = viewModel.getShotPreview();
         return preview != null && preview.player() == Player.HUMAN;
+    }
+
+    static boolean tryStartAiming(AtomicReference<Player> aimingOwner, Player player) {
+        return aimingOwner.compareAndSet(null, player) || aimingOwner.get() == player;
+    }
+
+    static void stopAiming(AtomicReference<Player> aimingOwner, Player player) {
+        aimingOwner.compareAndSet(player, null);
     }
 
     private static void sleepFrame() {

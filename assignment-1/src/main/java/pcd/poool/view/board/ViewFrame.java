@@ -11,6 +11,7 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import javax.swing.*;
 import pcd.poool.model.common.math.P2d;
@@ -61,6 +62,7 @@ public class ViewFrame extends JFrame {
     private int pressedShotDirections;
     private Timer shotTimer;
     private boolean humanDragActive;
+    private boolean humanKeyboardActive;
     
     public ViewFrame(ViewModel model, int w, int h){
         this(model, w, h, null, null);
@@ -71,7 +73,7 @@ public class ViewFrame extends JFrame {
     }
 
     public ViewFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler, Runnable restartHandler){
-        this(model, w, h, shotHandler, restartHandler, null);
+        this(model, w, h, shotHandler, restartHandler, null, null);
     }
 
     public ViewFrame(
@@ -80,7 +82,8 @@ public class ViewFrame extends JFrame {
             int h,
             Consumer<V2d> shotHandler,
             Runnable restartHandler,
-            Consumer<Boolean> humanAimingHandler){
+            BooleanSupplier humanAimingStartHandler,
+            Runnable humanAimingStopHandler){
     	this.model = model;
     	this.sync = new RenderSynch();
     	setTitle(WINDOW_TITLE);
@@ -89,14 +92,15 @@ public class ViewFrame extends JFrame {
         panel = new VisualiserPanel(w,h);
         getContentPane().add(panel);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        installInput(shotHandler, restartHandler, humanAimingHandler);
+        installInput(shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
     }
 
     private void installInput(
             Consumer<V2d> shotHandler,
             Runnable restartHandler,
-            Consumer<Boolean> humanAimingHandler) {
-        shotTimer = new Timer(SHOT_COMBO_WINDOW_MILLIS, event -> fireShot(shotHandler));
+            BooleanSupplier humanAimingStartHandler,
+            Runnable humanAimingStopHandler) {
+        shotTimer = new Timer(SHOT_COMBO_WINDOW_MILLIS, event -> fireShot(shotHandler, humanAimingStopHandler));
         shotTimer.setRepeats(false);
         addKeyListener(new KeyAdapter() {
             @Override
@@ -109,13 +113,14 @@ public class ViewFrame extends JFrame {
                 if (shotHandler == null) {
                     return;
                 }
-                if (isBotAiming(model)) {
-                    return;
-                }
                 int direction = directionFor(event.getKeyCode());
                 if (direction == 0) {
                     return;
                 }
+                if (!humanKeyboardActive && !tryStartHumanAiming(humanAimingStartHandler)) {
+                    return;
+                }
+                humanKeyboardActive = true;
                 pressedShotDirections |= direction;
                 updateKeyboardPreview();
                 shotTimer.restart();
@@ -128,12 +133,11 @@ public class ViewFrame extends JFrame {
                 if (shotHandler == null) {
                     return;
                 }
-                if (isBotAiming(model)) {
+                if (!tryStartHumanAiming(humanAimingStartHandler)) {
                     humanDragActive = false;
                     return;
                 }
                 humanDragActive = true;
-                notifyHumanAiming(humanAimingHandler, true);
                 updateMousePreview(event);
             }
 
@@ -148,7 +152,7 @@ public class ViewFrame extends JFrame {
                 fireMouseShotOnRelease(event, shotHandler);
                 model.clearShotPreview();
                 humanDragActive = false;
-                notifyHumanAiming(humanAimingHandler, false);
+                stopHumanAiming(humanAimingStopHandler);
                 panel.repaint();
             }
         });
@@ -169,9 +173,13 @@ public class ViewFrame extends JFrame {
         SwingUtilities.invokeLater(this::requestFocusInWindow);
     }
 
-    private void notifyHumanAiming(Consumer<Boolean> humanAimingHandler, boolean aiming) {
-        if (humanAimingHandler != null) {
-            humanAimingHandler.accept(aiming);
+    private boolean tryStartHumanAiming(BooleanSupplier humanAimingStartHandler) {
+        return humanAimingStartHandler == null || humanAimingStartHandler.getAsBoolean();
+    }
+
+    private void stopHumanAiming(Runnable humanAimingStopHandler) {
+        if (humanAimingStopHandler != null) {
+            humanAimingStopHandler.run();
         }
     }
 
@@ -220,12 +228,14 @@ public class ViewFrame extends JFrame {
         }
     }
 
-    private void fireShot(Consumer<V2d> shotHandler) {
+    private void fireShot(Consumer<V2d> shotHandler, Runnable humanAimingStopHandler) {
         var shot = keyboardShotImpulse(pressedShotDirections);
         pressedShotDirections = 0;
         if (shot.abs() > 0) {
             shotHandler.accept(shot);
         }
+        humanKeyboardActive = false;
+        stopHumanAiming(humanAimingStopHandler);
         model.clearShotPreview();
         panel.repaint();
     }
