@@ -1,7 +1,10 @@
 package pcd.poool.view.board;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
+import pcd.poool.model.common.math.V2d;
 
 public class View {
 
@@ -10,16 +13,52 @@ public class View {
 	
 	public View(ViewModel model, int w, int h) {
 		this.viewModel = model;
-		displayFrame(model, w, h);
+		displayFrame(model, w, h, null, null, null, null);
 	}
 
-	private void displayFrame(ViewModel model, int w, int h) {
+	public View(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
+		this.viewModel = model;
+		displayFrame(model, w, h, shotHandler, null, null, null);
+	}
+
+	public View(ViewModel model, int w, int h, Consumer<V2d> shotHandler, Runnable restartHandler) {
+		this.viewModel = model;
+		displayFrame(model, w, h, shotHandler, restartHandler, null, null);
+	}
+
+	public View(
+			ViewModel model,
+			int w,
+			int h,
+			Consumer<V2d> shotHandler,
+			Runnable restartHandler,
+			BooleanSupplier humanAimingStartHandler,
+			Runnable humanAimingStopHandler) {
+		this.viewModel = model;
+		displayFrame(model, w, h, shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
+	}
+
+	private void displayFrame(
+			ViewModel model,
+			int w,
+			int h,
+			Consumer<V2d> shotHandler,
+			Runnable restartHandler,
+			BooleanSupplier humanAimingStartHandler,
+			Runnable humanAimingStopHandler) {
 		if (SwingUtilities.isEventDispatchThread()) {
-			createAndShowFrame(model, w, h);
+			createAndShowFrame(model, w, h, shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
 			return;
 		}
 		try {
-			SwingUtilities.invokeAndWait(() -> createAndShowFrame(model, w, h));
+			SwingUtilities.invokeAndWait(() -> createAndShowFrame(
+					model,
+					w,
+					h,
+					shotHandler,
+					restartHandler,
+					humanAimingStartHandler,
+					humanAimingStopHandler));
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("Interrupted while showing view", ex);
@@ -28,8 +67,22 @@ public class View {
 		}
 	}
 
-	private void createAndShowFrame(ViewModel model, int w, int h) {
-		frame = new ViewFrame(model, w, h);	
+	private void createAndShowFrame(
+			ViewModel model,
+			int w,
+			int h,
+			Consumer<V2d> shotHandler,
+			Runnable restartHandler,
+			BooleanSupplier humanAimingStartHandler,
+			Runnable humanAimingStopHandler) {
+		frame = new ViewFrame(
+				model,
+				w,
+				h,
+				shotHandler,
+				restartHandler,
+				humanAimingStartHandler,
+				humanAimingStopHandler);	
 		frame.setVisible(true);
 	}
 		

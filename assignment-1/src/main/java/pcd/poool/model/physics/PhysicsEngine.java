@@ -50,6 +50,9 @@ public class PhysicsEngine {
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }
+        if (board.getBotBallEntity() != null) {
+            board.getBotBallEntity().updateState(dt, bounds);
+        }
         for (var ball : board.getSmallBallEntities()) {
             ball.updateState(dt, bounds);
         }
@@ -58,7 +61,10 @@ public class PhysicsEngine {
 
         var allBalls = board.getCollisionBalls();
         for (var pair : collisionDetector.detectCollisionPairs(allBalls)) {
-            Ball.resolveCollision(allBalls.get(pair.firstIndex()), allBalls.get(pair.secondIndex()));
+            var first = allBalls.get(pair.firstIndex());
+            var second = allBalls.get(pair.secondIndex());
+            board.recordCollision(first, second);
+            Ball.resolveCollision(first, second);
         }
     }
 }
