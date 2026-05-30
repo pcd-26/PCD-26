@@ -254,6 +254,15 @@ local movement/collision candidates. The coordinator then merges the partial
 results, handles balls near region boundaries, deduplicates cross-region
 collision pairs, and applies the final resolution in a deterministic order.
 
+Region boundaries require an overlap/border policy. A worker must not consider
+only the balls whose centers are inside its region: balls close to a border can
+collide with balls owned by the adjacent region. For this reason, each region
+also inspects a border band at least as wide as the maximum collision distance
+used by the broad phase. Candidate pairs that cross a region boundary are
+reported to the coordinator together with local pairs. Since the same pair may
+be discovered by multiple workers, the merge phase stores pairs in a set and
+then sorts them by stable ball/index identifiers before collision resolution.
+
 For large configurations, a uniform grid is preferable to hard-coded quadrants:
 it generalizes to more workers, adapts better to thousands of balls, and
 matches the existing broad-phase collision detector. Quadrants remain a useful
