@@ -189,12 +189,75 @@ to call `PhysicsEngine.step(...)` on the same board concurrently.
 - Control loop: consumes events, updates turn state, enables input or bot
 - Rendering loop: reads latest available snapshot without blocking
 
+### 5.1 Proposed multithreaded runtime
+The preferred platform-thread design is based on a small number of active
+components with explicit ownership, plus worker threads for the expensive
+physics phases.
+
+```text
+Swing EDT
+  - collects mouse/keyboard input
+  - sends commands such as ShootHuman, Restart, Pause
+  - never mutates the game model directly
+
+BotThread
+  - reads the latest immutable snapshot
+  - computes a bot shot when the bot can play
+  - sends ShootBot commands
+
+GameControllerThread
+  - owns logical game progression
+  - consumes pending commands
+  - coordinates physics steps
+  - applies score, game-over, restart, and pause rules
+  - publishes immutable snapshots for the GUI
+
+PhysicsWorkerThread[]
+  - process independent physics work, such as ball chunks or spatial regions
+  - do not decide game rules
+  - return partial results to the controller/physics coordinator
+
+SnapshotStore
+  - stores the latest immutable game/board snapshot
+  - can be read by the GUI without blocking the simulation loop
+```
+
+The scoring and rule logic should not run as a fully independent writer thread:
+it depends on physics events such as collisions, pocketed balls, and cue-ball
+losses. For this reason, the `GameControllerThread` should apply rules after
+each physics step, using the events produced by the physics layer.
+
+Conceptual control flow:
+
+```text
+Input/Bot
+   -> command queue
+   -> GameControllerThread
+   -> parallel physics step
+   -> consume physics events
+   -> update score/status
+   -> publish snapshot
+   -> View
+```
+
 ## 6. Physics parallelization strategy
 Strategy:
 1. broad phase with spatial partitioning
 2. parallel processing of collision candidate pairs
 3. merge/deduplicate pairs
 4. final resolution with stable ordering (tie-break by ball id)
+
+An intuitive platform-thread variant is to divide the board into spatial
+regions, for example four quadrants, and assign each region to a worker thread.
+Each worker processes the balls currently belonging to its region and produces
+local movement/collision candidates. The coordinator then merges the partial
+results, handles balls near region boundaries, deduplicates cross-region
+collision pairs, and applies the final resolution in a deterministic order.
+
+For large configurations, a uniform grid is preferable to hard-coded quadrants:
+it generalizes to more workers, adapts better to thousands of balls, and
+matches the existing broad-phase collision detector. Quadrants remain a useful
+conceptual explanation for the report and for a first platform-thread design.
 
 Tradeoffs:
 - higher throughput
