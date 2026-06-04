@@ -11,10 +11,18 @@ public class PhysicsEngine {
     private final SpatialCollisionDetector collisionDetector;
     private final long maxStepMillis;
 
+    /**
+     * Creates a physics engine using the default maximum sub-step duration.
+     */
     public PhysicsEngine() {
         this(PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
+    /**
+     * Creates a physics engine.
+     *
+     * @param maxStepMillis maximum duration of one internal physics sub-step
+     */
     public PhysicsEngine(long maxStepMillis) {
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
@@ -30,6 +38,9 @@ public class PhysicsEngine {
      * instability when a caller provides a large delta. The whole operation is
      * synchronized on the board so direct callers preserve the single-writer
      * ownership rule used by the concurrent architecture.
+     *
+     * @param board board to mutate
+     * @param elapsedMillis elapsed time in milliseconds
      */
     public void step(Board board, long elapsedMillis) {
         if (elapsedMillis < 0) {

@@ -13,6 +13,14 @@ public class Ball {
     private final double radius;
     private final double mass;
 
+    /**
+     * Creates a mutable physical ball.
+     *
+     * @param pos initial center position
+     * @param radius ball radius
+     * @param mass ball mass used by collision impulses
+     * @param vel initial velocity
+     */
     public Ball(P2d pos, double radius, double mass, V2d vel){
        this.pos = pos;
        this.radius = radius;
@@ -20,10 +28,22 @@ public class Ball {
        this.vel = vel;
     }
 
+    /**
+     * Advances this ball using the boundary owned by a board.
+     *
+     * @param dt elapsed time in milliseconds
+     * @param ctx board that provides movement bounds
+     */
     public void updateState(long dt, Board ctx){
         updateState(dt, ctx.getBounds());
     }
 
+    /**
+     * Advances this ball by applying friction, movement, and wall bounces.
+     *
+     * @param dt elapsed time in milliseconds
+     * @param bounds rectangular movement boundary
+     */
     public void updateState(long dt, Boundary bounds){
         double dt_scaled = dt * PhysicsDefaults.SECONDS_PER_MILLISECOND;
         applyFriction(dt_scaled);
@@ -31,6 +51,11 @@ public class Ball {
      	applyBoundaryConstraints(bounds);
     }
     
+    /**
+     * Assigns a new velocity to the ball.
+     *
+     * @param vel new velocity
+     */
     public void kick(V2d vel) {
     	this.vel = vel;
     }
@@ -56,6 +81,9 @@ public class Ball {
      *
      * <p>The method is deterministic for coincident centers: it chooses the
      * positive X axis as the separation normal, avoiding undefined normals.
+     *
+     * @param a first colliding ball
+     * @param b second colliding ball
      */
     public static void resolveCollision(Ball a, Ball b) {
     	double dx   = b.pos.x() - a.pos.x();
@@ -122,22 +150,47 @@ public class Ball {
     }
 
     
+    /**
+     * Gets the current center position.
+     *
+     * @return current center position
+     */
     public P2d getPos(){        
     	return pos;
     }
     
+    /**
+     * Gets the mass used by impulse computations.
+     *
+     * @return mass used by elastic collision resolution
+     */
     public double getMass() {
     	return mass;
     }
     
+    /**
+     * Gets the current velocity.
+     *
+     * @return current velocity
+     */
     public V2d getVel() {
     	return vel;
     }
     
+    /**
+     * Gets the ball radius.
+     *
+     * @return ball radius
+     */
     public double getRadius() {
     	return radius;
     }
 
+    /**
+     * Checks whether this ball is still moving.
+     *
+     * @return whether the ball velocity is above the rest threshold
+     */
     public boolean isMoving() {
         return vel.abs() > PhysicsDefaults.REST_SPEED_THRESHOLD;
     }

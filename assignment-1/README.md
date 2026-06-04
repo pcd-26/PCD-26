@@ -98,7 +98,25 @@ sequential game loop can be collected with:
 java -cp assignment-1/target/classes pcd.poool.benchmark.SequentialGameBenchmark 600
 ```
 
+The first platform-thread implementation is available through the reusable
+`pcd.poool.threaded.ThreadedGameRunner`. It keeps the sequential game model as
+the reference semantics, owns it from a controller platform thread, accepts
+asynchronous shot commands through a monitor, publishes immutable snapshots,
+and can optionally start a separate bot platform thread. Focused tests cover
+controller progression, asynchronous command execution, bot activity, and
+shutdown behavior.
+
+The playable platform-thread launcher can be started with:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.ThreadedPoool
+```
+
 The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
+
+Additional architectural notes, including the feasibility assessment for the
+platform-thread implementation and the proposed spatial decomposition strategy,
+are available in [`docs/concurrent-architecture.md`](docs/concurrent-architecture.md).
 
 The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to
 `main` and can also be started manually. It builds the report PDF and uploads an

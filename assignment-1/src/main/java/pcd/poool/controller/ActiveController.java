@@ -24,12 +24,21 @@ public class ActiveController<T> extends Thread {
     private final T target;
     private volatile boolean running;
 
+    /**
+     * Creates an active controller for a target object.
+     *
+     * @param target object on which commands are executed
+     * @param queueSize maximum number of pending commands
+     */
     public ActiveController(T target, int queueSize) {
         this.cmdBuffer = new BoundedBufferImpl<>(queueSize);
         this.target = target;
         this.running = true;
     }
 
+    /**
+     * Consumes commands until the controller is shut down or interrupted.
+     */
     @Override
     public void run() {
         log("started");
@@ -47,6 +56,11 @@ public class ActiveController<T> extends Thread {
         log("stopped");
     }
 
+    /**
+     * Enqueues a command for asynchronous execution.
+     *
+     * @param cmd command to execute on the controller target
+     */
     public void notifyNewCmd(Cmd<T> cmd) {
         try {
             cmdBuffer.put(cmd);
@@ -56,6 +70,9 @@ public class ActiveController<T> extends Thread {
         }
     }
 
+    /**
+     * Requests controller termination and interrupts any blocking buffer wait.
+     */
     public void shutdown() {
         running = false;
         interrupt();

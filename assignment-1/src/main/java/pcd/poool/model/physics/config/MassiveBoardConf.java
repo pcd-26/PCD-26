@@ -8,6 +8,10 @@ import pcd.poool.model.physics.Ball;
 import pcd.poool.model.physics.BoardConf;
 import pcd.poool.model.physics.Boundary;
 
+/**
+ * Massive grid-based board configuration used to stress broad-phase collision
+ * detection and benchmark scalability.
+ */
 public class MassiveBoardConf implements BoardConf {
 
 	private static final Boundary BOARD_BOUNDARY = new Boundary(-1.5, -1.0, 1.5, 1.0);
@@ -24,6 +28,12 @@ public class MassiveBoardConf implements BoardConf {
 	private static final double SMALL_BALL_RADIUS = 0.01;
 	private static final double SMALL_BALL_MASS = 0.25;
 	private static final V2d RESTING = new V2d(0, 0);
+
+	/**
+	 * Creates the massive board configuration.
+	 */
+	public MassiveBoardConf() {
+	}
 
 	@Override
 	public Ball getPlayerBall() {

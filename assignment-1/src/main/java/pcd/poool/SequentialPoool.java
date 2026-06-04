@@ -25,6 +25,17 @@ public class SequentialPoool {
     private static final long FRAME_SLEEP_MILLIS = 4;
     private static final double BOT_PREVIEW_SCALE = 0.35;
 
+    /**
+     * Utility class; not meant to be instantiated.
+     */
+    private SequentialPoool() {
+    }
+
+    /**
+     * Starts the playable sequential game.
+     *
+     * @param args ignored
+     */
     public static void main(String[] args) {
         var gameRef = new AtomicReference<>(newGame());
         var restartRequested = new AtomicBoolean(false);

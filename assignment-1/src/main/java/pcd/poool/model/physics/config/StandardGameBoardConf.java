@@ -23,6 +23,12 @@ public class StandardGameBoardConf implements BoardConf {
     private static final double SMALL_BALL_MASS = 0.4;
     private static final V2d RESTING = new V2d(0, 0);
 
+    /**
+     * Creates the standard playable board configuration.
+     */
+    public StandardGameBoardConf() {
+    }
+
     @Override
     public Boundary getBoardBoundary() {
         return BOARD_BOUNDARY;

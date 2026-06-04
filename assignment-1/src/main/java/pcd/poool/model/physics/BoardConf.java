@@ -10,16 +10,22 @@ import pcd.poool.model.common.math.V2d;
 public interface BoardConf {
 
 	/**
+	 * Gets the playable boundary.
+	 *
 	 * @return rectangular area where balls can move
 	 */
 	Boundary getBoardBoundary();
 	
 	/**
+	 * Creates the initial human cue ball.
+	 *
 	 * @return initial human cue ball
 	 */
 	Ball getPlayerBall();
 
 	/**
+	 * Creates the initial bot cue ball.
+	 *
 	 * @return initial bot cue ball
 	 */
 	default Ball getBotBall() {
@@ -28,11 +34,15 @@ public interface BoardConf {
 	}
 	
 	/**
+	 * Creates the initial small balls.
+	 *
 	 * @return initial small balls
 	 */
 	List<Ball> getSmallBalls();
 
 	/**
+	 * Creates the holes used by the game.
+	 *
 	 * @return holes used by the game; defaults to the upper board corners
 	 */
 	default List<Hole> getHoles() {
