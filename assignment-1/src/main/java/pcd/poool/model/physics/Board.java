@@ -22,6 +22,9 @@ public class Board {
 
     /**
      * Immutable ball data used by rendering and tests.
+     *
+     * @param pos ball center position
+     * @param radius ball radius
      */
     public static record BallSnapshot(P2d pos, double radius) {}
 
@@ -37,6 +40,10 @@ public class Board {
     private boolean botBallPocketed;
     private final Map<Ball, Player> lastDirectCueTouch;
     
+    /**
+     * Creates an empty board. Call {@link #init(BoardConf)} before using it in
+     * a game or benchmark.
+     */
     public Board(){
         physicsEngine = new PhysicsEngine();
         balls = new ArrayList<>();
@@ -74,6 +81,8 @@ public class Board {
     
     /**
      * Returns immutable rendering data instead of exposing mutable ball objects.
+     *
+     * @return immutable snapshots of all small balls currently on the board
      */
     public synchronized List<BallSnapshot> getBalls(){
     	if (balls == null) {
@@ -86,6 +95,11 @@ public class Board {
     	return Collections.unmodifiableList(snapshots);
     }
     
+    /**
+     * Gets the human cue-ball snapshot.
+     *
+     * @return immutable human cue-ball snapshot, or {@code null} when pocketed
+     */
     public synchronized BallSnapshot getPlayerBall() {
     	if (playerBall == null || playerBallPocketed) {
     		return null;
@@ -93,6 +107,11 @@ public class Board {
     	return new BallSnapshot(playerBall.getPos(), playerBall.getRadius());
     }
 
+    /**
+     * Gets the bot cue-ball snapshot.
+     *
+     * @return immutable bot cue-ball snapshot, or {@code null} when pocketed
+     */
     public synchronized BallSnapshot getBotBall() {
         if (botBall == null || botBallPocketed) {
             return null;
@@ -100,10 +119,20 @@ public class Board {
         return new BallSnapshot(botBall.getPos(), botBall.getRadius());
     }
 
+    /**
+     * Gets the configured holes.
+     *
+     * @return immutable copy of the configured holes
+     */
     public synchronized List<Hole> getHoles() {
         return Collections.unmodifiableList(new ArrayList<>(holes));
     }
 
+    /**
+     * Gets the total number of pocketed small balls.
+     *
+     * @return total number of small balls removed through holes
+     */
     public synchronized int getPocketedSmallBalls() {
         return pocketedSmallBalls;
     }
@@ -113,6 +142,8 @@ public class Board {
      *
      * <p>This legacy aggregate form is kept for tests and compatibility. Game
      * rules should prefer {@link #consumePendingScoredSmallBalls(Player)}.
+     *
+     * @return number of pending score events across all players
      */
     public synchronized int consumePendingScoredSmallBalls() {
         int scored = pendingScoredSmallBalls.values().stream().mapToInt(Integer::intValue).sum();
@@ -135,14 +166,29 @@ public class Board {
         return scored == null ? 0 : scored;
     }
 
+    /**
+     * Checks whether the human cue ball has been pocketed.
+     *
+     * @return whether the human cue ball has entered a hole
+     */
     public synchronized boolean isPlayerBallPocketed() {
         return playerBallPocketed;
     }
 
+    /**
+     * Checks whether the bot cue ball has been pocketed.
+     *
+     * @return whether the bot cue ball has entered a hole
+     */
     public synchronized boolean isBotBallPocketed() {
         return botBallPocketed;
     }
 
+    /**
+     * Checks whether any active ball is moving.
+     *
+     * @return whether any non-pocketed ball is still moving
+     */
     public synchronized boolean areBallsMoving() {
         if (playerBall != null && !playerBallPocketed && playerBall.isMoving()) {
             return true;
@@ -154,6 +200,8 @@ public class Board {
     }
 
     /**
+     * Checks whether a player's cue ball can currently be kicked.
+     *
      * @param player cue-ball owner
      * @return whether the player's cue ball exists and is stopped
      */
@@ -175,6 +223,11 @@ public class Board {
         }
     }
     
+    /**
+     * Gets the board boundary.
+     *
+     * @return rectangular board boundary
+     */
     public Boundary getBounds(){
         return bounds;
     }

@@ -6,6 +6,7 @@ import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.game.Player;
 import pcd.poool.model.physics.Board;
+import pcd.poool.model.physics.Hole;
 
 /**
  * Thread-safe snapshot consumed by the Swing renderer.
@@ -16,13 +17,28 @@ import pcd.poool.model.physics.Board;
  */
 public class ViewModel {
 
-	/** Immutable render data for a ball. */
+	/**
+	 * Immutable render data for a ball.
+	 *
+	 * @param pos center position
+	 * @param radius ball radius
+	 */
 	public static record BallViewInfo(P2d pos, double radius) {}
-	/** Immutable render data for a hole. */
+	/**
+	 * Immutable render data for a hole.
+	 *
+	 * @param center hole center
+	 * @param radius hole radius
+	 */
 	public static record HoleViewInfo(P2d center, double radius) {}
 	/**
 	 * Shot preview data. {@code player} controls the preview color and also
 	 * records who owns the current aiming interaction.
+	 *
+	 * @param from preview start position
+	 * @param to preview end position
+	 * @param intensity shot intensity displayed by the HUD
+	 * @param player preview owner
 	 */
 	public static record ShotPreviewInfo(P2d from, P2d to, double intensity, Player player) {}
 
@@ -34,6 +50,9 @@ public class ViewModel {
 	private int framePerSec;
 	private GameSnapshot game;
 	
+	/**
+	 * Creates an empty view model.
+	 */
 	public ViewModel() {
 		balls = new ArrayList<BallViewInfo>();
 		holes = new ArrayList<HoleViewInfo>();
@@ -73,32 +92,92 @@ public class ViewModel {
 		update(board, framePerSec);
 		this.game = game;
 	}
+
+	/**
+	 * Copies immutable board snapshots into rendering data.
+	 *
+	 * @param smallBalls current small-ball snapshots
+	 * @param playerBall current human cue-ball snapshot, or {@code null}
+	 * @param botBall current bot cue-ball snapshot, or {@code null}
+	 * @param holes current hole layout
+	 * @param game current game snapshot
+	 * @param framePerSec measured frame rate
+	 */
+	public synchronized void update(
+			List<Board.BallSnapshot> smallBalls,
+			Board.BallSnapshot playerBall,
+			Board.BallSnapshot botBall,
+			List<Hole> holes,
+			GameSnapshot game,
+			int framePerSec) {
+		balls.clear();
+		for (var ball : smallBalls) {
+			balls.add(new BallViewInfo(ball.pos(), ball.radius()));
+		}
+		this.holes.clear();
+		for (var hole : holes) {
+			this.holes.add(new HoleViewInfo(hole.center(), hole.radius()));
+		}
+		player = playerBall == null ? null : new BallViewInfo(playerBall.pos(), playerBall.radius());
+		bot = botBall == null ? null : new BallViewInfo(botBall.pos(), botBall.radius());
+		this.game = game;
+		this.framePerSec = framePerSec;
+	}
 	
+	/**
+	 * Gets the rendered small balls.
+	 *
+	 * @return copy of the rendered small-ball data
+	 */
 	public synchronized List<BallViewInfo> getBalls(){
 		var copy = new ArrayList<BallViewInfo>();
 		copy.addAll(balls);
 		return copy;
-		
+
 	}
 
+	/**
+	 * Gets the current FPS value.
+	 *
+	 * @return latest measured frame rate
+	 */
 	public synchronized int getFramePerSec() {
 		return framePerSec;
 	}
 
+	/**
+	 * Gets the human cue ball render data.
+	 *
+	 * @return rendered human cue ball, or {@code null} when pocketed
+	 */
 	public synchronized BallViewInfo getPlayerBall() {
 		return player;
 	}
 
+	/**
+	 * Gets the bot cue ball render data.
+	 *
+	 * @return rendered bot cue ball, or {@code null} when pocketed
+	 */
 	public synchronized BallViewInfo getBotBall() {
 		return bot;
 	}
 
+	/**
+	 * Gets the logical game snapshot.
+	 *
+	 * @return latest logical game snapshot
+	 */
 	public synchronized GameSnapshot getGame() {
 		return game;
 	}
 
 	/**
 	 * Sets a human-owned shot preview.
+	 *
+	 * @param from cue-ball position
+	 * @param to selected target point
+	 * @param intensity shot strength used by the HUD label
 	 */
 	public synchronized void setShotPreview(P2d from, P2d to, double intensity) {
 		setShotPreview(from, to, intensity, Player.HUMAN);
@@ -123,10 +202,20 @@ public class ViewModel {
 		shotPreview = null;
 	}
 
+	/**
+	 * Gets the active shot preview.
+	 *
+	 * @return active shot preview, or {@code null} when no preview is visible
+	 */
 	public synchronized ShotPreviewInfo getShotPreview() {
 		return shotPreview;
 	}
 
+	/**
+	 * Gets the rendered holes.
+	 *
+	 * @return copy of rendered hole data
+	 */
 	public synchronized List<HoleViewInfo> getHoles() {
 		return new ArrayList<HoleViewInfo>(holes);
 	}

@@ -64,6 +64,8 @@ public class SequentialGame {
      *
      * <p>The runner uses this for the red preview vector before the bot actually
      * kicks. A zero vector means the bot cannot currently shoot.
+     *
+     * @return bot shot velocity preview
      */
     public synchronized V2d previewBotShot() {
         if (!canBotShoot()) {
@@ -73,6 +75,8 @@ public class SequentialGame {
     }
 
     /**
+     * Checks human cue-ball readiness.
+     *
      * @return whether the human cue ball is present, stopped, and the game is not finished
      */
     public synchronized boolean canHumanShoot() {
@@ -80,6 +84,8 @@ public class SequentialGame {
     }
 
     /**
+     * Checks bot cue-ball readiness.
+     *
      * @return whether the bot cue ball is present, stopped, and the game is not finished
      */
     public synchronized boolean canBotShoot() {
@@ -152,12 +158,16 @@ public class SequentialGame {
      *
      * <p>Callers must keep model mutation through this game facade unless they
      * are implementing low-level physics tests.
+     *
+     * @return owned mutable board
      */
     public synchronized Board board() {
         return board;
     }
 
     /**
+     * Creates an immutable snapshot of the current game state.
+     *
      * @return immutable snapshot of scores, lifecycle state, readiness, and metrics
      */
     public synchronized GameSnapshot snapshot() {
