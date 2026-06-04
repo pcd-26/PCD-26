@@ -3,7 +3,10 @@ package pcd.poool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import pcd.poool.model.game.Player;
+import pcd.poool.model.physics.BoardConf;
+import pcd.poool.model.physics.config.MassiveBoardConf;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
+import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 import pcd.poool.threaded.ThreadedGameRunner;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
@@ -21,6 +24,7 @@ public class ThreadedPoool {
     private static final int VIEW_HEIGHT = 800;
     private static final long FRAME_SLEEP_MILLIS = 4;
     private static final double BOT_PREVIEW_SCALE = 0.35;
+    private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
 
     /**
      * Utility class; not meant to be instantiated.
@@ -34,7 +38,8 @@ public class ThreadedPoool {
      * @param args ignored
      */
     public static void main(String[] args) {
-        var runnerRef = new AtomicReference<>(newStartedRunner());
+        var boardProfile = BOARD_PROFILE.createConfiguration();
+        var runnerRef = new AtomicReference<>(newStartedRunner(boardProfile));
         var restartRequested = new AtomicBoolean(false);
         var aimingOwner = new AtomicReference<Player>();
         var viewModel = new ViewModel();
@@ -55,7 +60,7 @@ public class ThreadedPoool {
         while (true) {
             long now = System.currentTimeMillis();
             if (restartRequested.getAndSet(false)) {
-                var oldRunner = runnerRef.getAndSet(newStartedRunner());
+                var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile));
                 oldRunner.close();
                 aimingOwner.set(null);
                 viewModel.clearShotPreview();
@@ -79,10 +84,33 @@ public class ThreadedPoool {
         }
     }
 
-    private static ThreadedGameRunner newStartedRunner() {
-        var runner = new ThreadedGameRunner(new StandardGameBoardConf());
+    private static ThreadedGameRunner newStartedRunner(BoardConf boardProfile) {
+        var runner = new ThreadedGameRunner(boardProfile);
         runner.start();
         return runner;
+    }
+
+    private enum BoardProfile {
+        STANDARD {
+            @Override
+            BoardConf createConfiguration() {
+                return new StandardGameBoardConf();
+            }
+        },
+        THOUSAND {
+            @Override
+            BoardConf createConfiguration() {
+                return new ThousandBallsBoardConf();
+            }
+        },
+        MASSIVE {
+            @Override
+            BoardConf createConfiguration() {
+                return new MassiveBoardConf();
+            }
+        };
+
+        abstract BoardConf createConfiguration();
     }
 
     /**
