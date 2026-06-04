@@ -28,7 +28,7 @@ public class Board {
      */
     public static record BallSnapshot(P2d pos, double radius) {}
 
-    private final PhysicsEngine physicsEngine;
+    private final PhysicsStepper physicsEngine;
     private List<Ball> balls;
     private Ball playerBall;
     private Ball botBall;
@@ -45,7 +45,19 @@ public class Board {
      * a game or benchmark.
      */
     public Board(){
-        physicsEngine = new PhysicsEngine();
+        this(new PhysicsEngine());
+    }
+
+    /**
+     * Creates an empty board using the supplied physics stepping strategy.
+     *
+     * @param physicsEngine physics strategy used by {@link #updateState(long)}
+     */
+    public Board(PhysicsStepper physicsEngine){
+        if (physicsEngine == null) {
+            throw new IllegalArgumentException("physicsEngine must not be null");
+        }
+        this.physicsEngine = physicsEngine;
         balls = new ArrayList<>();
         holes = List.of();
         pendingScoredSmallBalls = new EnumMap<>(Player.class);

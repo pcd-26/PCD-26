@@ -6,7 +6,7 @@ package pcd.poool.model.physics;
  * <p>The engine is deliberately passive: runners decide whether steps are
  * executed sequentially, by a dedicated platform thread, or by tasks.
  */
-public class PhysicsEngine {
+public class PhysicsEngine implements PhysicsStepper {
 
     private final SpatialCollisionDetector collisionDetector;
     private final long maxStepMillis;
@@ -42,6 +42,7 @@ public class PhysicsEngine {
      * @param board board to mutate
      * @param elapsedMillis elapsed time in milliseconds
      */
+    @Override
     public void step(Board board, long elapsedMillis) {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");

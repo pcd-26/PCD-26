@@ -3,6 +3,7 @@ package pcd.poool.model.game;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.Board;
 import pcd.poool.model.physics.BoardConf;
+import pcd.poool.model.physics.PhysicsStepper;
 
 /**
  * Single-threaded gameplay coordinator for the playable sequential baseline.
@@ -35,7 +36,19 @@ public class SequentialGame {
      * @param conf initial board layout, cue balls, small balls, bounds, and holes
      */
     public SequentialGame(BoardConf conf) {
-        board = new Board();
+        this(conf, null);
+    }
+
+    /**
+     * Creates a new game from the given board configuration and physics
+     * stepping strategy.
+     *
+     * @param conf initial board layout, cue balls, small balls, bounds, and holes
+     * @param physicsStepper physics strategy, or {@code null} for the default
+     *        sequential engine
+     */
+    public SequentialGame(BoardConf conf, PhysicsStepper physicsStepper) {
+        board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
         status = GameStatus.RUNNING;
     }

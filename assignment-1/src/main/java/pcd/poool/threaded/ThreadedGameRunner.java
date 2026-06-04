@@ -5,6 +5,7 @@ import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.SequentialGame;
 import pcd.poool.model.physics.BoardConf;
 import pcd.poool.model.physics.PhysicsDefaults;
+import pcd.poool.model.physics.ThreadedPhysicsEngine;
 
 /**
  * Platform-thread execution strategy for Poool.
@@ -17,6 +18,7 @@ public class ThreadedGameRunner implements AutoCloseable {
 
     private static final Duration DEFAULT_JOIN_TIMEOUT = Duration.ofSeconds(2);
 
+    private final ThreadedPhysicsEngine physicsEngine;
     private final SequentialGame game;
     private final Config config;
     private final CommandQueueMonitor commands;
@@ -41,8 +43,9 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @param config execution configuration
      */
     public ThreadedGameRunner(BoardConf boardConf, Config config) {
-        game = new SequentialGame(boardConf);
         this.config = config;
+        physicsEngine = new ThreadedPhysicsEngine(config.physicsWorkerCount(), config.tickMillis());
+        game = new SequentialGame(boardConf, physicsEngine);
         commands = new CommandQueueMonitor();
         snapshots = new SnapshotStore(ThreadedGameSnapshot.from(game));
     }
@@ -130,6 +133,7 @@ public class ThreadedGameRunner implements AutoCloseable {
     public void awaitTermination(Duration timeout) throws InterruptedException {
         join(controllerThread, timeout);
         join(botThread, timeout);
+        physicsEngine.close();
     }
 
     @Override
@@ -223,8 +227,21 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @param tickMillis fixed simulation tick duration
      * @param botEnabled whether to start the asynchronous bot agent
      * @param botThinkTimeMillis delay before the bot submits a shot
+     * @param physicsWorkerCount number of worker platform threads used inside
+     *        each physics step
      */
-    public record Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis) {
+    public record Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis, int physicsWorkerCount) {
+
+        /**
+         * Creates a configuration using the default physics worker count.
+         *
+         * @param tickMillis fixed simulation tick duration
+         * @param botEnabled whether to start the asynchronous bot agent
+         * @param botThinkTimeMillis delay before the bot submits a shot
+         */
+        public Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis) {
+            this(tickMillis, botEnabled, botThinkTimeMillis, defaultPhysicsWorkerCount());
+        }
 
         /**
          * Validates the runtime configuration.
@@ -236,6 +253,9 @@ public class ThreadedGameRunner implements AutoCloseable {
             if (botThinkTimeMillis < 0) {
                 throw new IllegalArgumentException("botThinkTimeMillis must be >= 0");
             }
+            if (physicsWorkerCount < 1) {
+                throw new IllegalArgumentException("physicsWorkerCount must be >= 1");
+            }
         }
 
         /**
@@ -244,7 +264,7 @@ public class ThreadedGameRunner implements AutoCloseable {
          * @return default runtime configuration
          */
         public static Config defaultConfig() {
-            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, true, 600);
+            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, true, 600, defaultPhysicsWorkerCount());
         }
 
         /**
@@ -254,7 +274,11 @@ public class ThreadedGameRunner implements AutoCloseable {
          * @return configuration without the asynchronous bot agent
          */
         public static Config withoutBot() {
-            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, false, 0);
+            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, false, 0, defaultPhysicsWorkerCount());
+        }
+
+        private static int defaultPhysicsWorkerCount() {
+            return Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
         }
     }
 }

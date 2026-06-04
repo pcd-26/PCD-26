@@ -102,9 +102,10 @@ The first platform-thread implementation is available through the reusable
 `pcd.poool.threaded.ThreadedGameRunner`. It keeps the sequential game model as
 the reference semantics, owns it from a controller platform thread, accepts
 asynchronous shot commands through a monitor, publishes immutable snapshots,
-and can optionally start a separate bot platform thread. Focused tests cover
-controller progression, asynchronous command execution, bot activity, and
-shutdown behavior.
+can optionally start a separate bot platform thread, and uses
+`ThreadedPhysicsEngine` worker platform threads for parallel physics phases.
+Focused tests cover controller progression, asynchronous command execution,
+bot activity, threaded physics equivalence, and shutdown behavior.
 
 The playable platform-thread launcher can be started with:
 
@@ -112,11 +113,31 @@ The playable platform-thread launcher can be started with:
 java -cp assignment-1/target/classes pcd.poool.ThreadedPoool
 ```
 
+For manual stress testing, choose the board profile by changing
+`BOARD_PROFILE` in `pcd.poool.ThreadedPoool`:
+
+```java
+private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
+```
+
+The `thousand` profile creates 1000 small balls and is the recommended first
+manual stress test for the multithreaded version.
+
+The threaded physics benchmark uses the massive board configuration and can be
+run with an optional worker count:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.ThreadedPhysicsBenchmark 600
+java -cp assignment-1/target/classes pcd.poool.benchmark.ThreadedPhysicsBenchmark 600 8
+```
+
 The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
 
 Additional architectural notes, including the feasibility assessment for the
 platform-thread implementation and the proposed spatial decomposition strategy,
 are available in [`docs/concurrent-architecture.md`](docs/concurrent-architecture.md).
+The final thread-based implementation is described in
+[`docs/threaded-implementation.md`](docs/threaded-implementation.md).
 
 The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to
 `main` and can also be started manually. It builds the report PDF and uploads an

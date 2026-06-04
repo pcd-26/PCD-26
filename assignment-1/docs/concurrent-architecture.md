@@ -433,19 +433,19 @@ Recommended active objects:
 - `SnapshotStore`: stores the latest immutable snapshot for non-blocking GUI
   rendering.
 
-The initial platform-thread implementation provides the first four building
-blocks required by this architecture: `ThreadedGameRunner`, a controller
-platform thread, a monitor-based command queue, immutable snapshot publication,
-and an optional asynchronous bot platform thread. `PhysicsWorker` is left as
-the next refinement step: the current runner deliberately executes the existing
-sequential physics step inside the controller thread to preserve the reference
-semantics before introducing intra-step parallelism.
+The platform-thread implementation provides all building blocks required by
+this architecture: `ThreadedGameRunner`, a controller platform thread, a
+monitor-based command queue, immutable snapshot publication, an optional
+asynchronous bot platform thread, and a worker-based `ThreadedPhysicsEngine`.
+The physics workers parallelize the expensive independent phases of each tick,
+while the controller preserves deterministic game-rule ownership and snapshot
+publication.
 
 ### 6.4.1 Current platform-thread implementation
-The current implementation is a conservative platform-thread runtime whose
-primary objective is correctness and responsiveness. It introduces actual
-active components and monitor-based communication, but it does not yet
-parallelize the internal phases of one physics step.
+The current implementation is the final platform-thread runtime for the
+multithreaded assignment variant. It introduces active components,
+monitor-based communication, and intra-step worker parallelism for the physics
+simulation.
 
 Runtime components:
 
@@ -455,8 +455,11 @@ Runtime components:
 - `ThreadedGameRunner`: execution strategy. It owns one `SequentialGame`
   instance and starts the platform threads used by the runtime.
 - `poool-threaded-controller`: controller platform thread. It is the only
-  thread that drains game commands, advances the sequential game model, applies
-  game rules, and publishes snapshots.
+  thread that drains game commands, invokes the game model, applies game
+  rules, and publishes snapshots.
+- `poool-physics-worker-*`: long-lived physics worker platform threads owned by
+  `ThreadedPhysicsEngine`. They integrate disjoint ball chunks and build local
+  spatial-grid buckets for broad-phase collision detection.
 - `poool-threaded-bot`: optional bot platform thread. It reads immutable
   snapshots and submits bot-shot commands asynchronously after the configured
   think time.
@@ -475,7 +478,10 @@ Swing EDT / BotThread
  Controller platform thread
         |
         v
- SequentialGame + Board + PhysicsEngine
+ SequentialGame + Board + ThreadedPhysicsEngine
+        |
+        v
+ PhysicsWorker[] for integration and broad phase
         |
         v
  SnapshotStore
@@ -486,11 +492,10 @@ Swing EDT / BotThread
 
 This means that the game is already concurrent at the architecture level:
 input, bot behaviour, simulation, and rendering are separated into active
-components. The expensive physics computation, however, is still executed by
-the controller thread through the existing sequential physics engine. This is
-an intentional first step: it validates thread ownership, command
-serialization, shutdown, snapshot publication, and GUI responsiveness before
-introducing worker-level parallelism inside physics.
+components. The expensive physics computation is also parallelized internally:
+workers process independent ball ranges for integration and spatial-grid
+population. The controller then merges candidate collision pairs and resolves
+collisions in stable order.
 
 Current synchronization policy:
 
@@ -508,25 +513,26 @@ Current synchronization policy:
   cue ball can shoot;
 - the bot preview vector is computed by the owned game model and exported in
   the immutable snapshot, then rendered by `ThreadedPoool` when the bot can
-  shoot.
+  shoot;
+- `ThreadedPhysicsEngine` owns long-lived platform workers and coordinates each
+  worker phase through `WorkerCompletionMonitor`;
+- worker threads never apply game rules, update scores, or publish snapshots;
+  those operations remain serialized by the controller/game model.
 
-The current implementation therefore satisfies the first concurrency milestone:
-it provides asynchronous player input, asynchronous bot activity, stable
-single-writer model ownership, non-blocking snapshot-based rendering, and a
-maintainable place where physics workers can later be introduced.
+The current implementation therefore satisfies the intended multithreaded
+design: it provides asynchronous player input, asynchronous bot activity,
+stable single-writer model ownership, non-blocking snapshot-based rendering,
+and worker-based CPU exploitation for large physics configurations.
 
-Limitations of the current milestone:
+Remaining design trade-offs:
 
-- no `PhysicsWorker` threads are used yet;
-- collision detection and collision resolution still run in the controller
-  thread;
-- performance is expected to be comparable to the sequential baseline, with
-  improved responsiveness but not yet significant physics speedup;
-- CPU-core exploitation is limited to separating GUI, bot, and controller
-  activity, not to parallelizing thousands of ball updates.
-
-The next refinement should preserve this ownership model while replacing the
-single sequential physics call with a staged worker-based step.
+- collision resolution is still serialized after candidate-pair merge, because
+  resolving overlapping collisions concurrently would require conflict
+  analysis or fine-grained locking;
+- merging local spatial grids is serial and can become visible when almost all
+  balls occupy the same region;
+- the implementation is expected to scale best on large or massive boards with
+  spatially distributed balls.
 
 Recommended custom monitors:
 
