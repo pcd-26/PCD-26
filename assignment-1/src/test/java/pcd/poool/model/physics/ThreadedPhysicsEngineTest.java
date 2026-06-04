@@ -2,10 +2,12 @@ package pcd.poool.model.physics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import pcd.poool.model.physics.config.MinimalBoardConf;
+import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
 class ThreadedPhysicsEngineTest {
 
@@ -42,5 +44,24 @@ class ThreadedPhysicsEngineTest {
         engine.close();
 
         assertFalse(Thread.currentThread().isInterrupted());
+    }
+
+    @Test
+    @Timeout(5)
+    void thousandBallConfigurationCanBeSteppedByThreadedEngine() {
+        try (var engine = new ThreadedPhysicsEngine(4)) {
+            var board = new Board(engine);
+            board.init(new ThousandBallsBoardConf());
+
+            board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+
+            assertEquals(ThousandBallsBoardConf.SMALL_BALL_COUNT, board.getBalls().size());
+            assertEquals(4, engine.workerCount());
+        }
+    }
+
+    @Test
+    void rejectsInvalidWorkerCount() {
+        assertThrows(IllegalArgumentException.class, () -> new ThreadedPhysicsEngine(0));
     }
 }
