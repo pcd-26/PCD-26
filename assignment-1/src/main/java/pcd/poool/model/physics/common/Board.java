@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import pcd.poool.model.common.math.P2d;
@@ -28,6 +29,18 @@ public class Board {
      * @param radius ball radius
      */
     public static record BallSnapshot(P2d pos, double radius) {}
+
+    /**
+     * Immutable hole-interaction summary produced by a physics coordinator.
+     *
+     * @param playerBallPocketed whether the human cue ball entered a hole
+     * @param botBallPocketed whether the bot cue ball entered a hole
+     * @param pocketedSmallBalls small balls that entered holes, in deterministic order
+     */
+    public static record HoleInteractions(
+            boolean playerBallPocketed,
+            boolean botBallPocketed,
+            List<Ball> pocketedSmallBalls) {}
 
     private final PhysicsStepper physicsEngine;
     private List<Ball> balls;
@@ -312,6 +325,45 @@ public class Board {
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (isInsideHole(ball)) {
+                iterator.remove();
+                pocketedSmallBalls++;
+                var scorer = lastDirectCueTouch.remove(ball);
+                if (scorer != null) {
+                    pendingScoredSmallBalls.merge(scorer, 1, Integer::sum);
+                }
+            }
+        }
+    }
+
+    /**
+     * Applies a hole-interaction summary computed by a task-based coordinator.
+     *
+     * <p>The provided small-ball list must be ordered deterministically by the
+     * coordinator, with task order first and ball order inside each task.
+     *
+     * @param interactions detected pocketed entities for the current physics tick
+     */
+    public synchronized void applyHoleInteractions(HoleInteractions interactions) {
+        if (holes.isEmpty()) {
+            return;
+        }
+
+        if (interactions.playerBallPocketed() && playerBall != null && !playerBallPocketed) {
+            playerBallPocketed = true;
+        }
+        if (interactions.botBallPocketed() && botBall != null && !botBallPocketed) {
+            botBallPocketed = true;
+        }
+
+        if (interactions.pocketedSmallBalls().isEmpty()) {
+            return;
+        }
+
+        var pocketed = new LinkedHashSet<>(interactions.pocketedSmallBalls());
+        var iterator = balls.iterator();
+        while (iterator.hasNext()) {
+            var ball = iterator.next();
+            if (pocketed.contains(ball)) {
                 iterator.remove();
                 pocketedSmallBalls++;
                 var scorer = lastDirectCueTouch.remove(ball);

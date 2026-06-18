@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialCollisionDetector;
@@ -115,11 +116,13 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         var activeBalls = activeBalls(board);
         runRanges(activeBalls.size(), (from, to) -> {
             for (int i = from; i < to; i++) {
-                activeBalls.get(i).updateState(dt, bounds);
+                activeBalls.get(i).ball().updateState(dt, bounds);
             }
+            return null;
         });
 
-        board.applyHoleInteractions();
+        var holeInteractions = detectHoleInteractions(board.getHoles(), activeBalls);
+        board.applyHoleInteractions(holeInteractions);
 
         var collisionBalls = board.getCollisionBalls();
         for (var pair : collisionDetector.detectCollisionPairs(collisionBalls)) {
@@ -130,46 +133,95 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private List<Ball> activeBalls(Board board) {
-        var activeBalls = new ArrayList<Ball>();
-        if (board.getPlayerBallEntity() != null) {
-            activeBalls.add(board.getPlayerBallEntity());
+    private List<ActiveBall> activeBalls(Board board) {
+        var activeBalls = new ArrayList<ActiveBall>();
+        var playerBall = board.getPlayerBallEntity();
+        if (playerBall != null) {
+            activeBalls.add(new ActiveBall(playerBall, BallRole.PLAYER));
         }
-        if (board.getBotBallEntity() != null) {
-            activeBalls.add(board.getBotBallEntity());
+        var botBall = board.getBotBallEntity();
+        if (botBall != null) {
+            activeBalls.add(new ActiveBall(botBall, BallRole.BOT));
         }
-        activeBalls.addAll(board.getSmallBallEntities());
+        for (var ball : board.getSmallBallEntities()) {
+            activeBalls.add(new ActiveBall(ball, BallRole.SMALL));
+        }
         return activeBalls;
     }
 
-    private void runRanges(int itemCount, RangeTask rangeTask) {
+    private Board.HoleInteractions detectHoleInteractions(List<Hole> holes, List<ActiveBall> activeBalls) {
+        if (holes.isEmpty() || activeBalls.isEmpty()) {
+            return new Board.HoleInteractions(false, false, List.of());
+        }
+
+        var results = runRanges(activeBalls.size(), (from, to) -> {
+            boolean playerBallPocketed = false;
+            boolean botBallPocketed = false;
+            var pocketedSmallBalls = new ArrayList<Ball>();
+            for (int i = from; i < to; i++) {
+                var activeBall = activeBalls.get(i);
+                if (isInsideAnyHole(activeBall.ball(), holes)) {
+                    if (activeBall.role() == BallRole.PLAYER) {
+                        playerBallPocketed = true;
+                    } else if (activeBall.role() == BallRole.BOT) {
+                        botBallPocketed = true;
+                    } else {
+                        pocketedSmallBalls.add(activeBall.ball());
+                    }
+                }
+            }
+            return new HoleTaskResult(playerBallPocketed, botBallPocketed, pocketedSmallBalls);
+        });
+
+        boolean playerBallPocketed = false;
+        boolean botBallPocketed = false;
+        var pocketedSmallBalls = new ArrayList<Ball>();
+        for (var result : results) {
+            playerBallPocketed |= result.playerBallPocketed();
+            botBallPocketed |= result.botBallPocketed();
+            pocketedSmallBalls.addAll(result.pocketedSmallBalls());
+        }
+        return new Board.HoleInteractions(playerBallPocketed, botBallPocketed, List.copyOf(pocketedSmallBalls));
+    }
+
+    private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask) {
         if (itemCount == 0) {
-            return;
+            return List.of();
         }
 
         var ranges = buildRangeChunks(itemCount);
-        var tasks = new ArrayList<Callable<Void>>(ranges.size());
+        var tasks = new ArrayList<Callable<T>>(ranges.size());
         for (var range : ranges) {
             tasks.add(() -> {
-                rangeTask.run(range.fromInclusive(), range.toExclusive());
-                return null;
+                return rangeTask.run(range.fromInclusive(), range.toExclusive());
             });
         }
-        invokeAll(tasks);
+        return invokeAll(tasks);
     }
 
-    private void invokeAll(List<Callable<Void>> tasks) {
+    private <T> List<T> invokeAll(List<Callable<T>> tasks) {
         try {
-            List<Future<Void>> futures = executor.invokeAll(tasks);
+            List<Future<T>> futures = executor.invokeAll(tasks);
+            var results = new ArrayList<T>(futures.size());
             for (var future : futures) {
-                future.get();
+                results.add(future.get());
             }
+            return results;
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("task-based physics step interrupted", ex);
         } catch (ExecutionException ex) {
             throw rethrowTaskFailure(ex.getCause());
         }
+    }
+
+    private boolean isInsideAnyHole(Ball ball, List<Hole> holes) {
+        for (var hole : holes) {
+            if (hole.contains(ball.getPos())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<RangeChunk> buildRangeChunks(int itemCount) {
@@ -209,10 +261,23 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     @FunctionalInterface
-    private interface RangeTask {
+    private interface RangeTask<T> {
 
-        void run(int fromInclusive, int toExclusive);
+        T run(int fromInclusive, int toExclusive);
     }
 
     private record RangeChunk(int fromInclusive, int toExclusive) {}
+
+    private record HoleTaskResult(
+            boolean playerBallPocketed,
+            boolean botBallPocketed,
+            List<Ball> pocketedSmallBalls) {}
+
+    private record ActiveBall(Ball ball, BallRole role) {}
+
+    private enum BallRole {
+        PLAYER,
+        BOT,
+        SMALL
+    }
 }
