@@ -166,6 +166,45 @@ class TaskBasedPhysicsEngineTest {
         }
     }
 
+    @Test
+    @Timeout(6)
+    void denseCollisionConfigurationIsDeterministicAcrossRepeatedRuns() {
+        var conf = new DenseCollisionBoardConf();
+
+        try (var firstEngine = new TaskBasedPhysicsEngine(4);
+                var secondEngine = new TaskBasedPhysicsEngine(4)) {
+            var firstBoard = new Board(firstEngine);
+            firstBoard.init(conf);
+            var secondBoard = new Board(secondEngine);
+            secondBoard.init(conf);
+
+            for (int i = 0; i < 12; i++) {
+                firstBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                secondBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertBoardSnapshotsClose(firstBoard.getBalls(), secondBoard.getBalls());
+            assertBallSnapshotClose(firstBoard.getPlayerBall(), secondBoard.getPlayerBall());
+            assertBallSnapshotClose(firstBoard.getBotBall(), secondBoard.getBotBall());
+            assertEquals(firstBoard.getPocketedSmallBalls(), secondBoard.getPocketedSmallBalls());
+        }
+    }
+
+    @Test
+    @Timeout(8)
+    void highBallCountConfigurationCanBeSteppedRepeatedly() {
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var board = new Board(engine);
+            board.init(new ThousandBallsBoardConf());
+
+            for (int i = 0; i < 10; i++) {
+                board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertEquals(ThousandBallsBoardConf.SMALL_BALL_COUNT, board.getBalls().size());
+        }
+    }
+
     private static void assertBoardSnapshotsClose(
             List<Board.BallSnapshot> expected,
             List<Board.BallSnapshot> actual) {
@@ -235,6 +274,44 @@ class TaskBasedPhysicsEngineTest {
         @Override
         public List<Ball> getSmallBalls() {
             return List.of(new Ball(new P2d(-0.2, 0), 0.03, 1.0, new V2d(0.0, 0.0)));
+        }
+
+        @Override
+        public List<Hole> getHoles() {
+            return List.of();
+        }
+    }
+
+    private static class DenseCollisionBoardConf implements BoardConf {
+
+        @Override
+        public Boundary getBoardBoundary() {
+            return new Boundary(-1, -1, 1, 1);
+        }
+
+        @Override
+        public Ball getPlayerBall() {
+            return new Ball(new P2d(-0.35, 0), 0.05, 1.0, new V2d(0.8, 0.0));
+        }
+
+        @Override
+        public Ball getBotBall() {
+            return new Ball(new P2d(0.35, 0), 0.05, 1.0, new V2d(-0.8, 0.0));
+        }
+
+        @Override
+        public List<Ball> getSmallBalls() {
+            var balls = new java.util.ArrayList<Ball>();
+            int columns = 8;
+            int rows = 6;
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < columns; col++) {
+                    double x = -0.25 + col * 0.07;
+                    double y = -0.18 + row * 0.07;
+                    balls.add(new Ball(new P2d(x, y), 0.03, 1.0, new V2d(0.0, 0.0)));
+                }
+            }
+            return balls;
         }
 
         @Override
