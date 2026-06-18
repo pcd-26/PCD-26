@@ -41,7 +41,6 @@ public class ThreadedPoool {
         var boardProfile = BOARD_PROFILE.createConfiguration();
         var runnerRef = new AtomicReference<>(newStartedRunner(boardProfile));
         var restartRequested = new AtomicBoolean(false);
-        var aimingOwner = new AtomicReference<Player>();
         var viewModel = new ViewModel();
         var view = new View(
                 viewModel,
@@ -49,8 +48,8 @@ public class ThreadedPoool {
                 VIEW_HEIGHT,
                 velocity -> runnerRef.get().shootHuman(velocity),
                 () -> restartRequested.set(true),
-                () -> canStartHumanAiming(runnerRef.get(), aimingOwner),
-                () -> SequentialPoool.stopAiming(aimingOwner, Player.HUMAN));
+                () -> canStartHumanAiming(runnerRef.get()),
+                () -> viewModel.clearShotPreview(Player.HUMAN));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-threaded-shutdown"));
 
@@ -62,7 +61,6 @@ public class ThreadedPoool {
             if (restartRequested.getAndSet(false)) {
                 var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile));
                 oldRunner.close();
-                aimingOwner.set(null);
                 viewModel.clearShotPreview();
                 startTime = now;
                 renderedFrames = 0;
@@ -78,7 +76,7 @@ public class ThreadedPoool {
                     threadedSnapshot.holes(),
                     threadedSnapshot.game(),
                     framePerSec);
-            updateBotShotPreview(threadedSnapshot, viewModel, aimingOwner.get());
+            updateBotShotPreview(threadedSnapshot, viewModel);
             view.render();
             sleepFrame();
         }
@@ -114,14 +112,11 @@ public class ThreadedPoool {
     }
 
     /**
-     * Grants human aiming only while the latest game snapshot reports that the
-     * human cue ball is stopped and therefore eligible for a new shot.
+     * Grants human aiming while the latest game snapshot reports that the human
+     * cue ball is stopped and therefore eligible for a new shot.
      */
-    private static boolean canStartHumanAiming(
-            ThreadedGameRunner runner,
-            AtomicReference<Player> aimingOwner) {
-        return runner.snapshot().game().humanCanShoot()
-                && SequentialPoool.tryStartAiming(aimingOwner, Player.HUMAN);
+    private static boolean canStartHumanAiming(ThreadedGameRunner runner) {
+        return runner.snapshot().game().humanCanShoot();
     }
 
     /**
@@ -131,19 +126,9 @@ public class ThreadedPoool {
      */
     private static void updateBotShotPreview(
             pcd.poool.threaded.ThreadedGameSnapshot snapshot,
-            ViewModel viewModel,
-            Player aimingOwner) {
-        var currentPreview = viewModel.getShotPreview();
-        if (aimingOwner == Player.HUMAN) {
-            if (currentPreview != null && currentPreview.player() == Player.BOT) {
-                viewModel.clearShotPreview();
-            }
-            return;
-        }
+            ViewModel viewModel) {
         if (!snapshot.game().botCanShoot() || snapshot.botBall() == null) {
-            if (currentPreview != null && currentPreview.player() == Player.BOT) {
-                viewModel.clearShotPreview();
-            }
+            viewModel.clearShotPreview(Player.BOT);
             return;
         }
         var impulse = snapshot.botPreviewShot();

@@ -14,8 +14,8 @@ import pcd.poool.view.board.ViewModel;
  *
  * <p>The program runs physics, bot policy, input coordination, view-model
  * updates, and rendering from a single loop. Player actions remain
- * game-asynchronous through independent cue-ball readiness, while aiming is
- * serialized by a lightweight owner so human and bot previews cannot overlap.
+ * game-asynchronous through independent cue-ball readiness, and human/bot shot
+ * previews are tracked independently by the view model.
  */
 public class SequentialPoool {
 
@@ -39,7 +39,6 @@ public class SequentialPoool {
     public static void main(String[] args) {
         var gameRef = new AtomicReference<>(newGame());
         var restartRequested = new AtomicBoolean(false);
-        var aimingOwner = new AtomicReference<Player>();
         var viewModel = new ViewModel();
         var view = new View(
                 viewModel,
@@ -47,8 +46,8 @@ public class SequentialPoool {
                 VIEW_HEIGHT,
                 velocity -> gameRef.get().shootHuman(velocity),
                 () -> restartRequested.set(true),
-                () -> tryStartAiming(aimingOwner, Player.HUMAN),
-                () -> stopAiming(aimingOwner, Player.HUMAN));
+                () -> gameRef.get().canHumanShoot(),
+                () -> viewModel.clearShotPreview(Player.HUMAN));
 
         long startTime = System.currentTimeMillis();
         long lastUpdateTime = startTime;
@@ -59,7 +58,6 @@ public class SequentialPoool {
             long now = System.currentTimeMillis();
             if (restartRequested.getAndSet(false)) {
                 gameRef.set(newGame());
-                aimingOwner.set(null);
                 viewModel.clearShotPreview();
                 startTime = now;
                 lastUpdateTime = now;
@@ -76,24 +74,21 @@ public class SequentialPoool {
             }
             if (game.canBotShoot()) {
                 if (waitingForBotSince == 0) {
-                    if (tryStartAiming(aimingOwner, Player.BOT)) {
-                        waitingForBotSince = now;
-                    }
+                    waitingForBotSince = now;
                 } else if (now - waitingForBotSince >= BOT_THINK_TIME_MILLIS) {
                     game.shootBot();
-                    viewModel.clearShotPreview();
-                    stopAiming(aimingOwner, Player.BOT);
+                    viewModel.clearShotPreview(Player.BOT);
                     waitingForBotSince = 0;
                 }
             } else {
-                stopAiming(aimingOwner, Player.BOT);
+                viewModel.clearShotPreview(Player.BOT);
                 waitingForBotSince = 0;
             }
 
             renderedFrames++;
             int framePerSec = framePerSec(renderedFrames, startTime, now);
             viewModel.update(game.board(), game.snapshot(), framePerSec);
-            updateBotShotPreview(game, viewModel, aimingOwner.get());
+            updateBotShotPreview(game, viewModel, waitingForBotSince > 0);
             view.render();
             sleepFrame();
         }
@@ -111,8 +106,8 @@ public class SequentialPoool {
         return (int) (renderedFrames * 1000 / elapsed);
     }
 
-    private static void updateBotShotPreview(SequentialGame game, ViewModel viewModel, Player aimingOwner) {
-        if (!game.canBotShoot() || aimingOwner != Player.BOT) {
+    private static void updateBotShotPreview(SequentialGame game, ViewModel viewModel, boolean botAiming) {
+        if (!game.canBotShoot() || !botAiming) {
             return;
         }
         var bot = game.board().getBotBall();
@@ -125,26 +120,8 @@ public class SequentialPoool {
     }
 
     static boolean isHumanAiming(ViewModel viewModel) {
-        var preview = viewModel.getShotPreview();
+        var preview = viewModel.getShotPreview(Player.HUMAN);
         return preview != null && preview.player() == Player.HUMAN;
-    }
-
-    /**
-     * Attempts to acquire the UI aiming owner.
-     *
-     * <p>This is intentionally separate from game turns: the game has
-     * independent player readiness, but preview/aiming interaction is exclusive
-     * so that the human and bot cannot overwrite each other's shot preview.
-     */
-    static boolean tryStartAiming(AtomicReference<Player> aimingOwner, Player player) {
-        return aimingOwner.compareAndSet(null, player) || aimingOwner.get() == player;
-    }
-
-    /**
-     * Releases the UI aiming owner only if it is held by the given player.
-     */
-    static void stopAiming(AtomicReference<Player> aimingOwner, Player player) {
-        aimingOwner.compareAndSet(player, null);
     }
 
     private static void sleepFrame() {

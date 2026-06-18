@@ -1,6 +1,7 @@
 package pcd.poool.view.board;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,20 @@ class ViewModelTest {
 
         model.setShotPreview(new P2d(0, 0), new P2d(1, 0), 0.5, Player.BOT);
 
-        assertEquals(Player.BOT, model.getShotPreview().player());
+        assertEquals(Player.BOT, model.getShotPreview(Player.BOT).player());
+    }
+
+    @Test
+    void shotPreviewsAreIndependentByPlayer() {
+        var model = new ViewModel();
+
+        model.setShotPreview(new P2d(0, 0), new P2d(1, 0), 0.5, Player.BOT);
+        model.setShotPreview(new P2d(0, 1), new P2d(1, 1), 0.7, Player.HUMAN);
+        model.clearShotPreview(Player.HUMAN);
+
+        assertNull(model.getShotPreview(Player.HUMAN));
+        assertEquals(Player.BOT, model.getShotPreview(Player.BOT).player());
+        assertEquals(1, model.getShotPreviews().size());
     }
 
     @Test

@@ -63,7 +63,7 @@ class ViewFrameTest {
     }
 
     @Test
-    void botPreviewLocksHumanAimingInput() {
+    void botPreviewIsDetectedIndependently() {
         var model = new ViewModel();
         model.setShotPreview(new P2d(0, 0), new P2d(1, 0), 1.0, Player.BOT);
 

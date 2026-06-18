@@ -203,7 +203,7 @@ public class ViewFrame extends JFrame {
                     return;
                 }
                 fireMouseShotOnRelease(event, shotHandler);
-                model.clearShotPreview();
+                model.clearShotPreview(Player.HUMAN);
                 humanDragActive = false;
                 stopHumanAiming(humanAimingStopHandler);
                 panel.repaint();
@@ -240,7 +240,7 @@ public class ViewFrame extends JFrame {
      * @return whether the current preview is owned by the bot
      */
     static boolean isBotAiming(ViewModel viewModel) {
-        var preview = viewModel.getShotPreview();
+        var preview = viewModel.getShotPreview(Player.BOT);
         return preview != null && preview.player() == Player.BOT;
     }
 
@@ -292,7 +292,7 @@ public class ViewFrame extends JFrame {
         }
         humanKeyboardActive = false;
         stopHumanAiming(humanAimingStopHandler);
-        model.clearShotPreview();
+        model.clearShotPreview(Player.HUMAN);
         panel.repaint();
     }
 
@@ -302,7 +302,7 @@ public class ViewFrame extends JFrame {
         humanDragActive = false;
         humanKeyboardActive = false;
         stopHumanAiming(humanAimingStopHandler);
-        model.clearShotPreview();
+        model.clearShotPreview(Player.HUMAN);
         panel.repaint();
     }
 
@@ -515,10 +515,12 @@ public class ViewFrame extends JFrame {
         }
 
         private void drawShotPreview(Graphics2D g2) {
-            var preview = model.getShotPreview();
-            if (preview == null) {
-                return;
+            for (var preview : model.getShotPreviews()) {
+                drawShotPreview(g2, preview);
             }
+        }
+
+        private void drawShotPreview(Graphics2D g2, ViewModel.ShotPreviewInfo preview) {
             var start = toScreenPoint(preview.from());
             var end = toScreenPoint(preview.to());
             g2.setColor(preview.player() == Player.BOT ? Color.RED : new Color(30, 90, 210));
