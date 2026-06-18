@@ -17,6 +17,7 @@ import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.sequential.PhysicsEngine;
+import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
 class TaskBasedPhysicsEngineTest {
 
@@ -59,6 +60,34 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
+    @Timeout(3)
+    void taskBasedPhysicsMatchesSequentialOutcomeWithSingleWorker() {
+        var conf = new SeparatedMotionBoardConf();
+
+        var sequentialBoard = new Board(new PhysicsEngine());
+        sequentialBoard.init(conf);
+        sequentialBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
+        sequentialBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
+
+        try (var taskEngine = new TaskBasedPhysicsEngine(1)) {
+            var taskBoard = new Board(taskEngine);
+            taskBoard.init(conf);
+            taskBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
+            taskBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
+
+            for (int i = 0; i < 40; i++) {
+                sequentialBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                taskBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertEquals(sequentialBoard.getBalls(), taskBoard.getBalls());
+            assertEquals(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
+            assertEquals(sequentialBoard.getBotBall(), taskBoard.getBotBall());
+            assertEquals(sequentialBoard.getPocketedSmallBalls(), taskBoard.getPocketedSmallBalls());
+        }
+    }
+
+    @Test
     void stepAfterCloseFailsDeterministically() {
         var engine = new TaskBasedPhysicsEngine(2);
         var board = new Board(engine);
@@ -72,6 +101,20 @@ class TaskBasedPhysicsEngineTest {
     @Test
     void rejectsInvalidPoolSize() {
         assertThrows(IllegalArgumentException.class, () -> new TaskBasedPhysicsEngine(0));
+    }
+
+    @Test
+    @Timeout(5)
+    void thousandBallConfigurationCanBeSteppedByTaskBasedEngine() {
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var board = new Board(engine);
+            board.init(new ThousandBallsBoardConf());
+
+            board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+
+            assertEquals(ThousandBallsBoardConf.SMALL_BALL_COUNT, board.getBalls().size());
+            assertEquals(4, engine.poolSize());
+        }
     }
 
     private static class SeparatedMotionBoardConf implements BoardConf {
