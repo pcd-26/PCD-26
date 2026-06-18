@@ -1,6 +1,7 @@
 package pcd.poool.model.physics.taskbased;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -31,6 +32,19 @@ class TaskBasedPhysicsEngineTest {
         assertEquals(3, engine.poolSize());
 
         engine.close();
+    }
+
+    @Test
+    @Timeout(3)
+    void taskBasedPhysicsCanStepASimpleBoard() {
+        try (var engine = new TaskBasedPhysicsEngine(2)) {
+            var board = new Board(engine);
+            board.init(new MinimalTaskBoardConf());
+
+            assertDoesNotThrow(() -> board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS));
+            assertEquals(1, board.getBalls().size());
+            assertTrue(board.getPlayerBall() != null);
+        }
     }
 
     @Test
@@ -104,6 +118,21 @@ class TaskBasedPhysicsEngineTest {
     @Test
     void rejectsInvalidPoolSize() {
         assertThrows(IllegalArgumentException.class, () -> new TaskBasedPhysicsEngine(0));
+    }
+
+    @Test
+    @Timeout(3)
+    void taskFailuresArePropagatedToTheCaller() {
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var board = new Board(engine);
+            board.init(new FailingTaskBoardConf());
+
+            var failure = assertThrows(IllegalStateException.class, () ->
+                    board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS));
+
+            assertTrue(failure.getMessage().contains("task-based physics step failed")
+                    || failure.getMessage().contains("Injected task failure"));
+        }
     }
 
     @Test
@@ -279,6 +308,46 @@ class TaskBasedPhysicsEngineTest {
         @Override
         public List<Hole> getHoles() {
             return List.of();
+        }
+    }
+
+    private static class FailingTaskBoardConf implements BoardConf {
+
+        @Override
+        public Boundary getBoardBoundary() {
+            return new Boundary(-1, -1, 1, 1);
+        }
+
+        @Override
+        public Ball getPlayerBall() {
+            return new FailingBall(new P2d(0, 0), 0.05, 1.0, new V2d(0.2, 0.0));
+        }
+
+        @Override
+        public Ball getBotBall() {
+            return null;
+        }
+
+        @Override
+        public List<Ball> getSmallBalls() {
+            return List.of();
+        }
+
+        @Override
+        public List<Hole> getHoles() {
+            return List.of();
+        }
+    }
+
+    private static final class FailingBall extends Ball {
+
+        FailingBall(P2d pos, double radius, double mass, V2d vel) {
+            super(pos, radius, mass, vel);
+        }
+
+        @Override
+        public void updateState(long dt, Boundary bounds) {
+            throw new IllegalStateException("Injected task failure");
         }
     }
 
