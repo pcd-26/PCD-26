@@ -123,8 +123,9 @@ executes bounded sub-steps. Each sub-step follows this pipeline:
 5. build local spatial grids in parallel
 6. merge local grids serially
 7. deduplicate and sort candidate pairs
-8. resolve collisions serially in stable order
-9. return control to game-rule logic
+8. compute collision contributions in parallel
+9. merge and apply accumulated position/velocity deltas
+10. return control to game-rule logic
 ```
 
 ### 6.1 Parallel Integration
@@ -149,19 +150,89 @@ sorted by stable indexes.
 This avoids the quadratic all-against-all collision check and is the key to
 handling thousands of balls.
 
-### 6.3 Serial Collision Resolution
-Collision resolution remains serial and deterministic.
+### 6.3 Accumulated Collision Resolution
+Collision resolution uses an accumulated-impulse solver in the threaded engine.
 
-This is intentional. Resolving collisions mutates velocities and positions of
-two balls at a time. Parallelizing this phase safely would require either:
+The input of this phase is the sorted list of candidate pairs produced by the
+spatial grid. A candidate pair is not necessarily a real collision: two balls
+may share a grid cell without overlapping. Each worker therefore checks the
+exact distance before producing any contribution.
 
-- locking individual balls;
-- graph colouring / independent-pair batching;
-- or speculative resolution with rollback.
+The phase is organized as follows:
 
-Those options add significant complexity and make verification harder. The
-current design therefore parallelizes the high-volume independent phases and
-serializes the conflict-prone commit phase.
+```text
+candidate pairs
+  |
+  |-- split into contiguous pair ranges
+  v
+PhysicsWorker[]
+  |
+  |-- for each real contact:
+  |       compute collision normal
+  |       compute overlap correction
+  |       compute elastic impulse from the tick-start velocities
+  |       store deltas in a worker-local accumulator
+  v
+controller thread
+  |
+  |-- merge accumulators in worker-index order
+  |-- record real collision events on Board
+  |-- split balls into ranges
+  v
+PhysicsWorker[]
+  |
+  |-- apply final accumulated delta to each assigned ball
+```
+
+Each worker-local accumulator contains four arrays indexed by stable ball
+index:
+
+```text
+positionDeltaX[]
+positionDeltaY[]
+velocityDeltaX[]
+velocityDeltaY[]
+```
+
+For a contact `(A, B)`, the worker adds equal-and-opposite impulse
+contributions to the array entries for `A` and `B`. If a ball is touched by
+multiple contacts in the same tick, all those contributions are summed in its
+array slot. The ball object itself is not mutated during this calculation.
+
+The controller then merges worker-local accumulators in worker-index order and
+applies the final accumulated position and velocity deltas once per ball. This
+keeps the board under single-writer ownership while allowing the expensive
+contact calculations to run in parallel.
+
+### 6.4 Why This Parallelization Is Safe
+The solver avoids concurrent writes to `Ball` during contribution computation.
+Workers only read the tick-start position, velocity, radius, and mass of balls,
+then write to private arrays that no other worker can access.
+
+The only shared mutable `Ball` updates happen in the final apply phase. That
+phase is also parallel, but it partitions balls by index: each ball is assigned
+to exactly one worker, so no two workers write to the same `Ball`.
+
+This means the threaded engine does not need per-ball locks. Synchronization is
+coarse and explicit:
+
+- a barrier after pair-range contribution computation;
+- a deterministic controller merge;
+- a barrier after per-ball delta application.
+
+Game events such as direct cue-ball touches are recorded by the controller from
+the real-contact list after contribution computation. False positives from the
+spatial grid are ignored because they produce no collision contribution.
+
+### 6.5 Semantic Difference From Sequential Physics
+The sequential `PhysicsEngine` resolves each collision immediately. If the pair
+order is `(A, B)` followed by `(B, C)`, the second collision observes the
+velocity of `B` after the first collision has already changed it.
+
+The threaded accumulated solver instead models a tick as simultaneous contacts:
+all impulses are computed from the same tick-start state, accumulated per ball,
+and then applied together. This removes hidden order dependence from the
+threaded collision phase and exposes more parallel work.
 
 ## 7. Worker Lifecycle
 `ThreadedPhysicsEngine` creates long-lived platform threads once. Workers are
@@ -252,12 +323,12 @@ serialized.
 The key design decision is:
 
 ```text
-parallel computation, deterministic serial commit
+parallel contribution computation, deterministic aggregate commit
 ```
 
 This gives a strong balance between performance and correctness:
 
-- worker threads compute expensive physics phases;
+- worker threads compute expensive physics and collision-contribution phases;
 - the controller thread preserves model ownership;
 - snapshots decouple simulation from rendering;
 - custom monitors coordinate commands, snapshots, and worker completion;
