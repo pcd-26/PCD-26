@@ -17,6 +17,7 @@ import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialCollisionDetector;
+import pcd.poool.model.physics.common.SpatialGridSupport;
 import pcd.poool.model.common.math.V2d;
 
 /**
@@ -26,6 +27,21 @@ import pcd.poool.model.common.math.V2d;
  * physics implementations: callers synchronize on the board for the whole
  * update, while internal task execution is limited to disjoint work ranges or
  * read-only coordination phases.
+ *
+ * <p>Task pipeline:
+ * <ol>
+ *   <li>integrate balls in parallel over disjoint index ranges;</li>
+ *   <li>detect hole interactions in parallel and merge local results on the
+ *       coordinator thread;</li>
+ *   <li>build one local spatial grid per task, merge the grids on the
+ *       coordinator thread, then generate deterministic candidate pairs;</li>
+ *   <li>compute collision contributions in parallel over pair ranges, merge
+ *       local accumulators on the coordinator thread, and finally apply the
+ *       deltas to the board-owned balls.</li>
+ * </ol>
+ *
+ * <p>The coordinator thread is the caller of {@link #step(Board, long)} and is
+ * the only thread that mutates global board state or applies merged results.
  */
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
@@ -186,18 +202,18 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return List.of();
         }
 
-        double cellSize = computeCellSize(balls);
+        double cellSize = SpatialGridSupport.computeCellSize(balls);
         var localGrids = runRanges(balls.size(), (from, to) -> {
-            var localGrid = new java.util.HashMap<Cell, List<Integer>>();
+            var localGrid = new java.util.HashMap<SpatialGridSupport.GridCell, List<Integer>>();
             for (int i = from; i < to; i++) {
-                for (var cell : occupiedCells(balls.get(i), cellSize)) {
+                for (var cell : SpatialGridSupport.occupiedCells(balls.get(i), cellSize)) {
                     localGrid.computeIfAbsent(cell, ignored -> new ArrayList<>()).add(i);
                 }
             }
             return localGrid;
         });
 
-        var mergedGrid = new java.util.HashMap<Cell, List<Integer>>();
+        var mergedGrid = new java.util.HashMap<SpatialGridSupport.GridCell, List<Integer>>();
         for (var localGrid : localGrids) {
             if (localGrid == null) {
                 continue;
@@ -208,7 +224,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         var orderedCells = new ArrayList<>(mergedGrid.keySet());
-        orderedCells.sort(Cell::compareTo);
+        orderedCells.sort(SpatialGridSupport.GridCell::compareTo);
 
         var pairs = new java.util.HashSet<SpatialCollisionDetector.Pair>();
         for (int i = 0; i < orderedCells.size(); i++) {
@@ -216,7 +232,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             collectPairs(mergedGrid.get(cell), pairs);
             for (int j = i + 1; j < orderedCells.size(); j++) {
                 var otherCell = orderedCells.get(j);
-                if (areNeighboringCells(cell, otherCell)) {
+                if (SpatialGridSupport.areNeighboringCells(cell, otherCell)) {
                     collectPairs(mergedGrid.get(cell), mergedGrid.get(otherCell), pairs);
                 }
             }
@@ -358,13 +374,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return false;
     }
 
-    private double computeCellSize(List<Ball> balls) {
-        double minRadius = balls.stream().mapToDouble(Ball::getRadius)
-                .min()
-                .orElse(PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
-        return Math.max(minRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
-    }
-
     private void collectPairs(List<Integer> indexes, java.util.Set<SpatialCollisionDetector.Pair> pairs) {
         if (indexes == null) {
             return;
@@ -395,31 +404,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                         Math.max(firstIndex, secondIndex)));
             }
         }
-    }
-
-    private List<Cell> occupiedCells(Ball ball, double cellSize) {
-        int x0 = toCellCoordinate(ball.getPos().x() - ball.getRadius(), cellSize);
-        int x1 = toCellCoordinate(ball.getPos().x() + ball.getRadius(), cellSize);
-        int y0 = toCellCoordinate(ball.getPos().y() - ball.getRadius(), cellSize);
-        int y1 = toCellCoordinate(ball.getPos().y() + ball.getRadius(), cellSize);
-
-        var cells = new ArrayList<Cell>();
-        for (int x = x0; x <= x1; x++) {
-            for (int y = y0; y <= y1; y++) {
-                cells.add(new Cell(x, y));
-            }
-        }
-        return cells;
-    }
-
-    private int toCellCoordinate(double coordinate, double cellSize) {
-        return (int) Math.floor(coordinate / cellSize);
-    }
-
-    private boolean areNeighboringCells(Cell first, Cell second) {
-        int dx = Math.abs(first.x() - second.x());
-        int dy = Math.abs(first.y() - second.y());
-        return dx <= 1 && dy <= 1 && (dx != 0 || dy != 0);
     }
 
     private List<RangeChunk> buildRangeChunks(int itemCount) {
@@ -472,18 +456,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             List<Ball> pocketedSmallBalls) {}
 
     private record ActiveBall(Ball ball, BallRole role) {}
-
-    private record Cell(int x, int y) implements Comparable<Cell> {
-
-        @Override
-        public int compareTo(Cell other) {
-            int byX = Integer.compare(x, other.x);
-            if (byX != 0) {
-                return byX;
-            }
-            return Integer.compare(y, other.y);
-        }
-    }
 
     private enum BallRole {
         PLAYER,
