@@ -12,6 +12,11 @@ public class BoundedBufferImpl<Item> implements BoundedBuffer<Item> {
 	private LinkedList<Item> buffer;
 	private int maxSize;
 
+	/**
+	 * Creates a bounded buffer.
+	 *
+	 * @param size maximum number of items that can be stored
+	 */
 	public BoundedBufferImpl(int size) {
 		if (size <= 0) {
 			throw new IllegalArgumentException("size must be > 0");
@@ -20,6 +25,7 @@ public class BoundedBufferImpl<Item> implements BoundedBuffer<Item> {
 		maxSize = size;
 	}
 
+	@Override
 	public synchronized void put(Item item) throws InterruptedException {
 		while (isFull()) {
 			wait();
@@ -28,6 +34,7 @@ public class BoundedBufferImpl<Item> implements BoundedBuffer<Item> {
 		notifyAll();
 	}
 
+	@Override
 	public synchronized Item get() throws InterruptedException {
 		while (isEmpty()) {
 			wait();

@@ -14,6 +14,17 @@ public class PhysicsBenchmark {
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
     private static final String OUTPUT_FORMAT = "steps=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f%n";
 
+    /**
+     * Utility class; not meant to be instantiated.
+     */
+    private PhysicsBenchmark() {
+    }
+
+    /**
+     * Runs the benchmark.
+     *
+     * @param args optional first argument: number of physics steps
+     */
     public static void main(String[] args) {
         int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
         var board = new Board();

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
+import pcd.poool.model.physics.Ball;
 import pcd.poool.model.physics.PhysicsDefaults;
 
 class BoardConfigurationTest {
@@ -39,5 +40,15 @@ class BoardConfigurationTest {
         assertEquals(new P2d(bounds.x1(), bounds.y1()), holes.get(1).center());
         assertEquals(PhysicsDefaults.DEFAULT_HOLE_RADIUS, holes.get(0).radius());
         assertEquals(PhysicsDefaults.DEFAULT_HOLE_RADIUS, holes.get(1).radius());
+    }
+
+    @Test
+    void standardConfigurationDerivesMassesFromUniformMaterial() {
+        var configuration = new StandardGameBoardConf();
+        var playerBall = configuration.getPlayerBall();
+        var firstSmallBall = configuration.getSmallBalls().get(0);
+
+        assertEquals(Ball.massForRadius(playerBall.getRadius()), playerBall.getMass());
+        assertEquals(Ball.massForRadius(firstSmallBall.getRadius()), firstSmallBall.getMass());
     }
 }

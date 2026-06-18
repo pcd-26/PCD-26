@@ -8,13 +8,16 @@ import pcd.poool.model.physics.Ball;
 import pcd.poool.model.physics.BoardConf;
 import pcd.poool.model.physics.Boundary;
 
+/**
+ * Massive grid-based board configuration used to stress broad-phase collision
+ * detection and benchmark scalability.
+ */
 public class MassiveBoardConf implements BoardConf {
 
 	private static final Boundary BOARD_BOUNDARY = new Boundary(-1.5, -1.0, 1.5, 1.0);
 	private static final P2d PLAYER_START = new P2d(0, -0.75);
 	private static final V2d PLAYER_INITIAL_VELOCITY = new V2d(0, 0);
 	private static final double PLAYER_RADIUS = 0.05;
-	private static final double PLAYER_MASS = 1.5;
 
 	private static final int GRID_ROWS = 30;
 	private static final int GRID_COLUMNS = 150;
@@ -22,12 +25,17 @@ public class MassiveBoardConf implements BoardConf {
 	private static final double GRID_START_Y = 0.0;
 	private static final double GRID_SPACING = 0.015;
 	private static final double SMALL_BALL_RADIUS = 0.01;
-	private static final double SMALL_BALL_MASS = 0.25;
 	private static final V2d RESTING = new V2d(0, 0);
+
+	/**
+	 * Creates the massive board configuration.
+	 */
+	public MassiveBoardConf() {
+	}
 
 	@Override
 	public Ball getPlayerBall() {
-		return  new Ball(PLAYER_START, PLAYER_RADIUS, PLAYER_MASS, PLAYER_INITIAL_VELOCITY);
+		return  Ball.ofUniformMaterial(PLAYER_START, PLAYER_RADIUS, PLAYER_INITIAL_VELOCITY);
 	}
 
 	@Override
@@ -38,7 +46,7 @@ public class MassiveBoardConf implements BoardConf {
     		for (int col = 0; col < GRID_COLUMNS; col++) {
         		var px = GRID_START_X + col * GRID_SPACING;
         		var py = GRID_START_Y + row * GRID_SPACING;
-        		var b = new Ball(new P2d(px, py), SMALL_BALL_RADIUS, SMALL_BALL_MASS, RESTING);
+				var b = Ball.ofUniformMaterial(new P2d(px, py), SMALL_BALL_RADIUS, RESTING);
             	balls.add(b);    			
     		}
     	}		

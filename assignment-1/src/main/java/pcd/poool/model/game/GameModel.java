@@ -3,17 +3,17 @@ package pcd.poool.model.game;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.Board;
 import pcd.poool.model.physics.BoardConf;
+import pcd.poool.model.physics.PhysicsStepper;
 
 /**
- * Single-threaded gameplay coordinator for the playable sequential baseline.
+ * Shared gameplay model used by both sequential and threaded runtimes.
  *
  * <p>The class owns the game rules above the passive physics engine: score
- * accounting, cue-ball availability, end-game conditions, and baseline timing
- * metrics. Human and bot readiness are independent, matching the assignment
- * rule that players act asynchronously; the sequential runner still invokes
- * this object from one loop, so model mutation remains serialized.
+ * accounting, cue-ball availability, end-game conditions, and timing metrics.
+ * Human and bot readiness are independent, while callers still serialize
+ * mutation through the chosen runtime strategy.
  */
-public class SequentialGame {
+public class GameModel {
 
     private static final double MIN_SHOT_SPEED = 0.05;
     private static final double BOT_SHOT_SPEED = 1.2;
@@ -34,8 +34,20 @@ public class SequentialGame {
      *
      * @param conf initial board layout, cue balls, small balls, bounds, and holes
      */
-    public SequentialGame(BoardConf conf) {
-        board = new Board();
+    public GameModel(BoardConf conf) {
+        this(conf, null);
+    }
+
+    /**
+     * Creates a new game from the given board configuration and physics
+     * stepping strategy.
+     *
+     * @param conf initial board layout, cue balls, small balls, bounds, and holes
+     * @param physicsStepper physics strategy, or {@code null} for the default
+     *        sequential engine
+     */
+    public GameModel(BoardConf conf, PhysicsStepper physicsStepper) {
+        board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
         status = GameStatus.RUNNING;
     }
@@ -64,6 +76,8 @@ public class SequentialGame {
      *
      * <p>The runner uses this for the red preview vector before the bot actually
      * kicks. A zero vector means the bot cannot currently shoot.
+     *
+     * @return bot shot velocity preview
      */
     public synchronized V2d previewBotShot() {
         if (!canBotShoot()) {
@@ -73,6 +87,8 @@ public class SequentialGame {
     }
 
     /**
+     * Checks human cue-ball readiness.
+     *
      * @return whether the human cue ball is present, stopped, and the game is not finished
      */
     public synchronized boolean canHumanShoot() {
@@ -80,6 +96,8 @@ public class SequentialGame {
     }
 
     /**
+     * Checks bot cue-ball readiness.
+     *
      * @return whether the bot cue ball is present, stopped, and the game is not finished
      */
     public synchronized boolean canBotShoot() {
@@ -111,7 +129,7 @@ public class SequentialGame {
      *
      * <p>The method also consumes scoring events collected by the board,
      * detects cue-ball losses, detects completion after all small balls are
-     * pocketed, and records baseline step timing.
+     * pocketed, and records timing metrics.
      *
      * @param dtMillis elapsed time in milliseconds
      */
@@ -152,12 +170,16 @@ public class SequentialGame {
      *
      * <p>Callers must keep model mutation through this game facade unless they
      * are implementing low-level physics tests.
+     *
+     * @return owned mutable board
      */
     public synchronized Board board() {
         return board;
     }
 
     /**
+     * Creates an immutable snapshot of the current game state.
+     *
      * @return immutable snapshot of scores, lifecycle state, readiness, and metrics
      */
     public synchronized GameSnapshot snapshot() {

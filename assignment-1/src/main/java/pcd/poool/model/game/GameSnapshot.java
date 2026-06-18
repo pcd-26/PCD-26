@@ -6,6 +6,17 @@ package pcd.poool.model.game;
  * <p>The Swing view and benchmarks read this record instead of inspecting
  * mutable gameplay fields directly. {@code gameOverReason} is {@code null}
  * while the game is still running.
+ *
+ * @param humanScore current human score
+ * @param botScore current bot score
+ * @param status current lifecycle state
+ * @param winner winning player, or {@code null} for running games and draws
+ * @param gameOverReason terminal reason, or {@code null} while running
+ * @param humanCanShoot whether the human cue ball can currently be kicked
+ * @param botCanShoot whether the bot cue ball can currently be kicked
+ * @param elapsedMillis simulated game time
+ * @param simulatedSteps number of completed simulation steps
+ * @param averageStepMillis average physics step duration
  */
 public record GameSnapshot(
         int humanScore,
@@ -20,6 +31,8 @@ public record GameSnapshot(
         double averageStepMillis) {
 
     /**
+     * Checks whether the game has reached a terminal state.
+     *
      * @return whether the game lifecycle has reached a terminal state
      */
     public boolean isFinished() {

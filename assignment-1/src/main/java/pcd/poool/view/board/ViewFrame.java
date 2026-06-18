@@ -66,26 +66,68 @@ public class ViewFrame extends JFrame {
     private static final int OVERLAY_TITLE_SIZE = 44;
     private static final int OVERLAY_HINT_SIZE = 18;
     
+    /** Panel responsible for actual Swing painting. */
     private VisualiserPanel panel;
+    /** Shared render state read by the EDT. */
     private ViewModel model;
+    /** Monitor used to wait for frame completion. */
     private RenderSynch sync;
+    /** Bit mask of arrow directions currently composing a keyboard shot. */
     private int pressedShotDirections;
+    /** Timer that groups quick arrow-key combinations into one shot. */
     private Timer shotTimer;
+    /** Whether a mouse drag aiming interaction is active. */
     private boolean humanDragActive;
+    /** Whether a keyboard aiming interaction is active. */
     private boolean humanKeyboardActive;
     
+    /**
+     * Creates a read-only frame.
+     *
+     * @param model model rendered by the frame
+     * @param w board width in pixels
+     * @param h board height in pixels
+     */
     public ViewFrame(ViewModel model, int w, int h){
         this(model, w, h, null, null);
     }
 
+    /**
+     * Creates a frame with shot input support.
+     *
+     * @param model model rendered by the frame
+     * @param w board width in pixels
+     * @param h board height in pixels
+     * @param shotHandler callback receiving shot velocity requests
+     */
     public ViewFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler){
         this(model, w, h, shotHandler, null);
     }
 
+    /**
+     * Creates a frame with shot and restart input support.
+     *
+     * @param model model rendered by the frame
+     * @param w board width in pixels
+     * @param h board height in pixels
+     * @param shotHandler callback receiving shot velocity requests
+     * @param restartHandler callback invoked when restart is requested
+     */
     public ViewFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler, Runnable restartHandler){
         this(model, w, h, shotHandler, restartHandler, null, null);
     }
 
+    /**
+     * Creates a fully interactive frame.
+     *
+     * @param model model rendered by the frame
+     * @param w board width in pixels
+     * @param h board height in pixels
+     * @param shotHandler callback receiving shot velocity requests
+     * @param restartHandler callback invoked when restart is requested
+     * @param humanAimingStartHandler callback used to authorize human aiming
+     * @param humanAimingStopHandler callback invoked when human aiming ends
+     */
     public ViewFrame(
             ViewModel model,
             int w,
@@ -161,7 +203,7 @@ public class ViewFrame extends JFrame {
                     return;
                 }
                 fireMouseShotOnRelease(event, shotHandler);
-                model.clearShotPreview();
+                model.clearShotPreview(Player.HUMAN);
                 humanDragActive = false;
                 stopHumanAiming(humanAimingStopHandler);
                 panel.repaint();
@@ -198,7 +240,7 @@ public class ViewFrame extends JFrame {
      * @return whether the current preview is owned by the bot
      */
     static boolean isBotAiming(ViewModel viewModel) {
-        var preview = viewModel.getShotPreview();
+        var preview = viewModel.getShotPreview(Player.BOT);
         return preview != null && preview.player() == Player.BOT;
     }
 
@@ -250,7 +292,7 @@ public class ViewFrame extends JFrame {
         }
         humanKeyboardActive = false;
         stopHumanAiming(humanAimingStopHandler);
-        model.clearShotPreview();
+        model.clearShotPreview(Player.HUMAN);
         panel.repaint();
     }
 
@@ -260,7 +302,7 @@ public class ViewFrame extends JFrame {
         humanDragActive = false;
         humanKeyboardActive = false;
         stopHumanAiming(humanAimingStopHandler);
-        model.clearShotPreview();
+        model.clearShotPreview(Player.HUMAN);
         panel.repaint();
     }
 
@@ -330,6 +372,9 @@ public class ViewFrame extends JFrame {
         return normalized * MAX_MOUSE_SHOT_IMPULSE;
     }
 
+    /**
+     * Requests a repaint and waits until the corresponding frame is rendered.
+     */
     public void render(){
 		if (SwingUtilities.isEventDispatchThread()) {
 			throw new IllegalStateException("render() must not be called on the EDT");
@@ -344,12 +389,26 @@ public class ViewFrame extends JFrame {
 		}
     }
         
+    /**
+     * Panel that converts board coordinates to screen coordinates and paints
+     * the current view model.
+     */
     public class VisualiserPanel extends JPanel {
+        /** Screen-space X origin of the board. */
         private int ox;
+        /** Screen-space Y origin of the board. */
         private int oy;
+        /** Board-to-screen scale factor. */
         private int delta;
+        /** Frame id to notify after the next paint operation. */
         private volatile long frameToNotify = NO_FRAME_TO_NOTIFY;
         
+        /**
+         * Creates the visualiser panel.
+         *
+         * @param w panel width in pixels
+         * @param h panel height in pixels
+         */
         public VisualiserPanel(int w, int h){
             setSize(w, h + WINDOW_DECORATION_HEIGHT);
             ox = w / CIRCLE_DIAMETER_FACTOR;
@@ -357,6 +416,12 @@ public class ViewFrame extends JFrame {
             delta = Math.min(ox, oy);
         }
 
+        /**
+         * Associates the next paint operation with a render synchronization
+         * frame id.
+         *
+         * @param frame frame id to signal when painting completes
+         */
         public void setFrameToNotify(long frame) {
         	frameToNotify = frame;
         }
@@ -450,10 +515,12 @@ public class ViewFrame extends JFrame {
         }
 
         private void drawShotPreview(Graphics2D g2) {
-            var preview = model.getShotPreview();
-            if (preview == null) {
-                return;
+            for (var preview : model.getShotPreviews()) {
+                drawShotPreview(g2, preview);
             }
+        }
+
+        private void drawShotPreview(Graphics2D g2, ViewModel.ShotPreviewInfo preview) {
             var start = toScreenPoint(preview.from());
             var end = toScreenPoint(preview.to());
             g2.setColor(preview.player() == Player.BOT ? Color.RED : new Color(30, 90, 210));
