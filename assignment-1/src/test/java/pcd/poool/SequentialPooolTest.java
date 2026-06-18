@@ -3,7 +3,6 @@ package pcd.poool;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.game.Player;
@@ -30,14 +29,13 @@ class SequentialPooolTest {
     }
 
     @Test
-    void aimingOwnerAllowsOnlyOnePlayerAtATime() {
-        var aimingOwner = new AtomicReference<Player>();
+    void humanAimingCanCoexistWithBotPreview() {
+        var viewModel = new ViewModel();
 
-        assertTrue(SequentialPoool.tryStartAiming(aimingOwner, Player.BOT));
-        assertFalse(SequentialPoool.tryStartAiming(aimingOwner, Player.HUMAN));
+        viewModel.setShotPreview(new P2d(0, 0), new P2d(1, 0), 1.0, Player.BOT);
+        viewModel.setShotPreview(new P2d(0, 1), new P2d(1, 1), 1.0, Player.HUMAN);
 
-        SequentialPoool.stopAiming(aimingOwner, Player.BOT);
-
-        assertTrue(SequentialPoool.tryStartAiming(aimingOwner, Player.HUMAN));
+        assertTrue(SequentialPoool.isHumanAiming(viewModel));
+        assertTrue(viewModel.getShotPreview(Player.BOT) != null);
     }
 }

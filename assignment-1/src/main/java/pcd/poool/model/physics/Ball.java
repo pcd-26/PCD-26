@@ -7,12 +7,25 @@ import pcd.poool.model.common.math.V2d;
  * Ball entity with position, velocity, and collision update logic.
  */
 public class Ball {
+
+    private static final double REFERENCE_RADIUS = 0.05;
+    private static final double REFERENCE_MASS = 1.5;
+    private static final double UNIFORM_AREAL_DENSITY =
+            REFERENCE_MASS / diskArea(REFERENCE_RADIUS);
     
     private P2d pos;
     private V2d vel;
     private final double radius;
     private final double mass;
 
+    /**
+     * Creates a mutable physical ball.
+     *
+     * @param pos initial center position
+     * @param radius ball radius
+     * @param mass ball mass used by collision impulses
+     * @param vel initial velocity
+     */
     public Ball(P2d pos, double radius, double mass, V2d vel){
        this.pos = pos;
        this.radius = radius;
@@ -20,10 +33,48 @@ public class Ball {
        this.vel = vel;
     }
 
+    /**
+     * Creates a ball assuming the same material density used by the standard
+     * cue ball, so mass scales with the disk area in the 2D simulation.
+     *
+     * @param pos initial center position
+     * @param radius ball radius
+     * @param vel initial velocity
+     * @return ball whose mass is derived from its radius
+     */
+    public static Ball ofUniformMaterial(P2d pos, double radius, V2d vel) {
+        return new Ball(pos, radius, massForRadius(radius), vel);
+    }
+
+    /**
+     * Computes the mass implied by the uniform-material 2D model.
+     *
+     * @param radius ball radius
+     * @return mass proportional to the disk area with shared areal density
+     */
+    public static double massForRadius(double radius) {
+        if (radius <= 0) {
+            throw new IllegalArgumentException("radius must be > 0");
+        }
+        return UNIFORM_AREAL_DENSITY * diskArea(radius);
+    }
+
+    /**
+     * Advances this ball using the boundary owned by a board.
+     *
+     * @param dt elapsed time in milliseconds
+     * @param ctx board that provides movement bounds
+     */
     public void updateState(long dt, Board ctx){
         updateState(dt, ctx.getBounds());
     }
 
+    /**
+     * Advances this ball by applying friction, movement, and wall bounces.
+     *
+     * @param dt elapsed time in milliseconds
+     * @param bounds rectangular movement boundary
+     */
     public void updateState(long dt, Boundary bounds){
         double dt_scaled = dt * PhysicsDefaults.SECONDS_PER_MILLISECOND;
         applyFriction(dt_scaled);
@@ -31,8 +82,21 @@ public class Ball {
      	applyBoundaryConstraints(bounds);
     }
     
+    /**
+     * Assigns a new velocity to the ball.
+     *
+     * @param vel new velocity
+     */
     public void kick(V2d vel) {
     	this.vel = vel;
+    }
+
+    void translate(V2d delta) {
+        pos = new P2d(pos.x() + delta.x(), pos.y() + delta.y());
+    }
+
+    void addVelocity(V2d delta) {
+        vel = vel.sum(delta);
     }
 
     private void applyBoundaryConstraints(Boundary bounds){
@@ -56,6 +120,9 @@ public class Ball {
      *
      * <p>The method is deterministic for coincident centers: it chooses the
      * positive X axis as the separation normal, avoiding undefined normals.
+     *
+     * @param a first colliding ball
+     * @param b second colliding ball
      */
     public static void resolveCollision(Ball a, Ball b) {
     	double dx   = b.pos.x() - a.pos.x();
@@ -122,24 +189,53 @@ public class Ball {
     }
 
     
+    /**
+     * Gets the current center position.
+     *
+     * @return current center position
+     */
     public P2d getPos(){        
     	return pos;
     }
     
+    /**
+     * Gets the mass used by impulse computations.
+     *
+     * @return mass used by elastic collision resolution
+     */
     public double getMass() {
     	return mass;
     }
     
+    /**
+     * Gets the current velocity.
+     *
+     * @return current velocity
+     */
     public V2d getVel() {
     	return vel;
     }
     
+    /**
+     * Gets the ball radius.
+     *
+     * @return ball radius
+     */
     public double getRadius() {
     	return radius;
     }
 
+    /**
+     * Checks whether this ball is still moving.
+     *
+     * @return whether the ball velocity is above the rest threshold
+     */
     public boolean isMoving() {
         return vel.abs() > PhysicsDefaults.REST_SPEED_THRESHOLD;
+    }
+
+    private static double diskArea(double radius) {
+        return Math.PI * radius * radius;
     }
 
 }
