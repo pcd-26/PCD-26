@@ -3,7 +3,7 @@ package pcd.poool.threaded;
 import java.util.List;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameSnapshot;
-import pcd.poool.model.game.SequentialGame;
+import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.Board;
 import pcd.poool.model.physics.Hole;
 
@@ -25,7 +25,7 @@ public record ThreadedGameSnapshot(
         List<Hole> holes,
         V2d botPreviewShot) {
 
-    static ThreadedGameSnapshot from(SequentialGame game) {
+    static ThreadedGameSnapshot from(GameModel game) {
         var board = game.board();
         return new ThreadedGameSnapshot(
                 game.snapshot(),

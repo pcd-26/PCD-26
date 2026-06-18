@@ -14,11 +14,11 @@ import pcd.poool.model.physics.Boundary;
 import pcd.poool.model.physics.Hole;
 import pcd.poool.model.physics.PhysicsDefaults;
 
-class SequentialGameTest {
+class GameModelTest {
 
     @Test
     void humanScoresWhenOwnCueBallDirectlyPocketsSmallBall() {
-        var game = new SequentialGame(new DirectScoringConf());
+        var game = new GameModel(new DirectScoringConf());
 
         assertTrue(game.shootHuman(new V2d(1.6, 0)));
         runUntilNotMoving(game, 400);
@@ -33,7 +33,7 @@ class SequentialGameTest {
 
     @Test
     void humanAndBotCanShootIndependentlyWhenTheirCueBallsAreStopped() {
-        var game = new SequentialGame(new DirectScoringConf());
+        var game = new GameModel(new DirectScoringConf());
 
         assertTrue(game.shootHuman(new V2d(1.6, 0)));
         assertTrue(game.shootBot());
@@ -41,7 +41,7 @@ class SequentialGameTest {
 
     @Test
     void pocketingHumanCueBallImmediatelyGivesTheWinToBot() {
-        var game = new SequentialGame(new HumanCueAlreadyInHoleConf());
+        var game = new GameModel(new HumanCueAlreadyInHoleConf());
 
         game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
 
@@ -53,7 +53,7 @@ class SequentialGameTest {
 
     @Test
     void exposesBaselineStepMetrics() {
-        var game = new SequentialGame(new DirectScoringConf());
+        var game = new GameModel(new DirectScoringConf());
 
         game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
 
@@ -63,7 +63,7 @@ class SequentialGameTest {
 
     @Test
     void botShotCanBePreviewedBeforeItIsExecuted() {
-        var game = new SequentialGame(new DirectScoringConf());
+        var game = new GameModel(new DirectScoringConf());
         game.shootHuman(new V2d(1.6, 0));
         runUntilNotMoving(game, 400);
 
@@ -75,7 +75,7 @@ class SequentialGameTest {
 
     @Test
     void smallBallPocketedAfterSmallBallCollisionDoesNotScore() {
-        var game = new SequentialGame(new IndirectPocketConf());
+        var game = new GameModel(new IndirectPocketConf());
 
         assertTrue(game.shootHuman(new V2d(1.6, 0)));
         runUntilNotMoving(game, 500);
@@ -83,7 +83,7 @@ class SequentialGameTest {
         assertEquals(0, game.snapshot().humanScore());
     }
 
-    private void runUntilNotMoving(SequentialGame game, int maxSteps) {
+    private void runUntilNotMoving(GameModel game, int maxSteps) {
         for (int i = 0; i < maxSteps && game.snapshot().status() == GameStatus.BALLS_MOVING; i++) {
             game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
         }

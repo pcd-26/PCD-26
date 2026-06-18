@@ -1,6 +1,6 @@
 package pcd.poool.threaded;
 
-import pcd.poool.model.game.SequentialGame;
+import pcd.poool.model.game.GameModel;
 
 /**
  * Command executed by the threaded game controller on its owned game model.
@@ -13,7 +13,7 @@ interface GameCommand {
      *
      * @param game model owned by the controller thread
      */
-    void execute(SequentialGame game);
+    void execute(GameModel game);
 
     /**
      * Notifies the command that it was discarded before execution, typically

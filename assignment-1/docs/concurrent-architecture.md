@@ -335,7 +335,7 @@ thread-based implementation:
 - `SpatialCollisionDetector` already uses a deterministic uniform grid, making
   spatial decomposition a natural extension rather than a new conceptual
   subsystem.
-- `SequentialGame` centralizes scoring, cue-ball availability, and termination
+- `GameModel` centralizes scoring, cue-ball availability, and termination
   rules, so the concurrent version can preserve the same game semantics by
   reusing the same rule order after each physics step.
 
@@ -452,7 +452,7 @@ Runtime components:
 - `ThreadedPoool`: playable launcher. It owns the Swing view loop, reads the
   latest immutable `ThreadedGameSnapshot`, updates `ViewModel`, and requests
   repainting. It does not mutate the game model directly.
-- `ThreadedGameRunner`: execution strategy. It owns one `SequentialGame`
+- `ThreadedGameRunner`: execution strategy. It owns one `GameModel`
   instance and starts the platform threads used by the runtime.
 - `poool-threaded-controller`: controller platform thread. It is the only
   thread that drains game commands, invokes the game model, applies game
@@ -464,7 +464,7 @@ Runtime components:
   snapshots and submits bot-shot commands asynchronously after the configured
   think time.
 - Swing EDT: handles keyboard and mouse events. It produces shot/restart
-  requests but does not write to `Board` or `SequentialGame`.
+  requests but does not write to `Board` or `GameModel`.
 
 The resulting ownership structure is:
 
@@ -478,7 +478,7 @@ Swing EDT / BotThread
  Controller platform thread
         |
         v
- SequentialGame + Board + ThreadedPhysicsEngine
+ GameModel + Board + ThreadedPhysicsEngine
         |
         v
  PhysicsWorker[] for integration and broad phase

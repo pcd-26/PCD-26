@@ -3,7 +3,7 @@ package pcd.poool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import pcd.poool.model.game.Player;
-import pcd.poool.model.game.SequentialGame;
+import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.PhysicsDefaults;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.view.board.View;
@@ -94,8 +94,8 @@ public class SequentialPoool {
         }
     }
 
-    private static SequentialGame newGame() {
-        return new SequentialGame(new StandardGameBoardConf());
+    private static GameModel newGame() {
+        return new GameModel(new StandardGameBoardConf());
     }
 
     private static int framePerSec(int renderedFrames, long startTime, long now) {
@@ -106,7 +106,7 @@ public class SequentialPoool {
         return (int) (renderedFrames * 1000 / elapsed);
     }
 
-    private static void updateBotShotPreview(SequentialGame game, ViewModel viewModel, boolean botAiming) {
+    private static void updateBotShotPreview(GameModel game, ViewModel viewModel, boolean botAiming) {
         if (!game.canBotShoot() || !botAiming) {
             return;
         }

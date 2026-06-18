@@ -43,7 +43,7 @@ Swing EDT / BotThread
  Controller platform thread
         |
         v
- SequentialGame + Board + ThreadedPhysicsEngine
+ GameModel + Board + ThreadedPhysicsEngine
         |
         v
  PhysicsWorker[]
@@ -59,11 +59,11 @@ Swing EDT / BotThread
 The central correctness rule is single-writer ownership of the authoritative
 game state.
 
-- `SequentialGame` remains the owner of game rules: score, cue-ball
+- `GameModel` remains the owner of game rules: score, cue-ball
   availability, status, and termination.
 - `Board` remains the owner of physical entities and low-level physics events.
-- Only the controller thread invokes mutating operations on `SequentialGame`.
-- GUI and bot threads never mutate `Board` or `SequentialGame` directly.
+- Only the controller thread invokes mutating operations on `GameModel`.
+- GUI and bot threads never mutate `Board` or `GameModel` directly.
 - Physics workers only execute assigned physics computations during a
   controller-owned step.
 
@@ -103,7 +103,7 @@ independent from physics mutation and avoids UI/model races.
 ## 6. Worker-Based Physics Pipeline
 The heavy part of the thread-based implementation is `ThreadedPhysicsEngine`.
 It implements the same `PhysicsStepper` strategy interface as the sequential
-`PhysicsEngine`, so `SequentialGame` can be reused unchanged at the game-rule
+`PhysicsEngine`, so `GameModel` can be reused unchanged at the game-rule
 level.
 
 For each physics tick, the controller calls:

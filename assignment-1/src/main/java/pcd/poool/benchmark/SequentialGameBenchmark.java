@@ -2,7 +2,7 @@ package pcd.poool.benchmark;
 
 import java.util.Locale;
 import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.game.SequentialGame;
+import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.PhysicsDefaults;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 
@@ -28,7 +28,7 @@ public class SequentialGameBenchmark {
      */
     public static void main(String[] args) {
         int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
-        var game = new SequentialGame(new StandardGameBoardConf());
+        var game = new GameModel(new StandardGameBoardConf());
         game.shootHuman(new V2d(0, 1.4));
 
         for (int i = 0; i < steps && !game.snapshot().isFinished(); i++) {

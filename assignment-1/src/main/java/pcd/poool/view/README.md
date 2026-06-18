@@ -33,7 +33,7 @@ The view package is responsible for:
 
 - `SequentialPoool` and `ThreadedPoool` both create a `View` and keep updating
   its `ViewModel`.
-- `ViewFrame` never mutates `Board` or `SequentialGame` directly.
+- `ViewFrame` never mutates `Board` or `GameModel` directly.
 - Input is converted into callbacks such as "shoot human" or "restart".
 - Rendering uses copied or immutable data so Swing does not read the mutable
   game model directly.
