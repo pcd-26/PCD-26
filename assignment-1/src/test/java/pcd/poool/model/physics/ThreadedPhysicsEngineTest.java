@@ -2,6 +2,7 @@ package pcd.poool.model.physics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
+import pcd.poool.model.game.Player;
 import pcd.poool.model.physics.config.MinimalBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
@@ -41,6 +43,43 @@ class ThreadedPhysicsEngineTest {
             } finally {
                 secondEngine.close();
             }
+        }
+    }
+
+    @Test
+    @Timeout(3)
+    void threadedPhysicsMatchesSequentialBaselineWhenNoCollisionsOccur() {
+        var conf = new SeparatedMotionBoardConf();
+
+        try (var threadedEngine = new ThreadedPhysicsEngine(3)) {
+            var sequentialBoard = new Board(new PhysicsEngine());
+            sequentialBoard.init(conf);
+            sequentialBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
+            sequentialBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
+
+            var threadedBoard = new Board(threadedEngine);
+            threadedBoard.init(conf);
+            threadedBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
+            threadedBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
+
+            for (int i = 0; i < 40; i++) {
+                sequentialBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                threadedBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertAll(
+                    () -> assertEquals(sequentialBoard.getBalls(), threadedBoard.getBalls()),
+                    () -> assertEquals(sequentialBoard.getPlayerBall(), threadedBoard.getPlayerBall()),
+                    () -> assertEquals(sequentialBoard.getBotBall(), threadedBoard.getBotBall()),
+                    () -> assertEquals(
+                            sequentialBoard.getPocketedSmallBalls(),
+                            threadedBoard.getPocketedSmallBalls()),
+                    () -> assertEquals(
+                            sequentialBoard.isPlayerBallPocketed(),
+                            threadedBoard.isPlayerBallPocketed()),
+                    () -> assertEquals(
+                            sequentialBoard.isBotBallPocketed(),
+                            threadedBoard.isBotBallPocketed()));
         }
     }
 
@@ -95,6 +134,24 @@ class ThreadedPhysicsEngineTest {
     }
 
     @Test
+    @Timeout(3)
+    void workerTasksAreSpreadAcrossAllWorkersOnLargeBoard() {
+        try (var engine = new ThreadedPhysicsEngine(4)) {
+            var board = new Board(engine);
+            board.init(new ThousandBallsBoardConf());
+
+            var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
+
+            assertEquals(4, engine.workerCount());
+            assertEquals(
+                    profile.activeBalls(),
+                    profile.integrationWorkerItems().stream().mapToInt(Integer::intValue).sum());
+            assertTrue(profile.integrationWorkerItems().stream().allMatch(item -> item > 0));
+            assertTrue(profile.localGridWorkerItems().stream().allMatch(item -> item > 0));
+        }
+    }
+
+    @Test
     void rejectsInvalidWorkerCount() {
         assertThrows(IllegalArgumentException.class, () -> new ThreadedPhysicsEngine(0));
     }
@@ -119,6 +176,36 @@ class ThreadedPhysicsEngineTest {
         @Override
         public List<Ball> getSmallBalls() {
             return List.of(new Ball(new P2d(0, 0), 0.05, 1.0, new V2d(0.0, 0.0)));
+        }
+
+        @Override
+        public List<Hole> getHoles() {
+            return List.of();
+        }
+    }
+
+    private static class SeparatedMotionBoardConf implements BoardConf {
+
+        @Override
+        public Boundary getBoardBoundary() {
+            return new Boundary(-1, -1, 1, 1);
+        }
+
+        @Override
+        public Ball getPlayerBall() {
+            return new Ball(new P2d(-0.75, 0), 0.04, 1.0, new V2d(0.0, 0.0));
+        }
+
+        @Override
+        public Ball getBotBall() {
+            return new Ball(new P2d(0.75, 0), 0.04, 1.0, new V2d(0.0, 0.0));
+        }
+
+        @Override
+        public List<Ball> getSmallBalls() {
+            return List.of(
+                    new Ball(new P2d(-0.1, 0.65), 0.03, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.1, -0.65), 0.03, 1.0, new V2d(0.0, 0.0)));
         }
 
         @Override
