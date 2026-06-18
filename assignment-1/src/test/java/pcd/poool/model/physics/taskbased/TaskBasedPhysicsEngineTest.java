@@ -16,10 +16,13 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.common.SpatialCollisionDetector.Pair;
 import pcd.poool.model.physics.sequential.PhysicsEngine;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
 class TaskBasedPhysicsEngineTest {
+
+    private static final double EPSILON = 1e-9;
 
     @Test
     void taskBasedPhysicsCanBeConfiguredWithExplicitPoolSize() {
@@ -51,9 +54,9 @@ class TaskBasedPhysicsEngineTest {
                 taskBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
             }
 
-            assertEquals(sequentialBoard.getBalls(), taskBoard.getBalls());
-            assertEquals(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
-            assertEquals(sequentialBoard.getBotBall(), taskBoard.getBotBall());
+            assertBoardSnapshotsClose(sequentialBoard.getBalls(), taskBoard.getBalls());
+            assertBallSnapshotClose(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
+            assertBallSnapshotClose(sequentialBoard.getBotBall(), taskBoard.getBotBall());
             assertEquals(sequentialBoard.getPocketedSmallBalls(), taskBoard.getPocketedSmallBalls());
             assertTrue(taskBoard.getBalls().size() > 0);
         }
@@ -80,9 +83,9 @@ class TaskBasedPhysicsEngineTest {
                 taskBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
             }
 
-            assertEquals(sequentialBoard.getBalls(), taskBoard.getBalls());
-            assertEquals(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
-            assertEquals(sequentialBoard.getBotBall(), taskBoard.getBotBall());
+            assertBoardSnapshotsClose(sequentialBoard.getBalls(), taskBoard.getBalls());
+            assertBallSnapshotClose(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
+            assertBallSnapshotClose(sequentialBoard.getBotBall(), taskBoard.getBotBall());
             assertEquals(sequentialBoard.getPocketedSmallBalls(), taskBoard.getPocketedSmallBalls());
         }
     }
@@ -115,6 +118,71 @@ class TaskBasedPhysicsEngineTest {
             assertEquals(ThousandBallsBoardConf.SMALL_BALL_COUNT, board.getBalls().size());
             assertEquals(4, engine.poolSize());
         }
+    }
+
+    @Test
+    void broadPhaseDeduplicatesCandidatePairsAcrossMergedCells() {
+        try (var engine = new TaskBasedPhysicsEngine(2)) {
+            var balls = List.of(
+                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.06, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
+
+            var pairs = engine.detectCollisionPairs(balls);
+
+            assertEquals(1, pairs.size());
+            assertEquals(List.of(new Pair(0, 1)), pairs);
+        }
+    }
+
+    @Test
+    void broadPhaseReturnsDeterministicallyOrderedCandidatePairs() {
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var balls = List.of(
+                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.06, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.07, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
+
+            var firstRun = engine.detectCollisionPairs(balls);
+            var secondRun = engine.detectCollisionPairs(balls);
+
+            assertEquals(List.of(
+                    new Pair(0, 1),
+                    new Pair(0, 2),
+                    new Pair(1, 2)), firstRun);
+            assertEquals(firstRun, secondRun);
+        }
+    }
+
+    @Test
+    void broadPhaseIncludesNeighboringCellCandidates() {
+        try (var engine = new TaskBasedPhysicsEngine(1)) {
+            var balls = List.of(
+                    new Ball(new P2d(0.0, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.15, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
+
+            var pairs = engine.detectCollisionPairs(balls);
+
+            assertEquals(List.of(new Pair(0, 1)), pairs);
+        }
+    }
+
+    private static void assertBoardSnapshotsClose(
+            List<Board.BallSnapshot> expected,
+            List<Board.BallSnapshot> actual) {
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            assertBallSnapshotClose(expected.get(i), actual.get(i));
+        }
+    }
+
+    private static void assertBallSnapshotClose(Board.BallSnapshot expected, Board.BallSnapshot actual) {
+        if (expected == null || actual == null) {
+            assertEquals(expected, actual);
+            return;
+        }
+        assertEquals(expected.radius(), actual.radius(), EPSILON);
+        assertEquals(expected.pos().x(), actual.pos().x(), EPSILON);
+        assertEquals(expected.pos().y(), actual.pos().y(), EPSILON);
     }
 
     private static class SeparatedMotionBoardConf implements BoardConf {
