@@ -1,9 +1,9 @@
 package pcd.poool.benchmark;
 
 import java.util.Locale;
-import pcd.poool.model.physics.Board;
-import pcd.poool.model.physics.PhysicsDefaults;
-import pcd.poool.model.physics.ThreadedPhysicsEngine;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 import pcd.poool.model.physics.config.MassiveBoardConf;
 
 /**

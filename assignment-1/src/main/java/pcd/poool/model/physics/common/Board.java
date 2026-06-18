@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,6 +9,7 @@ import java.util.Map;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.Player;
+import pcd.poool.model.physics.sequential.PhysicsEngine;
 
 /**
  * Mutable board state used by the physics loop.
@@ -244,19 +245,19 @@ public class Board {
         return bounds;
     }
 
-    synchronized Ball getPlayerBallEntity() {
+    public synchronized Ball getPlayerBallEntity() {
         return playerBallPocketed ? null : playerBall;
     }
 
-    synchronized Ball getBotBallEntity() {
+    public synchronized Ball getBotBallEntity() {
         return botBallPocketed ? null : botBall;
     }
 
-    synchronized List<Ball> getSmallBallEntities() {
+    public synchronized List<Ball> getSmallBallEntities() {
         return balls;
     }
 
-    synchronized List<Ball> getCollisionBalls() {
+    public synchronized List<Ball> getCollisionBalls() {
         var allBalls = new ArrayList<Ball>();
         if (playerBall != null && !playerBallPocketed) {
             allBalls.add(playerBall);
@@ -268,7 +269,7 @@ public class Board {
         return allBalls;
     }
 
-    synchronized void recordCollision(Ball first, Ball second) {
+    public synchronized void recordCollision(Ball first, Ball second) {
         recordDirectCueTouch(first, second, Player.HUMAN);
         recordDirectCueTouch(first, second, Player.BOT);
         clearSmallBallScoringOnIndirectTouch(first, second);
@@ -293,7 +294,7 @@ public class Board {
         }
     }
 
-    synchronized void applyHoleInteractions() {
+    public synchronized void applyHoleInteractions() {
         if (holes.isEmpty()) {
             return;
         }

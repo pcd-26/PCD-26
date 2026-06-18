@@ -9,8 +9,8 @@ import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.game.GameStatus;
 import pcd.poool.model.game.Player;
-import pcd.poool.model.physics.Board;
-import pcd.poool.model.physics.Hole;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.Hole;
 
 class ViewModelTest {
 

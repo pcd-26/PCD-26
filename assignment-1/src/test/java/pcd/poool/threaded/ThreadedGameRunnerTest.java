@@ -17,10 +17,10 @@ import org.junit.jupiter.api.Timeout;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameStatus;
-import pcd.poool.model.physics.Ball;
-import pcd.poool.model.physics.BoardConf;
-import pcd.poool.model.physics.Boundary;
-import pcd.poool.model.physics.Hole;
+import pcd.poool.model.physics.common.Ball;
+import pcd.poool.model.physics.common.BoardConf;
+import pcd.poool.model.physics.common.Boundary;
+import pcd.poool.model.physics.common.Hole;
 
 class ThreadedGameRunnerTest {
 

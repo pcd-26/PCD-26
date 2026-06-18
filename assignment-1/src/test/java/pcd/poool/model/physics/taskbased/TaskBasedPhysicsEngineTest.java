@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.taskbased;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -10,6 +10,13 @@ import org.junit.jupiter.api.Timeout;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.Player;
+import pcd.poool.model.physics.common.Ball;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.BoardConf;
+import pcd.poool.model.physics.common.Boundary;
+import pcd.poool.model.physics.common.Hole;
+import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.sequential.PhysicsEngine;
 
 class TaskBasedPhysicsEngineTest {
 

@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.threaded;
 
 /**
  * Long-lived platform thread used by {@link ThreadedPhysicsEngine}.

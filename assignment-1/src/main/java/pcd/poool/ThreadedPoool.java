@@ -3,7 +3,7 @@ package pcd.poool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import pcd.poool.model.game.Player;
-import pcd.poool.model.physics.BoardConf;
+import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.config.MassiveBoardConf;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;

@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -11,9 +11,9 @@ import java.util.Set;
 /**
  * Broad-phase collision detector based on a deterministic uniform grid.
  */
-class SpatialCollisionDetector {
+public class SpatialCollisionDetector {
 
-    List<Pair> detectCollisionPairs(List<Ball> balls) {
+    public List<Pair> detectCollisionPairs(List<Ball> balls) {
         if (balls.size() < 2) {
             return List.of();
         }
@@ -80,7 +80,7 @@ class SpatialCollisionDetector {
         return (int) Math.floor(coordinate / cellSize);
     }
 
-    record Pair(int firstIndex, int secondIndex) {}
+    public record Pair(int firstIndex, int secondIndex) {}
 
     private record Cell(int x, int y) {}
 }

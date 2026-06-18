@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 /**
  * Shared physics constants used by the deterministic sequential engine.

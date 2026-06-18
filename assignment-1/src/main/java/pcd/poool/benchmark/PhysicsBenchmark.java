@@ -1,8 +1,9 @@
 package pcd.poool.benchmark;
 
 import java.util.Locale;
-import pcd.poool.model.physics.Board;
-import pcd.poool.model.physics.PhysicsDefaults;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.sequential.PhysicsEngine;
 import pcd.poool.model.physics.config.MassiveBoardConf;
 
 /**
@@ -27,7 +28,7 @@ public class PhysicsBenchmark {
      */
     public static void main(String[] args) {
         int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
-        var board = new Board();
+        var board = new Board(new PhysicsEngine());
         board.init(new MassiveBoardConf());
 
         long start = System.nanoTime();

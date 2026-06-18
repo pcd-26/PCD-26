@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
@@ -91,11 +91,11 @@ public class Ball {
     	this.vel = vel;
     }
 
-    void translate(V2d delta) {
+    public void translate(V2d delta) {
         pos = new P2d(pos.x() + delta.x(), pos.y() + delta.y());
     }
 
-    void addVelocity(V2d delta) {
+    public void addVelocity(V2d delta) {
         vel = vel.sum(delta);
     }
 
