@@ -1,0 +1,313 @@
+package pcd.poool.taskbased;
+
+import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
+import pcd.poool.model.common.math.V2d;
+import pcd.poool.model.game.GameModel;
+import pcd.poool.model.physics.common.BoardConf;
+import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
+
+/**
+ * Executor-based execution strategy for Poool.
+ *
+ * <p>The runner keeps the game model single-writer: the scheduled controller
+ * tick is the only component that applies queued commands and advances the
+ * simulation. Auxiliary tasks may submit commands through a monitor-backed
+ * queue, but they never mutate the model directly.
+ */
+public class TaskBasedGameRunner implements AutoCloseable {
+
+    private static final Duration DEFAULT_JOIN_TIMEOUT = Duration.ofSeconds(2);
+
+    private final TaskBasedPhysicsEngine physicsEngine;
+    private final GameModel game;
+    private final Config config;
+    private final CommandQueueMonitor commands;
+    private final SnapshotStore snapshots;
+    private final ScheduledExecutorService controllerExecutor;
+    private final ExecutorService botExecutor;
+    private final AtomicReference<RuntimeException> failure;
+    private volatile boolean running;
+    private volatile boolean closed;
+
+    /**
+     * Creates a task-based runner with the default configuration.
+     *
+     * @param boardConf initial board configuration
+     */
+    public TaskBasedGameRunner(BoardConf boardConf) {
+        this(boardConf, Config.defaultConfig());
+    }
+
+    /**
+     * Creates a task-based runner.
+     *
+     * @param boardConf initial board configuration
+     * @param config execution configuration
+     */
+    public TaskBasedGameRunner(BoardConf boardConf, Config config) {
+        this(boardConf, config, new TaskBasedPhysicsEngine(config.physicsWorkerCount(), config.tickMillis()));
+    }
+
+    TaskBasedGameRunner(BoardConf boardConf, Config config, TaskBasedPhysicsEngine physicsEngine) {
+        this.config = Objects.requireNonNull(config, "config");
+        this.physicsEngine = Objects.requireNonNull(physicsEngine, "physicsEngine");
+        game = new GameModel(Objects.requireNonNull(boardConf, "boardConf"), physicsEngine);
+        commands = new CommandQueueMonitor();
+        snapshots = new SnapshotStore(TaskBasedGameSnapshot.from(game));
+        failure = new AtomicReference<>();
+        controllerExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            var thread = new Thread(runnable, "poool-task-controller");
+            thread.setDaemon(true);
+            return thread;
+        });
+        botExecutor = config.botEnabled()
+                ? Executors.newSingleThreadExecutor(runnable -> {
+                    var thread = new Thread(runnable, "poool-task-bot");
+                    thread.setDaemon(true);
+                    return thread;
+                })
+                : null;
+    }
+
+    /**
+     * Starts the controller loop and, if enabled, the asynchronous bot loop.
+     */
+    public synchronized void start() {
+        ensureHealthy();
+        if (running) {
+            return;
+        }
+        if (closed) {
+            throw new IllegalStateException("task-based game runner is closed");
+        }
+        running = true;
+        controllerExecutor.scheduleAtFixedRate(this::tick, 0, config.tickMillis(), TimeUnit.MILLISECONDS);
+        if (botExecutor != null) {
+            botExecutor.submit(new TaskBasedBotAgent(snapshots, this, config.botThinkTimeMillis()));
+        }
+    }
+
+    /**
+     * Checks whether the runtime is active.
+     *
+     * @return whether the task-based runtime is active
+     */
+    public boolean isRunning() {
+        return running;
+    }
+
+    /**
+     * Submits an asynchronous human shot command.
+     *
+     * @param velocity shot velocity
+     * @return receipt completed when the controller executes the command
+     */
+    public CommandReceipt<Boolean> shootHuman(V2d velocity) {
+        ensureHealthy();
+        return submit(game -> game.shootHuman(velocity));
+    }
+
+    /**
+     * Submits an asynchronous bot shot command.
+     *
+     * @return receipt completed when the controller executes the command
+     */
+    public CommandReceipt<Boolean> shootBot() {
+        ensureHealthy();
+        return submit(GameModel::shootBot);
+    }
+
+    /**
+     * Gets the latest snapshot.
+     *
+     * @return latest immutable state published by the controller
+     */
+    public TaskBasedGameSnapshot snapshot() {
+        ensureHealthy();
+        return snapshots.get();
+    }
+
+    /**
+     * Gets the snapshot monitor.
+     *
+     * @return monitor used by tests and views to wait for published snapshots
+     */
+    public SnapshotStore snapshots() {
+        return snapshots;
+    }
+
+    /**
+     * Requests runtime shutdown and wakes blocked producers.
+     */
+    public synchronized void requestStop() {
+        running = false;
+        commands.close();
+        controllerExecutor.shutdownNow();
+        if (botExecutor != null) {
+            botExecutor.shutdownNow();
+        }
+    }
+
+    /**
+     * Waits for executor termination.
+     *
+     * @param timeout maximum wait duration for each executor
+     * @throws InterruptedException if interrupted while waiting
+     */
+    public void awaitTermination(Duration timeout) throws InterruptedException {
+        controllerExecutor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        if (botExecutor != null) {
+            botExecutor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
+        physicsEngine.close();
+    }
+
+    @Override
+    public void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        requestStop();
+        try {
+            awaitTermination(DEFAULT_JOIN_TIMEOUT);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    RuntimeException failure() {
+        return failure.get();
+    }
+
+    private void tick() {
+        if (!running) {
+            return;
+        }
+        try {
+            drainCommands();
+            if (!game.snapshot().isFinished()) {
+                game.step(config.tickMillis());
+            }
+            snapshots.publish(TaskBasedGameSnapshot.from(game));
+        } catch (RuntimeException ex) {
+            failure.compareAndSet(null, ex);
+            running = false;
+            commands.close();
+            if (botExecutor != null) {
+                botExecutor.shutdownNow();
+            }
+            controllerExecutor.shutdownNow();
+            snapshots.publish(TaskBasedGameSnapshot.from(game));
+            throw ex;
+        }
+    }
+
+    private void drainCommands() {
+        GameCommand command = commands.poll();
+        while (command != null) {
+            command.execute(game);
+            command = commands.poll();
+        }
+    }
+
+    private void ensureHealthy() {
+        var observedFailure = failure.get();
+        if (observedFailure != null) {
+            throw new IllegalStateException("task-based game runner failed", observedFailure);
+        }
+    }
+
+    private CommandReceipt<Boolean> submit(ShotOperation operation) {
+        var receipt = new CommandReceipt<Boolean>();
+        boolean accepted = commands.put(new GameCommand() {
+            @Override
+            public void execute(GameModel game) {
+                try {
+                    receipt.complete(operation.execute(game));
+                } catch (RuntimeException ex) {
+                    receipt.fail(ex);
+                }
+            }
+
+            @Override
+            public void reject() {
+                receipt.complete(false);
+            }
+        });
+        if (!accepted) {
+            receipt.complete(false);
+        }
+        return receipt;
+    }
+
+    @FunctionalInterface
+    private interface ShotOperation {
+
+        boolean execute(GameModel game);
+    }
+
+    /**
+     * Runtime configuration for the task-based runner.
+     *
+     * @param tickMillis fixed simulation tick duration
+     * @param botEnabled whether to start the asynchronous bot agent
+     * @param botThinkTimeMillis delay before the bot submits a shot
+     * @param physicsWorkerCount number of executor workers used inside each physics step
+     */
+    public record Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis, int physicsWorkerCount) {
+
+        /**
+         * Creates a configuration using the default physics worker count.
+         *
+         * @param tickMillis fixed simulation tick duration
+         * @param botEnabled whether to start the asynchronous bot agent
+         * @param botThinkTimeMillis delay before the bot submits a shot
+         */
+        public Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis) {
+            this(tickMillis, botEnabled, botThinkTimeMillis, defaultPhysicsWorkerCount());
+        }
+
+        public Config {
+            if (tickMillis <= 0) {
+                throw new IllegalArgumentException("tickMillis must be > 0");
+            }
+            if (botThinkTimeMillis < 0) {
+                throw new IllegalArgumentException("botThinkTimeMillis must be >= 0");
+            }
+            if (physicsWorkerCount < 1) {
+                throw new IllegalArgumentException("physicsWorkerCount must be >= 1");
+            }
+        }
+
+        /**
+         * Creates the default runtime configuration.
+         *
+         * @return default runtime configuration
+         */
+        public static Config defaultConfig() {
+            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, true, 600, defaultPhysicsWorkerCount());
+        }
+
+        /**
+         * Creates a configuration suitable for deterministic tests without bot
+         * activity.
+         *
+         * @return configuration without the asynchronous bot agent
+         */
+        public static Config withoutBot() {
+            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, false, 0, defaultPhysicsWorkerCount());
+        }
+
+        private static int defaultPhysicsWorkerCount() {
+            return Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+        }
+    }
+}
