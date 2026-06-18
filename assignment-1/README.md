@@ -138,6 +138,9 @@ platform-thread implementation and the proposed spatial decomposition strategy,
 are available in [`docs/concurrent-architecture.md`](docs/concurrent-architecture.md).
 The final thread-based implementation is described in
 [`docs/threaded-implementation.md`](docs/threaded-implementation.md).
+An implementation-oriented architecture map, covering package responsibilities,
+state ownership, and component interactions, is available in
+[`docs/runtime-architecture.md`](docs/runtime-architecture.md).
 
 The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to
 `main` and can also be started manually. It builds the report PDF and uploads an

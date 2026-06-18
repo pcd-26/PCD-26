@@ -30,7 +30,7 @@ public interface BoardConf {
 	 */
 	default Ball getBotBall() {
 		var bounds = getBoardBoundary();
-		return new Ball(new P2d(0, bounds.y1() * 0.75), 0.05, 1.5, new V2d(0, 0));
+		return Ball.ofUniformMaterial(new P2d(0, bounds.y1() * 0.75), 0.05, new V2d(0, 0));
 	}
 	
 	/**
