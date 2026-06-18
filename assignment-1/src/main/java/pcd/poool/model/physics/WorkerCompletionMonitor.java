@@ -26,13 +26,16 @@ class WorkerCompletionMonitor {
     }
 
     synchronized void await() {
+        boolean interrupted = false;
         while (remaining > 0) {
             try {
                 wait();
             } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("interrupted while waiting for physics workers", ex);
+                interrupted = true;
             }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
         if (failure != null) {
             throw failure;
