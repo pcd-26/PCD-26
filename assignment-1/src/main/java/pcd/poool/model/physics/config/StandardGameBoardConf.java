@@ -18,9 +18,7 @@ public class StandardGameBoardConf implements BoardConf {
 
     private static final Boundary BOARD_BOUNDARY = new Boundary(-1.5, -1.0, 1.5, 1.0);
     private static final double CUE_RADIUS = 0.05;
-    private static final double CUE_MASS = 1.5;
     private static final double SMALL_BALL_RADIUS = 0.035;
-    private static final double SMALL_BALL_MASS = 0.4;
     private static final V2d RESTING = new V2d(0, 0);
 
     /**
@@ -36,12 +34,12 @@ public class StandardGameBoardConf implements BoardConf {
 
     @Override
     public Ball getPlayerBall() {
-        return new Ball(new P2d(0, -0.72), CUE_RADIUS, CUE_MASS, RESTING);
+        return Ball.ofUniformMaterial(new P2d(0, -0.72), CUE_RADIUS, RESTING);
     }
 
     @Override
     public Ball getBotBall() {
-        return new Ball(new P2d(0, 0.62), CUE_RADIUS, CUE_MASS, RESTING);
+        return Ball.ofUniformMaterial(new P2d(0, 0.62), CUE_RADIUS, RESTING);
     }
 
     @Override
@@ -54,7 +52,7 @@ public class StandardGameBoardConf implements BoardConf {
             for (int col = 0; col <= row; col++) {
                 double x = startX + row * spacing;
                 double y = startY + (col - row / 2.0) * spacing;
-                balls.add(new Ball(new P2d(x, y), SMALL_BALL_RADIUS, SMALL_BALL_MASS, RESTING));
+                balls.add(Ball.ofUniformMaterial(new P2d(x, y), SMALL_BALL_RADIUS, RESTING));
             }
         }
         return balls;

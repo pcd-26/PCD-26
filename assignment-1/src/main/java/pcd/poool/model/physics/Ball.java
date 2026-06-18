@@ -7,6 +7,11 @@ import pcd.poool.model.common.math.V2d;
  * Ball entity with position, velocity, and collision update logic.
  */
 public class Ball {
+
+    private static final double REFERENCE_RADIUS = 0.05;
+    private static final double REFERENCE_MASS = 1.5;
+    private static final double UNIFORM_AREAL_DENSITY =
+            REFERENCE_MASS / diskArea(REFERENCE_RADIUS);
     
     private P2d pos;
     private V2d vel;
@@ -26,6 +31,32 @@ public class Ball {
        this.radius = radius;
        this.mass = mass;
        this.vel = vel;
+    }
+
+    /**
+     * Creates a ball assuming the same material density used by the standard
+     * cue ball, so mass scales with the disk area in the 2D simulation.
+     *
+     * @param pos initial center position
+     * @param radius ball radius
+     * @param vel initial velocity
+     * @return ball whose mass is derived from its radius
+     */
+    public static Ball ofUniformMaterial(P2d pos, double radius, V2d vel) {
+        return new Ball(pos, radius, massForRadius(radius), vel);
+    }
+
+    /**
+     * Computes the mass implied by the uniform-material 2D model.
+     *
+     * @param radius ball radius
+     * @return mass proportional to the disk area with shared areal density
+     */
+    public static double massForRadius(double radius) {
+        if (radius <= 0) {
+            throw new IllegalArgumentException("radius must be > 0");
+        }
+        return UNIFORM_AREAL_DENSITY * diskArea(radius);
     }
 
     /**
@@ -193,6 +224,10 @@ public class Ball {
      */
     public boolean isMoving() {
         return vel.abs() > PhysicsDefaults.REST_SPEED_THRESHOLD;
+    }
+
+    private static double diskArea(double radius) {
+        return Math.PI * radius * radius;
     }
 
 }

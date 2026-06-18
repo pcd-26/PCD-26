@@ -22,11 +22,9 @@ public class ThousandBallsBoardConf implements BoardConf {
 
     private static final Boundary BOARD_BOUNDARY = new Boundary(-1.5, -1.0, 1.5, 1.0);
     private static final double CUE_RADIUS = 0.05;
-    private static final double CUE_MASS = 1.5;
     private static final P2d HUMAN_START = new P2d(0, -0.78);
     private static final P2d BOT_START = new P2d(0, 0.78);
     private static final double SMALL_BALL_RADIUS = 0.008;
-    private static final double SMALL_BALL_MASS = 0.25;
     private static final int GRID_ROWS = 25;
     private static final int GRID_COLUMNS = 40;
     private static final double GRID_START_X = -0.78;
@@ -47,12 +45,12 @@ public class ThousandBallsBoardConf implements BoardConf {
 
     @Override
     public Ball getPlayerBall() {
-        return new Ball(HUMAN_START, CUE_RADIUS, CUE_MASS, RESTING);
+        return Ball.ofUniformMaterial(HUMAN_START, CUE_RADIUS, RESTING);
     }
 
     @Override
     public Ball getBotBall() {
-        return new Ball(BOT_START, CUE_RADIUS, CUE_MASS, RESTING);
+        return Ball.ofUniformMaterial(BOT_START, CUE_RADIUS, RESTING);
     }
 
     @Override
@@ -62,7 +60,7 @@ public class ThousandBallsBoardConf implements BoardConf {
             for (int col = 0; col < GRID_COLUMNS; col++) {
                 double x = GRID_START_X + col * GRID_SPACING;
                 double y = GRID_START_Y + row * GRID_SPACING;
-                balls.add(new Ball(new P2d(x, y), SMALL_BALL_RADIUS, SMALL_BALL_MASS, RESTING));
+                balls.add(Ball.ofUniformMaterial(new P2d(x, y), SMALL_BALL_RADIUS, RESTING));
             }
         }
         return balls;

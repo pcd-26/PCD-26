@@ -18,14 +18,11 @@ public class MinimalBoardConf implements BoardConf {
 	private static final P2d PLAYER_START = new P2d(0, 0);
 	private static final V2d PLAYER_INITIAL_VELOCITY = new V2d(0, 0.5);
 	private static final double PLAYER_RADIUS = 0.06;
-	private static final double PLAYER_MASS = 1.0;
 
 	private static final double FIRST_SMALL_BALL_RADIUS = 0.05;
-	private static final double FIRST_SMALL_BALL_MASS = 0.75;
 	private static final P2d FIRST_SMALL_BALL_START = new P2d(0, 0.5);
 
 	private static final double SECOND_SMALL_BALL_RADIUS = 0.025;
-	private static final double SECOND_SMALL_BALL_MASS = 0.25;
 	private static final P2d SECOND_SMALL_BALL_START = new P2d(0.05, 0.55);
 	private static final V2d RESTING = new V2d(0, 0);
 
@@ -37,17 +34,17 @@ public class MinimalBoardConf implements BoardConf {
 
 	@Override
 	public Ball getPlayerBall() {
-    	return new Ball(PLAYER_START, PLAYER_RADIUS, PLAYER_MASS, PLAYER_INITIAL_VELOCITY);
+		return Ball.ofUniformMaterial(PLAYER_START, PLAYER_RADIUS, PLAYER_INITIAL_VELOCITY);
 	}
 
 	@Override
 	public List<Ball> getSmallBalls() {		
         var balls = new ArrayList<Ball>();
-    	var b1 = new Ball(FIRST_SMALL_BALL_START, FIRST_SMALL_BALL_RADIUS, FIRST_SMALL_BALL_MASS, RESTING);
-    	var b2 = new Ball(SECOND_SMALL_BALL_START, SECOND_SMALL_BALL_RADIUS, SECOND_SMALL_BALL_MASS, RESTING);
-    	balls.add(b1);
-    	balls.add(b2);
-    	return balls;
+		var b1 = Ball.ofUniformMaterial(FIRST_SMALL_BALL_START, FIRST_SMALL_BALL_RADIUS, RESTING);
+		var b2 = Ball.ofUniformMaterial(SECOND_SMALL_BALL_START, SECOND_SMALL_BALL_RADIUS, RESTING);
+		balls.add(b1);
+		balls.add(b2);
+		return balls;
 	}
 
 	@Override
