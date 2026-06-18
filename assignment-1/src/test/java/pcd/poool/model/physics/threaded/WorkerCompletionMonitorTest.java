@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.threaded;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

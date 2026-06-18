@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.threaded;
 
 /**
  * Monitor used by the controller thread to wait for a worker phase to finish.

@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

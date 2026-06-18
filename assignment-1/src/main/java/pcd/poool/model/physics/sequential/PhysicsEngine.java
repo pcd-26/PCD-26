@@ -1,4 +1,10 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.sequential;
+
+import pcd.poool.model.physics.common.Ball;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.common.PhysicsStepper;
+import pcd.poool.model.physics.common.SpatialCollisionDetector;
 
 /**
  * Deterministic physics stepper for board state updates.

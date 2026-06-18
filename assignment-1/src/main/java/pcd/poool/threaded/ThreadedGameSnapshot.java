@@ -4,8 +4,8 @@ import java.util.List;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.game.GameModel;
-import pcd.poool.model.physics.Board;
-import pcd.poool.model.physics.Hole;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.Hole;
 
 /**
  * Immutable state published by the platform-thread runner.

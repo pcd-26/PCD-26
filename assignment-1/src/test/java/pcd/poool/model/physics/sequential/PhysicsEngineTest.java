@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.sequential;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -10,6 +10,11 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
+import pcd.poool.model.physics.common.Ball;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.BoardConf;
+import pcd.poool.model.physics.common.Boundary;
+import pcd.poool.model.physics.common.Hole;
 
 class PhysicsEngineTest {
 

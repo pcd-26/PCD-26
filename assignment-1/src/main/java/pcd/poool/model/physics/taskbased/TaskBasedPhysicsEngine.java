@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.taskbased;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +8,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import pcd.poool.model.physics.common.Ball;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.common.PhysicsStepper;
+import pcd.poool.model.physics.common.SpatialCollisionDetector;
 
 /**
  * Task-based physics stepper for board state updates.

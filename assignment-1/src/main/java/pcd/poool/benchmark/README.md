@@ -26,6 +26,7 @@ controlled workloads and report timing data useful for the assignment report.
 ## Relationships
 
 - Uses board configurations from `model.physics.config`.
-- Uses `Board`, `GameModel`, `PhysicsEngine`, or `ThreadedPhysicsEngine`
-  depending on the workload being measured.
+- Uses `Board`, `GameModel`, `physics.sequential.PhysicsEngine`, or
+  `physics.threaded.ThreadedPhysicsEngine` depending on the workload being
+  measured.
 - Produces execution-time data, but does not affect the main game logic.

@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 /**
  * Axis-aligned rectangular board boundary.
