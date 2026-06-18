@@ -293,9 +293,9 @@ Input/Bot
 ## 6. Physics parallelization strategy
 Strategy:
 1. broad phase with spatial partitioning
-2. parallel processing of collision candidate pairs
-3. merge/deduplicate pairs
-4. final resolution with stable ordering (tie-break by ball id)
+2. merge/deduplicate candidate pairs
+3. parallel computation of collision contributions
+4. deterministic aggregate application of per-ball deltas
 
 An intuitive platform-thread variant is to divide the board into spatial
 regions, for example four quadrants, and assign each region to a worker thread.
@@ -311,7 +311,8 @@ also inspects a border band at least as wide as the maximum collision distance
 used by the broad phase. Candidate pairs that cross a region boundary are
 reported to the coordinator together with local pairs. Since the same pair may
 be discovered by multiple workers, the merge phase stores pairs in a set and
-then sorts them by stable ball/index identifiers before collision resolution.
+then sorts them by stable ball/index identifiers before contribution
+computation.
 
 For large configurations, a uniform grid is preferable to hard-coded quadrants:
 it generalizes to more workers, adapts better to thousands of balls, and
@@ -367,10 +368,41 @@ GameControllerThread
   |       spatial-grid buckets and collision candidates
   |-- barrier
   |-- merge and order candidate pairs
-  |-- resolve collisions and hole interactions
+  |-- start phase C on PhysicsWorkerThread[]
+  |       collision contribution accumulators
+  |-- barrier
+  |-- merge accumulated deltas deterministically
+  |-- start phase D on PhysicsWorkerThread[]
+  |       apply one final delta per ball
+  |-- barrier
+  |-- resolve hole interactions
   |-- apply game rules and scoring
   |-- publish immutable snapshot
 ```
+
+The implemented threaded engine follows this staged idea. It does not let
+workers mutate colliding balls while they inspect candidate pairs. Instead, each
+worker owns a private collision accumulator with per-ball delta arrays:
+
+```text
+positionDeltaX[], positionDeltaY[], velocityDeltaX[], velocityDeltaY[]
+```
+
+For every exact overlapping contact, the worker computes the contact normal,
+the overlap correction, and the elastic impulse contribution. Those values are
+added to the private arrays under the indexes of the two involved balls. A ball
+with several simultaneous contacts naturally receives the sum of all related
+contributions.
+
+After all workers finish, the controller merges the private arrays in a stable
+order and then assigns disjoint ball ranges back to the workers for the final
+apply phase. In that phase each ball is written by only one worker, so the
+implementation avoids fine-grained locks while still parallelizing the costly
+collision math.
+
+This is different from immediate sequential collision resolution. The threaded
+solver treats one tick as a simultaneous set of contact contributions computed
+from the same tick-start state, then commits the accumulated result.
 
 The phases have different concurrency properties:
 
@@ -526,9 +558,8 @@ and worker-based CPU exploitation for large physics configurations.
 
 Remaining design trade-offs:
 
-- collision resolution is still serialized after candidate-pair merge, because
-  resolving overlapping collisions concurrently would require conflict
-  analysis or fine-grained locking;
+- collision resolution uses an accumulated-impulse solver, so the threaded
+  trajectory can differ from the sequential immediate-resolution trajectory;
 - merging local spatial grids is serial and can become visible when almost all
   balls occupy the same region;
 - the implementation is expected to scale best on large or massive boards with

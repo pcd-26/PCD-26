@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import pcd.poool.model.common.math.V2d;
 
 /**
  * Platform-threaded physics stepper for large Poool configurations.
@@ -16,7 +17,7 @@ import java.util.Set;
  * and the method synchronizes on the board for the whole tick. Inside that
  * critical section, long-lived worker threads perform independent computation
  * on disjoint ball chunks. The controller thread then merges worker results and
- * resolves collisions in a deterministic order.
+ * applies deterministic aggregate collision deltas.
  *
  * <p>The current parallel phases are:
  *
@@ -24,7 +25,8 @@ import java.util.Set;
  *   <li>ball integration: friction, movement, and boundary constraints;</li>
  *   <li>spatial-grid population for broad-phase collision detection;</li>
  *   <li>deterministic merge/deduplication of candidate pairs;</li>
- *   <li>serial collision resolution and game-event recording.</li>
+ *   <li>parallel accumulated-impulse collision resolution and game-event
+ *       recording.</li>
  * </ol>
  */
 public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
@@ -160,16 +162,102 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         var detection = detectCollisionPairs(collisionBalls, profile);
         long resolutionStart = profile == null ? 0 : System.nanoTime();
-        for (var pair : detection.pairs()) {
-            var first = collisionBalls.get(pair.firstIndex());
-            var second = collisionBalls.get(pair.secondIndex());
-            board.recordCollision(first, second);
-            Ball.resolveCollision(first, second);
-        }
+        resolveCollisionsWithAccumulatedImpulses(board, collisionBalls, detection.pairs());
         if (profile != null) {
             profile.candidatePairs += detection.pairs().size();
             profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
         }
+    }
+
+    private void resolveCollisionsWithAccumulatedImpulses(
+            Board board,
+            List<Ball> balls,
+            List<CollisionPair> pairs) {
+        if (pairs.isEmpty()) {
+            return;
+        }
+
+        var localDeltas = new CollisionDeltaAccumulator[Math.min(workers.length, pairs.size())];
+        runRanges(pairs.size(), (from, to, workerIndex) -> {
+            var accumulator = new CollisionDeltaAccumulator(balls.size());
+            for (int i = from; i < to; i++) {
+                accumulator.add(computeCollisionContribution(balls, pairs.get(i)));
+            }
+            localDeltas[workerIndex] = accumulator;
+        });
+
+        var merged = new CollisionDeltaAccumulator(balls.size());
+        for (var delta : localDeltas) {
+            if (delta != null) {
+                merged.merge(delta);
+            }
+        }
+
+        for (var pair : merged.contactPairs) {
+            board.recordCollision(balls.get(pair.firstIndex()), balls.get(pair.secondIndex()));
+        }
+
+        runRanges(balls.size(), (from, to, workerIndex) -> {
+            for (int i = from; i < to; i++) {
+                var positionDelta = new V2d(merged.positionDeltaX[i], merged.positionDeltaY[i]);
+                var velocityDelta = new V2d(merged.velocityDeltaX[i], merged.velocityDeltaY[i]);
+                balls.get(i).translate(positionDelta);
+                balls.get(i).addVelocity(velocityDelta);
+            }
+        });
+    }
+
+    private CollisionContribution computeCollisionContribution(List<Ball> balls, CollisionPair pair) {
+        var a = balls.get(pair.firstIndex());
+        var b = balls.get(pair.secondIndex());
+
+        double dx = b.getPos().x() - a.getPos().x();
+        double dy = b.getPos().y() - a.getPos().y();
+        double dist = Math.hypot(dx, dy);
+        double minD = a.getRadius() + b.getRadius();
+
+        if (dist >= minD) {
+            return null;
+        }
+        if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
+            dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+            dy = 0.0;
+            dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+        }
+
+        double nx = dx / dist;
+        double ny = dy / dist;
+        double totalMass = a.getMass() + b.getMass();
+        double overlap = minD - dist;
+        double firstPositionCorrection = overlap * (b.getMass() / totalMass);
+        double secondPositionCorrection = overlap * (a.getMass() / totalMass);
+
+        double firstVelocityDeltaX = 0.0;
+        double firstVelocityDeltaY = 0.0;
+        double secondVelocityDeltaX = 0.0;
+        double secondVelocityDeltaY = 0.0;
+        double relativeVelocityX = b.getVel().x() - a.getVel().x();
+        double relativeVelocityY = b.getVel().y() - a.getVel().y();
+        double relativeVelocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+        if (relativeVelocityAlongNormal <= 0) {
+            double impulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityAlongNormal
+                    / (1.0 / a.getMass() + 1.0 / b.getMass());
+            firstVelocityDeltaX = -(impulse / a.getMass()) * nx;
+            firstVelocityDeltaY = -(impulse / a.getMass()) * ny;
+            secondVelocityDeltaX = (impulse / b.getMass()) * nx;
+            secondVelocityDeltaY = (impulse / b.getMass()) * ny;
+        }
+
+        return new CollisionContribution(
+                pair,
+                -nx * firstPositionCorrection,
+                -ny * firstPositionCorrection,
+                firstVelocityDeltaX,
+                firstVelocityDeltaY,
+                nx * secondPositionCorrection,
+                ny * secondPositionCorrection,
+                secondVelocityDeltaX,
+                secondVelocityDeltaY);
     }
 
     private List<Ball> activeBalls(Board board) {
@@ -322,7 +410,61 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private record CollisionPair(int firstIndex, int secondIndex) {}
 
+    private record CollisionContribution(
+            CollisionPair pair,
+            double firstPositionDeltaX,
+            double firstPositionDeltaY,
+            double firstVelocityDeltaX,
+            double firstVelocityDeltaY,
+            double secondPositionDeltaX,
+            double secondPositionDeltaY,
+            double secondVelocityDeltaX,
+            double secondVelocityDeltaY) {}
+
     private record DetectionResult(List<CollisionPair> pairs, int mergedCells, int maxCellOccupancy) {}
+
+    private static final class CollisionDeltaAccumulator {
+
+        private final double[] positionDeltaX;
+        private final double[] positionDeltaY;
+        private final double[] velocityDeltaX;
+        private final double[] velocityDeltaY;
+        private final List<CollisionPair> contactPairs;
+
+        private CollisionDeltaAccumulator(int ballCount) {
+            positionDeltaX = new double[ballCount];
+            positionDeltaY = new double[ballCount];
+            velocityDeltaX = new double[ballCount];
+            velocityDeltaY = new double[ballCount];
+            contactPairs = new ArrayList<>();
+        }
+
+        private void add(CollisionContribution contribution) {
+            if (contribution == null) {
+                return;
+            }
+            var pair = contribution.pair();
+            positionDeltaX[pair.firstIndex()] += contribution.firstPositionDeltaX();
+            positionDeltaY[pair.firstIndex()] += contribution.firstPositionDeltaY();
+            velocityDeltaX[pair.firstIndex()] += contribution.firstVelocityDeltaX();
+            velocityDeltaY[pair.firstIndex()] += contribution.firstVelocityDeltaY();
+            positionDeltaX[pair.secondIndex()] += contribution.secondPositionDeltaX();
+            positionDeltaY[pair.secondIndex()] += contribution.secondPositionDeltaY();
+            velocityDeltaX[pair.secondIndex()] += contribution.secondVelocityDeltaX();
+            velocityDeltaY[pair.secondIndex()] += contribution.secondVelocityDeltaY();
+            contactPairs.add(pair);
+        }
+
+        private void merge(CollisionDeltaAccumulator other) {
+            for (int i = 0; i < positionDeltaX.length; i++) {
+                positionDeltaX[i] += other.positionDeltaX[i];
+                positionDeltaY[i] += other.positionDeltaY[i];
+                velocityDeltaX[i] += other.velocityDeltaX[i];
+                velocityDeltaY[i] += other.velocityDeltaY[i];
+            }
+            contactPairs.addAll(other.contactPairs);
+        }
+    }
 
     /**
      * Immutable per-step profiling data for the threaded physics pipeline.

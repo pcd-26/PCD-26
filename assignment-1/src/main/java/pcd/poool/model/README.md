@@ -49,7 +49,11 @@ These types are shared by physics, view, and tests.
 - `PhysicsEngine.java`
   Sequential implementation of `PhysicsStepper`.
 - `ThreadedPhysicsEngine.java`
-  Worker-based multithreaded implementation of `PhysicsStepper`.
+  Worker-based multithreaded implementation of `PhysicsStepper`. It computes
+  collision contributions in parallel and applies accumulated position/velocity
+  deltas deterministically once per ball. Candidate pairs are split across
+  worker threads, each worker fills private per-ball delta arrays, and the
+  controller merges those arrays before the final per-ball apply phase.
 - `SpatialCollisionDetector.java`
   Broad-phase detector used by the sequential physics engine.
 - `PhysicsWorker.java`

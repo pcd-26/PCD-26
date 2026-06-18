@@ -91,6 +91,14 @@ public class Ball {
     	this.vel = vel;
     }
 
+    void translate(V2d delta) {
+        pos = new P2d(pos.x() + delta.x(), pos.y() + delta.y());
+    }
+
+    void addVelocity(V2d delta) {
+        vel = vel.sum(delta);
+    }
+
     private void applyBoundaryConstraints(Boundary bounds){
         if (pos.x() + radius > bounds.x1()){
             pos = new P2d(bounds.x1() - radius, pos.y());
