@@ -27,7 +27,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
 
-    private final SpatialCollisionDetector collisionDetector;
     private final ExecutorService executor;
     private final long maxStepMillis;
     private final int poolSize;
@@ -64,7 +63,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         this.poolSize = poolSize;
         this.maxStepMillis = maxStepMillis;
-        this.collisionDetector = new SpatialCollisionDetector();
         this.executor = Executors.newFixedThreadPool(poolSize, runnable -> {
             var thread = new Thread(runnable);
             thread.setName("poool-task-physics-worker");
@@ -125,7 +123,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         board.applyHoleInteractions(holeInteractions);
 
         var collisionBalls = board.getCollisionBalls();
-        for (var pair : collisionDetector.detectCollisionPairs(collisionBalls)) {
+        for (var pair : detectCollisionPairs(collisionBalls)) {
             var first = collisionBalls.get(pair.firstIndex());
             var second = collisionBalls.get(pair.secondIndex());
             board.recordCollision(first, second);
@@ -184,6 +182,54 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return new Board.HoleInteractions(playerBallPocketed, botBallPocketed, List.copyOf(pocketedSmallBalls));
     }
 
+    List<SpatialCollisionDetector.Pair> detectCollisionPairs(List<Ball> balls) {
+        if (balls.size() < 2) {
+            return List.of();
+        }
+
+        double cellSize = computeCellSize(balls);
+        var localGrids = runRanges(balls.size(), (from, to) -> {
+            var localGrid = new java.util.HashMap<Cell, List<Integer>>();
+            for (int i = from; i < to; i++) {
+                for (var cell : occupiedCells(balls.get(i), cellSize)) {
+                    localGrid.computeIfAbsent(cell, ignored -> new ArrayList<>()).add(i);
+                }
+            }
+            return localGrid;
+        });
+
+        var mergedGrid = new java.util.HashMap<Cell, List<Integer>>();
+        for (var localGrid : localGrids) {
+            if (localGrid == null) {
+                continue;
+            }
+            for (var entry : localGrid.entrySet()) {
+                mergedGrid.computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>()).addAll(entry.getValue());
+            }
+        }
+
+        var orderedCells = new ArrayList<>(mergedGrid.keySet());
+        orderedCells.sort(Cell::compareTo);
+
+        var pairs = new java.util.HashSet<SpatialCollisionDetector.Pair>();
+        for (int i = 0; i < orderedCells.size(); i++) {
+            var cell = orderedCells.get(i);
+            collectPairs(mergedGrid.get(cell), pairs);
+            for (int j = i + 1; j < orderedCells.size(); j++) {
+                var otherCell = orderedCells.get(j);
+                if (areNeighboringCells(cell, otherCell)) {
+                    collectPairs(mergedGrid.get(cell), mergedGrid.get(otherCell), pairs);
+                }
+            }
+        }
+
+        var orderedPairs = new ArrayList<>(pairs);
+        orderedPairs.sort(java.util.Comparator
+                .comparingInt(SpatialCollisionDetector.Pair::firstIndex)
+                .thenComparingInt(SpatialCollisionDetector.Pair::secondIndex));
+        return orderedPairs;
+    }
+
     private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask) {
         if (itemCount == 0) {
             return List.of();
@@ -222,6 +268,70 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }
         return false;
+    }
+
+    private double computeCellSize(List<Ball> balls) {
+        double minRadius = balls.stream().mapToDouble(Ball::getRadius)
+                .min()
+                .orElse(PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
+        return Math.max(minRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
+    }
+
+    private void collectPairs(List<Integer> indexes, java.util.Set<SpatialCollisionDetector.Pair> pairs) {
+        if (indexes == null) {
+            return;
+        }
+        for (int i = 0; i < indexes.size() - 1; i++) {
+            for (int j = i + 1; j < indexes.size(); j++) {
+                pairs.add(new SpatialCollisionDetector.Pair(
+                        Math.min(indexes.get(i), indexes.get(j)),
+                        Math.max(indexes.get(i), indexes.get(j))));
+            }
+        }
+    }
+
+    private void collectPairs(
+            List<Integer> firstIndexes,
+            List<Integer> secondIndexes,
+            java.util.Set<SpatialCollisionDetector.Pair> pairs) {
+        if (firstIndexes == null || secondIndexes == null) {
+            return;
+        }
+        for (var firstIndex : firstIndexes) {
+            for (var secondIndex : secondIndexes) {
+                if (firstIndex.equals(secondIndex)) {
+                    continue;
+                }
+                pairs.add(new SpatialCollisionDetector.Pair(
+                        Math.min(firstIndex, secondIndex),
+                        Math.max(firstIndex, secondIndex)));
+            }
+        }
+    }
+
+    private List<Cell> occupiedCells(Ball ball, double cellSize) {
+        int x0 = toCellCoordinate(ball.getPos().x() - ball.getRadius(), cellSize);
+        int x1 = toCellCoordinate(ball.getPos().x() + ball.getRadius(), cellSize);
+        int y0 = toCellCoordinate(ball.getPos().y() - ball.getRadius(), cellSize);
+        int y1 = toCellCoordinate(ball.getPos().y() + ball.getRadius(), cellSize);
+
+        var cells = new ArrayList<Cell>();
+        for (int x = x0; x <= x1; x++) {
+            for (int y = y0; y <= y1; y++) {
+                cells.add(new Cell(x, y));
+            }
+        }
+        return cells;
+    }
+
+    private int toCellCoordinate(double coordinate, double cellSize) {
+        return (int) Math.floor(coordinate / cellSize);
+    }
+
+    private boolean areNeighboringCells(Cell first, Cell second) {
+        int dx = Math.abs(first.x() - second.x());
+        int dy = Math.abs(first.y() - second.y());
+        return dx <= 1 && dy <= 1 && (dx != 0 || dy != 0);
     }
 
     private List<RangeChunk> buildRangeChunks(int itemCount) {
@@ -274,6 +384,18 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             List<Ball> pocketedSmallBalls) {}
 
     private record ActiveBall(Ball ball, BallRole role) {}
+
+    private record Cell(int x, int y) implements Comparable<Cell> {
+
+        @Override
+        public int compareTo(Cell other) {
+            int byX = Integer.compare(x, other.x);
+            if (byX != 0) {
+                return byX;
+            }
+            return Integer.compare(y, other.y);
+        }
+    }
 
     private enum BallRole {
         PLAYER,
