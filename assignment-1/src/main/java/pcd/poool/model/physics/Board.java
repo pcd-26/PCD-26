@@ -16,7 +16,7 @@ import pcd.poool.model.game.Player;
  * <p>The board owns the physical entities and records low-level events needed
  * by game rules, such as cue balls being pocketed and small balls that are
  * eligible to score. Higher-level lifecycle decisions remain in
- * {@code SequentialGame}.
+ * {@code GameModel}.
  */
 public class Board {
 

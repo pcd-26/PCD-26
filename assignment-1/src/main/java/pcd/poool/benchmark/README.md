@@ -18,6 +18,10 @@ controlled workloads and report timing data useful for the assignment report.
 - `ThreadedPhysicsBenchmark.java`
   Benchmarks the multithreaded physics engine and can optionally choose the
   number of worker threads.
+- `ThreadedPhysicsProfilingBenchmark.java`
+  Profiles the threaded physics pipeline phase by phase and compares a sparse
+  and a clustered layout to highlight possible bottlenecks in broad-phase
+  collision handling.
 
 ## Relationships
 
