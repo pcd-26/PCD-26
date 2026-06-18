@@ -7,7 +7,7 @@ shared game model.
 
 The package provides the platform-thread execution strategy for Poool. It does
 not define a second set of game rules. Instead, it wraps the shared
-`SequentialGame` with a controller thread, asynchronous command submission,
+`GameModel` with a controller thread, asynchronous command submission,
 immutable snapshot publication, and worker-based physics stepping.
 
 ## Files
@@ -23,7 +23,7 @@ immutable snapshot publication, and worker-based physics stepping.
 - `CommandQueueMonitor.java`
   Monitor that stores pending commands for the controller thread.
 - `GameCommand.java`
-  Command interface executed by the controller on its owned `SequentialGame`.
+  Command interface executed by the controller on its owned `GameModel`.
 - `CommandReceipt.java`
   Small completion object returned to callers that submit asynchronous
   commands.
@@ -35,7 +35,7 @@ immutable snapshot publication, and worker-based physics stepping.
 
 ## Relationships
 
-- Uses `model.game.SequentialGame` as the authoritative gameplay model.
+- Uses `model.game.GameModel` as the authoritative gameplay model.
 - Uses `model.physics.ThreadedPhysicsEngine` as the injected stepping strategy.
 - Is created by `ThreadedPoool`, which handles the Swing-facing launcher loop.
 - Receives user shots indirectly from `view.ViewFrame` through the launcher.

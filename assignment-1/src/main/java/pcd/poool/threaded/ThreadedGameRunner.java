@@ -2,7 +2,7 @@ package pcd.poool.threaded;
 
 import java.time.Duration;
 import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.game.SequentialGame;
+import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.BoardConf;
 import pcd.poool.model.physics.PhysicsDefaults;
 import pcd.poool.model.physics.ThreadedPhysicsEngine;
@@ -10,7 +10,7 @@ import pcd.poool.model.physics.ThreadedPhysicsEngine;
 /**
  * Platform-thread execution strategy for Poool.
  *
- * <p>The runner owns a {@link SequentialGame} instance and confines all game
+ * <p>The runner owns a {@link GameModel} instance and confines all game
  * mutations to one controller thread. External threads submit commands through
  * a monitor, while the optional bot agent runs as a separate platform thread.
  */
@@ -19,7 +19,7 @@ public class ThreadedGameRunner implements AutoCloseable {
     private static final Duration DEFAULT_JOIN_TIMEOUT = Duration.ofSeconds(2);
 
     private final ThreadedPhysicsEngine physicsEngine;
-    private final SequentialGame game;
+    private final GameModel game;
     private final Config config;
     private final CommandQueueMonitor commands;
     private final SnapshotStore snapshots;
@@ -45,7 +45,7 @@ public class ThreadedGameRunner implements AutoCloseable {
     public ThreadedGameRunner(BoardConf boardConf, Config config) {
         this.config = config;
         physicsEngine = new ThreadedPhysicsEngine(config.physicsWorkerCount(), config.tickMillis());
-        game = new SequentialGame(boardConf, physicsEngine);
+        game = new GameModel(boardConf, physicsEngine);
         commands = new CommandQueueMonitor();
         snapshots = new SnapshotStore(ThreadedGameSnapshot.from(game));
     }
@@ -93,7 +93,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @return receipt completed when the controller executes the command
      */
     public CommandReceipt<Boolean> shootBot() {
-        return submit(SequentialGame::shootBot);
+        return submit(GameModel::shootBot);
     }
 
     /**
@@ -150,7 +150,7 @@ public class ThreadedGameRunner implements AutoCloseable {
         var receipt = new CommandReceipt<Boolean>();
         boolean accepted = commands.put(new GameCommand() {
             @Override
-            public void execute(SequentialGame game) {
+            public void execute(GameModel game) {
                 try {
                     receipt.complete(operation.execute(game));
                 } catch (RuntimeException ex) {
@@ -218,7 +218,7 @@ public class ThreadedGameRunner implements AutoCloseable {
     @FunctionalInterface
     private interface ShotOperation {
 
-        boolean execute(SequentialGame game);
+        boolean execute(GameModel game);
     }
 
     /**

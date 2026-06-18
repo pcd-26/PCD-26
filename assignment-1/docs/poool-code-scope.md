@@ -11,7 +11,7 @@
 - `pcd.poool.model.physics.config`: `MinimalBoardConf`,
   `StandardGameBoardConf`, `LargeBoardConf`, `ThousandBallsBoardConf`,
   `MassiveBoardConf`
-- `pcd.poool.model.game`: `SequentialGame`, `GameSnapshot`, `Player`,
+- `pcd.poool.model.game`: `GameModel`, `GameSnapshot`, `Player`,
   `GameStatus`, `GameOverReason`
 - `pcd.poool.model.concurrent`: `BoundedBuffer`, `BoundedBufferImpl`
 - `pcd.poool.view`: `RenderSynch`

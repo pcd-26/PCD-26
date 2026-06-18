@@ -72,7 +72,7 @@ These types are shared by physics, view, and tests.
 
 ### `game`
 
-- `SequentialGame.java`
+- `GameModel.java`
   Main game-rule coordinator. Uses the board and applies score, winner,
   readiness, and match lifecycle rules.
 - `GameSnapshot.java`
@@ -93,7 +93,7 @@ These types are shared by physics, view, and tests.
 
 ## Relationships
 
-- `game.SequentialGame` uses `physics.Board`.
+- `game.GameModel` uses `physics.Board`.
 - `physics.Board` delegates stepping to a `PhysicsStepper`.
 - Both sequential and threaded runtimes reuse the same `model` package.
 - The view reads snapshots and copied data from the model, but does not own it.

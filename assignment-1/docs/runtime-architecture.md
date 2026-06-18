@@ -25,7 +25,7 @@ That means:
 - `SequentialPoool` runs the whole game from one loop.
 - `ThreadedGameRunner` runs the same logical game from a controller thread and
   delegates expensive physics phases to worker threads.
-- `Board` and `SequentialGame` are reused in both modes.
+- `Board` and `GameModel` are reused in both modes.
 
 ## 2. Package map
 
@@ -83,7 +83,7 @@ and benchmarks.
 
 ### `pcd.poool.model.game`
 
-- `SequentialGame`
+- `GameModel`
   Central game-rule coordinator.
 - `GameSnapshot`
   Immutable logical state exposed to view, tests, and benchmarks.
@@ -172,9 +172,9 @@ Implementations:
 Both mutate the same `Board` API and preserve the same game semantics at the
 board level.
 
-### `SequentialGame`: gameplay coordinator
+### `GameModel`: gameplay coordinator
 
-`SequentialGame` is the main domain-level component. It owns:
+`GameModel` is the main domain-level component. It owns:
 
 - score;
 - game status;
@@ -188,9 +188,9 @@ board level.
 It uses `Board` for low-level state and physics. In other words:
 
 - `Board` knows what physically happened.
-- `SequentialGame` decides what that means for the match.
+- `GameModel` decides what that means for the match.
 
-This is why `SequentialGame` is reused even in the threaded runtime: the
+This is why `GameModel` is reused even in the threaded runtime: the
 project keeps one authoritative set of game rules.
 
 ## 4. Runtime wiring
@@ -199,7 +199,7 @@ project keeps one authoritative set of game rules.
 
 `SequentialPoool` builds:
 
-- one `SequentialGame`;
+- one `GameModel`;
 - one shared `ViewModel`;
 - one `View`.
 
@@ -224,14 +224,14 @@ runtime loop.
 
 `ThreadedGameRunner` then assembles:
 
-- one `SequentialGame`;
+- one `GameModel`;
 - one `ThreadedPhysicsEngine`;
 - one controller thread;
 - one optional bot thread;
 - one `CommandQueueMonitor`;
 - one `SnapshotStore`.
 
-The controller thread is the single writer of `SequentialGame`.
+The controller thread is the single writer of `GameModel`.
 
 External threads never mutate the game directly:
 
@@ -248,14 +248,14 @@ This preserves a clear ownership rule:
 
 ### Entry points
 
-- `SequentialPoool` uses `SequentialGame`, `View`, and `ViewModel`.
+- `SequentialPoool` uses `GameModel`, `View`, and `ViewModel`.
 - `ThreadedPoool` uses `ThreadedGameRunner`, `View`, and `ViewModel`.
 
 ### Game model
 
-- `SequentialGame` uses `Board`.
-- `SequentialGame` optionally injects a `PhysicsStepper` into `Board`.
-- `SequentialGame` produces `GameSnapshot`.
+- `GameModel` uses `Board`.
+- `GameModel` optionally injects a `PhysicsStepper` into `Board`.
+- `GameModel` produces `GameSnapshot`.
 
 ### Physics
 
@@ -265,11 +265,11 @@ This preserves a clear ownership rule:
 
 ### Threaded runtime
 
-- `ThreadedGameRunner` uses `SequentialGame`, `ThreadedPhysicsEngine`,
+- `ThreadedGameRunner` uses `GameModel`, `ThreadedPhysicsEngine`,
   `CommandQueueMonitor`, `SnapshotStore`, and `ThreadedBotAgent`.
 - `ThreadedBotAgent` uses `SnapshotStore` and `ThreadedGameRunner`.
 - `CommandQueueMonitor` stores `GameCommand` objects.
-- `GameCommand` executes against `SequentialGame`.
+- `GameCommand` executes against `GameModel`.
 - `ThreadedGameRunner` publishes `ThreadedGameSnapshot` into `SnapshotStore`.
 
 ### View
@@ -287,19 +287,19 @@ This preserves a clear ownership rule:
 1. The user presses keys or drags the mouse on `ViewFrame`.
 2. `ViewFrame` converts the gesture into a `V2d` shot.
 3. The shot callback reaches the current launcher.
-4. In sequential mode, the launcher calls `SequentialGame.shootHuman(...)`.
+4. In sequential mode, the launcher calls `GameModel.shootHuman(...)`.
 5. In threaded mode, the launcher calls `ThreadedGameRunner.shootHuman(...)`,
    which enqueues a `GameCommand`.
-6. The controller thread eventually executes the command on `SequentialGame`.
+6. The controller thread eventually executes the command on `GameModel`.
 
 ### 6.2 Physics progression
 
 1. A runtime decides when to call `step(...)`.
-2. `SequentialGame.step(...)` calls `Board.updateState(...)`.
+2. `GameModel.step(...)` calls `Board.updateState(...)`.
 3. `Board.updateState(...)` delegates to its `PhysicsStepper`.
 4. The physics stepper mutates positions, velocities, collisions, and holes.
 5. `Board` records low-level events.
-6. `SequentialGame` consumes those events and updates score and lifecycle state.
+6. `GameModel` consumes those events and updates score and lifecycle state.
 
 ### 6.3 Rendering
 
@@ -323,12 +323,12 @@ authoritative mutable model.
 
 The code follows a strong single-writer rule.
 
-- In sequential mode, the main loop is the only writer of `SequentialGame`.
-- In threaded mode, the controller thread is the only writer of `SequentialGame`.
+- In sequential mode, the main loop is the only writer of `GameModel`.
+- In threaded mode, the controller thread is the only writer of `GameModel`.
 - `ThreadedPhysicsEngine` uses worker threads for internal phases, but the step
   still happens under controller-owned orchestration.
-- Swing never mutates `Board` or `SequentialGame` directly.
-- The bot never mutates `Board` or `SequentialGame` directly.
+- Swing never mutates `Board` or `GameModel` directly.
+- The bot never mutates `Board` or `GameModel` directly.
 
 This is the central architectural constraint that keeps the code understandable
 and reduces races.

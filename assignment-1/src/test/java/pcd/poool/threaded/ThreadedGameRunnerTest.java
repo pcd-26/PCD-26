@@ -24,7 +24,7 @@ class ThreadedGameRunnerTest {
 
     @Test
     @Timeout(3)
-    void controllerThreadAdvancesTheSequentialGameModel() throws InterruptedException {
+    void controllerThreadAdvancesTheSharedGameModel() throws InterruptedException {
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 

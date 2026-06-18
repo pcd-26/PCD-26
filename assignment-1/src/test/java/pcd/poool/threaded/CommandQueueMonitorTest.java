@@ -43,7 +43,7 @@ class CommandQueueMonitorTest {
         private final AtomicInteger rejections = new AtomicInteger();
 
         @Override
-        public void execute(pcd.poool.model.game.SequentialGame game) {
+        public void execute(pcd.poool.model.game.GameModel game) {
             executions.incrementAndGet();
         }
 

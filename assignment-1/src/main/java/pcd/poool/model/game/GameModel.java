@@ -6,15 +6,14 @@ import pcd.poool.model.physics.BoardConf;
 import pcd.poool.model.physics.PhysicsStepper;
 
 /**
- * Single-threaded gameplay coordinator for the playable sequential baseline.
+ * Shared gameplay model used by both sequential and threaded runtimes.
  *
  * <p>The class owns the game rules above the passive physics engine: score
- * accounting, cue-ball availability, end-game conditions, and baseline timing
- * metrics. Human and bot readiness are independent, matching the assignment
- * rule that players act asynchronously; the sequential runner still invokes
- * this object from one loop, so model mutation remains serialized.
+ * accounting, cue-ball availability, end-game conditions, and timing metrics.
+ * Human and bot readiness are independent, while callers still serialize
+ * mutation through the chosen runtime strategy.
  */
-public class SequentialGame {
+public class GameModel {
 
     private static final double MIN_SHOT_SPEED = 0.05;
     private static final double BOT_SHOT_SPEED = 1.2;
@@ -35,7 +34,7 @@ public class SequentialGame {
      *
      * @param conf initial board layout, cue balls, small balls, bounds, and holes
      */
-    public SequentialGame(BoardConf conf) {
+    public GameModel(BoardConf conf) {
         this(conf, null);
     }
 
@@ -47,7 +46,7 @@ public class SequentialGame {
      * @param physicsStepper physics strategy, or {@code null} for the default
      *        sequential engine
      */
-    public SequentialGame(BoardConf conf, PhysicsStepper physicsStepper) {
+    public GameModel(BoardConf conf, PhysicsStepper physicsStepper) {
         board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
         status = GameStatus.RUNNING;
@@ -130,7 +129,7 @@ public class SequentialGame {
      *
      * <p>The method also consumes scoring events collected by the board,
      * detects cue-ball losses, detects completion after all small balls are
-     * pocketed, and records baseline step timing.
+     * pocketed, and records timing metrics.
      *
      * @param dtMillis elapsed time in milliseconds
      */
