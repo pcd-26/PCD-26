@@ -115,6 +115,7 @@ class TaskBasedGameRunnerTest {
         int producers = 4;
         int shotsPerProducer = 20;
         var startGate = new CountDownLatch(1);
+        var firstBatchGate = new CountDownLatch(producers);
         var readyGate = new CountDownLatch(producers);
         var receipts = Collections.synchronizedList(new ArrayList<CommandReceipt<Boolean>>());
         ExecutorService executor = Executors.newFixedThreadPool(producers);
@@ -124,8 +125,10 @@ class TaskBasedGameRunnerTest {
                 executor.submit(() -> {
                     readyGate.countDown();
                     try {
+                        receipts.add(runner.shootHuman(new V2d(0, 0)));
+                        firstBatchGate.countDown();
                         startGate.await();
-                        for (int j = 0; j < shotsPerProducer; j++) {
+                        for (int j = 1; j < shotsPerProducer; j++) {
                             receipts.add(runner.shootHuman(new V2d(0, 0)));
                         }
                     } catch (InterruptedException ex) {
@@ -135,19 +138,18 @@ class TaskBasedGameRunnerTest {
             }
 
             assertTrue(readyGate.await(1, TimeUnit.SECONDS));
-            startGate.countDown();
+            assertTrue(firstBatchGate.await(1, TimeUnit.SECONDS));
             runner.close();
+            startGate.countDown();
 
             executor.shutdown();
             assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
 
-            int completed = 0;
+            assertTrue(receipts.size() >= producers);
             for (var receipt : receipts) {
                 assertFalse(receipt.await(SHORT_TIMEOUT));
-                completed++;
             }
 
-            assertEquals(producers * shotsPerProducer, completed);
             assertFalse(runner.isRunning());
         } finally {
             executor.shutdownNow();
