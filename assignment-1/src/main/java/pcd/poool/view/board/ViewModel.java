@@ -1,6 +1,7 @@
 package pcd.poool.view.board;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.game.GameSnapshot;
@@ -46,7 +47,7 @@ public class ViewModel {
 	private ArrayList<HoleViewInfo> holes;
 	private BallViewInfo player;
 	private BallViewInfo bot;
-	private ShotPreviewInfo shotPreview;
+	private EnumMap<Player, ShotPreviewInfo> shotPreviews;
 	private int framePerSec;
 	private GameSnapshot game;
 	
@@ -56,6 +57,7 @@ public class ViewModel {
 	public ViewModel() {
 		balls = new ArrayList<BallViewInfo>();
 		holes = new ArrayList<HoleViewInfo>();
+		shotPreviews = new EnumMap<>(Player.class);
 		framePerSec = 0;
 	}
 	
@@ -192,23 +194,53 @@ public class ViewModel {
 	 * @param player owner of the preview
 	 */
 	public synchronized void setShotPreview(P2d from, P2d to, double intensity, Player player) {
-		shotPreview = new ShotPreviewInfo(from, to, intensity, player);
+		shotPreviews.put(player, new ShotPreviewInfo(from, to, intensity, player));
 	}
 
 	/**
 	 * Removes any active shot preview.
 	 */
 	public synchronized void clearShotPreview() {
-		shotPreview = null;
+		shotPreviews.clear();
+	}
+
+	/**
+	 * Removes the active shot preview for one player.
+	 *
+	 * @param player preview owner to clear
+	 */
+	public synchronized void clearShotPreview(Player player) {
+		shotPreviews.remove(player);
 	}
 
 	/**
 	 * Gets the active shot preview.
 	 *
-	 * @return active shot preview, or {@code null} when no preview is visible
+	 * @return human preview when present, otherwise bot preview, or {@code null}
+	 *         when no preview is visible
 	 */
 	public synchronized ShotPreviewInfo getShotPreview() {
-		return shotPreview;
+		var humanPreview = shotPreviews.get(Player.HUMAN);
+		return humanPreview == null ? shotPreviews.get(Player.BOT) : humanPreview;
+	}
+
+	/**
+	 * Gets the active shot preview for one player.
+	 *
+	 * @param player preview owner
+	 * @return active player preview, or {@code null} when not visible
+	 */
+	public synchronized ShotPreviewInfo getShotPreview(Player player) {
+		return shotPreviews.get(player);
+	}
+
+	/**
+	 * Gets all active shot previews.
+	 *
+	 * @return copy of active shot previews
+	 */
+	public synchronized List<ShotPreviewInfo> getShotPreviews() {
+		return new ArrayList<>(shotPreviews.values());
 	}
 
 	/**
