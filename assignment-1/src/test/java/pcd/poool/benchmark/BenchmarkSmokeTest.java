@@ -22,4 +22,10 @@ class BenchmarkSmokeTest {
     void threadedPhysicsBenchmarkRunsForOneStep() {
         ThreadedPhysicsBenchmark.main(new String[] {"1", "2"});
     }
+
+    @Test
+    @Timeout(5)
+    void threadedPhysicsProfilingBenchmarkRunsForOneStep() {
+        ThreadedPhysicsProfilingBenchmark.main(new String[] {"1", "2", "16"});
+    }
 }
