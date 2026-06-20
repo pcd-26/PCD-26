@@ -183,7 +183,7 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
-    void broadPhaseIncludesNeighboringCellCandidates() {
+    void broadPhaseIncludesSharedBoundaryCandidates() {
         try (var engine = new TaskBasedPhysicsEngine(1)) {
             var balls = List.of(
                     new Ball(new P2d(0.0, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
@@ -192,6 +192,19 @@ class TaskBasedPhysicsEngineTest {
             var pairs = engine.detectCollisionPairs(balls);
 
             assertEquals(List.of(new Pair(0, 1)), pairs);
+        }
+    }
+
+    @Test
+    void broadPhaseSkipsAdjacentCellsWhenBallsDoNotShareOccupiedCells() {
+        try (var engine = new TaskBasedPhysicsEngine(2)) {
+            var balls = List.of(
+                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.25, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
+
+            var pairs = engine.detectCollisionPairs(balls);
+
+            assertEquals(List.of(), pairs);
         }
     }
 

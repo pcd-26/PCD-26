@@ -1,9 +1,6 @@
 package pcd.poool.model.physics.taskbased;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -46,6 +43,7 @@ import pcd.poool.model.common.math.V2d;
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
+    private static final int MIN_ITEMS_PER_PARALLEL_TASK = 64;
 
     private final ExecutorService executor;
     private final long maxStepMillis;
@@ -223,19 +221,9 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }
 
-        var orderedCells = new ArrayList<>(mergedGrid.keySet());
-        orderedCells.sort(SpatialGridSupport.GridCell::compareTo);
-
         var pairs = new java.util.HashSet<SpatialCollisionDetector.Pair>();
-        for (int i = 0; i < orderedCells.size(); i++) {
-            var cell = orderedCells.get(i);
-            collectPairs(mergedGrid.get(cell), pairs);
-            for (int j = i + 1; j < orderedCells.size(); j++) {
-                var otherCell = orderedCells.get(j);
-                if (SpatialGridSupport.areNeighboringCells(cell, otherCell)) {
-                    collectPairs(mergedGrid.get(cell), mergedGrid.get(otherCell), pairs);
-                }
-            }
+        for (var indexes : mergedGrid.values()) {
+            collectPairs(indexes, pairs);
         }
 
         var orderedPairs = new ArrayList<>(pairs);
@@ -340,6 +328,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         var ranges = buildRangeChunks(itemCount);
+        if (ranges.size() == 1) {
+            var range = ranges.get(0);
+            var result = new ArrayList<T>(1);
+            result.add(rangeTask.run(range.fromInclusive(), range.toExclusive()));
+            return result;
+        }
         var tasks = new ArrayList<Callable<T>>(ranges.size());
         for (var range : ranges) {
             tasks.add(() -> {
@@ -387,27 +381,9 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private void collectPairs(
-            List<Integer> firstIndexes,
-            List<Integer> secondIndexes,
-            java.util.Set<SpatialCollisionDetector.Pair> pairs) {
-        if (firstIndexes == null || secondIndexes == null) {
-            return;
-        }
-        for (var firstIndex : firstIndexes) {
-            for (var secondIndex : secondIndexes) {
-                if (firstIndex.equals(secondIndex)) {
-                    continue;
-                }
-                pairs.add(new SpatialCollisionDetector.Pair(
-                        Math.min(firstIndex, secondIndex),
-                        Math.max(firstIndex, secondIndex)));
-            }
-        }
-    }
-
     private List<RangeChunk> buildRangeChunks(int itemCount) {
-        int workerCount = Math.min(poolSize, itemCount);
+        int taskCountByWorkSize = Math.max(1, itemCount / MIN_ITEMS_PER_PARALLEL_TASK);
+        int workerCount = Math.min(Math.min(poolSize, itemCount), taskCountByWorkSize);
         int baseChunk = itemCount / workerCount;
         int remainder = itemCount % workerCount;
         var chunks = new ArrayList<RangeChunk>(workerCount);
