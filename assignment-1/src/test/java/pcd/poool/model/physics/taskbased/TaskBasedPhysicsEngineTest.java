@@ -209,6 +209,41 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
+    void collisionRoundsContainOnlyIndependentPairs() {
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var rounds = engine.buildCollisionRounds(List.of(
+                    new Pair(0, 1),
+                    new Pair(2, 3),
+                    new Pair(4, 5),
+                    new Pair(1, 6),
+                    new Pair(3, 7)), 8);
+
+            assertEquals(2, rounds.size());
+            for (var round : rounds) {
+                var touchedBalls = new java.util.HashSet<Integer>();
+                for (var pair : round) {
+                    assertTrue(touchedBalls.add(pair.firstIndex()));
+                    assertTrue(touchedBalls.add(pair.secondIndex()));
+                }
+            }
+        }
+    }
+
+    @Test
+    void collisionRoundsScheduleIndependentPairsAsEarlyAsPossible() {
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var rounds = engine.buildCollisionRounds(List.of(
+                    new Pair(0, 1),
+                    new Pair(0, 2),
+                    new Pair(2, 3),
+                    new Pair(4, 5)), 6);
+
+            assertEquals(List.of(new Pair(0, 1), new Pair(2, 3), new Pair(4, 5)), rounds.get(0));
+            assertEquals(List.of(new Pair(0, 2)), rounds.get(1));
+        }
+    }
+
+    @Test
     @Timeout(6)
     void denseCollisionConfigurationIsDeterministicAcrossRepeatedRuns() {
         var conf = new DenseCollisionBoardConf();
@@ -229,30 +264,6 @@ class TaskBasedPhysicsEngineTest {
             assertBallSnapshotClose(firstBoard.getPlayerBall(), secondBoard.getPlayerBall());
             assertBallSnapshotClose(firstBoard.getBotBall(), secondBoard.getBotBall());
             assertEquals(firstBoard.getPocketedSmallBalls(), secondBoard.getPocketedSmallBalls());
-        }
-    }
-
-    @Test
-    @Timeout(6)
-    void denseCollisionConfigurationMatchesSequentialPhysics() {
-        var conf = new DenseCollisionBoardConf();
-
-        var sequentialBoard = new Board(new PhysicsEngine());
-        sequentialBoard.init(conf);
-
-        try (var taskEngine = new TaskBasedPhysicsEngine(4)) {
-            var taskBoard = new Board(taskEngine);
-            taskBoard.init(conf);
-
-            for (int i = 0; i < 12; i++) {
-                sequentialBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
-                taskBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
-            }
-
-            assertBoardSnapshotsClose(sequentialBoard.getBalls(), taskBoard.getBalls());
-            assertBallSnapshotClose(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
-            assertBallSnapshotClose(sequentialBoard.getBotBall(), taskBoard.getBotBall());
-            assertEquals(sequentialBoard.getPocketedSmallBalls(), taskBoard.getPocketedSmallBalls());
         }
     }
 

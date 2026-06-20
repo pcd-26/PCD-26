@@ -76,6 +76,11 @@ These types are shared by physics, view, and tests.
 - `TaskBasedPhysicsEngine.java`
   Executor-based physics implementation that preserves the same board
   ownership model while scheduling work through an `ExecutorService`.
+  Integration, hole checks, spatial-grid construction, and collision handling
+  are modeled as tasks. Collision pairs are packed in compact `long` values.
+  Small contact sets are resolved as independent collision rounds; larger
+  contact sets use parallel accumulated impulse/delta computation followed by a
+  deterministic merge and per-ball apply phase.
 
 ### `physics/config`
 
