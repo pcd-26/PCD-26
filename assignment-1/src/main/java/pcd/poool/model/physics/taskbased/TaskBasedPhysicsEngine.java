@@ -184,7 +184,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.candidatePairs += collisionPairs.size();
         }
         long resolutionStart = profile == null ? 0 : System.nanoTime();
-        resolveCollisionsWithAccumulatedImpulses(board, collisionBalls, collisionPairs, profile);
+        resolveCollisionsDeterministically(board, collisionBalls, collisionPairs, profile);
         if (profile != null) {
             profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
         }
@@ -303,10 +303,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.mergedCells += mergedGrid.size();
             profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
         }
-        return new CollisionPairs(pairs.toArray(), mergedGrid.size(), maxCellOccupancy);
+        long[] orderedPairs = pairs.toArray();
+        java.util.Arrays.sort(orderedPairs);
+        return new CollisionPairs(orderedPairs, mergedGrid.size(), maxCellOccupancy);
     }
 
-    private void resolveCollisionsWithAccumulatedImpulses(
+    private void resolveCollisionsDeterministically(
             Board board,
             List<Ball> balls,
             CollisionPairs pairs,
@@ -315,40 +317,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return;
         }
 
-        var localAccumulators = new CollisionAccumulator[Math.min(poolSize, pairs.size())];
-        runRanges(pairs.size(), (from, to, workerIndex) -> {
-            var accumulator = new CollisionAccumulator(balls.size());
-            for (int i = from; i < to; i++) {
-                accumulator.addCollision(balls, pairs.encodedPairs()[i]);
-            }
-            localAccumulators[workerIndex] = accumulator;
-            return null;
-        });
-
-        var merged = new CollisionAccumulator(balls.size());
-        for (var accumulator : localAccumulators) {
-            if (accumulator != null) {
-                merged.merge(accumulator);
-            }
+        for (long pair : pairs.encodedPairs()) {
+            var first = balls.get(firstIndex(pair));
+            var second = balls.get(secondIndex(pair));
+            board.recordCollision(first, second);
+            Ball.resolveCollision(first, second);
         }
-
-        for (int i = 0; i < merged.contactPairCount; i++) {
-            long pair = merged.contactPairs[i];
-            board.recordCollision(balls.get(firstIndex(pair)), balls.get(secondIndex(pair)));
-        }
-
-        long applyStart = profile == null ? 0 : System.nanoTime();
-        runRanges(balls.size(), (from, to, workerIndex) -> {
-            for (int i = from; i < to; i++) {
-                balls.get(i).translate(new V2d(merged.positionDeltaX[i], merged.positionDeltaY[i]));
-                balls.get(i).addVelocity(new V2d(merged.velocityDeltaX[i], merged.velocityDeltaY[i]));
-            }
-            if (profile != null) {
-                profile.applyWorkerItems[workerIndex] += to - from;
-                profile.applyWorkerNanos[workerIndex] += System.nanoTime() - applyStart;
-            }
-            return null;
-        });
     }
 
     private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask) {

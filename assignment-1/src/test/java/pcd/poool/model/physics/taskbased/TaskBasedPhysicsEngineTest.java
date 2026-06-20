@@ -233,6 +233,30 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
+    @Timeout(6)
+    void denseCollisionConfigurationMatchesSequentialPhysics() {
+        var conf = new DenseCollisionBoardConf();
+
+        var sequentialBoard = new Board(new PhysicsEngine());
+        sequentialBoard.init(conf);
+
+        try (var taskEngine = new TaskBasedPhysicsEngine(4)) {
+            var taskBoard = new Board(taskEngine);
+            taskBoard.init(conf);
+
+            for (int i = 0; i < 12; i++) {
+                sequentialBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                taskBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertBoardSnapshotsClose(sequentialBoard.getBalls(), taskBoard.getBalls());
+            assertBallSnapshotClose(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
+            assertBallSnapshotClose(sequentialBoard.getBotBall(), taskBoard.getBotBall());
+            assertEquals(sequentialBoard.getPocketedSmallBalls(), taskBoard.getPocketedSmallBalls());
+        }
+    }
+
+    @Test
     @Timeout(8)
     void highBallCountConfigurationCanBeSteppedRepeatedly() {
         try (var engine = new TaskBasedPhysicsEngine(4)) {
