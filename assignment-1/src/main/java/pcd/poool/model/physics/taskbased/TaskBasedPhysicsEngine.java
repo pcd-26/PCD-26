@@ -324,7 +324,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         runRanges(pairs.size(), (from, to, workerIndex) -> {
             var accumulator = new CollisionAccumulator(balls.size());
             for (int i = from; i < to; i++) {
-                accumulator.add(computeCollisionContribution(balls, pairs.get(i)));
+                accumulator.addCollision(balls, pairs.get(i));
             }
             localAccumulators[workerIndex] = accumulator;
             return null;
@@ -353,59 +353,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
             return null;
         });
-    }
-
-    private CollisionContribution computeCollisionContribution(List<Ball> balls, SpatialCollisionDetector.Pair pair) {
-        var a = balls.get(pair.firstIndex());
-        var b = balls.get(pair.secondIndex());
-
-        double dx = b.getPos().x() - a.getPos().x();
-        double dy = b.getPos().y() - a.getPos().y();
-        double dist = Math.hypot(dx, dy);
-        double minD = a.getRadius() + b.getRadius();
-
-        if (dist >= minD) {
-            return null;
-        }
-        if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
-            dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
-            dy = 0.0;
-            dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
-        }
-
-        double nx = dx / dist;
-        double ny = dy / dist;
-        double totalMass = a.getMass() + b.getMass();
-        double overlap = minD - dist;
-        double firstPositionCorrection = overlap * (b.getMass() / totalMass);
-        double secondPositionCorrection = overlap * (a.getMass() / totalMass);
-
-        double firstVelocityDeltaX = 0.0;
-        double firstVelocityDeltaY = 0.0;
-        double secondVelocityDeltaX = 0.0;
-        double secondVelocityDeltaY = 0.0;
-        double relativeVelocityX = b.getVel().x() - a.getVel().x();
-        double relativeVelocityY = b.getVel().y() - a.getVel().y();
-        double relativeVelocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
-        if (relativeVelocityAlongNormal <= 0) {
-            double impulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityAlongNormal
-                    / (1.0 / a.getMass() + 1.0 / b.getMass());
-            firstVelocityDeltaX = -(impulse / a.getMass()) * nx;
-            firstVelocityDeltaY = -(impulse / a.getMass()) * ny;
-            secondVelocityDeltaX = (impulse / b.getMass()) * nx;
-            secondVelocityDeltaY = (impulse / b.getMass()) * ny;
-        }
-
-        return new CollisionContribution(
-                pair,
-                -nx * firstPositionCorrection,
-                -ny * firstPositionCorrection,
-                firstVelocityDeltaX,
-                firstVelocityDeltaY,
-                nx * secondPositionCorrection,
-                ny * secondPositionCorrection,
-                secondVelocityDeltaX,
-                secondVelocityDeltaY);
     }
 
     private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask) {
@@ -525,17 +472,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         SMALL
     }
 
-    private record CollisionContribution(
-            SpatialCollisionDetector.Pair pair,
-            double firstPositionDeltaX,
-            double firstPositionDeltaY,
-            double firstVelocityDeltaX,
-            double firstVelocityDeltaY,
-            double secondPositionDeltaX,
-            double secondPositionDeltaY,
-            double secondVelocityDeltaX,
-            double secondVelocityDeltaY) {}
-
     /**
      * Immutable per-step profiling data for the task-based physics pipeline.
      *
@@ -592,19 +528,55 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             contactPairs = new ArrayList<>();
         }
 
-        private void add(CollisionContribution contribution) {
-            if (contribution == null) {
+        private void addCollision(List<Ball> balls, SpatialCollisionDetector.Pair pair) {
+            var a = balls.get(pair.firstIndex());
+            var b = balls.get(pair.secondIndex());
+
+            double dx = b.getPos().x() - a.getPos().x();
+            double dy = b.getPos().y() - a.getPos().y();
+            double dist = Math.hypot(dx, dy);
+            double minD = a.getRadius() + b.getRadius();
+
+            if (dist >= minD) {
                 return;
             }
-            var pair = contribution.pair();
-            positionDeltaX[pair.firstIndex()] += contribution.firstPositionDeltaX();
-            positionDeltaY[pair.firstIndex()] += contribution.firstPositionDeltaY();
-            velocityDeltaX[pair.firstIndex()] += contribution.firstVelocityDeltaX();
-            velocityDeltaY[pair.firstIndex()] += contribution.firstVelocityDeltaY();
-            positionDeltaX[pair.secondIndex()] += contribution.secondPositionDeltaX();
-            positionDeltaY[pair.secondIndex()] += contribution.secondPositionDeltaY();
-            velocityDeltaX[pair.secondIndex()] += contribution.secondVelocityDeltaX();
-            velocityDeltaY[pair.secondIndex()] += contribution.secondVelocityDeltaY();
+            if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
+                dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+                dy = 0.0;
+                dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+            }
+
+            double nx = dx / dist;
+            double ny = dy / dist;
+            double totalMass = a.getMass() + b.getMass();
+            double overlap = minD - dist;
+            double firstPositionCorrection = overlap * (b.getMass() / totalMass);
+            double secondPositionCorrection = overlap * (a.getMass() / totalMass);
+
+            double firstVelocityDeltaX = 0.0;
+            double firstVelocityDeltaY = 0.0;
+            double secondVelocityDeltaX = 0.0;
+            double secondVelocityDeltaY = 0.0;
+            double relativeVelocityX = b.getVel().x() - a.getVel().x();
+            double relativeVelocityY = b.getVel().y() - a.getVel().y();
+            double relativeVelocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+            if (relativeVelocityAlongNormal <= 0) {
+                double impulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityAlongNormal
+                        / (1.0 / a.getMass() + 1.0 / b.getMass());
+                firstVelocityDeltaX = -(impulse / a.getMass()) * nx;
+                firstVelocityDeltaY = -(impulse / a.getMass()) * ny;
+                secondVelocityDeltaX = (impulse / b.getMass()) * nx;
+                secondVelocityDeltaY = (impulse / b.getMass()) * ny;
+            }
+
+            positionDeltaX[pair.firstIndex()] += -nx * firstPositionCorrection;
+            positionDeltaY[pair.firstIndex()] += -ny * firstPositionCorrection;
+            velocityDeltaX[pair.firstIndex()] += firstVelocityDeltaX;
+            velocityDeltaY[pair.firstIndex()] += firstVelocityDeltaY;
+            positionDeltaX[pair.secondIndex()] += nx * secondPositionCorrection;
+            positionDeltaY[pair.secondIndex()] += ny * secondPositionCorrection;
+            velocityDeltaX[pair.secondIndex()] += secondVelocityDeltaX;
+            velocityDeltaY[pair.secondIndex()] += secondVelocityDeltaY;
             contactPairs.add(pair);
         }
 
