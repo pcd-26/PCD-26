@@ -32,18 +32,21 @@ import pcd.poool.model.common.math.V2d;
  *       coordinator thread;</li>
  *   <li>build one local spatial grid per task, merge the grids on the
  *       coordinator thread, then generate deterministic candidate pairs;</li>
- *   <li>compute collision contributions in parallel over pair ranges, merge
- *       local accumulators on the coordinator thread, and finally apply the
- *       deltas to the board-owned balls.</li>
+ *   <li>group candidate collisions into deterministic non-conflicting rounds
+ *       and resolve each round with executor tasks. Collisions in the same
+ *       round never mutate the same ball, while independent contacts are
+ *       scheduled as early as possible.</li>
  * </ol>
  *
- * <p>The coordinator thread is the caller of {@link #step(Board, long)} and is
- * the only thread that mutates global board state or applies merged results.
+ * <p>The coordinator thread is the caller of {@link #step(Board, long)} and
+ * owns global board state. Worker tasks mutate only disjoint balls inside a
+ * collision round or disjoint ball ranges in other phases.
  */
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
     private static final int MIN_ITEMS_PER_PARALLEL_TASK = 64;
+    private static final int MIN_PAIRS_FOR_ACCUMULATED_SOLVER = 512;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
     private final ExecutorService executor;
@@ -184,7 +187,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.candidatePairs += collisionPairs.size();
         }
         long resolutionStart = profile == null ? 0 : System.nanoTime();
-        resolveCollisionsDeterministically(board, collisionBalls, collisionPairs, profile);
+        resolveCollisionsInParallelRounds(board, collisionBalls, collisionPairs, profile);
         if (profile != null) {
             profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
         }
@@ -308,7 +311,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return new CollisionPairs(orderedPairs, mergedGrid.size(), maxCellOccupancy);
     }
 
-    private void resolveCollisionsDeterministically(
+    private void resolveCollisionsInParallelRounds(
             Board board,
             List<Ball> balls,
             CollisionPairs pairs,
@@ -316,13 +319,123 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (pairs.size() == 0) {
             return;
         }
+        if (pairs.size() >= MIN_PAIRS_FOR_ACCUMULATED_SOLVER) {
+            resolveCollisionsWithAccumulatedImpulses(board, balls, pairs, profile);
+            return;
+        }
 
         for (long pair : pairs.encodedPairs()) {
             var first = balls.get(firstIndex(pair));
             var second = balls.get(secondIndex(pair));
             board.recordCollision(first, second);
-            Ball.resolveCollision(first, second);
         }
+
+        for (var round : buildCollisionRounds(pairs, balls.size())) {
+            runRanges(round.size(), (from, to, workerIndex) -> {
+                for (int i = from; i < to; i++) {
+                    long pair = round.encodedPairs()[i];
+                    Ball.resolveCollision(balls.get(firstIndex(pair)), balls.get(secondIndex(pair)));
+                }
+                return null;
+            });
+        }
+    }
+
+    private void resolveCollisionsWithAccumulatedImpulses(
+            Board board,
+            List<Ball> balls,
+            CollisionPairs pairs,
+            StepProfileAccumulator profile) {
+        var localAccumulators = new CollisionAccumulator[Math.min(poolSize, pairs.size())];
+        runRanges(pairs.size(), (from, to, workerIndex) -> {
+            var accumulator = new CollisionAccumulator(balls.size());
+            for (int i = from; i < to; i++) {
+                accumulator.addCollision(balls, pairs.encodedPairs()[i]);
+            }
+            localAccumulators[workerIndex] = accumulator;
+            return null;
+        });
+
+        var merged = new CollisionAccumulator(balls.size());
+        for (var accumulator : localAccumulators) {
+            if (accumulator != null) {
+                merged.merge(accumulator);
+            }
+        }
+
+        for (int i = 0; i < merged.contactPairCount; i++) {
+            long pair = merged.contactPairs[i];
+            board.recordCollision(balls.get(firstIndex(pair)), balls.get(secondIndex(pair)));
+        }
+
+        runRanges(balls.size(), (from, to, workerIndex) -> {
+            long workerStart = profile == null ? 0 : System.nanoTime();
+            for (int i = from; i < to; i++) {
+                balls.get(i).translate(new V2d(merged.positionDeltaX[i], merged.positionDeltaY[i]));
+                balls.get(i).addVelocity(new V2d(merged.velocityDeltaX[i], merged.velocityDeltaY[i]));
+            }
+            if (profile != null) {
+                profile.applyWorkerItems[workerIndex] += to - from;
+                profile.applyWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
+            }
+            return null;
+        });
+    }
+
+    List<List<SpatialCollisionDetector.Pair>> buildCollisionRounds(
+            List<SpatialCollisionDetector.Pair> pairs,
+            int ballCount) {
+        long[] encodedPairs = new long[pairs.size()];
+        for (int i = 0; i < pairs.size(); i++) {
+            var pair = pairs.get(i);
+            encodedPairs[i] = encodePair(pair.firstIndex(), pair.secondIndex());
+        }
+
+        var rounds = buildCollisionRounds(new CollisionPairs(encodedPairs, 0, 0), ballCount);
+        var result = new ArrayList<List<SpatialCollisionDetector.Pair>>(rounds.size());
+        for (var round : rounds) {
+            var decodedRound = new ArrayList<SpatialCollisionDetector.Pair>(round.size());
+            for (long packedPair : round.encodedPairs()) {
+                decodedRound.add(new SpatialCollisionDetector.Pair(firstIndex(packedPair), secondIndex(packedPair)));
+            }
+            result.add(List.copyOf(decodedRound));
+        }
+        return List.copyOf(result);
+    }
+
+    private List<CollisionRound> buildCollisionRounds(CollisionPairs pairs, int ballCount) {
+        if (pairs.size() == 0) {
+            return List.of();
+        }
+
+        long[] remainingPairs = pairs.encodedPairs();
+        int remainingCount = remainingPairs.length;
+        var rounds = new ArrayList<CollisionRound>();
+        while (remainingCount > 0) {
+            boolean[] usedBalls = new boolean[ballCount];
+            long[] roundPairs = new long[remainingCount];
+            long[] nextRemainingPairs = new long[remainingCount];
+            int roundCount = 0;
+            int nextRemainingCount = 0;
+
+            for (int i = 0; i < remainingCount; i++) {
+                long pair = remainingPairs[i];
+                int first = firstIndex(pair);
+                int second = secondIndex(pair);
+                if (!usedBalls[first] && !usedBalls[second]) {
+                    roundPairs[roundCount++] = pair;
+                    usedBalls[first] = true;
+                    usedBalls[second] = true;
+                } else {
+                    nextRemainingPairs[nextRemainingCount++] = pair;
+                }
+            }
+
+            rounds.add(new CollisionRound(java.util.Arrays.copyOf(roundPairs, roundCount)));
+            remainingPairs = nextRemainingPairs;
+            remainingCount = nextRemainingCount;
+        }
+        return rounds;
     }
 
     private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask) {
@@ -456,53 +569,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private record ActiveBall(Ball ball, BallRole role) {}
+    private record CollisionRound(long[] encodedPairs) {
 
-    private enum BallRole {
-        PLAYER,
-        BOT,
-        SMALL
+        private int size() {
+            return encodedPairs.length;
+        }
     }
-
-    /**
-     * Immutable per-step profiling data for the task-based physics pipeline.
-     *
-     * @param activeBalls number of balls integrated across all internal sub-steps
-     * @param collisionBalls number of balls considered for collision detection
-     * @param candidatePairs number of candidate collision pairs generated
-     * @param mergedCells number of populated cells in the merged spatial grid
-     * @param maxCellOccupancy maximum number of balls registered in one cell
-     * @param integrationMillis total integration time in milliseconds
-     * @param holeInteractionMillis hole interaction time in milliseconds
-     * @param localGridBuildMillis local per-task grid-build time in milliseconds
-     * @param gridMergeMillis merged-grid assembly time in milliseconds
-     * @param pairCollectionMillis candidate-pair generation and sorting time in milliseconds
-     * @param collisionResolutionMillis collision resolution time in milliseconds
-     * @param integrationWorkerMillis per-task integration time in milliseconds
-     * @param localGridWorkerMillis per-task local-grid build time in milliseconds
-     * @param applyWorkerMillis per-task final application time in milliseconds
-     * @param integrationWorkerItems per-task ball counts integrated
-     * @param localGridWorkerItems per-task ball counts used for local-grid population
-     * @param applyWorkerItems per-task ball counts written in the final apply phase
-     */
-    public record StepProfile(
-            int activeBalls,
-            int collisionBalls,
-            int candidatePairs,
-            int mergedCells,
-            int maxCellOccupancy,
-            double integrationMillis,
-            double holeInteractionMillis,
-            double localGridBuildMillis,
-            double gridMergeMillis,
-            double pairCollectionMillis,
-            double collisionResolutionMillis,
-            List<Double> integrationWorkerMillis,
-            List<Double> localGridWorkerMillis,
-            List<Double> applyWorkerMillis,
-            List<Integer> integrationWorkerItems,
-            List<Integer> localGridWorkerItems,
-            List<Integer> applyWorkerItems) {}
 
     private static final class CollisionAccumulator {
 
@@ -606,6 +678,54 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             contactPairs = java.util.Arrays.copyOf(contactPairs, newCapacity);
         }
     }
+
+    private record ActiveBall(Ball ball, BallRole role) {}
+
+    private enum BallRole {
+        PLAYER,
+        BOT,
+        SMALL
+    }
+
+    /**
+     * Immutable per-step profiling data for the task-based physics pipeline.
+     *
+     * @param activeBalls number of balls integrated across all internal sub-steps
+     * @param collisionBalls number of balls considered for collision detection
+     * @param candidatePairs number of candidate collision pairs generated
+     * @param mergedCells number of populated cells in the merged spatial grid
+     * @param maxCellOccupancy maximum number of balls registered in one cell
+     * @param integrationMillis total integration time in milliseconds
+     * @param holeInteractionMillis hole interaction time in milliseconds
+     * @param localGridBuildMillis local per-task grid-build time in milliseconds
+     * @param gridMergeMillis merged-grid assembly time in milliseconds
+     * @param pairCollectionMillis candidate-pair generation and sorting time in milliseconds
+     * @param collisionResolutionMillis collision resolution time in milliseconds
+     * @param integrationWorkerMillis per-task integration time in milliseconds
+     * @param localGridWorkerMillis per-task local-grid build time in milliseconds
+     * @param applyWorkerMillis per-task final application time in milliseconds
+     * @param integrationWorkerItems per-task ball counts integrated
+     * @param localGridWorkerItems per-task ball counts used for local-grid population
+     * @param applyWorkerItems per-task ball counts written in the final apply phase
+     */
+    public record StepProfile(
+            int activeBalls,
+            int collisionBalls,
+            int candidatePairs,
+            int mergedCells,
+            int maxCellOccupancy,
+            double integrationMillis,
+            double holeInteractionMillis,
+            double localGridBuildMillis,
+            double gridMergeMillis,
+            double pairCollectionMillis,
+            double collisionResolutionMillis,
+            List<Double> integrationWorkerMillis,
+            List<Double> localGridWorkerMillis,
+            List<Double> applyWorkerMillis,
+            List<Integer> integrationWorkerItems,
+            List<Integer> localGridWorkerItems,
+            List<Integer> applyWorkerItems) {}
 
     private static final class LongPairSet {
 

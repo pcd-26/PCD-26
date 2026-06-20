@@ -64,9 +64,12 @@ measurements:
 diagnosis of `parallel_overhead_dominates` means the concurrent strategy is
 slower than the sequential baseline for that workload. A diagnosis of
 `different_trajectory_check_rules` means the implementation is deterministic
-across repeats but its accumulated collision solver produced a different final
-floating-point trajectory from the sequential immediate-resolution baseline;
-in that case gameplay rule tests should be used together with timing data.
+across repeats but produced a different final floating-point trajectory from
+the sequential immediate-resolution baseline; in that case gameplay rule tests
+should be used together with timing data. The task-based engine uses
+deterministic collision rounds for small contact sets and a parallel
+accumulated-impulse solver for larger contact sets, so the benchmark output is
+the intended source for understanding the consistency/performance tradeoff.
 
 ## Relationships
 
