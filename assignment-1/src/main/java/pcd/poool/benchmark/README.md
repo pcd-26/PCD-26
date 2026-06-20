@@ -22,6 +22,11 @@ controlled workloads and report timing data useful for the assignment report.
   Profiles the threaded physics pipeline phase by phase and compares a sparse
   and a clustered layout to highlight possible bottlenecks in broad-phase
   collision handling.
+- `TaskBasedPhysicsProfilingBenchmark.java`
+  Profiles the task-based physics pipeline phase by phase using the engine's
+  internal profiling snapshot. It reports the time spent in integration, hole
+  handling, grid construction, merge, pair collection, collision resolution,
+  and final apply.
 - `CompletePhysicsBenchmark.java`
   Runs the recommended automatic comparison across the sequential,
   platform-threaded, and task-based physics engines. It uses the same
@@ -66,7 +71,8 @@ in that case gameplay rule tests should be used together with timing data.
 ## Relationships
 
 - Uses board configurations from `model.physics.config`.
-- Uses `Board`, `GameModel`, `physics.sequential.PhysicsEngine`, or
-  `physics.threaded.ThreadedPhysicsEngine` depending on the workload being
+- Uses `Board`, `GameModel`, `physics.sequential.PhysicsEngine`,
+  `physics.threaded.ThreadedPhysicsEngine`, or
+  `physics.taskbased.TaskBasedPhysicsEngine` depending on the workload being
   measured.
 - Produces execution-time data, but does not affect the main game logic.
