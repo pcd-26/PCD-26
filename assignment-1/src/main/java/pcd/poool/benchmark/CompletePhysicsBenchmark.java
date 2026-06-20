@@ -11,9 +11,9 @@ package pcd.poool.benchmark;
  */
 public class CompletePhysicsBenchmark {
 
-    private static final int DEFAULT_STEPS = 600;
-    private static final int DEFAULT_WARMUP_STEPS = 50;
-    private static final int DEFAULT_REPEATS = 5;
+    private static final int DEFAULT_STEPS = 30;
+    private static final int DEFAULT_WARMUP_STEPS = 5;
+    private static final int DEFAULT_REPEATS = 2;
 
     private CompletePhysicsBenchmark() {
     }
