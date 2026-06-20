@@ -46,4 +46,10 @@ class BenchmarkSmokeTest {
     void taskVsThreadedPhysicsBenchmarkRunsForOneStep() {
         TaskVsThreadedPhysicsBenchmark.main(new String[] {"1", "0", "1"});
     }
+
+    @Test
+    @Timeout(10)
+    void completePhysicsBenchmarkRunsForOneStep() {
+        CompletePhysicsBenchmark.main(new String[] {"1", "0", "1"});
+    }
 }
