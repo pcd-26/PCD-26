@@ -34,7 +34,7 @@ Run the complete benchmark from the repository root after compiling:
 
 ```bash
 mvn -f assignment-1/pom.xml package
-java -cp assignment-1/target/classes pcd.poool.benchmark.CompletePhysicsBenchmark 600 50 5
+java -cp assignment-1/target/classes pcd.poool.benchmark.CompletePhysicsBenchmark 30 5 2
 ```
 
 Arguments are:
