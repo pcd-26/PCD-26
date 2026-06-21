@@ -118,16 +118,20 @@ public final class HeadlessSimulationRunner {
         try {
             var board = new Board(stepper);
             board.init(boardConf);
-            long start = System.nanoTime();
-            for (int i = 0; i < config.steps(); i++) {
-                board.updateState(STEP_MILLIS);
+            var measured = BenchmarkRunner.time(1, false, config.steps(), () -> {
+                for (int i = 0; i < config.steps(); i++) {
+                    board.updateState(STEP_MILLIS);
+                }
+                return checksum(board);
+            });
+            if (measured.failed()) {
+                throw new IllegalStateException("headless simulation failed: " + measured.failureMessage());
             }
-            long elapsed = System.nanoTime() - start;
             return new SimulationResult(
                     config,
-                    elapsed,
-                    config.steps(),
-                    checksum(board));
+                    measured.elapsedNanos(),
+                    measured.completedSteps(),
+                    measured.checksum());
         } finally {
             if (closeable != null) {
                 try {

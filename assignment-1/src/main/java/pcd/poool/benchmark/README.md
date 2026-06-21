@@ -17,6 +17,16 @@ controlled workloads and report timing data useful for the assignment report.
   game-rule progression.
 - `BenchmarkConfig.java`
   Shared benchmark configuration model used by all benchmark runners.
+- `BenchmarkRunner.java`
+  Shared timing and aggregation infrastructure. It produces raw
+  `BenchmarkRunResult` values for each warmup and measured run, then
+  summarizes the measured runs into a `BenchmarkSummary`.
+- `BenchmarkRunResult.java`
+  Immutable raw measurement for a single run, including elapsed time,
+  throughput, checksum, and status.
+- `BenchmarkSummary.java`
+  Aggregate statistics for a benchmark session, kept separate from the raw
+  per-run measurements.
 - `HeadlessSimulationRunner.java`
   Runs a seeded simulation without GUI rendering and reports elapsed time,
   completed steps, and a final board-state hash for the selected execution
@@ -61,6 +71,9 @@ hash so repeated runs of the same scenario can be validated.
 
 All benchmark entry points now consume the shared `BenchmarkConfig` model, so
 defaults, validation, and exported configuration values stay centralized.
+The measurement infrastructure is shared through `BenchmarkRunner`, which
+keeps warmup runs, measured runs, raw per-run results, and summary statistics
+separate.
 
 ## Recommended comparison
 
