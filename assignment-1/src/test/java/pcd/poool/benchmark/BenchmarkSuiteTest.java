@@ -69,9 +69,11 @@ class BenchmarkSuiteTest {
                         if (config.implementation() == BenchmarkConfig.ImplementationType.THREADS && invocation == 1) {
                             throw new IllegalStateException("boom");
                         }
+                        var fingerprint = new BenchmarkStateFingerprint(11L, 11L, 100, 0, false, false, false, true);
                         return new BenchmarkRunner.BenchmarkExecution(
-                                config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL ? 11L : 22L,
-                                BenchmarkInstrumentation.zero());
+                                11L,
+                                BenchmarkInstrumentation.zero(),
+                                fingerprint);
                     };
                 },
                 new PrintStream(outBuffer, true),

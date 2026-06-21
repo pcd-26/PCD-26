@@ -60,9 +60,10 @@ public final class BenchmarkSuite {
      * @throws Exception if directory creation fails
      */
     public static SuiteReport run(Path resultsRoot, Instant timestamp, PrintStream out, PrintStream err) throws Exception {
+        var correctnessGuard = new BenchmarkCorrectnessGuard();
         return run(
                 buildMatrix(resultsRoot, timestamp),
-                config -> () -> HeadlessSimulationRunner.simulateExecution(config),
+                config -> correctnessGuard.wrap(config, () -> HeadlessSimulationRunner.simulateExecution(config)),
                 out,
                 err,
                 timestamp);
@@ -128,11 +129,11 @@ public final class BenchmarkSuite {
             var rawResults = runScenario(config, workload, out);
             var summary = BenchmarkRunner.summarize(config, rawResults);
             if (summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
-                sequentialBaselines.put(new ScenarioKey(config.balls(), config.steps()), summary);
+                sequentialBaselines.put(new ScenarioKey(config.balls(), config.steps(), config.seed()), summary);
             }
 
             BenchmarkSummary sequentialBaseline = sequentialBaselines.getOrDefault(
-                    new ScenarioKey(config.balls(), config.steps()),
+                    new ScenarioKey(config.balls(), config.steps(), config.seed()),
                     summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL ? summary : null);
 
             if (sequentialBaseline == null) {
@@ -326,6 +327,6 @@ public final class BenchmarkSuite {
     public record SuiteReport(Path outputDir, int completedConfigs, int failedConfigs) {
     }
 
-    private record ScenarioKey(int balls, int steps) {
+    private record ScenarioKey(int balls, int steps, long seed) {
     }
 }

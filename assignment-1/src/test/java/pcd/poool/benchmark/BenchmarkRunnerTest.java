@@ -75,6 +75,7 @@ class BenchmarkRunnerTest {
         assertEquals(1, summary.successfulMeasuredRuns());
         assertEquals(1, summary.failedRuns());
         assertEquals(2, summary.successfulRuns());
+        assertTrue(summary.meanElapsedMillis() > 0.0);
         assertEquals(7L, summary.checksum());
         assertTrue(summary.checksumStable());
     }
