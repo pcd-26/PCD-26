@@ -100,4 +100,21 @@ class HeadlessSimulationRunnerTest {
 
         assertEquals(first.stateHash(), second.stateHash());
     }
+
+    @Test
+    @Timeout(5)
+    void instrumentedThreadedExecutionCapturesSynchronizationMetrics() {
+        var execution = HeadlessSimulationRunner.simulateExecution(
+                BenchmarkConfig.defaults()
+                        .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
+                        .withBalls(128)
+                        .withThreads(THREAD_COUNT)
+                        .withSteps(1)
+                        .withSeed(SEED)
+                        .withInstrumentationEnabled(true));
+
+        assertTrue(execution.instrumentation().lockAcquisitions() >= 0L);
+        assertTrue(execution.instrumentation().submittedTasks() > 0L);
+        assertTrue(execution.instrumentation().syncTimeMillis() >= 0.0);
+    }
 }

@@ -69,7 +69,9 @@ class BenchmarkSuiteTest {
                         if (config.implementation() == BenchmarkConfig.ImplementationType.THREADS && invocation == 1) {
                             throw new IllegalStateException("boom");
                         }
-                        return config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL ? 11L : 22L;
+                        return new BenchmarkRunner.BenchmarkExecution(
+                                config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL ? 11L : 22L,
+                                BenchmarkInstrumentation.zero());
                     };
                 },
                 new PrintStream(outBuffer, true),

@@ -62,7 +62,7 @@ public final class BenchmarkSuite {
     public static SuiteReport run(Path resultsRoot, Instant timestamp, PrintStream out, PrintStream err) throws Exception {
         return run(
                 buildMatrix(resultsRoot, timestamp),
-                config -> () -> HeadlessSimulationRunner.simulate(config),
+                config -> () -> HeadlessSimulationRunner.simulateExecution(config),
                 out,
                 err,
                 timestamp);
@@ -110,7 +110,7 @@ public final class BenchmarkSuite {
             int currentScenario = scenarioIndex + 1;
             printScenarioStart(out, currentScenario, scenarioCount, config);
 
-            BenchmarkRunner.BenchmarkWorkload workload;
+            BenchmarkRunner.BenchmarkExecutionWorkload workload;
             try {
                 workload = workloadFactory.create(config);
             } catch (Exception ex) {
@@ -223,12 +223,12 @@ public final class BenchmarkSuite {
                 .withWarmupRuns(BenchmarkConfig.DEFAULT_WARMUP_RUNS)
                 .withMeasuredRuns(BenchmarkConfig.DEFAULT_MEASURED_RUNS)
                 .withGuiEnabled(false)
-                .withInstrumentationEnabled(false);
+                .withInstrumentationEnabled(true);
     }
 
     private static List<BenchmarkRunResult> runScenario(
             BenchmarkConfig config,
-            BenchmarkRunner.BenchmarkWorkload workload,
+            BenchmarkRunner.BenchmarkExecutionWorkload workload,
             PrintStream out) {
         var results = new ArrayList<BenchmarkRunResult>(config.warmupRuns() + config.measuredRuns());
         int totalRuns = config.warmupRuns() + config.measuredRuns();
@@ -279,12 +279,18 @@ public final class BenchmarkSuite {
 
     private static void printRunEnd(PrintStream out, BenchmarkRunResult result) {
         out.printf(Locale.US,
-                "run_end run=%d status=%s elapsed_ms=%.3f throughput=%.3f checksum=%d%n",
+                "run_end run=%d status=%s elapsed_ms=%.3f throughput=%.3f checksum=%d sync_ms=%.3f agg_ms=%.3f submit_ms=%.3f wait_ms=%.3f locks=%d tasks=%d%n",
                 result.runIndex(),
                 result.status(),
                 result.elapsedMillis(),
                 result.throughputStepsPerSecond(),
-                result.checksum());
+                result.checksum(),
+                result.instrumentation().syncTimeMillis(),
+                result.instrumentation().aggregationTimeMillis(),
+                result.instrumentation().taskSubmissionTimeMillis(),
+                result.instrumentation().joinOrFutureWaitMillis(),
+                result.instrumentation().lockAcquisitions(),
+                result.instrumentation().submittedTasks());
     }
 
     private static void printScenarioCompleted(
@@ -307,7 +313,7 @@ public final class BenchmarkSuite {
     @FunctionalInterface
     public interface WorkloadFactory {
 
-        BenchmarkRunner.BenchmarkWorkload create(BenchmarkConfig config);
+        BenchmarkRunner.BenchmarkExecutionWorkload create(BenchmarkConfig config);
     }
 
     /**

@@ -34,6 +34,36 @@ public final class BenchmarkRunner {
     }
 
     /**
+     * Benchmark workload executed inside a timed run and returning both a
+     * checksum and optional instrumentation.
+     */
+    @FunctionalInterface
+    public interface BenchmarkExecutionWorkload {
+
+        /**
+         * Executes the benchmark payload.
+         *
+         * @return execution result and optional instrumentation
+         * @throws Exception if the workload fails
+         */
+        BenchmarkExecution run() throws Exception;
+    }
+
+    /**
+     * Result returned by an execution workload.
+     *
+     * @param checksum checksum or state hash produced by the workload
+     * @param instrumentation optional synchronization metrics for the run
+     */
+    public record BenchmarkExecution(long checksum, BenchmarkInstrumentation instrumentation) {
+        public BenchmarkExecution {
+            if (instrumentation == null) {
+                instrumentation = BenchmarkInstrumentation.zero();
+            }
+        }
+    }
+
+    /**
      * Measures one benchmark run.
      *
      * @param runIndex 1-based run index
@@ -47,11 +77,34 @@ public final class BenchmarkRunner {
             boolean warmup,
             int completedSteps,
             BenchmarkWorkload workload) {
+        return time(runIndex, warmup, completedSteps, () -> new BenchmarkExecution(workload.run(), BenchmarkInstrumentation.zero()));
+    }
+
+    /**
+     * Measures one benchmark run and captures optional instrumentation.
+     *
+     * @param runIndex 1-based run index
+     * @param warmup whether the run belongs to the warmup phase
+     * @param completedSteps number of simulation steps completed by the run
+     * @param workload timed workload
+     * @return raw run result
+     */
+    public static BenchmarkRunResult time(
+            int runIndex,
+            boolean warmup,
+            int completedSteps,
+            BenchmarkExecutionWorkload workload) {
         long start = System.nanoTime();
         try {
-            long checksum = workload.run();
+            BenchmarkExecution execution = workload.run();
             long elapsedNanos = System.nanoTime() - start;
-            return BenchmarkRunResult.success(runIndex, warmup, elapsedNanos, completedSteps, checksum);
+            return BenchmarkRunResult.success(
+                    runIndex,
+                    warmup,
+                    elapsedNanos,
+                    completedSteps,
+                    execution.checksum(),
+                    execution.instrumentation());
         } catch (Exception ex) {
             long elapsedNanos = System.nanoTime() - start;
             return BenchmarkRunResult.failure(runIndex, warmup, elapsedNanos, failureMessage(ex));

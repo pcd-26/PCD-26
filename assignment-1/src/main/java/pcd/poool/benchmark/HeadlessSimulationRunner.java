@@ -91,92 +91,125 @@ public final class HeadlessSimulationRunner {
      * @return benchmark result including elapsed time and final state hash
      */
     public static SimulationResult run(BenchmarkConfig config) {
-        var result = runInternal(config);
+        long start = System.nanoTime();
+        var execution = simulateExecution(config);
+        long elapsedNanos = System.nanoTime() - start;
+        var result = new SimulationResult(config, elapsedNanos, config.steps(), execution.checksum());
         blackhole = result.stateHash();
         return result;
     }
 
+    /**
+     * Runs the headless simulation and returns only the final checksum.
+     *
+     * @param config benchmark configuration
+     * @return checksum or state hash of the final board state
+     */
     static long simulate(BenchmarkConfig config) {
-        return runSimulation(config);
+        return simulateExecution(config).checksum();
     }
 
-    private static SimulationResult runInternal(BenchmarkConfig config) {
-        PhysicsStepper stepper;
-        AutoCloseable closeable = null;
-        switch (config.implementation()) {
-            case SEQUENTIAL -> stepper = new PhysicsEngine();
-            case THREADS -> {
-                var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
-                stepper = engine;
-                closeable = engine;
-            }
-            case EXECUTOR -> {
-                var engine = new TaskBasedPhysicsEngine(config.effectiveThreads());
-                stepper = engine;
-                closeable = engine;
-            }
-            default -> throw new IllegalStateException("unsupported implementation: " + config.implementation());
-        }
+    /**
+     * Runs the headless simulation and returns the final checksum plus optional
+     * instrumentation.
+     *
+     * @param config benchmark configuration
+     * @return execution result and optional synchronization metrics
+     */
+    static BenchmarkRunner.BenchmarkExecution simulateExecution(BenchmarkConfig config) {
+        return switch (config.implementation()) {
+            case SEQUENTIAL -> simulateSequential(config);
+            case THREADS -> simulateThreaded(config);
+            case EXECUTOR -> simulateTaskBased(config);
+        };
+    }
 
+    private static BenchmarkRunner.BenchmarkExecution simulateSequential(BenchmarkConfig config) {
+        var board = new Board(new PhysicsEngine());
+        board.init(new SeededBoardConf(config.balls(), config.seed()));
+        runSimulationLoop(board, config, null, null);
+        return new BenchmarkRunner.BenchmarkExecution(checksum(board), BenchmarkInstrumentation.zero());
+    }
+
+    private static BenchmarkRunner.BenchmarkExecution simulateThreaded(BenchmarkConfig config) {
+        var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
+        return simulateWithEngine(config, engine, null);
+    }
+
+    private static BenchmarkRunner.BenchmarkExecution simulateTaskBased(BenchmarkConfig config) {
+        var engine = new TaskBasedPhysicsEngine(config.effectiveThreads());
+        return simulateWithEngine(config, null, engine);
+    }
+
+    private static BenchmarkRunner.BenchmarkExecution simulateWithEngine(
+            BenchmarkConfig config,
+            ThreadedPhysicsEngine threadedEngine,
+            TaskBasedPhysicsEngine taskBasedEngine) {
+        AutoCloseable closeable = threadedEngine != null ? threadedEngine : taskBasedEngine;
         try {
+            PhysicsStepper stepper = threadedEngine != null ? threadedEngine : taskBasedEngine;
             var board = new Board(stepper);
             board.init(new SeededBoardConf(config.balls(), config.seed()));
-            var measured = BenchmarkRunner.time(1, false, config.steps(), () -> runSimulation(board, config));
-            return new SimulationResult(
-                    config,
-                    measured.elapsedNanos(),
-                    measured.completedSteps(),
-                    measured.checksum());
+            var instrumentation = runSimulationLoop(board, config, threadedEngine, taskBasedEngine);
+            return new BenchmarkRunner.BenchmarkExecution(checksum(board), instrumentation);
         } finally {
-            if (closeable != null) {
-                try {
-                    closeable.close();
-                } catch (Exception ex) {
-                    throw new IllegalStateException("failed to close benchmark engine", ex);
-                }
-            }
+            closeQuietly(closeable);
         }
     }
 
-    private static long runSimulation(BenchmarkConfig config) {
-        var boardConf = new SeededBoardConf(config.balls(), config.seed());
-        PhysicsStepper stepper;
-        AutoCloseable closeable = null;
-        switch (config.implementation()) {
-            case SEQUENTIAL -> stepper = new PhysicsEngine();
-            case THREADS -> {
-                var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
-                stepper = engine;
-                closeable = engine;
-            }
-            case EXECUTOR -> {
-                var engine = new TaskBasedPhysicsEngine(config.effectiveThreads());
-                stepper = engine;
-                closeable = engine;
-            }
-            default -> throw new IllegalStateException("unsupported implementation: " + config.implementation());
-        }
-
-        try {
-            var board = new Board(stepper);
-            board.init(boardConf);
-            return runSimulation(board, config);
-        } finally {
-            if (closeable != null) {
-                try {
-                    closeable.close();
-                } catch (Exception ex) {
-                    throw new IllegalStateException("failed to close benchmark engine", ex);
-                }
-            }
-        }
-    }
-
-    private static long runSimulation(Board board, BenchmarkConfig config) {
+    private static BenchmarkInstrumentation runSimulationLoop(
+            Board board,
+            BenchmarkConfig config,
+            ThreadedPhysicsEngine threadedEngine,
+            TaskBasedPhysicsEngine taskBasedEngine) {
+        var instrumentation = BenchmarkInstrumentation.zero();
         for (int i = 0; i < config.steps(); i++) {
-            board.updateState(STEP_MILLIS);
+            if (config.instrumentationEnabled() && threadedEngine != null) {
+                instrumentation = instrumentation.plus(toInstrumentation(threadedEngine.profileStep(board, STEP_MILLIS)));
+            } else if (config.instrumentationEnabled() && taskBasedEngine != null) {
+                instrumentation = instrumentation.plus(toInstrumentation(taskBasedEngine.profileStep(board, STEP_MILLIS)));
+            } else {
+                board.updateState(STEP_MILLIS);
+            }
         }
-        return checksum(board);
+        return instrumentation;
+    }
+
+    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngine.StepProfile profile) {
+        if (profile == null) {
+            return BenchmarkInstrumentation.zero();
+        }
+        return new BenchmarkInstrumentation(
+                profile.syncTimeMillis(),
+                profile.aggregationTimeMillis(),
+                profile.taskSubmissionTimeMillis(),
+                profile.joinOrFutureWaitMillis(),
+                profile.lockAcquisitions(),
+                profile.submittedTasks());
+    }
+
+    private static BenchmarkInstrumentation toInstrumentation(TaskBasedPhysicsEngine.StepProfile profile) {
+        if (profile == null) {
+            return BenchmarkInstrumentation.zero();
+        }
+        return new BenchmarkInstrumentation(
+                profile.syncTimeMillis(),
+                profile.aggregationTimeMillis(),
+                profile.taskSubmissionTimeMillis(),
+                profile.joinOrFutureWaitMillis(),
+                profile.lockAcquisitions(),
+                profile.submittedTasks());
+    }
+
+    private static void closeQuietly(AutoCloseable closeable) {
+        if (closeable == null) {
+            return;
+        }
+        try {
+            closeable.close();
+        } catch (Exception ex) {
+            throw new IllegalStateException("failed to close benchmark engine", ex);
+        }
     }
 
     private static long checksum(Board board) {

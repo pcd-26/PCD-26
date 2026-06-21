@@ -23,13 +23,14 @@ controlled workloads and report timing data useful for the assignment report.
   summarizes the measured runs into a `BenchmarkSummary`.
 - `BenchmarkRunResult.java`
   Immutable raw measurement for a single run, including elapsed time,
-  throughput, checksum, and status.
+  throughput, checksum, synchronization metrics, and status.
 - `BenchmarkSummary.java`
   Aggregate statistics for a benchmark session, kept separate from the raw
   per-run measurements.
 - `BenchmarkCsvWriter.java`
   Appends raw runs and aggregate summaries to stable CSV files in the
-  configured output directory.
+  configured output directory. Raw run rows include the synchronization
+  overhead columns used by the benchmark report.
 - `BenchmarkSuite.java`
   Executes the full benchmark matrix, prints progress, and stores all results
   in a timestamped directory under `benchmarks/results/`.
@@ -41,8 +42,8 @@ controlled workloads and report timing data useful for the assignment report.
   results.
 - `HeadlessSimulationRunner.java`
   Runs a seeded simulation without GUI rendering and reports elapsed time,
-  completed steps, and a final board-state hash for the selected execution
-  strategy.
+  completed steps, a final board-state hash, and optional coordination
+  metrics for the selected execution strategy.
 - `ThreadedPhysicsBenchmark.java`
   Benchmarks the multithreaded physics engine and can optionally choose the
   number of worker threads.
@@ -88,7 +89,10 @@ keeps warmup runs, measured runs, raw per-run results, and summary statistics
 separate.
 `BenchmarkCsvWriter` writes `benchmark-runs.csv` and `benchmark-summary.csv`
 with stable headers so the results can be fed directly into charts or report
-tables.
+tables. The raw run export includes the `syncTimeMillis`,
+`aggregationTimeMillis`, `taskSubmissionTimeMillis`,
+`joinOrFutureWaitMillis`, `lockAcquisitions`, and `submittedTasks` columns
+when instrumentation is enabled.
 `RuntimeTelemetryCsvWriter` writes `environment.csv` with one stable header and
 one snapshot row so the benchmark report can state the runtime conditions.
 
