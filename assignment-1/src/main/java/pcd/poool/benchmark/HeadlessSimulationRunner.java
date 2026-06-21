@@ -27,10 +27,6 @@ import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
  */
 public final class HeadlessSimulationRunner {
 
-    private static final int DEFAULT_BALL_COUNT = 100;
-    private static final int DEFAULT_THREAD_COUNT = Math.max(1, Runtime.getRuntime().availableProcessors());
-    private static final int DEFAULT_STEPS = 600;
-    private static final long DEFAULT_SEED = 0L;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
     private static final long STEP_MILLIS = PhysicsDefaults.FIXED_STEP_MILLIS;
     private static final Boundary BOARD_BOUNDARY = new StandardGameBoardConf().getBoardBoundary();
@@ -56,29 +52,33 @@ public final class HeadlessSimulationRunner {
      *   <li>random seed</li>
      * </ol>
      *
-     * Missing arguments fall back to the defaults used by the benchmark
-     * helpers.
+     * Missing arguments fall back to the defaults provided by
+     * {@link BenchmarkConfig}.
      *
      * @param args optional CLI arguments
      */
     public static void main(String[] args) {
-        var implementation = args.length > 0
-                ? ImplementationType.fromString(args[0])
-                : ImplementationType.SEQUENTIAL;
-        int balls = args.length > 1 ? Integer.parseInt(args[1]) : DEFAULT_BALL_COUNT;
-        int threads = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_THREAD_COUNT;
-        int steps = args.length > 3 ? Integer.parseInt(args[3]) : DEFAULT_STEPS;
-        long seed = args.length > 4 ? Long.parseLong(args[4]) : DEFAULT_SEED;
+        var config = BenchmarkConfig.headlessSimulationDefaults();
+        if (args.length > 0) {
+            config = config.withImplementation(BenchmarkConfig.ImplementationType.parse(args[0]));
+        }
+        if (args.length > 1) {
+            config = config.withBalls(Integer.parseInt(args[1]));
+        }
+        if (args.length > 2) {
+            config = config.withThreads(Integer.parseInt(args[2]));
+        }
+        if (args.length > 3) {
+            config = config.withSteps(Integer.parseInt(args[3]));
+        }
+        if (args.length > 4) {
+            config = config.withSeed(Long.parseLong(args[4]));
+        }
 
-        var result = run(implementation, balls, threads, steps, seed);
+        var result = run(config);
         System.out.printf(Locale.US,
-                "implementation=%s balls=%d requested_threads=%d effective_threads=%d steps=%d seed=%d elapsed_ms=%.3f completed_steps=%d state_hash=%d%n",
-                result.implementation().name().toLowerCase(Locale.ROOT),
-                result.ballCount(),
-                result.requestedThreadCount(),
-                result.effectiveThreadCount(),
-                result.simulationSteps(),
-                result.seed(),
+                "config=%s elapsed_ms=%.3f completed_steps=%d state_hash=%d%n",
+                result.config().toKeyValueString(),
                 result.elapsedMillis(),
                 result.completedSteps(),
                 result.stateHash());
@@ -87,81 +87,46 @@ public final class HeadlessSimulationRunner {
     /**
      * Runs one headless benchmark scenario.
      *
-     * @param implementation execution strategy to use
-     * @param ballCount number of small balls to generate
-     * @param threadCount requested worker count for concurrent implementations
-     * @param simulationSteps number of simulation steps to execute
-     * @param seed random seed used to generate the initial board
+     * @param config benchmark configuration
      * @return benchmark result including elapsed time and final state hash
      */
-    public static SimulationResult run(
-            ImplementationType implementation,
-            int ballCount,
-            int threadCount,
-            int simulationSteps,
-            long seed) {
-        if (implementation == null) {
-            throw new IllegalArgumentException("implementation must not be null");
-        }
-        if (ballCount < 0) {
-            throw new IllegalArgumentException("ballCount must be >= 0");
-        }
-        if (threadCount < 1) {
-            throw new IllegalArgumentException("threadCount must be >= 1");
-        }
-        if (simulationSteps < 0) {
-            throw new IllegalArgumentException("simulationSteps must be >= 0");
-        }
-
-        int effectiveThreadCount = implementation == ImplementationType.SEQUENTIAL ? 1 : threadCount;
-        var boardConf = new SeededBoardConf(ballCount, seed);
-        var result = runInternal(implementation, boardConf, ballCount, threadCount, effectiveThreadCount, simulationSteps, seed);
+    public static SimulationResult run(BenchmarkConfig config) {
+        var boardConf = new SeededBoardConf(config.balls(), config.seed());
+        var result = runInternal(config, boardConf);
         blackhole = result.stateHash();
         return result;
     }
 
-    private static SimulationResult runInternal(
-            ImplementationType implementation,
-            BoardConf boardConf,
-            int ballCount,
-            int requestedThreadCount,
-            int effectiveThreadCount,
-            int simulationSteps,
-            long seed) {
+    private static SimulationResult runInternal(BenchmarkConfig config, BoardConf boardConf) {
         PhysicsStepper stepper;
         AutoCloseable closeable = null;
-        switch (implementation) {
+        switch (config.implementation()) {
             case SEQUENTIAL -> stepper = new PhysicsEngine();
             case THREADS -> {
-                var engine = new ThreadedPhysicsEngine(effectiveThreadCount);
+                var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
                 stepper = engine;
                 closeable = engine;
             }
             case EXECUTOR -> {
-                var engine = new TaskBasedPhysicsEngine(effectiveThreadCount);
+                var engine = new TaskBasedPhysicsEngine(config.effectiveThreads());
                 stepper = engine;
                 closeable = engine;
             }
-            default -> throw new IllegalStateException("unsupported implementation: " + implementation);
+            default -> throw new IllegalStateException("unsupported implementation: " + config.implementation());
         }
 
         try {
             var board = new Board(stepper);
             board.init(boardConf);
             long start = System.nanoTime();
-            for (int i = 0; i < simulationSteps; i++) {
+            for (int i = 0; i < config.steps(); i++) {
                 board.updateState(STEP_MILLIS);
             }
             long elapsed = System.nanoTime() - start;
             return new SimulationResult(
-                    implementation,
-                    ballCount,
-                    requestedThreadCount,
-                    effectiveThreadCount,
-                    simulationSteps,
-                    seed,
+                    config,
                     elapsed,
-                    simulationSteps,
+                    config.steps(),
                     checksum(board));
         } finally {
             if (closeable != null) {
@@ -223,52 +188,15 @@ public final class HeadlessSimulationRunner {
     }
 
     /**
-     * Supported execution strategies for the headless benchmark.
-     */
-    public enum ImplementationType {
-        SEQUENTIAL,
-        THREADS,
-        EXECUTOR;
-
-        /**
-         * Parses a command-line token into an implementation type.
-         *
-         * @param value command-line token
-         * @return parsed execution strategy
-         */
-        public static ImplementationType fromString(String value) {
-            if (value == null) {
-                throw new IllegalArgumentException("implementation type must not be null");
-            }
-            return switch (value.trim().toLowerCase(Locale.ROOT)) {
-                case "sequential", "seq" -> SEQUENTIAL;
-                case "threads", "threaded", "thread" -> THREADS;
-                case "executor", "task", "taskbased" -> EXECUTOR;
-                default -> throw new IllegalArgumentException("unknown implementation type: " + value);
-            };
-        }
-    }
-
-    /**
      * Immutable benchmark result.
      *
-     * @param implementation execution strategy used
-     * @param ballCount number of small balls in the scenario
-     * @param requestedThreadCount thread count requested by the caller
-     * @param effectiveThreadCount thread count actually used by the engine
-     * @param simulationSteps number of simulation steps requested
-     * @param seed random seed used to generate the scenario
+     * @param config benchmark configuration used for the run
      * @param elapsedNanos elapsed time for the measured simulation loop
      * @param completedSteps number of steps completed successfully
      * @param stateHash final board-state hash consumed by the benchmark
      */
     public record SimulationResult(
-            ImplementationType implementation,
-            int ballCount,
-            int requestedThreadCount,
-            int effectiveThreadCount,
-            int simulationSteps,
-            long seed,
+            BenchmarkConfig config,
             long elapsedNanos,
             int completedSteps,
             long stateHash) {

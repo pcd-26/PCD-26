@@ -11,10 +11,6 @@ import pcd.poool.model.physics.config.StandardGameBoardConf;
  */
 public class SequentialGameBenchmark {
 
-    private static final int DEFAULT_STEPS = 600;
-    private static final String OUTPUT_FORMAT =
-            "steps=%d balls=%d status=%s elapsed_game_ms=%d avg_step_ms=%.6f%n";
-
     /**
      * Utility class; not meant to be instantiated.
      */
@@ -27,11 +23,14 @@ public class SequentialGameBenchmark {
      * @param args optional first argument: number of game steps
      */
     public static void main(String[] args) {
-        int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
+        var config = BenchmarkConfig.sequentialGameDefaults();
+        if (args.length > 0) {
+            config = config.withSteps(Integer.parseInt(args[0]));
+        }
         var game = new GameModel(new StandardGameBoardConf());
         game.shootHuman(new V2d(0, 1.4));
 
-        for (int i = 0; i < steps && !game.snapshot().isFinished(); i++) {
+        for (int i = 0; i < config.steps() && !game.snapshot().isFinished(); i++) {
             game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
             if (game.canBotShoot()) {
                 game.shootBot();
@@ -39,7 +38,9 @@ public class SequentialGameBenchmark {
         }
 
         var snapshot = game.snapshot();
-        System.out.printf(Locale.US, OUTPUT_FORMAT,
+        System.out.printf(Locale.US,
+                "config=%s steps=%d balls=%d status=%s elapsed_game_ms=%d avg_step_ms=%.6f%n",
+                config.toKeyValueString(),
                 snapshot.simulatedSteps(),
                 game.board().getBalls().size(),
                 snapshot.status(),
