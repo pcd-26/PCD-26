@@ -1,0 +1,324 @@
+package pcd.poool.benchmark;
+
+import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Executes the full benchmark matrix and exports the results.
+ */
+public final class BenchmarkSuite {
+
+    private static final List<Integer> BALL_COUNTS = List.of(100, 500, 1_000, 2_000, 5_000);
+    private static final List<Integer> THREAD_COUNTS = List.of(1, 2, 4, 8, Math.max(1, Runtime.getRuntime().availableProcessors()));
+    private static final Path DEFAULT_RESULTS_ROOT = Path.of("benchmarks", "results");
+    private static final DateTimeFormatter DIRECTORY_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
+
+    private BenchmarkSuite() {
+    }
+
+    /**
+     * Runs the complete benchmark matrix.
+     *
+     * @param args optional benchmark results root directory
+     */
+    public static void main(String[] args) {
+        Path resultsRoot = args.length > 0 ? Path.of(args[0]) : DEFAULT_RESULTS_ROOT;
+        try {
+            var report = run(resultsRoot, Instant.now(), System.out, System.err);
+            System.out.printf(Locale.US,
+                    "suite_completed output_dir=%s configs=%d failed_configs=%d%n",
+                    report.outputDir(),
+                    report.completedConfigs(),
+                    report.failedConfigs());
+        } catch (Exception ex) {
+            System.err.printf(Locale.US, "suite_failed message=%s%n", ex.getMessage());
+            ex.printStackTrace(System.err);
+            System.exit(1);
+        }
+    }
+
+    /**
+     * Runs the suite using the default headless benchmark workload.
+     *
+     * @param resultsRoot root directory under which the timestamped run
+     *                    directory will be created
+     * @param timestamp instant used to name the output directory
+     * @param out progress stream
+     * @param err error stream
+     * @return suite execution report
+     * @throws Exception if directory creation fails
+     */
+    public static SuiteReport run(Path resultsRoot, Instant timestamp, PrintStream out, PrintStream err) throws Exception {
+        return run(
+                buildMatrix(resultsRoot, timestamp),
+                config -> () -> HeadlessSimulationRunner.simulate(config),
+                out,
+                err,
+                timestamp);
+    }
+
+    /**
+     * Runs the suite with a custom workload factory, which is useful for
+     * testing failure handling.
+     *
+     * @param configs benchmark configurations
+     * @param workloadFactory factory that builds the timed workload for each config
+     * @param out progress stream
+     * @param err error stream
+     * @param timestamp instant used to name the output directory
+     * @return suite execution report
+     * @throws Exception if directory creation or export fails unexpectedly
+     */
+    public static SuiteReport run(
+            List<BenchmarkConfig> configs,
+            WorkloadFactory workloadFactory,
+            PrintStream out,
+            PrintStream err,
+            Instant timestamp) throws Exception {
+        Objects.requireNonNull(configs, "configs");
+        Objects.requireNonNull(workloadFactory, "workloadFactory");
+        Objects.requireNonNull(out, "out");
+        Objects.requireNonNull(err, "err");
+        Objects.requireNonNull(timestamp, "timestamp");
+
+        if (configs.isEmpty()) {
+            throw new IllegalArgumentException("configs must not be empty");
+        }
+
+        Path outputDir = configs.get(0).outputDir();
+        Files.createDirectories(outputDir);
+
+        Map<ScenarioKey, BenchmarkSummary> sequentialBaselines = new LinkedHashMap<>();
+        int completedScenarios = 0;
+        int failedScenarios = 0;
+        int scenarioCount = configs.size();
+
+        for (int scenarioIndex = 0; scenarioIndex < configs.size(); scenarioIndex++) {
+            var config = configs.get(scenarioIndex);
+            int currentScenario = scenarioIndex + 1;
+            printScenarioStart(out, currentScenario, scenarioCount, config);
+
+            BenchmarkRunner.BenchmarkWorkload workload;
+            try {
+                workload = workloadFactory.create(config);
+            } catch (Exception ex) {
+                failedScenarios++;
+                err.printf(Locale.US,
+                        "benchmark_scenario_failed implementation=%s balls=%d threads=%d steps=%d message=%s%n",
+                        config.implementation().name().toLowerCase(Locale.ROOT),
+                        config.balls(),
+                        config.threads(),
+                        config.steps(),
+                        ex.getMessage());
+                continue;
+            }
+
+            var rawResults = runScenario(config, workload, out);
+            var summary = BenchmarkRunner.summarize(config, rawResults);
+            if (summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
+                sequentialBaselines.put(new ScenarioKey(config.balls(), config.steps()), summary);
+            }
+
+            BenchmarkSummary sequentialBaseline = sequentialBaselines.getOrDefault(
+                    new ScenarioKey(config.balls(), config.steps()),
+                    summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL ? summary : null);
+
+            if (sequentialBaseline == null) {
+                err.printf(Locale.US,
+                        "benchmark_export_skipped reason=missing_sequential_baseline implementation=%s balls=%d threads=%d steps=%d%n",
+                        config.implementation().name().toLowerCase(Locale.ROOT),
+                        config.balls(),
+                        config.threads(),
+                        config.steps());
+            } else {
+                try {
+                    if (config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
+                        BenchmarkCsvWriter.export(config, rawResults, summary);
+                    } else {
+                        BenchmarkCsvWriter.export(config, rawResults, summary, sequentialBaseline);
+                    }
+                } catch (Exception ex) {
+                    failedScenarios++;
+                    err.printf(Locale.US,
+                            "benchmark_export_failed implementation=%s balls=%d threads=%d steps=%d message=%s%n",
+                            config.implementation().name().toLowerCase(Locale.ROOT),
+                            config.balls(),
+                            config.threads(),
+                            config.steps(),
+                            ex.getMessage());
+                    continue;
+                }
+            }
+
+            if (summary.failedRuns() > 0) {
+                failedScenarios++;
+                err.printf(Locale.US,
+                        "benchmark_scenario_completed_with_failures implementation=%s balls=%d threads=%d steps=%d failed_runs=%d%n",
+                        config.implementation().name().toLowerCase(Locale.ROOT),
+                        config.balls(),
+                        config.threads(),
+                        config.steps(),
+                        summary.failedRuns());
+            }
+            completedScenarios++;
+            printScenarioCompleted(out, completedScenarios, scenarioCount, config, summary);
+        }
+
+        return new SuiteReport(outputDir, completedScenarios, failedScenarios);
+    }
+
+    /**
+     * Builds the benchmark matrix for the suite.
+     *
+     * @param resultsRoot root directory that will contain the timestamped run directory
+     * @param timestamp instant used to create the directory name
+     * @return benchmark configurations with a shared timestamped output directory
+     * @throws Exception if the output directory cannot be created
+     */
+    public static List<BenchmarkConfig> buildMatrix(Path resultsRoot, Instant timestamp) throws Exception {
+        Objects.requireNonNull(resultsRoot, "resultsRoot");
+        Objects.requireNonNull(timestamp, "timestamp");
+        Path outputDir = resultsRoot.resolve(DIRECTORY_FORMATTER.format(timestamp));
+        Files.createDirectories(outputDir);
+
+        var configs = new ArrayList<BenchmarkConfig>();
+        for (var balls : BALL_COUNTS) {
+            configs.add(baseConfig()
+                    .withBalls(balls)
+                    .withThreads(1)
+                    .withImplementation(BenchmarkConfig.ImplementationType.SEQUENTIAL)
+                    .withOutputDir(outputDir));
+            for (var threads : THREAD_COUNTS) {
+                configs.add(baseConfig()
+                        .withBalls(balls)
+                        .withThreads(threads)
+                        .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
+                        .withOutputDir(outputDir));
+            }
+            for (var threads : THREAD_COUNTS) {
+                configs.add(baseConfig()
+                        .withBalls(balls)
+                        .withThreads(threads)
+                        .withImplementation(BenchmarkConfig.ImplementationType.EXECUTOR)
+                        .withOutputDir(outputDir));
+            }
+        }
+        return List.copyOf(configs);
+    }
+
+    private static BenchmarkConfig baseConfig() {
+        return BenchmarkConfig.defaults()
+                .withWarmupRuns(BenchmarkConfig.DEFAULT_WARMUP_RUNS)
+                .withMeasuredRuns(BenchmarkConfig.DEFAULT_MEASURED_RUNS)
+                .withGuiEnabled(false)
+                .withInstrumentationEnabled(false);
+    }
+
+    private static List<BenchmarkRunResult> runScenario(
+            BenchmarkConfig config,
+            BenchmarkRunner.BenchmarkWorkload workload,
+            PrintStream out) {
+        var results = new ArrayList<BenchmarkRunResult>(config.warmupRuns() + config.measuredRuns());
+        int totalRuns = config.warmupRuns() + config.measuredRuns();
+        int runIndex = 1;
+
+        for (int i = 0; i < config.warmupRuns(); i++) {
+            printRunStart(out, config, runIndex, totalRuns, true);
+            var result = BenchmarkRunner.time(runIndex, true, config.steps(), workload);
+            results.add(result);
+            printRunEnd(out, result);
+            runIndex++;
+        }
+
+        for (int i = 0; i < config.measuredRuns(); i++) {
+            printRunStart(out, config, runIndex, totalRuns, false);
+            var result = BenchmarkRunner.time(runIndex, false, config.steps(), workload);
+            results.add(result);
+            printRunEnd(out, result);
+            runIndex++;
+        }
+
+        return List.copyOf(results);
+    }
+
+    private static void printScenarioStart(PrintStream out, int current, int total, BenchmarkConfig config) {
+        out.printf(Locale.US,
+                "scenario_start current_scenario=%d completed_scenarios=%d total_scenarios=%d implementation=%s balls=%d threads=%d steps=%d seed=%d%n",
+                current,
+                current - 1,
+                total,
+                config.implementation().name().toLowerCase(Locale.ROOT),
+                config.balls(),
+                config.threads(),
+                config.steps(),
+                config.seed());
+    }
+
+    private static void printRunStart(PrintStream out, BenchmarkConfig config, int runIndex, int totalRuns, boolean warmup) {
+        out.printf(Locale.US,
+                "run_start scenario=%s balls=%d threads=%d run=%d/%d phase=%s%n",
+                config.implementation().name().toLowerCase(Locale.ROOT),
+                config.balls(),
+                config.threads(),
+                runIndex,
+                totalRuns,
+                warmup ? "warmup" : "measured");
+    }
+
+    private static void printRunEnd(PrintStream out, BenchmarkRunResult result) {
+        out.printf(Locale.US,
+                "run_end run=%d status=%s elapsed_ms=%.3f throughput=%.3f checksum=%d%n",
+                result.runIndex(),
+                result.status(),
+                result.elapsedMillis(),
+                result.throughputStepsPerSecond(),
+                result.checksum());
+    }
+
+    private static void printScenarioCompleted(
+            PrintStream out,
+            int completed,
+            int total,
+            BenchmarkConfig config,
+            BenchmarkSummary summary) {
+        out.printf(Locale.US,
+                "scenario_completed completed_scenarios=%d/%d implementation=%s balls=%d threads=%d mean_ms=%.3f checksum=%d%n",
+                completed,
+                total,
+                config.implementation().name().toLowerCase(Locale.ROOT),
+                config.balls(),
+                config.threads(),
+                summary.meanElapsedMillis(),
+                summary.checksum());
+    }
+
+    @FunctionalInterface
+    public interface WorkloadFactory {
+
+        BenchmarkRunner.BenchmarkWorkload create(BenchmarkConfig config);
+    }
+
+    /**
+     * Immutable report for a suite execution.
+     *
+     * @param outputDir timestamped output directory
+     * @param completedConfigs number of configs completed successfully
+     * @param failedConfigs number of configs that failed during export
+     */
+    public record SuiteReport(Path outputDir, int completedConfigs, int failedConfigs) {
+    }
+
+    private record ScenarioKey(int balls, int steps) {
+    }
+}
