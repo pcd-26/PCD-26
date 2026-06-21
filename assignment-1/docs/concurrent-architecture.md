@@ -623,7 +623,9 @@ The benchmark should compare the sequential baseline with the platform-thread
 runner using the same deterministic initial configuration and the same number
 of simulated ticks. Useful metrics include average step time, worst-frame
 latency, rendered FPS, worker utilization, and speedup relative to the
-sequential baseline. The expected academic conclusion is not that every
+sequential baseline. The detailed benchmark requirements and metric formulas
+are defined in [`benchmarking.md`](benchmarking.md).
+The expected academic conclusion is not that every
 configuration is faster, but that the threaded architecture scales on
 computationally intensive scenarios while preserving responsiveness and
 correctness.
