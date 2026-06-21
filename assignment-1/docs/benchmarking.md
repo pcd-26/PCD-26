@@ -352,3 +352,175 @@ This benchmark model supports the assignment requirements by:
 - documenting speedup, efficiency, and throughput formulas
 - separating headless and GUI benchmarks
 - listing explicit reproducible benchmark scenarios
+
+## 11. Benchmark execution guide
+
+This section documents how to run the benchmark workflow from the command line
+and how to reproduce the generated artifacts.
+
+### 11.1 Build the project
+
+Compile the assignment before running any benchmark entry point:
+
+```bash
+mvn -f assignment-1/pom.xml package
+```
+
+### 11.2 Run the headless simulation benchmark
+
+Use the headless runner when you want to benchmark simulation logic without
+opening the GUI:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+```
+
+Command arguments are:
+
+```text
+implementation_type balls_count thread_count simulation_steps random_seed
+```
+
+The headless runner reports elapsed time, completed steps, and a final
+checksum or state hash so that the same scenario can be replayed and checked
+for correctness.
+
+### 11.3 Run the GUI benchmark
+
+Use the GUI benchmark when you want responsiveness measurements that include
+rendering and event handling:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.GuiResponsivenessBenchmark
+```
+
+Do not interact with the GUI during the benchmark run unless the scenario
+explicitly asks for user input. GUI benchmarks are intentionally separate from
+headless throughput measurements.
+
+### 11.4 Run the full benchmark matrix
+
+Use the benchmark suite to execute the whole matrix in one command:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite
+```
+
+The suite runs the sequential, threaded, and executor implementations across
+the configured ball counts and thread counts, prints progress, and stores the
+results in a timestamped directory under `benchmarks/results/`.
+
+### 11.5 Generate the analysis tables
+
+After the suite has produced `benchmark-summary.csv`, generate report-ready
+tables with:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkScalabilityAnalyzer benchmarks/results/<timestamp>
+```
+
+This writes:
+
+- `speedup-table.csv`
+- `efficiency-table.csv`
+- `scalability-table.csv`
+
+### 11.6 Generate the charts
+
+After the benchmark CSV files are available, generate the charts with:
+
+```bash
+python scripts/plot_benchmarks.py --input-dir benchmarks/results/<timestamp> --output-dir benchmarks/charts
+```
+
+This script reads:
+
+- `benchmark-summary.csv`
+- `benchmark-runs.csv`
+- `speedup-table.csv`
+- `efficiency-table.csv`
+- `gui-responsiveness.csv`
+
+It writes the PNG figures used in the report into `benchmarks/charts/`.
+
+### 11.7 Output directory structure
+
+Each benchmark campaign produces a timestamped result directory similar to:
+
+```text
+benchmarks/results/20260621-131530-000/
+```
+
+Typical contents are:
+
+```text
+benchmark-runs.csv
+benchmark-summary.csv
+environment.csv
+gui-responsiveness.csv
+speedup-table.csv
+efficiency-table.csv
+scalability-table.csv
+```
+
+The chart generator writes PNG files to:
+
+```text
+benchmarks/charts/
+```
+
+### 11.8 CSV file meanings
+
+- `benchmark-runs.csv` contains one raw record per warmup or measured run.
+- `benchmark-summary.csv` contains the aggregate statistics for each benchmark
+  scenario.
+- `environment.csv` contains the runtime and machine metadata used to interpret
+  the measurements.
+- `gui-responsiveness.csv` contains GUI timing data and must not be mixed with
+  headless throughput measurements.
+- `speedup-table.csv`, `efficiency-table.csv`, and `scalability-table.csv`
+  are derived analysis tables for the report.
+
+### 11.9 Benchmark environment fields
+
+The exported `environment.csv` records:
+
+- `availableProcessors`
+- `jvmName`
+- `jvmVersion`
+- `osName`
+- `osVersion`
+- `osArch`
+- `maxMemoryBytes`
+- `totalMemoryBytes`
+- `freeMemoryBytes`
+- `processCpuTimeSupported`
+- `processCpuTimeNanos`
+
+`processCpuTimeNanos` is populated only when the JVM exposes process CPU time
+through the operating system bean.
+
+### 11.10 Known limitations
+
+- Benchmark results can vary across machines, JVM versions, and operating
+  systems.
+- GUI responsiveness measurements are more sensitive to desktop load than
+  headless throughput measurements.
+- Exact checksum equality is not always guaranteed for implementations that
+  preserve correctness through different execution orders.
+- Short workloads may be dominated by warmup effects or synchronization
+  overhead.
+- Some operating systems do not expose process CPU time, so CPU utilization may
+  be partially unavailable or estimated from the supported metadata.
+
+### 11.11 Reduce measurement noise
+
+- Close heavy background applications before running a benchmark campaign.
+- Use the same machine for all implementations you want to compare.
+- Keep the laptop connected to power during measurements.
+- Avoid interacting with the GUI during GUI benchmark runs.
+- Repeat the benchmark campaign if the output shows clear outliers.
+- Keep the JVM, OS, and hardware configuration unchanged while comparing one
+  benchmark matrix.
