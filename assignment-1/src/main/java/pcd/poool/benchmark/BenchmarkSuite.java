@@ -98,6 +98,7 @@ public final class BenchmarkSuite {
 
         Path outputDir = configs.get(0).outputDir();
         Files.createDirectories(outputDir);
+        RuntimeTelemetryCsvWriter.export(outputDir, RuntimeTelemetry.capture());
 
         Map<ScenarioKey, BenchmarkSummary> sequentialBaselines = new LinkedHashMap<>();
         int completedScenarios = 0;
