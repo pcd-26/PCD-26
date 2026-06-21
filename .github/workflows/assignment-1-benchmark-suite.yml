@@ -1,0 +1,39 @@
+name: Assignment 1 Full Benchmark Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      results_root:
+        description: "Benchmark results root directory"
+        required: false
+        default: "benchmarks/results/manual"
+
+jobs:
+  benchmark:
+    name: Run full benchmark suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build assignment-1
+        working-directory: assignment-1
+        run: mvn -B clean verify
+
+      - name: Run full benchmark suite
+        run: java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --full "${{ inputs.results_root }}"
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-1-full-benchmark
+          path: ${{ inputs.results_root }}/**
+          if-no-files-found: error

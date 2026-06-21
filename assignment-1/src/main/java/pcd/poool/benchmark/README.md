@@ -39,8 +39,9 @@ controlled workloads and report timing data useful for the assignment report.
   Generates report-ready PNG charts from the benchmark CSV files and stores
   them in `benchmarks/charts/`.
 - `BenchmarkSuite.java`
-  Executes the full benchmark matrix, prints progress, and stores all results
-  in a timestamped directory under `benchmarks/results/`.
+  Executes the full benchmark matrix or the lightweight CI smoke matrix,
+  prints progress, and stores all results in a timestamped directory under
+  `benchmarks/results/` or `benchmarks/results/ci/`.
 - `RuntimeTelemetry.java`
   Captures JVM, OS, heap, CPU-count, and optional process CPU-time metadata
   for benchmark interpretation.
@@ -122,11 +123,22 @@ the report.
 `scripts/plot_benchmarks.py` turns the CSV exports into charts for execution
 time, throughput, speedup, efficiency, CPU utilization, synchronization
 overhead, and GUI latency.
+The GitHub Actions CI workflow runs the smoke benchmark matrix on pull
+requests, uploads the generated CSV files as artifacts, and keeps the full
+benchmark matrix available as a manually triggered workflow. CI benchmark
+numbers are only for regression checks; the report should use locally or
+controlled-machine generated results.
 
 To execute the full benchmark matrix in one command:
 
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite
+```
+
+To execute the CI smoke matrix locally:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --smoke benchmarks/results/ci
 ```
 
 The suite stores its output in a timestamped directory under

@@ -524,3 +524,51 @@ through the operating system bean.
 - Repeat the benchmark campaign if the output shows clear outliers.
 - Keep the JVM, OS, and hardware configuration unchanged while comparing one
   benchmark matrix.
+
+## 12. CI integration
+
+Continuous integration runs a lightweight smoke benchmark so the project can
+check correctness without paying the cost of the full benchmark matrix on every
+pull request.
+
+### 12.1 CI smoke benchmark
+
+The CI smoke benchmark uses a reduced configuration set:
+
+- balls: `100`
+- steps: `1000`
+- thread counts: `1`, `2`
+- warmup runs: `1`
+- measured runs: `1`
+
+It exercises the `sequential`, `threads`, and `executor` implementations and
+fails if the correctness guard detects a mismatch or an invalid final state.
+
+The smoke benchmark writes its outputs under:
+
+```text
+benchmarks/results/ci/
+```
+
+The CI workflow also uploads the generated CSV files as build artifacts so the
+results can be inspected after the run.
+
+### 12.2 Manual full benchmark workflow
+
+The full benchmark matrix is triggered manually through GitHub Actions. It is
+the workflow used for report-grade numbers and should be run on a controlled
+machine when possible.
+
+### 12.3 CI benchmark numbers are not official
+
+Benchmark numbers collected in CI are useful for regression detection and
+correctness checks, but they are not the official report numbers.
+
+Reasons:
+
+- the runner hardware is shared and can vary over time
+- background load is not controlled
+- the VM and OS environment may differ from the local benchmark machine
+
+Use local or controlled-machine runs for the official benchmark tables and
+charts in the report.
