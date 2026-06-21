@@ -1,9 +1,9 @@
 package pcd.poool.model.game;
 
 import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.physics.Board;
-import pcd.poool.model.physics.BoardConf;
-import pcd.poool.model.physics.PhysicsStepper;
+import pcd.poool.model.physics.common.Board;
+import pcd.poool.model.physics.common.BoardConf;
+import pcd.poool.model.physics.common.PhysicsStepper;
 
 /**
  * Shared gameplay model used by both sequential and threaded runtimes.

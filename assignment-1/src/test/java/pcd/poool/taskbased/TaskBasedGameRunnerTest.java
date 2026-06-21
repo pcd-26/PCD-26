@@ -1,8 +1,9 @@
-package pcd.poool.threaded;
+package pcd.poool.taskbased;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -21,17 +22,18 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
+import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 
-class ThreadedGameRunnerTest {
+class TaskBasedGameRunnerTest {
 
     private static final Duration SHORT_TIMEOUT = Duration.ofSeconds(2);
-    private static final ThreadedGameRunner.Config FAST_WITHOUT_BOT =
-            new ThreadedGameRunner.Config(5, false, 0);
+    private static final TaskBasedGameRunner.Config FAST_WITHOUT_BOT =
+            new TaskBasedGameRunner.Config(5, false, 0);
 
     @Test
     @Timeout(3)
-    void controllerThreadAdvancesTheSharedGameModel() throws InterruptedException {
-        try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
+    void controllerTaskAdvancesTheSharedGameModel() throws InterruptedException {
+        try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
             var snapshot = runner.snapshots().awaitUntil(
@@ -45,7 +47,7 @@ class ThreadedGameRunnerTest {
     @Test
     @Timeout(3)
     void humanShotIsExecutedAsAnAsynchronousCommand() throws InterruptedException {
-        try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
+        try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
             var accepted = runner.shootHuman(new V2d(1.6, 0)).await(SHORT_TIMEOUT);
@@ -61,7 +63,7 @@ class ThreadedGameRunnerTest {
     @Test
     @Timeout(5)
     void concurrentHumanShotSubmissionsCompleteWithoutLostReceipts() throws InterruptedException {
-        try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
+        try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
             int producers = 6;
@@ -106,9 +108,82 @@ class ThreadedGameRunnerTest {
 
     @Test
     @Timeout(3)
-    void botAgentSubmitsShotsFromASeparateActiveComponent() throws InterruptedException {
-        var config = new ThreadedGameRunner.Config(5, true, 0);
-        try (var runner = new ThreadedGameRunner(new DirectScoringConf(), config)) {
+    void rejectedCommandsCompleteAfterShutdown() throws InterruptedException {
+        var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT);
+        runner.start();
+
+        int producers = 4;
+        int shotsPerProducer = 20;
+        var startGate = new CountDownLatch(1);
+        var firstBatchGate = new CountDownLatch(producers);
+        var readyGate = new CountDownLatch(producers);
+        var receipts = Collections.synchronizedList(new ArrayList<CommandReceipt<Boolean>>());
+        ExecutorService executor = Executors.newFixedThreadPool(producers);
+
+        try {
+            for (int i = 0; i < producers; i++) {
+                executor.submit(() -> {
+                    readyGate.countDown();
+                    try {
+                        receipts.add(runner.shootHuman(new V2d(0, 0)));
+                        firstBatchGate.countDown();
+                        startGate.await();
+                        for (int j = 1; j < shotsPerProducer; j++) {
+                            receipts.add(runner.shootHuman(new V2d(0, 0)));
+                        }
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+
+            assertTrue(readyGate.await(1, TimeUnit.SECONDS));
+            assertTrue(firstBatchGate.await(1, TimeUnit.SECONDS));
+            runner.close();
+            startGate.countDown();
+
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+
+            assertTrue(receipts.size() >= producers);
+            for (var receipt : receipts) {
+                assertFalse(receipt.await(SHORT_TIMEOUT));
+            }
+
+            assertFalse(runner.isRunning());
+        } finally {
+            executor.shutdownNow();
+            runner.close();
+        }
+    }
+
+    @Test
+    @Timeout(3)
+    void repeatedStopIsSafe() {
+        var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT);
+        runner.start();
+
+        runner.close();
+        runner.close();
+
+        assertFalse(runner.isRunning());
+    }
+
+    @Test
+    void shutdownPreventsNewCommands() throws InterruptedException {
+        var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT);
+        runner.start();
+        runner.close();
+
+        var receipt = runner.shootHuman(new V2d(0.1, 0.0));
+        assertFalse(receipt.await(SHORT_TIMEOUT));
+    }
+
+    @Test
+    @Timeout(3)
+    void botAgentSubmitsShotsFromASeparateTask() throws InterruptedException {
+        var config = new TaskBasedGameRunner.Config(5, true, 0);
+        try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 
             var snapshot = runner.snapshots().awaitUntil(
@@ -122,7 +197,7 @@ class ThreadedGameRunnerTest {
     @Test
     @Timeout(3)
     void snapshotExposesBotPreviewWhenBotCanShoot() throws InterruptedException {
-        try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
+        try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
             var snapshot = runner.snapshots().awaitUntil(
@@ -134,51 +209,60 @@ class ThreadedGameRunnerTest {
     }
 
     @Test
-    @Timeout(3)
-    void rejectedCommandsCompleteAfterShutdown() throws InterruptedException {
-        var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT);
-        runner.start();
+    @Timeout(5)
+    void taskBasedRunnerAdvancesSimulationAndSurvivesHighCommandLoad() throws InterruptedException {
+        try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
+            runner.start();
 
-        int producers = 4;
-        int shotsPerProducer = 20;
-        var startGate = new CountDownLatch(1);
-        var readyGate = new CountDownLatch(producers);
-        var receipts = Collections.synchronizedList(new ArrayList<CommandReceipt<Boolean>>());
-        ExecutorService executor = Executors.newFixedThreadPool(producers);
+            int producers = 6;
+            int shotsPerProducer = 30;
+            var startGate = new CountDownLatch(1);
+            var readyGate = new CountDownLatch(producers);
+            var executor = Executors.newFixedThreadPool(producers);
 
-        try {
-            for (int i = 0; i < producers; i++) {
-                executor.submit(() -> {
-                    readyGate.countDown();
-                    try {
-                        startGate.await();
-                        for (int j = 0; j < shotsPerProducer; j++) {
-                            receipts.add(runner.shootHuman(new V2d(0, 0)));
+            try {
+                for (int i = 0; i < producers; i++) {
+                    executor.submit(() -> {
+                        readyGate.countDown();
+                        try {
+                            startGate.await();
+                            for (int j = 0; j < shotsPerProducer; j++) {
+                                runner.shootHuman(new V2d(0, 0));
+                            }
+                        } catch (InterruptedException ex) {
+                            Thread.currentThread().interrupt();
                         }
-                    } catch (InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                    }
-                });
+                    });
+                }
+
+                assertTrue(readyGate.await(1, TimeUnit.SECONDS));
+                startGate.countDown();
+                executor.shutdown();
+                assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+
+                var snapshot = runner.snapshots().awaitUntil(
+                        state -> state.game().simulatedSteps() >= 4,
+                        SHORT_TIMEOUT);
+
+                assertTrue(snapshot.game().simulatedSteps() >= 4);
+            } finally {
+                executor.shutdownNow();
             }
+        }
+    }
 
-            assertTrue(readyGate.await(1, TimeUnit.SECONDS));
-            startGate.countDown();
-            runner.close();
+    @Test
+    void taskFailuresArePropagatedToTheCaller() throws InterruptedException {
+        try (var runner = new TaskBasedGameRunner(
+                new DirectScoringConf(),
+                FAST_WITHOUT_BOT,
+                new FailingPhysicsEngine())) {
+            runner.start();
 
-            executor.shutdown();
-            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+            runner.snapshots().awaitUntil(state -> runner.failure() != null, SHORT_TIMEOUT);
 
-            int completed = 0;
-            for (var receipt : receipts) {
-                assertFalse(receipt.await(SHORT_TIMEOUT));
-                completed++;
-            }
-
-            assertEquals(producers * shotsPerProducer, completed);
-            assertFalse(runner.isRunning());
-        } finally {
-            executor.shutdownNow();
-            runner.close();
+            var failure = assertThrows(IllegalStateException.class, runner::snapshot);
+            assertTrue(failure.getMessage().contains("task-based game runner failed"));
         }
     }
 
@@ -209,6 +293,18 @@ class ThreadedGameRunnerTest {
         @Override
         public List<Hole> getHoles() {
             return List.of(new Hole(new P2d(0.85, 0), 0.12));
+        }
+    }
+
+    private static class FailingPhysicsEngine extends TaskBasedPhysicsEngine {
+
+        FailingPhysicsEngine() {
+            super(1);
+        }
+
+        @Override
+        public void step(pcd.poool.model.physics.common.Board board, long elapsedMillis) {
+            throw new IllegalStateException("Injected task failure");
         }
     }
 }

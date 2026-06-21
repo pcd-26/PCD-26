@@ -3,7 +3,7 @@ package pcd.poool.benchmark;
 import java.util.Locale;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameModel;
-import pcd.poool.model.physics.PhysicsDefaults;
+import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 
 /**

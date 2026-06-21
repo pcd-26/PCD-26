@@ -3,9 +3,9 @@ package pcd.poool.threaded;
 import java.time.Duration;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameModel;
-import pcd.poool.model.physics.BoardConf;
-import pcd.poool.model.physics.PhysicsDefaults;
-import pcd.poool.model.physics.ThreadedPhysicsEngine;
+import pcd.poool.model.physics.common.BoardConf;
+import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 
 /**
  * Platform-thread execution strategy for Poool.
