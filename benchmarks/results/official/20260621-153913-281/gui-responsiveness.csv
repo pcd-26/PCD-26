@@ -1,0 +1,2 @@
+timestamp,implementation,balls,threads,steps,seed,requestedUpdates,completedUpdates,elapsedMillis,meanUpdateIntervalMillis,meanUpdateLatencyMillis,maxUpdateLatencyMillis,updateRatePerSecond,meanEdtDelayMillis,maxEdtDelayMillis,delayedUpdates
+2026-06-21T15:56:48.844293500Z,sequential,100,1,1000,0,1000,1000,15587.560100,15.595979,15.576720,250.238600,64.153722,6.286835,73.643000,298
