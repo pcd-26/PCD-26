@@ -91,13 +91,55 @@ public final class HeadlessSimulationRunner {
      * @return benchmark result including elapsed time and final state hash
      */
     public static SimulationResult run(BenchmarkConfig config) {
-        var boardConf = new SeededBoardConf(config.balls(), config.seed());
-        var result = runInternal(config, boardConf);
+        var result = runInternal(config);
         blackhole = result.stateHash();
         return result;
     }
 
-    private static SimulationResult runInternal(BenchmarkConfig config, BoardConf boardConf) {
+    static long simulate(BenchmarkConfig config) {
+        return runSimulation(config);
+    }
+
+    private static SimulationResult runInternal(BenchmarkConfig config) {
+        PhysicsStepper stepper;
+        AutoCloseable closeable = null;
+        switch (config.implementation()) {
+            case SEQUENTIAL -> stepper = new PhysicsEngine();
+            case THREADS -> {
+                var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
+                stepper = engine;
+                closeable = engine;
+            }
+            case EXECUTOR -> {
+                var engine = new TaskBasedPhysicsEngine(config.effectiveThreads());
+                stepper = engine;
+                closeable = engine;
+            }
+            default -> throw new IllegalStateException("unsupported implementation: " + config.implementation());
+        }
+
+        try {
+            var board = new Board(stepper);
+            board.init(new SeededBoardConf(config.balls(), config.seed()));
+            var measured = BenchmarkRunner.time(1, false, config.steps(), () -> runSimulation(board, config));
+            return new SimulationResult(
+                    config,
+                    measured.elapsedNanos(),
+                    measured.completedSteps(),
+                    measured.checksum());
+        } finally {
+            if (closeable != null) {
+                try {
+                    closeable.close();
+                } catch (Exception ex) {
+                    throw new IllegalStateException("failed to close benchmark engine", ex);
+                }
+            }
+        }
+    }
+
+    private static long runSimulation(BenchmarkConfig config) {
+        var boardConf = new SeededBoardConf(config.balls(), config.seed());
         PhysicsStepper stepper;
         AutoCloseable closeable = null;
         switch (config.implementation()) {
@@ -118,20 +160,7 @@ public final class HeadlessSimulationRunner {
         try {
             var board = new Board(stepper);
             board.init(boardConf);
-            var measured = BenchmarkRunner.time(1, false, config.steps(), () -> {
-                for (int i = 0; i < config.steps(); i++) {
-                    board.updateState(STEP_MILLIS);
-                }
-                return checksum(board);
-            });
-            if (measured.failed()) {
-                throw new IllegalStateException("headless simulation failed: " + measured.failureMessage());
-            }
-            return new SimulationResult(
-                    config,
-                    measured.elapsedNanos(),
-                    measured.completedSteps(),
-                    measured.checksum());
+            return runSimulation(board, config);
         } finally {
             if (closeable != null) {
                 try {
@@ -141,6 +170,13 @@ public final class HeadlessSimulationRunner {
                 }
             }
         }
+    }
+
+    private static long runSimulation(Board board, BenchmarkConfig config) {
+        for (int i = 0; i < config.steps(); i++) {
+            board.updateState(STEP_MILLIS);
+        }
+        return checksum(board);
     }
 
     private static long checksum(Board board) {

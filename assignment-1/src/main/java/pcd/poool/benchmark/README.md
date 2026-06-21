@@ -30,6 +30,9 @@ controlled workloads and report timing data useful for the assignment report.
 - `BenchmarkCsvWriter.java`
   Appends raw runs and aggregate summaries to stable CSV files in the
   configured output directory.
+- `BenchmarkSuite.java`
+  Executes the full benchmark matrix, prints progress, and stores all results
+  in a timestamped directory under `benchmarks/results/`.
 - `HeadlessSimulationRunner.java`
   Runs a seeded simulation without GUI rendering and reports elapsed time,
   completed steps, and a final board-state hash for the selected execution
@@ -80,6 +83,15 @@ separate.
 `BenchmarkCsvWriter` writes `benchmark-runs.csv` and `benchmark-summary.csv`
 with stable headers so the results can be fed directly into charts or report
 tables.
+
+To execute the full benchmark matrix in one command:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite
+```
+
+The suite stores its output in a timestamped directory under
+`benchmarks/results/`, for example `benchmarks/results/20260621-131530-000/`.
 
 ## Recommended comparison
 
