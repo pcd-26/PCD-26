@@ -15,6 +15,10 @@ controlled workloads and report timing data useful for the assignment report.
 - `SequentialGameBenchmark.java`
   Benchmarks the integrated sequential gameplay loop, including physics and
   game-rule progression.
+- `HeadlessSimulationRunner.java`
+  Runs a seeded simulation without GUI rendering and reports elapsed time,
+  completed steps, and a final board-state hash for the selected execution
+  strategy.
 - `ThreadedPhysicsBenchmark.java`
   Benchmarks the multithreaded physics engine and can optionally choose the
   number of worker threads.
@@ -32,6 +36,26 @@ controlled workloads and report timing data useful for the assignment report.
   platform-threaded, and task-based physics engines. It uses the same
   deterministic scenarios, warmup, repeat count, and checksum validation for
   every implementation.
+
+## Headless simulation runner
+
+The headless runner is the preferred benchmark entry point when the goal is to
+compare the simulation logic without Swing rendering:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+```
+
+Arguments are:
+
+```text
+implementation_type balls_count thread_count simulation_steps random_seed
+```
+
+The runner keeps GUI code out of the benchmark path and returns a final state
+hash so repeated runs of the same scenario can be validated.
 
 ## Recommended comparison
 
