@@ -317,6 +317,15 @@ invariants and clearly mark invalid or mismatched runs as failed. Failed runs
 must be excluded from aggregate statistics, but their failure reasons should
 still be exported for traceability.
 
+For post-processing, the benchmark results can be analyzed from
+`benchmark-summary.csv` to produce:
+
+- `speedup-table.csv`
+- `efficiency-table.csv`
+- `scalability-table.csv`
+
+These tables are intended for direct inclusion in the report.
+
 ## 9. Interpretation guidance
 
 - `sequential` is the semantic baseline.
