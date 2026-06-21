@@ -44,6 +44,13 @@ controlled workloads and report timing data useful for the assignment report.
   Runs a seeded simulation without GUI rendering and reports elapsed time,
   completed steps, a final board-state hash, and optional coordination
   metrics for the selected execution strategy.
+- `GuiResponsivenessBenchmark.java`
+  Runs a scripted Swing benchmark that measures render latency, EDT delay, and
+  update rate separately from headless throughput.
+- `GuiResponsivenessMonitor.java`
+  Collects GUI timing metrics for request, EDT, and render completion phases.
+- `GuiResponsivenessCsvWriter.java`
+  Exports GUI responsiveness measurements to `gui-responsiveness.csv`.
 - `ThreadedPhysicsBenchmark.java`
   Benchmarks the multithreaded physics engine and can optionally choose the
   number of worker threads.
@@ -95,6 +102,8 @@ tables. The raw run export includes the `syncTimeMillis`,
 when instrumentation is enabled.
 `RuntimeTelemetryCsvWriter` writes `environment.csv` with one stable header and
 one snapshot row so the benchmark report can state the runtime conditions.
+`GuiResponsivenessCsvWriter` writes `gui-responsiveness.csv` with the GUI
+latency, delay, and update-rate measurements collected by the Swing benchmark.
 
 To execute the full benchmark matrix in one command:
 

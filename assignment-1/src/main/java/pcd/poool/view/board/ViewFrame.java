@@ -388,6 +388,13 @@ public class ViewFrame extends JFrame {
 			Thread.currentThread().interrupt();
 		}
     }
+
+    /**
+     * Disposes the underlying Swing window.
+     */
+    public void close() {
+        dispose();
+    }
         
     /**
      * Panel that converts board coordinates to screen coordinates and paints

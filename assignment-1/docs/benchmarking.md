@@ -193,6 +193,16 @@ GUI benchmarks include rendering and event handling. They measure:
 GUI benchmarks must be treated as a separate family because rendering costs can
 dominate the physics cost and make throughput numbers hard to interpret.
 
+GUI benchmark exports should be written to a separate file, such as
+`gui-responsiveness.csv`, and should report at least:
+
+- average update interval
+- average update latency
+- maximum update delay
+- update rate or FPS
+- EDT delay measured with `SwingUtilities.invokeLater`
+- delayed update count when a threshold is configured
+
 ## 5. Benchmark matrix
 
 The benchmark matrix defines the supported comparison space.
