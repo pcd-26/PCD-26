@@ -15,6 +15,8 @@ controlled workloads and report timing data useful for the assignment report.
 - `SequentialGameBenchmark.java`
   Benchmarks the integrated sequential gameplay loop, including physics and
   game-rule progression.
+- `BenchmarkConfig.java`
+  Shared benchmark configuration model used by all benchmark runners.
 - `HeadlessSimulationRunner.java`
   Runs a seeded simulation without GUI rendering and reports elapsed time,
   completed steps, and a final board-state hash for the selected execution
@@ -56,6 +58,9 @@ implementation_type balls_count thread_count simulation_steps random_seed
 
 The runner keeps GUI code out of the benchmark path and returns a final state
 hash so repeated runs of the same scenario can be validated.
+
+All benchmark entry points now consume the shared `BenchmarkConfig` model, so
+defaults, validation, and exported configuration values stay centralized.
 
 ## Recommended comparison
 

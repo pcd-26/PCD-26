@@ -11,11 +11,6 @@ import pcd.poool.model.physics.config.MassiveBoardConf;
  */
 public class ThreadedPhysicsBenchmark {
 
-    private static final int DEFAULT_STEPS = 600;
-    private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
-    private static final String OUTPUT_FORMAT =
-            "steps=%d workers=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f%n";
-
     /**
      * Utility class; not meant to be instantiated.
      */
@@ -28,25 +23,30 @@ public class ThreadedPhysicsBenchmark {
      * @param args optional arguments: number of physics steps, worker count
      */
     public static void main(String[] args) {
-        int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
-        int workers = args.length > 1
-                ? Integer.parseInt(args[1])
-                : Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+        var config = BenchmarkConfig.threadedPhysicsDefaults();
+        if (args.length > 0) {
+            config = config.withSteps(Integer.parseInt(args[0]));
+        }
+        if (args.length > 1) {
+            config = config.withThreads(Integer.parseInt(args[1]));
+        }
 
-        try (var physicsEngine = new ThreadedPhysicsEngine(workers)) {
+        try (var physicsEngine = new ThreadedPhysicsEngine(config.effectiveThreads())) {
             var board = new Board(physicsEngine);
             board.init(new MassiveBoardConf());
 
             long start = System.nanoTime();
-            for (int i = 0; i < steps; i++) {
+            for (int i = 0; i < config.steps(); i++) {
                 board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
             }
             long elapsed = System.nanoTime() - start;
 
-            double elapsedMillis = elapsed / NANOS_PER_MILLISECOND;
-            double avgStepMillis = elapsedMillis / steps;
-            System.out.printf(Locale.US, OUTPUT_FORMAT,
-                    steps,
+            double elapsedMillis = elapsed / 1_000_000.0;
+            double avgStepMillis = elapsedMillis / config.steps();
+            System.out.printf(Locale.US,
+                    "config=%s steps=%d workers=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f%n",
+                    config.toKeyValueString(),
+                    config.steps(),
                     physicsEngine.workerCount(),
                     board.getBalls().size(),
                     elapsedMillis,

@@ -20,8 +20,9 @@
 - `pcd.poool.threaded`: `ThreadedGameRunner`, `ThreadedGameSnapshot`,
   `ThreadedBotAgent`, `CommandQueueMonitor`, `GameCommand`,
   `CommandReceipt`, `SnapshotStore`
-- `pcd.poool.benchmark`: `PhysicsBenchmark`, `SequentialGameBenchmark`,
-  `ThreadedPhysicsBenchmark`, `HeadlessSimulationRunner`
+- `pcd.poool.benchmark`: `BenchmarkConfig`, `PhysicsBenchmark`,
+  `SequentialGameBenchmark`, `ThreadedPhysicsBenchmark`,
+  `HeadlessSimulationRunner`
 - `pcd.poool`: `SequentialPoool`, `ThreadedPoool`
 
 ## Excluded from `pcd.poool`

@@ -19,15 +19,12 @@ import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
  * number of balls so bottlenecks in the spatial phases become visible.
  */
 public class ThreadedPhysicsProfilingBenchmark {
-
-    private static final int DEFAULT_STEPS = 120;
-    private static final int DEFAULT_SMALL_BALLS = 1_600;
     private static final Boundary BOARD_BOUNDARY = new Boundary(-1.5, -1.0, 1.5, 1.0);
     private static final double CUE_RADIUS = 0.05;
     private static final double SMALL_BALL_RADIUS = 0.01;
     private static final V2d RESTING = new V2d(0, 0);
     private static final String OUTPUT_FORMAT =
-            "%s steps=%d workers=%d balls=%d avg_total_ms=%.6f avg_integration_ms=%.6f "
+            "%s config=%s steps=%d workers=%d balls=%d avg_total_ms=%.6f avg_integration_ms=%.6f "
             + "avg_grid_build_ms=%.6f avg_grid_merge_ms=%.6f avg_pair_ms=%.6f "
             + "avg_resolution_ms=%.6f avg_pairs=%d avg_cells=%d max_cell_occupancy=%d "
             + "integration_worker_imbalance=%.3f grid_worker_imbalance=%.3f%n";
@@ -41,37 +38,43 @@ public class ThreadedPhysicsProfilingBenchmark {
      * @param args optional arguments: number of steps, worker count, small-ball count
      */
     public static void main(String[] args) {
-        int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
-        int workers = args.length > 1
-                ? Integer.parseInt(args[1])
-                : Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
-        int smallBalls = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_SMALL_BALLS;
+        var config = BenchmarkConfig.threadedProfilingDefaults();
+        if (args.length > 0) {
+            config = config.withSteps(Integer.parseInt(args[0]));
+        }
+        if (args.length > 1) {
+            config = config.withThreads(Integer.parseInt(args[1]));
+        }
+        if (args.length > 2) {
+            config = config.withBalls(Integer.parseInt(args[2]));
+        }
 
-        runScenario("sparse", steps, workers, new SparseBoardConf(smallBalls));
-        runScenario("clustered", steps, workers, new ClusteredBoardConf(smallBalls));
+        runScenario("sparse", config, new SparseBoardConf(config.balls()));
+        runScenario("clustered", config, new ClusteredBoardConf(config.balls()));
     }
 
-    private static void runScenario(String name, int steps, int workers, BoardConf conf) {
-        try (var engine = new ThreadedPhysicsEngine(workers)) {
+    private static void runScenario(String name, BenchmarkConfig config, BoardConf conf) {
+        try (var engine = new ThreadedPhysicsEngine(config.effectiveThreads())) {
             var board = new Board(engine);
             board.init(conf);
             var totals = new ProfileTotals();
-            for (int i = 0; i < steps; i++) {
+            for (int i = 0; i < config.steps(); i++) {
                 totals.add(engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS));
             }
             System.out.printf(Locale.US, OUTPUT_FORMAT,
                     name,
-                    steps,
+                    config.toKeyValueString(),
+                    config.steps(),
                     engine.workerCount(),
                     board.getBalls().size(),
-                    totals.averageTotalMillis(steps),
-                    totals.averageIntegrationMillis(steps),
-                    totals.averageGridBuildMillis(steps),
-                    totals.averageGridMergeMillis(steps),
-                    totals.averagePairMillis(steps),
-                    totals.averageResolutionMillis(steps),
-                    totals.averagePairs(steps),
-                    totals.averageCells(steps),
+                    totals.averageTotalMillis(config.steps()),
+                    totals.averageIntegrationMillis(config.steps()),
+                    totals.averageGridBuildMillis(config.steps()),
+                    totals.averageGridMergeMillis(config.steps()),
+                    totals.averagePairMillis(config.steps()),
+                    totals.averageResolutionMillis(config.steps()),
+                    totals.averagePairs(config.steps()),
+                    totals.averageCells(config.steps()),
                     totals.maxCellOccupancy,
                     totals.integrationWorkerImbalance(),
                     totals.gridWorkerImbalance());

@@ -19,12 +19,8 @@ import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
  * and final apply.
  */
 public class TaskBasedPhysicsProfilingBenchmark {
-
-    private static final int DEFAULT_STEPS = 30;
-    private static final int DEFAULT_WARMUP_STEPS = 5;
-    private static final int DEFAULT_REPEATS = 2;
     private static final String OUTPUT_FORMAT =
-            "%s steps=%d warmup=%d repeats=%d workers=%d balls=%d "
+            "%s config=%s steps=%d warmup=%d repeats=%d workers=%d balls=%d "
             + "avg_total_ms=%.6f avg_integration_ms=%.6f avg_hole_ms=%.6f "
             + "avg_grid_build_ms=%.6f avg_grid_merge_ms=%.6f avg_pair_ms=%.6f "
             + "avg_resolution_ms=%.6f avg_apply_ms=%.6f avg_pairs=%d avg_cells=%d "
@@ -40,13 +36,20 @@ public class TaskBasedPhysicsProfilingBenchmark {
      *             and repeat count
      */
     public static void main(String[] args) {
-        int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
-        int warmupSteps = args.length > 1 ? Integer.parseInt(args[1]) : DEFAULT_WARMUP_STEPS;
-        int repeats = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_REPEATS;
+        var config = BenchmarkConfig.taskProfilingDefaults();
+        if (args.length > 0) {
+            config = config.withSteps(Integer.parseInt(args[0]));
+        }
+        if (args.length > 1) {
+            config = config.withWarmupRuns(Integer.parseInt(args[1]));
+        }
+        if (args.length > 2) {
+            config = config.withMeasuredRuns(Integer.parseInt(args[2]));
+        }
 
         for (var scenario : scenarios()) {
             for (var workers : PhysicsBenchmarkSupport.workerCounts()) {
-                printScenario(scenario, workers, steps, warmupSteps, repeats);
+                printScenario(scenario, config.withThreads(workers));
             }
         }
     }
@@ -58,14 +61,15 @@ public class TaskBasedPhysicsProfilingBenchmark {
                 new Scenario("high-load", MassiveBoardConf::new));
     }
 
-    private static void printScenario(Scenario scenario, int workers, int steps, int warmupSteps, int repeats) {
-        var summary = summarizeScenario(scenario, workers, steps, warmupSteps, repeats);
+    private static void printScenario(Scenario scenario, BenchmarkConfig config) {
+        var summary = summarizeScenario(scenario, config);
         System.out.printf(Locale.US, OUTPUT_FORMAT,
                 scenario.name(),
-                steps,
-                warmupSteps,
-                repeats,
-                workers,
+                config.toKeyValueString(),
+                config.steps(),
+                config.warmupRuns(),
+                config.measuredRuns(),
+                config.effectiveThreads(),
                 summary.balls(),
                 summary.avgTotalMillis(),
                 summary.avgIntegrationMillis(),
@@ -83,31 +87,25 @@ public class TaskBasedPhysicsProfilingBenchmark {
 
     private static ProfileSummary summarizeScenario(
             Scenario scenario,
-            int workers,
-            int steps,
-            int warmupSteps,
-            int repeats) {
-        if (repeats < 1) {
-            throw new IllegalArgumentException("repeats must be >= 1");
-        }
+            BenchmarkConfig config) {
         int balls = -1;
         double elapsedWallMillis = 0.0;
         var totals = new PhaseTotals();
-        for (int repeat = 0; repeat < repeats; repeat++) {
-            try (var engine = new TaskBasedPhysicsEngine(workers)) {
+        for (int repeat = 0; repeat < config.measuredRuns(); repeat++) {
+            try (var engine = new TaskBasedPhysicsEngine(config.effectiveThreads())) {
                 var board = new Board(engine);
                 board.init(scenario.confSupplier().get());
-                warmup(board, warmupSteps);
+                warmup(board, config.warmupRuns());
 
                 long start = System.nanoTime();
-                for (int step = 0; step < steps; step++) {
+                for (int step = 0; step < config.steps(); step++) {
                     totals.add(engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS));
                 }
                 elapsedWallMillis += (System.nanoTime() - start) / 1_000_000.0;
                 balls = board.getBalls().size();
             }
         }
-        return totals.toSummary(balls, elapsedWallMillis / repeats, steps * repeats);
+        return totals.toSummary(balls, elapsedWallMillis / config.measuredRuns(), config.steps() * config.measuredRuns());
     }
 
     private static void warmup(Board board, int warmupSteps) {
