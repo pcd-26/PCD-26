@@ -31,6 +31,10 @@ controlled workloads and report timing data useful for the assignment report.
   Appends raw runs and aggregate summaries to stable CSV files in the
   configured output directory. Raw run rows include the synchronization
   overhead columns used by the benchmark report.
+- `BenchmarkScalabilityAnalyzer.java`
+  Reads `benchmark-summary.csv` and writes `speedup-table.csv`,
+  `efficiency-table.csv`, and `scalability-table.csv` for report-ready
+  post-processing.
 - `BenchmarkSuite.java`
   Executes the full benchmark matrix, prints progress, and stores all results
   in a timestamped directory under `benchmarks/results/`.
@@ -109,6 +113,9 @@ for aggregate comparisons.
 one snapshot row so the benchmark report can state the runtime conditions.
 `GuiResponsivenessCsvWriter` writes `gui-responsiveness.csv` with the GUI
 latency, delay, and update-rate measurements collected by the Swing benchmark.
+`BenchmarkScalabilityAnalyzer` consumes `benchmark-summary.csv` and produces
+speedup, efficiency, and scalability tables that can be copied directly into
+the report.
 
 To execute the full benchmark matrix in one command:
 
