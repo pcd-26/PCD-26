@@ -80,6 +80,19 @@ class BenchmarkRunnerTest {
     }
 
     @Test
+    void timeCapturesInstrumentationFromExecutionWorkload() {
+        var instrumentation = new BenchmarkInstrumentation(1.25, 2.5, 3.75, 5.0, 6L, 7L);
+
+        var result = BenchmarkRunner.time(1, false, 12, () ->
+                new BenchmarkRunner.BenchmarkExecution(99L, instrumentation));
+
+        assertTrue(result.succeeded());
+        assertEquals(99L, result.checksum());
+        assertEquals(instrumentation, result.instrumentation());
+        assertEquals(12, result.completedSteps());
+    }
+
+    @Test
     void throughputFormulaMatchesCompletedStepsPerSecond() {
         assertEquals(2_000.0, BenchmarkRunner.throughput(500, 250_000_000L), 1e-9);
     }

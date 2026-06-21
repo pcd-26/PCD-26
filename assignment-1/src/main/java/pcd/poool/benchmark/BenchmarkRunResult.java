@@ -12,6 +12,7 @@ import java.util.Locale;
  * @param completedSteps number of completed simulation steps
  * @param throughputStepsPerSecond completed steps divided by elapsed seconds
  * @param checksum checksum or state hash observed at the end of the run
+ * @param instrumentation optional synchronization metrics collected during the run
  * @param status run status
  * @param failureMessage optional failure detail, null for successful runs
  */
@@ -23,6 +24,7 @@ public record BenchmarkRunResult(
         int completedSteps,
         double throughputStepsPerSecond,
         long checksum,
+        BenchmarkInstrumentation instrumentation,
         Status status,
         String failureMessage) {
 
@@ -42,6 +44,7 @@ public record BenchmarkRunResult(
      * @param elapsedNanos elapsed wall-clock time in nanoseconds
      * @param completedSteps number of completed simulation steps
      * @param checksum checksum or state hash observed at the end of the run
+     * @param instrumentation optional synchronization metrics collected during the run
      * @return successful run result
      */
     public static BenchmarkRunResult success(
@@ -50,6 +53,27 @@ public record BenchmarkRunResult(
             long elapsedNanos,
             int completedSteps,
             long checksum) {
+        return success(runIndex, warmup, elapsedNanos, completedSteps, checksum, BenchmarkInstrumentation.zero());
+    }
+
+    /**
+     * Creates a successful run result.
+     *
+     * @param runIndex 1-based run index
+     * @param warmup whether the run belongs to the warmup phase
+     * @param elapsedNanos elapsed wall-clock time in nanoseconds
+     * @param completedSteps number of completed simulation steps
+     * @param checksum checksum or state hash observed at the end of the run
+     * @param instrumentation optional synchronization metrics collected during the run
+     * @return successful run result
+     */
+    public static BenchmarkRunResult success(
+            int runIndex,
+            boolean warmup,
+            long elapsedNanos,
+            int completedSteps,
+            long checksum,
+            BenchmarkInstrumentation instrumentation) {
         double elapsedMillis = elapsedNanos / BenchmarkRunner.NANOS_PER_MILLISECOND;
         double throughput = BenchmarkRunner.throughput(completedSteps, elapsedNanos);
         return new BenchmarkRunResult(
@@ -60,6 +84,7 @@ public record BenchmarkRunResult(
                 completedSteps,
                 throughput,
                 checksum,
+                instrumentation == null ? BenchmarkInstrumentation.zero() : instrumentation,
                 Status.SUCCESS,
                 null);
     }
@@ -74,6 +99,25 @@ public record BenchmarkRunResult(
      * @return failed run result
      */
     public static BenchmarkRunResult failure(int runIndex, boolean warmup, long elapsedNanos, String failureMessage) {
+        return failure(runIndex, warmup, elapsedNanos, failureMessage, BenchmarkInstrumentation.zero());
+    }
+
+    /**
+     * Creates a failed run result.
+     *
+     * @param runIndex 1-based run index
+     * @param warmup whether the run belongs to the warmup phase
+     * @param elapsedNanos elapsed wall-clock time in nanoseconds
+     * @param failureMessage failure detail
+     * @param instrumentation optional synchronization metrics collected during the run
+     * @return failed run result
+     */
+    public static BenchmarkRunResult failure(
+            int runIndex,
+            boolean warmup,
+            long elapsedNanos,
+            String failureMessage,
+            BenchmarkInstrumentation instrumentation) {
         double elapsedMillis = elapsedNanos / BenchmarkRunner.NANOS_PER_MILLISECOND;
         return new BenchmarkRunResult(
                 runIndex,
@@ -83,6 +127,7 @@ public record BenchmarkRunResult(
                 0,
                 0.0,
                 0L,
+                instrumentation == null ? BenchmarkInstrumentation.zero() : instrumentation,
                 Status.FAILED,
                 failureMessage);
     }
@@ -108,13 +153,14 @@ public record BenchmarkRunResult(
     @Override
     public String toString() {
         return String.format(Locale.US,
-                "BenchmarkRunResult{runIndex=%d, warmup=%s, elapsedMillis=%.6f, completedSteps=%d, throughput=%.3f, checksum=%d, status=%s}",
+                "BenchmarkRunResult{runIndex=%d, warmup=%s, elapsedMillis=%.6f, completedSteps=%d, throughput=%.3f, checksum=%d, instrumentation=%s, status=%s}",
                 runIndex,
                 warmup,
                 elapsedMillis,
                 completedSteps,
                 throughputStepsPerSecond,
                 checksum,
+                instrumentation,
                 status);
     }
 }

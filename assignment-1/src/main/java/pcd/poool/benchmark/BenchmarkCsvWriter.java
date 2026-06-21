@@ -20,7 +20,7 @@ public final class BenchmarkCsvWriter {
     public static final String SUMMARY_FILE_NAME = "benchmark-summary.csv";
 
     private static final String RUNS_HEADER =
-            "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,checksum,status";
+            "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,checksum,status,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks";
     private static final String SUMMARY_HEADER =
             "implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,speedup,efficiency";
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_INSTANT;
@@ -104,7 +104,13 @@ public final class BenchmarkCsvWriter {
                             formatDouble(result.elapsedMillis()),
                             formatDouble(result.throughputStepsPerSecond()),
                             Long.toString(result.checksum()),
-                            result.status().name()))
+                            result.status().name(),
+                            formatDouble(result.instrumentation().syncTimeMillis()),
+                            formatDouble(result.instrumentation().aggregationTimeMillis()),
+                            formatDouble(result.instrumentation().taskSubmissionTimeMillis()),
+                            formatDouble(result.instrumentation().joinOrFutureWaitMillis()),
+                            Long.toString(result.instrumentation().lockAcquisitions()),
+                            Long.toString(result.instrumentation().submittedTasks())))
                     .append(System.lineSeparator());
         }
         write(runsFile, lines);

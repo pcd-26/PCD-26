@@ -27,7 +27,8 @@ class BenchmarkCsvWriterTest {
                 .withOutputDir(tempDir);
         var rawResults = List.of(
                 BenchmarkRunResult.success(1, true, 10_000_000L, 10, 11L),
-                BenchmarkRunResult.success(2, false, 20_000_000L, 10, 11L),
+                BenchmarkRunResult.success(2, false, 20_000_000L, 10, 11L,
+                        new BenchmarkInstrumentation(1.500000, 2.500000, 3.500000, 4.500000, 6L, 7L)),
                 BenchmarkRunResult.success(3, false, 30_000_000L, 10, 11L));
         var summary = BenchmarkRunner.summarize(config, rawResults);
 
@@ -38,10 +39,11 @@ class BenchmarkCsvWriterTest {
 
         var runsLines = Files.readAllLines(export.runsFile());
         var summaryLines = Files.readAllLines(export.summaryFile());
-        assertEquals("timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,checksum,status", runsLines.get(0));
+        assertEquals("timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,checksum,status,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks", runsLines.get(0));
         assertEquals("implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,speedup,efficiency", summaryLines.get(0));
         assertTrue(runsLines.get(1).startsWith("20"));
         assertTrue(runsLines.get(1).contains("sequential,100,1,10,42,1,"));
+        assertTrue(runsLines.get(2).contains(",1.500000,2.500000,3.500000,4.500000,6,7"));
         assertTrue(summaryLines.get(1).contains("sequential,100,1,10,2,"));
         assertTrue(summaryLines.get(1).contains(",1.000000,1.000000"));
     }
