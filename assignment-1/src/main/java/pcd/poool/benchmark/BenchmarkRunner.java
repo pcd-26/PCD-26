@@ -1,5 +1,6 @@
 package pcd.poool.benchmark;
 
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -106,19 +107,23 @@ public final class BenchmarkRunner {
             int completedSteps,
             BenchmarkExecutionWorkload workload) {
         long start = System.nanoTime();
+        Long cpuStart = processCpuTimeNanos();
         try {
             BenchmarkExecution execution = workload.run();
             long elapsedNanos = System.nanoTime() - start;
+            double cpuUtilization = cpuUtilizationPercent(cpuStart, processCpuTimeNanos(), elapsedNanos);
             return BenchmarkRunResult.success(
                     runIndex,
                     warmup,
                     elapsedNanos,
                     completedSteps,
                     execution.checksum(),
-                    execution.instrumentation());
+                    execution.instrumentation(),
+                    cpuUtilization);
         } catch (Exception ex) {
             long elapsedNanos = System.nanoTime() - start;
-            return BenchmarkRunResult.failure(runIndex, warmup, elapsedNanos, failureMessage(ex));
+            double cpuUtilization = cpuUtilizationPercent(cpuStart, processCpuTimeNanos(), elapsedNanos);
+            return BenchmarkRunResult.failure(runIndex, warmup, elapsedNanos, failureMessage(ex), BenchmarkInstrumentation.zero(), cpuUtilization);
         }
     }
 
@@ -169,6 +174,7 @@ public final class BenchmarkRunner {
         int failedMeasuredRuns = 0;
         var elapsedSamples = new ArrayList<Double>();
         var throughputSamples = new ArrayList<Double>();
+        var cpuUtilizationSamples = new ArrayList<Double>();
         Long checksum = null;
         boolean checksumStable = true;
 
@@ -185,6 +191,9 @@ public final class BenchmarkRunner {
                     successfulMeasuredRuns++;
                     elapsedSamples.add(result.elapsedMillis());
                     throughputSamples.add(result.throughputStepsPerSecond());
+                    if (!Double.isNaN(result.cpuUtilizationPercent())) {
+                        cpuUtilizationSamples.add(result.cpuUtilizationPercent());
+                    }
                     if (checksum == null) {
                         checksum = result.checksum();
                     } else if (!checksum.equals(result.checksum())) {
@@ -204,6 +213,7 @@ public final class BenchmarkRunner {
         double maxElapsedMillis = max(elapsedSamples);
         double stddevElapsedMillis = stddev(elapsedSamples, meanElapsedMillis);
         double meanThroughput = mean(throughputSamples);
+        double meanCpuUtilization = mean(cpuUtilizationSamples);
 
         return new BenchmarkSummary(
                 config,
@@ -219,6 +229,7 @@ public final class BenchmarkRunner {
                 maxElapsedMillis,
                 stddevElapsedMillis,
                 meanThroughput,
+                meanCpuUtilization,
                 checksum == null ? 0L : checksum,
                 checksum != null && checksumStable);
     }
@@ -243,6 +254,29 @@ public final class BenchmarkRunner {
             return ex.getClass().getSimpleName();
         }
         return String.format(Locale.US, "%s: %s", ex.getClass().getSimpleName(), message);
+    }
+
+    private static Long processCpuTimeNanos() {
+        var osBean = ManagementFactory.getOperatingSystemMXBean();
+        if (osBean instanceof com.sun.management.OperatingSystemMXBean extendedBean) {
+            long value = extendedBean.getProcessCpuTime();
+            if (value >= 0L) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static double cpuUtilizationPercent(Long startCpuNanos, Long endCpuNanos, long elapsedNanos) {
+        if (startCpuNanos == null || endCpuNanos == null || elapsedNanos <= 0L) {
+            return Double.NaN;
+        }
+        long cpuDelta = Math.max(0L, endCpuNanos - startCpuNanos);
+        if (cpuDelta <= 0L) {
+            return Double.NaN;
+        }
+        int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
+        return cpuDelta * 100.0 / (elapsedNanos * processors);
     }
 
     private static double mean(List<Double> values) {

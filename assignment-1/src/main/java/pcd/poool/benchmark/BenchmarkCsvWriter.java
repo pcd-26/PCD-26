@@ -20,9 +20,9 @@ public final class BenchmarkCsvWriter {
     public static final String SUMMARY_FILE_NAME = "benchmark-summary.csv";
 
     private static final String RUNS_HEADER =
-            "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks";
+            "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks";
     private static final String SUMMARY_HEADER =
-            "implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,speedup,efficiency";
+            "implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,meanCpuUtilizationPercent,speedup,efficiency";
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_INSTANT;
 
     private BenchmarkCsvWriter() {
@@ -103,6 +103,7 @@ public final class BenchmarkCsvWriter {
                             Integer.toString(result.runIndex()),
                             formatDouble(result.elapsedMillis()),
                             formatDouble(result.throughputStepsPerSecond()),
+                            formatDouble(result.cpuUtilizationPercent()),
                             Long.toString(result.checksum()),
                             result.status().name(),
                             result.failureMessage() == null ? "" : result.failureMessage(),
@@ -138,6 +139,7 @@ public final class BenchmarkCsvWriter {
                         formatDouble(summary.maxElapsedMillis()),
                         formatDouble(summary.stddevElapsedMillis()),
                         formatDouble(summary.meanThroughputStepsPerSecond()),
+                        formatDouble(summary.meanCpuUtilizationPercent()),
                         formatDouble(speedup),
                         formatDouble(efficiency)))
                 .append(System.lineSeparator());
