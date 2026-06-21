@@ -27,6 +27,9 @@ controlled workloads and report timing data useful for the assignment report.
 - `BenchmarkSummary.java`
   Aggregate statistics for a benchmark session, kept separate from the raw
   per-run measurements.
+- `BenchmarkCsvWriter.java`
+  Appends raw runs and aggregate summaries to stable CSV files in the
+  configured output directory.
 - `HeadlessSimulationRunner.java`
   Runs a seeded simulation without GUI rendering and reports elapsed time,
   completed steps, and a final board-state hash for the selected execution
@@ -74,6 +77,9 @@ defaults, validation, and exported configuration values stay centralized.
 The measurement infrastructure is shared through `BenchmarkRunner`, which
 keeps warmup runs, measured runs, raw per-run results, and summary statistics
 separate.
+`BenchmarkCsvWriter` writes `benchmark-runs.csv` and `benchmark-summary.csv`
+with stable headers so the results can be fed directly into charts or report
+tables.
 
 ## Recommended comparison
 
