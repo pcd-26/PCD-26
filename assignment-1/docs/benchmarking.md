@@ -310,6 +310,13 @@ Benchmark reports should present:
 The report must clearly state whether a measurement comes from a headless run
 or a GUI run.
 
+Benchmark correctness should be checked on the same scenario across
+`sequential`, `threads`, and `executor` runs. When exact checksum equality is
+not sufficient, the benchmark should fall back to deterministic state
+invariants and clearly mark invalid or mismatched runs as failed. Failed runs
+must be excluded from aggregate statistics, but their failure reasons should
+still be exported for traceability.
+
 ## 9. Interpretation guidance
 
 - `sequential` is the semantic baseline.

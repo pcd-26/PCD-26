@@ -99,7 +99,12 @@ with stable headers so the results can be fed directly into charts or report
 tables. The raw run export includes the `syncTimeMillis`,
 `aggregationTimeMillis`, `taskSubmissionTimeMillis`,
 `joinOrFutureWaitMillis`, `lockAcquisitions`, and `submittedTasks` columns
-when instrumentation is enabled.
+when instrumentation is enabled. Failed runs are exported with `status=FAILED`
+and a `failureReason` column so correctness problems remain visible in the raw
+data.
+The full benchmark suite also checks that sequential, threaded, and
+executor-based runs agree on the same scenario before their results are used
+for aggregate comparisons.
 `RuntimeTelemetryCsvWriter` writes `environment.csv` with one stable header and
 one snapshot row so the benchmark report can state the runtime conditions.
 `GuiResponsivenessCsvWriter` writes `gui-responsiveness.csv` with the GUI

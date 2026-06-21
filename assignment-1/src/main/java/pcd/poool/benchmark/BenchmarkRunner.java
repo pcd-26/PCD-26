@@ -55,11 +55,21 @@ public final class BenchmarkRunner {
      * @param checksum checksum or state hash produced by the workload
      * @param instrumentation optional synchronization metrics for the run
      */
-    public record BenchmarkExecution(long checksum, BenchmarkInstrumentation instrumentation) {
+    public record BenchmarkExecution(
+            long checksum,
+            BenchmarkInstrumentation instrumentation,
+            BenchmarkStateFingerprint fingerprint) {
         public BenchmarkExecution {
             if (instrumentation == null) {
                 instrumentation = BenchmarkInstrumentation.zero();
             }
+            if (fingerprint == null) {
+                fingerprint = BenchmarkStateFingerprint.unknown(checksum);
+            }
+        }
+
+        public BenchmarkExecution(long checksum, BenchmarkInstrumentation instrumentation) {
+            this(checksum, instrumentation, BenchmarkStateFingerprint.unknown(checksum));
         }
     }
 
@@ -77,7 +87,8 @@ public final class BenchmarkRunner {
             boolean warmup,
             int completedSteps,
             BenchmarkWorkload workload) {
-        return time(runIndex, warmup, completedSteps, () -> new BenchmarkExecution(workload.run(), BenchmarkInstrumentation.zero()));
+        return time(runIndex, warmup, completedSteps,
+                () -> new BenchmarkExecution(workload.run(), BenchmarkInstrumentation.zero()));
     }
 
     /**

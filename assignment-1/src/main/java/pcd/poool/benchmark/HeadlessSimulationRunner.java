@@ -114,7 +114,10 @@ public final class HeadlessSimulationRunner {
         var board = new Board(new PhysicsEngine());
         board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
         runSimulationLoop(board, config, null, null);
-        return new BenchmarkRunner.BenchmarkExecution(checksum(board), BenchmarkInstrumentation.zero());
+        return new BenchmarkRunner.BenchmarkExecution(
+                checksum(board),
+                BenchmarkInstrumentation.zero(),
+                captureFingerprint(board));
     }
 
     private static BenchmarkRunner.BenchmarkExecution simulateThreaded(BenchmarkConfig config) {
@@ -137,7 +140,10 @@ public final class HeadlessSimulationRunner {
             var board = new Board(stepper);
             board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
             var instrumentation = runSimulationLoop(board, config, threadedEngine, taskBasedEngine);
-            return new BenchmarkRunner.BenchmarkExecution(checksum(board), instrumentation);
+            return new BenchmarkRunner.BenchmarkExecution(
+                    checksum(board),
+                    instrumentation,
+                    captureFingerprint(board));
         } finally {
             closeQuietly(closeable);
         }
@@ -244,6 +250,75 @@ public final class HeadlessSimulationRunner {
 
     private static long avalanche(long value) {
         return mix(value, value << 1);
+    }
+
+    private static BenchmarkStateFingerprint captureFingerprint(Board board) {
+        synchronized (board) {
+            var bounds = board.getBounds();
+            var player = board.getPlayerBall();
+            var bot = board.getBotBall();
+            var smallBalls = board.getBalls();
+            long hash = 0xD6E8FEB86659FD93L;
+            boolean hasNaN = false;
+            boolean withinBounds = true;
+
+            hash = mix(hash, board.getPocketedSmallBalls());
+            hash = mix(hash, board.isPlayerBallPocketed() ? 1L : 0L);
+            hash = mix(hash, board.isBotBallPocketed() ? 1L : 0L);
+            hash = mix(hash, smallBalls.size());
+
+            if (player != null) {
+                hash = mix(hash, fingerprintBall(player));
+                hasNaN |= hasNaN(player);
+                withinBounds &= isWithinBounds(player, bounds);
+            }
+
+            if (bot != null) {
+                hash = mix(hash, fingerprintBall(bot));
+                hasNaN |= hasNaN(bot);
+                withinBounds &= isWithinBounds(bot, bounds);
+            }
+
+            for (var ball : smallBalls) {
+                hash = mix(hash, fingerprintBall(ball));
+                hasNaN |= hasNaN(ball);
+                withinBounds &= isWithinBounds(ball, bounds);
+            }
+
+            return new BenchmarkStateFingerprint(
+                    checksum(board),
+                    avalanche(hash),
+                    smallBalls.size(),
+                    board.getPocketedSmallBalls(),
+                    board.isPlayerBallPocketed(),
+                    board.isBotBallPocketed(),
+                    hasNaN,
+                    withinBounds);
+        }
+    }
+
+    private static boolean hasNaN(Board.BallSnapshot ball) {
+        return Double.isNaN(ball.pos().x())
+                || Double.isNaN(ball.pos().y())
+                || Double.isNaN(ball.radius());
+    }
+
+    private static boolean isWithinBounds(Board.BallSnapshot ball, pcd.poool.model.physics.common.Boundary bounds) {
+        if (bounds == null) {
+            return true;
+        }
+        return ball.pos().x() >= bounds.x0() - 1e-9
+                && ball.pos().x() <= bounds.x1() + 1e-9
+                && ball.pos().y() >= bounds.y0() - 1e-9
+                && ball.pos().y() <= bounds.y1() + 1e-9;
+    }
+
+    private static long fingerprintBall(Board.BallSnapshot ball) {
+        long hash = 0x9E3779B97F4A7C15L;
+        hash = mix(hash, Double.doubleToLongBits(ball.pos().x()));
+        hash = mix(hash, Double.doubleToLongBits(ball.pos().y()));
+        hash = mix(hash, Double.doubleToLongBits(ball.radius()));
+        return hash;
     }
 
     /**
