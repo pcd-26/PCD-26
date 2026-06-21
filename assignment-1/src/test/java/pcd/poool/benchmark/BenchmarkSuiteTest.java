@@ -35,6 +35,25 @@ class BenchmarkSuiteTest {
     }
 
     @Test
+    void buildSmokeMatrixCreatesCiDirectoryAndLightweightConfigurations() throws Exception {
+        Instant timestamp = Instant.parse("2026-06-21T13:15:30Z");
+
+        var configs = BenchmarkSuite.buildSmokeMatrix(tempDir.resolve("ci"), timestamp);
+
+        assertEquals(5, configs.size());
+        Path expectedOutputDir = tempDir.resolve("ci").resolve("20260621-131530-000");
+        assertTrue(Files.isDirectory(expectedOutputDir));
+        assertTrue(configs.stream().allMatch(config -> config.outputDir().equals(expectedOutputDir)));
+        assertTrue(configs.stream().allMatch(config -> config.balls() == 100));
+        assertTrue(configs.stream().allMatch(config -> config.steps() == 1000));
+        assertTrue(configs.stream().allMatch(config -> config.warmupRuns() == 1));
+        assertTrue(configs.stream().allMatch(config -> config.measuredRuns() == 1));
+        assertEquals(1, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL).count());
+        assertEquals(2, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS).count());
+        assertEquals(2, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR).count());
+    }
+
+    @Test
     void runContinuesAfterScenarioFailureAndPreservesEarlierResults() throws Exception {
         Path outputDir = tempDir.resolve("suite-results");
         var configs = List.of(

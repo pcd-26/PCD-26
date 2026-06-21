@@ -20,7 +20,13 @@ public final class BenchmarkSuite {
 
     private static final List<Integer> BALL_COUNTS = List.of(100, 500, 1_000, 2_000, 5_000);
     private static final List<Integer> THREAD_COUNTS = List.of(1, 2, 4, 8, Math.max(1, Runtime.getRuntime().availableProcessors()));
+    private static final List<Integer> CI_SMOKE_THREAD_COUNTS = List.of(1, 2);
+    private static final int CI_SMOKE_BALLS = 100;
+    private static final int CI_SMOKE_STEPS = 1_000;
+    private static final int CI_SMOKE_WARMUP = 1;
+    private static final int CI_SMOKE_MEASURED = 1;
     private static final Path DEFAULT_RESULTS_ROOT = Path.of("benchmarks", "results");
+    private static final Path CI_RESULTS_ROOT = Path.of("benchmarks", "results", "ci");
     private static final DateTimeFormatter DIRECTORY_FORMATTER =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
 
@@ -33,9 +39,17 @@ public final class BenchmarkSuite {
      * @param args optional benchmark results root directory
      */
     public static void main(String[] args) {
-        Path resultsRoot = args.length > 0 ? Path.of(args[0]) : DEFAULT_RESULTS_ROOT;
+        Mode mode = Mode.FULL;
+        int argIndex = 0;
+        if (args.length > 0 && isModeToken(args[0])) {
+            mode = Mode.parse(args[0]);
+            argIndex = 1;
+        }
+        Path resultsRoot = args.length > argIndex
+                ? Path.of(args[argIndex])
+                : mode == Mode.SMOKE ? CI_RESULTS_ROOT : DEFAULT_RESULTS_ROOT;
         try {
-            var report = run(resultsRoot, Instant.now(), System.out, System.err);
+            var report = run(resultsRoot, Instant.now(), System.out, System.err, mode);
             System.out.printf(Locale.US,
                     "suite_completed output_dir=%s configs=%d failed_configs=%d%n",
                     report.outputDir(),
@@ -60,9 +74,26 @@ public final class BenchmarkSuite {
      * @throws Exception if directory creation fails
      */
     public static SuiteReport run(Path resultsRoot, Instant timestamp, PrintStream out, PrintStream err) throws Exception {
+        return run(resultsRoot, timestamp, out, err, Mode.FULL);
+    }
+
+    /**
+     * Runs the suite in the requested mode using the default headless
+     * benchmark workload.
+     *
+     * @param resultsRoot root directory under which the timestamped run
+     *                    directory will be created
+     * @param timestamp instant used to name the output directory
+     * @param out progress stream
+     * @param err error stream
+     * @param mode suite execution mode
+     * @return suite execution report
+     * @throws Exception if directory creation fails
+     */
+    public static SuiteReport run(Path resultsRoot, Instant timestamp, PrintStream out, PrintStream err, Mode mode) throws Exception {
         var correctnessGuard = new BenchmarkCorrectnessGuard();
         return run(
-                buildMatrix(resultsRoot, timestamp),
+                mode == Mode.SMOKE ? buildSmokeMatrix(resultsRoot, timestamp) : buildMatrix(resultsRoot, timestamp),
                 config -> correctnessGuard.wrap(config, () -> HeadlessSimulationRunner.simulateExecution(config)),
                 out,
                 err,
@@ -219,12 +250,81 @@ public final class BenchmarkSuite {
         return List.copyOf(configs);
     }
 
+    /**
+     * Builds the lightweight smoke benchmark matrix used by CI.
+     *
+     * @param resultsRoot root directory that will contain the timestamped run directory
+     * @param timestamp instant used to create the directory name
+     * @return benchmark configurations for the smoke suite
+     * @throws Exception if the output directory cannot be created
+     */
+    public static List<BenchmarkConfig> buildSmokeMatrix(Path resultsRoot, Instant timestamp) throws Exception {
+        Objects.requireNonNull(resultsRoot, "resultsRoot");
+        Objects.requireNonNull(timestamp, "timestamp");
+        Path outputDir = resultsRoot.resolve(DIRECTORY_FORMATTER.format(timestamp));
+        Files.createDirectories(outputDir);
+
+        var configs = new ArrayList<BenchmarkConfig>();
+        configs.add(baseConfig()
+                .withBalls(CI_SMOKE_BALLS)
+                .withSteps(CI_SMOKE_STEPS)
+                .withWarmupRuns(CI_SMOKE_WARMUP)
+                .withMeasuredRuns(CI_SMOKE_MEASURED)
+                .withThreads(1)
+                .withImplementation(BenchmarkConfig.ImplementationType.SEQUENTIAL)
+                .withOutputDir(outputDir));
+        for (var threads : CI_SMOKE_THREAD_COUNTS) {
+            configs.add(baseConfig()
+                    .withBalls(CI_SMOKE_BALLS)
+                    .withSteps(CI_SMOKE_STEPS)
+                    .withWarmupRuns(CI_SMOKE_WARMUP)
+                    .withMeasuredRuns(CI_SMOKE_MEASURED)
+                    .withThreads(threads)
+                    .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
+                    .withOutputDir(outputDir));
+        }
+        for (var threads : CI_SMOKE_THREAD_COUNTS) {
+            configs.add(baseConfig()
+                    .withBalls(CI_SMOKE_BALLS)
+                    .withSteps(CI_SMOKE_STEPS)
+                    .withWarmupRuns(CI_SMOKE_WARMUP)
+                    .withMeasuredRuns(CI_SMOKE_MEASURED)
+                    .withThreads(threads)
+                    .withImplementation(BenchmarkConfig.ImplementationType.EXECUTOR)
+                    .withOutputDir(outputDir));
+        }
+        return List.copyOf(configs);
+    }
+
     private static BenchmarkConfig baseConfig() {
         return BenchmarkConfig.defaults()
                 .withWarmupRuns(BenchmarkConfig.DEFAULT_WARMUP_RUNS)
                 .withMeasuredRuns(BenchmarkConfig.DEFAULT_MEASURED_RUNS)
                 .withGuiEnabled(false)
                 .withInstrumentationEnabled(true);
+    }
+
+    private static boolean isModeToken(String value) {
+        return value != null && switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "--smoke", "smoke", "--full", "full" -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Suite execution mode.
+     */
+    public enum Mode {
+        FULL,
+        SMOKE;
+
+        static Mode parse(String value) {
+            return switch (value.trim().toLowerCase(Locale.ROOT)) {
+                case "--smoke", "smoke" -> SMOKE;
+                case "--full", "full" -> FULL;
+                default -> throw new IllegalArgumentException("unknown suite mode: " + value);
+            };
+        }
     }
 
     private static List<BenchmarkRunResult> runScenario(
