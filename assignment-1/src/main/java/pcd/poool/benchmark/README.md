@@ -35,6 +35,9 @@ controlled workloads and report timing data useful for the assignment report.
   Reads `benchmark-summary.csv` and writes `speedup-table.csv`,
   `efficiency-table.csv`, and `scalability-table.csv` for report-ready
   post-processing.
+- `scripts/plot_benchmarks.py`
+  Generates report-ready PNG charts from the benchmark CSV files and stores
+  them in `benchmarks/charts/`.
 - `BenchmarkSuite.java`
   Executes the full benchmark matrix, prints progress, and stores all results
   in a timestamped directory under `benchmarks/results/`.
@@ -116,6 +119,9 @@ latency, delay, and update-rate measurements collected by the Swing benchmark.
 `BenchmarkScalabilityAnalyzer` consumes `benchmark-summary.csv` and produces
 speedup, efficiency, and scalability tables that can be copied directly into
 the report.
+`scripts/plot_benchmarks.py` turns the CSV exports into charts for execution
+time, throughput, speedup, efficiency, CPU utilization, synchronization
+overhead, and GUI latency.
 
 To execute the full benchmark matrix in one command:
 

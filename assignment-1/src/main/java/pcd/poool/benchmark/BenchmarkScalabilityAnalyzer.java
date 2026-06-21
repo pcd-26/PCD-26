@@ -32,11 +32,11 @@ public final class BenchmarkScalabilityAnalyzer {
     private static final double EPSILON = 1e-9;
 
     private static final String SPEEDUP_HEADER =
-            "balls,steps,implementation,threads,meanMillis,meanThroughput,sequentialMeanMillis,speedup,speedupBelowOne";
+            "balls,steps,implementation,threads,meanMillis,meanThroughput,meanCpuUtilizationPercent,sequentialMeanMillis,speedup,speedupBelowOne";
     private static final String EFFICIENCY_HEADER =
-            "balls,steps,implementation,threads,meanMillis,meanThroughput,sequentialMeanMillis,speedup,efficiency,efficiencyDegradation";
+            "balls,steps,implementation,threads,meanMillis,meanThroughput,meanCpuUtilizationPercent,sequentialMeanMillis,speedup,efficiency,efficiencyDegradation";
     private static final String SCALABILITY_HEADER =
-            "balls,steps,sequentialThroughput,threadedBestThreads,threadedBestThroughput,threadedSpeedup,threadedEfficiency,threadedSaturationPoint,threadedSlowerThanSequential,threadedEfficiencyDegradation,executorBestThreads,executorBestThroughput,executorSpeedup,executorEfficiency,executorSaturationPoint,executorSlowerThanThreaded,executorEfficiencyDegradation";
+            "balls,steps,sequentialThroughput,threadedBestThreads,threadedBestThroughput,threadedCpuUtilization,threadedSpeedup,threadedEfficiency,threadedSaturationPoint,threadedSlowerThanSequential,threadedEfficiencyDegradation,executorBestThreads,executorBestThroughput,executorCpuUtilization,executorSpeedup,executorEfficiency,executorSaturationPoint,executorSlowerThanThreaded,executorEfficiencyDegradation";
 
     private BenchmarkScalabilityAnalyzer() {
     }
@@ -118,6 +118,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     row.threads(),
                     row.meanMillis(),
                     row.meanThroughput(),
+                    row.meanCpuUtilization(),
                     baseline == null ? Double.NaN : baseline.meanMillis(),
                     speedup,
                     !Double.isNaN(speedup) && speedup < 1.0));
@@ -141,6 +142,7 @@ public final class BenchmarkScalabilityAnalyzer {
                         row.threads(),
                         row.meanMillis(),
                         row.meanThroughput(),
+                        row.meanCpuUtilization(),
                         row.sequentialMeanMillis(),
                         row.speedup(),
                         efficiency,
@@ -179,6 +181,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     sequential == null ? Double.NaN : sequential.meanThroughput(),
                     bestThreaded == null ? 0 : bestThreaded.threads(),
                     bestThreaded == null ? Double.NaN : bestThreaded.meanThroughput(),
+                    bestThreaded == null ? Double.NaN : bestThreaded.meanCpuUtilization(),
                     bestThreaded == null || sequential == null || bestThreaded.meanMillis() <= 0.0 ? Double.NaN : sequential.meanMillis() / bestThreaded.meanMillis(),
                     bestThreaded == null ? Double.NaN : (sequential == null || bestThreaded.meanMillis() <= 0.0 ? Double.NaN : (sequential.meanMillis() / bestThreaded.meanMillis()) / Math.max(1, bestThreaded.threads())),
                     saturationPoint(threadedRows),
@@ -186,6 +189,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     threadedEfficiencyDegradation,
                     bestExecutor == null ? 0 : bestExecutor.threads(),
                     bestExecutor == null ? Double.NaN : bestExecutor.meanThroughput(),
+                    bestExecutor == null ? Double.NaN : bestExecutor.meanCpuUtilization(),
                     bestExecutor == null || sequential == null || bestExecutor.meanMillis() <= 0.0 ? Double.NaN : sequential.meanMillis() / bestExecutor.meanMillis(),
                     bestExecutor == null ? Double.NaN : (sequential == null || bestExecutor.meanMillis() <= 0.0 ? Double.NaN : (sequential.meanMillis() / bestExecutor.meanMillis()) / Math.max(1, bestExecutor.threads())),
                     saturationPoint(executorRows),
@@ -348,6 +352,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     parseDouble(cells, columns, "maxMillis"),
                     parseDouble(cells, columns, "stdDevMillis"),
                     parseDouble(cells, columns, "meanThroughput"),
+                    parseDouble(cells, columns, "meanCpuUtilizationPercent"),
                     parseDouble(cells, columns, "speedup"),
                     parseDouble(cells, columns, "efficiency")));
         }
@@ -480,6 +485,7 @@ public final class BenchmarkScalabilityAnalyzer {
             double maxMillis,
             double stdDevMillis,
             double meanThroughput,
+            double meanCpuUtilization,
             double speedup,
             double efficiency) {
     }
@@ -491,6 +497,7 @@ public final class BenchmarkScalabilityAnalyzer {
             int threads,
             double meanMillis,
             double meanThroughput,
+            double meanCpuUtilization,
             double sequentialMeanMillis,
             double speedup,
             boolean speedupBelowOne) implements CsvRow {
@@ -504,6 +511,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     Integer.toString(threads),
                     formatDouble(meanMillis),
                     formatDouble(meanThroughput),
+                    formatDouble(meanCpuUtilization),
                     formatDouble(sequentialMeanMillis),
                     formatDouble(speedup),
                     formatBoolean(speedupBelowOne));
@@ -517,6 +525,7 @@ public final class BenchmarkScalabilityAnalyzer {
             int threads,
             double meanMillis,
             double meanThroughput,
+            double meanCpuUtilization,
             double sequentialMeanMillis,
             double speedup,
             double efficiency,
@@ -531,6 +540,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     Integer.toString(threads),
                     formatDouble(meanMillis),
                     formatDouble(meanThroughput),
+                    formatDouble(meanCpuUtilization),
                     formatDouble(sequentialMeanMillis),
                     formatDouble(speedup),
                     formatDouble(efficiency),
@@ -544,6 +554,7 @@ public final class BenchmarkScalabilityAnalyzer {
             double sequentialThroughput,
             int threadedBestThreads,
             double threadedBestThroughput,
+            double threadedCpuUtilization,
             double threadedSpeedup,
             double threadedEfficiency,
             int threadedSaturationPoint,
@@ -551,6 +562,7 @@ public final class BenchmarkScalabilityAnalyzer {
             boolean threadedEfficiencyDegradation,
             int executorBestThreads,
             double executorBestThroughput,
+            double executorCpuUtilization,
             double executorSpeedup,
             double executorEfficiency,
             int executorSaturationPoint,
@@ -565,6 +577,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     formatDouble(sequentialThroughput),
                     Integer.toString(threadedBestThreads),
                     formatDouble(threadedBestThroughput),
+                    formatDouble(threadedCpuUtilization),
                     formatDouble(threadedSpeedup),
                     formatDouble(threadedEfficiency),
                     Integer.toString(threadedSaturationPoint),
@@ -572,6 +585,7 @@ public final class BenchmarkScalabilityAnalyzer {
                     formatBoolean(threadedEfficiencyDegradation),
                     Integer.toString(executorBestThreads),
                     formatDouble(executorBestThroughput),
+                    formatDouble(executorCpuUtilization),
                     formatDouble(executorSpeedup),
                     formatDouble(executorEfficiency),
                     Integer.toString(executorSaturationPoint),

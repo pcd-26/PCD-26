@@ -326,6 +326,10 @@ For post-processing, the benchmark results can be analyzed from
 
 These tables are intended for direct inclusion in the report.
 
+The chart-generation script can then turn the benchmark CSV files into PNG
+figures for execution time, throughput, speedup, efficiency, CPU utilization,
+synchronization overhead, and GUI latency.
+
 ## 9. Interpretation guidance
 
 - `sequential` is the semantic baseline.
