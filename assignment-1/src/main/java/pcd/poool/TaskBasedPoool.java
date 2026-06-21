@@ -7,18 +7,20 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.config.MassiveBoardConf;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
-import pcd.poool.threaded.ThreadedGameRunner;
+import pcd.poool.taskbased.TaskBasedGameRunner;
+import pcd.poool.taskbased.TaskBasedGameSnapshot;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
 
 /**
- * Playable platform-thread entry point for Poool.
+ * Playable task-based entry point for Poool.
  *
- * <p>The GUI loop only renders immutable snapshots. Physics and game-rule
- * mutations are owned by {@link ThreadedGameRunner}'s controller platform
- * thread, while the bot can run as a separate active component.
+ * <p>The user-facing experience matches the threaded launcher, but the
+ * simulation is coordinated through {@link TaskBasedGameRunner} and its
+ * executor-backed physics engine. The runner owns the game model, while the
+ * UI loop only consumes immutable snapshots.
  */
-public class ThreadedPoool {
+public class TaskBasedPoool {
 
     private static final int VIEW_WIDTH = 1200;
     private static final int VIEW_HEIGHT = 800;
@@ -26,20 +28,24 @@ public class ThreadedPoool {
     private static final double BOT_PREVIEW_SCALE = 0.35;
     private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
 
-    /**
-     * Utility class; not meant to be instantiated.
-     */
-    private ThreadedPoool() {
+    private TaskBasedPoool() {
     }
 
     /**
-     * Starts the playable platform-thread game.
+     * Starts the playable task-based game.
      *
-     * @param args ignored
+     * @param args optional first argument: worker count for the task-based
+     *             physics engine
      */
     public static void main(String[] args) {
         var boardProfile = BOARD_PROFILE.createConfiguration();
-        var runnerRef = new AtomicReference<>(newStartedRunner(boardProfile));
+        var config = taskBasedConfig(args);
+        System.out.printf(
+                "Starting task-based Poool with %d physics workers (%s board)%n",
+                config.physicsWorkerCount(),
+                BOARD_PROFILE.name().toLowerCase());
+
+        var runnerRef = new AtomicReference<>(newStartedRunner(boardProfile, config));
         var restartRequested = new AtomicBoolean(false);
         var viewModel = new ViewModel();
         var view = new View(
@@ -51,7 +57,7 @@ public class ThreadedPoool {
                 () -> canStartHumanAiming(runnerRef.get()),
                 () -> viewModel.clearShotPreview(Player.HUMAN));
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-threaded-shutdown"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-task-based-shutdown"));
 
         long startTime = System.currentTimeMillis();
         int renderedFrames = 0;
@@ -59,7 +65,7 @@ public class ThreadedPoool {
         while (true) {
             long now = System.currentTimeMillis();
             if (restartRequested.getAndSet(false)) {
-                var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile));
+                var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile, config));
                 oldRunner.close();
                 viewModel.clearShotPreview();
                 startTime = now;
@@ -68,22 +74,42 @@ public class ThreadedPoool {
 
             renderedFrames++;
             int framePerSec = framePerSec(renderedFrames, startTime, now);
-            var threadedSnapshot = runnerRef.get().snapshot();
+            var taskSnapshot = runnerRef.get().snapshot();
             viewModel.update(
-                    threadedSnapshot.smallBalls(),
-                    threadedSnapshot.humanBall(),
-                    threadedSnapshot.botBall(),
-                    threadedSnapshot.holes(),
-                    threadedSnapshot.game(),
+                    taskSnapshot.smallBalls(),
+                    taskSnapshot.humanBall(),
+                    taskSnapshot.botBall(),
+                    taskSnapshot.holes(),
+                    taskSnapshot.game(),
                     framePerSec);
-            updateBotShotPreview(threadedSnapshot, viewModel);
+            updateBotShotPreview(taskSnapshot, viewModel);
             view.render();
             sleepFrame();
         }
     }
 
-    private static ThreadedGameRunner newStartedRunner(BoardConf boardProfile) {
-        var runner = new ThreadedGameRunner(boardProfile);
+    static TaskBasedGameRunner.Config taskBasedConfig(String[] args) {
+        int workerCount = parseWorkerCount(args);
+        return new TaskBasedGameRunner.Config(
+                pcd.poool.model.physics.common.PhysicsDefaults.FIXED_STEP_MILLIS,
+                true,
+                600,
+                workerCount);
+    }
+
+    static int parseWorkerCount(String[] args) {
+        if (args == null || args.length == 0) {
+            return Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+        }
+        int workers = Integer.parseInt(args[0]);
+        if (workers < 1) {
+            throw new IllegalArgumentException("worker count must be >= 1");
+        }
+        return workers;
+    }
+
+    private static TaskBasedGameRunner newStartedRunner(BoardConf boardProfile, TaskBasedGameRunner.Config config) {
+        var runner = new TaskBasedGameRunner(boardProfile, config);
         runner.start();
         return runner;
     }
@@ -111,22 +137,11 @@ public class ThreadedPoool {
         abstract BoardConf createConfiguration();
     }
 
-    /**
-     * Grants human aiming while the latest game snapshot reports that the human
-     * cue ball is stopped and therefore eligible for a new shot.
-     */
-    private static boolean canStartHumanAiming(ThreadedGameRunner runner) {
+    private static boolean canStartHumanAiming(TaskBasedGameRunner runner) {
         return runner.snapshot().game().humanCanShoot();
     }
 
-    /**
-     * Projects the bot shot preview stored in the immutable threaded snapshot
-     * into the shared view model without giving the bot direct access to Swing
-     * or mutable game entities.
-     */
-    private static void updateBotShotPreview(
-            pcd.poool.threaded.ThreadedGameSnapshot snapshot,
-            ViewModel viewModel) {
+    private static void updateBotShotPreview(TaskBasedGameSnapshot snapshot, ViewModel viewModel) {
         if (!snapshot.game().botCanShoot() || snapshot.botBall() == null) {
             viewModel.clearShotPreview(Player.BOT);
             return;

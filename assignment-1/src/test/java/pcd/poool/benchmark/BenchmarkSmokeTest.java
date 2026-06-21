@@ -28,4 +28,28 @@ class BenchmarkSmokeTest {
     void threadedPhysicsProfilingBenchmarkRunsForOneStep() {
         ThreadedPhysicsProfilingBenchmark.main(new String[] {"1", "2", "16"});
     }
+
+    @Test
+    @Timeout(5)
+    void taskBasedPhysicsBenchmarkRunsForOneStep() {
+        TaskBasedPhysicsBenchmark.main(new String[] {"1", "0", "1"});
+    }
+
+    @Test
+    @Timeout(5)
+    void taskBasedPhysicsProfilingBenchmarkRunsForOneStep() {
+        TaskBasedPhysicsProfilingBenchmark.main(new String[] {"1", "0", "1"});
+    }
+
+    @Test
+    @Timeout(5)
+    void taskVsThreadedPhysicsBenchmarkRunsForOneStep() {
+        TaskVsThreadedPhysicsBenchmark.main(new String[] {"1", "0", "1"});
+    }
+
+    @Test
+    @Timeout(10)
+    void completePhysicsBenchmarkRunsForOneStep() {
+        CompletePhysicsBenchmark.main(new String[] {"1", "0", "1"});
+    }
 }

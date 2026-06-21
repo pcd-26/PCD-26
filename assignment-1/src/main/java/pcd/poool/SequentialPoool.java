@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import pcd.poool.model.game.Player;
 import pcd.poool.model.game.GameModel;
-import pcd.poool.model.physics.PhysicsDefaults;
+import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;

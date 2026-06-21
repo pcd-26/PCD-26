@@ -36,7 +36,8 @@ immutable snapshot publication, and worker-based physics stepping.
 ## Relationships
 
 - Uses `model.game.GameModel` as the authoritative gameplay model.
-- Uses `model.physics.ThreadedPhysicsEngine` as the injected stepping strategy.
+- Uses `model.physics.threaded.ThreadedPhysicsEngine` as the injected stepping
+  strategy.
 - Is created by `ThreadedPoool`, which handles the Swing-facing launcher loop.
 - Receives user shots indirectly from `view.ViewFrame` through the launcher.
 - Publishes immutable state consumed by `ThreadedPoool` and by tests.

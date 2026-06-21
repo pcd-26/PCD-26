@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
-import pcd.poool.model.physics.Ball;
-import pcd.poool.model.physics.PhysicsDefaults;
+import pcd.poool.model.physics.common.Ball;
+import pcd.poool.model.physics.common.PhysicsDefaults;
 
 class BoardConfigurationTest {
 

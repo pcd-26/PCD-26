@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 import java.util.List;
 import pcd.poool.model.common.math.P2d;

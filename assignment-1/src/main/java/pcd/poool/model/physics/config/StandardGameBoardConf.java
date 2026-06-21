@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.physics.Ball;
-import pcd.poool.model.physics.BoardConf;
-import pcd.poool.model.physics.Boundary;
+import pcd.poool.model.physics.common.Ball;
+import pcd.poool.model.physics.common.BoardConf;
+import pcd.poool.model.physics.common.Boundary;
 
 /**
  * Small playable board configuration for the sequential game baseline.

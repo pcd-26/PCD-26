@@ -1,4 +1,4 @@
-package pcd.poool.model.physics;
+package pcd.poool.model.physics.common;
 
 /**
  * Strategy interface for advancing a mutable board state.

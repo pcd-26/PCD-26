@@ -294,8 +294,8 @@ Input/Bot
 Strategy:
 1. broad phase with spatial partitioning
 2. merge/deduplicate candidate pairs
-3. parallel computation of collision contributions
-4. deterministic aggregate application of per-ball deltas
+3. deterministic ordering of candidate pairs
+4. parallel resolution of independent collision rounds
 
 An intuitive platform-thread variant is to divide the board into spatial
 regions, for example four quadrants, and assign each region to a worker thread.
@@ -368,17 +368,23 @@ GameControllerThread
   |       spatial-grid buckets and collision candidates
   |-- barrier
   |-- merge and order candidate pairs
-  |-- start phase C on PhysicsWorkerThread[]
-  |       collision contribution accumulators
-  |-- barrier
-  |-- merge accumulated deltas deterministically
-  |-- start phase D on PhysicsWorkerThread[]
-  |       apply one final delta per ball
-  |-- barrier
+  |-- group ordered collision pairs into non-conflicting rounds
+  |-- for each round:
+  |       start phase C on PhysicsWorkerThread[] / Executor tasks
+  |           resolve disjoint collisions in parallel
+  |       barrier
   |-- resolve hole interactions
   |-- apply game rules and scoring
   |-- publish immutable snapshot
 ```
+
+The task-based implementation uses this round-based variant for small contact
+sets. For larger contact sets, where per-round task overhead would dominate, it
+switches to a task-based accumulated-impulse solver: each task computes
+position and velocity deltas in private arrays, the coordinator merges those
+arrays deterministically, and a final task phase applies disjoint ball ranges.
+This keeps the implementation based on the Executor Framework while making the
+expensive impulse/displacement computation parallel under load.
 
 The implemented threaded engine follows this staged idea. It does not let
 workers mutate colliding balls while they inspect candidate pairs. Instead, each

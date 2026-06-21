@@ -1,14 +1,14 @@
-package pcd.poool.threaded;
+package pcd.poool.taskbased;
 
 import java.util.List;
 import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.game.GameModel;
+import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.Hole;
 
 /**
- * Immutable state published by the platform-thread runner.
+ * Immutable state published by the task-based runner.
  *
  * @param game logical game snapshot
  * @param smallBalls immutable small-ball snapshots
@@ -17,7 +17,7 @@ import pcd.poool.model.physics.common.Hole;
  * @param holes immutable hole layout
  * @param botPreviewShot bot shot preview vector, or zero when the bot cannot shoot
  */
-public record ThreadedGameSnapshot(
+public record TaskBasedGameSnapshot(
         GameSnapshot game,
         List<Board.BallSnapshot> smallBalls,
         Board.BallSnapshot humanBall,
@@ -25,9 +25,9 @@ public record ThreadedGameSnapshot(
         List<Hole> holes,
         V2d botPreviewShot) {
 
-    static ThreadedGameSnapshot from(GameModel game) {
+    static TaskBasedGameSnapshot from(GameModel game) {
         var board = game.board();
-        return new ThreadedGameSnapshot(
+        return new TaskBasedGameSnapshot(
                 game.snapshot(),
                 List.copyOf(board.getBalls()),
                 board.getPlayerBall(),
