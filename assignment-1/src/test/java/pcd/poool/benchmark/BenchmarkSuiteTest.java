@@ -81,8 +81,10 @@ class BenchmarkSuiteTest {
 
         Path runsFile = outputDir.resolve(BenchmarkCsvWriter.RUNS_FILE_NAME);
         Path summaryFile = outputDir.resolve(BenchmarkCsvWriter.SUMMARY_FILE_NAME);
+        Path environmentFile = outputDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME);
         assertTrue(Files.exists(runsFile));
         assertTrue(Files.exists(summaryFile));
+        assertTrue(Files.exists(environmentFile));
 
         var runsLines = Files.readAllLines(runsFile);
         var summaryLines = Files.readAllLines(summaryFile);

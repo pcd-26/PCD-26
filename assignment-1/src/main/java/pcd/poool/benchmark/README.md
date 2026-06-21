@@ -33,6 +33,12 @@ controlled workloads and report timing data useful for the assignment report.
 - `BenchmarkSuite.java`
   Executes the full benchmark matrix, prints progress, and stores all results
   in a timestamped directory under `benchmarks/results/`.
+- `RuntimeTelemetry.java`
+  Captures JVM, OS, heap, CPU-count, and optional process CPU-time metadata
+  for benchmark interpretation.
+- `RuntimeTelemetryCsvWriter.java`
+  Exports the telemetry snapshot to `environment.csv` alongside benchmark
+  results.
 - `HeadlessSimulationRunner.java`
   Runs a seeded simulation without GUI rendering and reports elapsed time,
   completed steps, and a final board-state hash for the selected execution
@@ -83,6 +89,8 @@ separate.
 `BenchmarkCsvWriter` writes `benchmark-runs.csv` and `benchmark-summary.csv`
 with stable headers so the results can be fed directly into charts or report
 tables.
+`RuntimeTelemetryCsvWriter` writes `environment.csv` with one stable header and
+one snapshot row so the benchmark report can state the runtime conditions.
 
 To execute the full benchmark matrix in one command:
 
