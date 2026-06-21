@@ -52,4 +52,10 @@ class BenchmarkSmokeTest {
     void completePhysicsBenchmarkRunsForOneStep() {
         CompletePhysicsBenchmark.main(new String[] {"1", "0", "1"});
     }
+
+    @Test
+    @Timeout(5)
+    void headlessSimulationRunnerRunsForOneStep() {
+        HeadlessSimulationRunner.main(new String[] {"sequential", "10", "2", "1", "123"});
+    }
 }
