@@ -1,18 +1,9 @@
 package pcd.poool.benchmark;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
-import java.util.SplittableRandom;
-import pcd.poool.model.common.math.P2d;
-import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
-import pcd.poool.model.physics.common.BoardConf;
-import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
-import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.model.physics.sequential.PhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
@@ -29,11 +20,6 @@ public final class HeadlessSimulationRunner {
 
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
     private static final long STEP_MILLIS = PhysicsDefaults.FIXED_STEP_MILLIS;
-    private static final Boundary BOARD_BOUNDARY = new StandardGameBoardConf().getBoardBoundary();
-    private static final double INNER_LEFT = -1.20;
-    private static final double INNER_RIGHT = 1.20;
-    private static final double INNER_BOTTOM = -0.55;
-    private static final double INNER_TOP = 0.55;
     private static volatile long blackhole;
 
     private HeadlessSimulationRunner() {
@@ -126,7 +112,7 @@ public final class HeadlessSimulationRunner {
 
     private static BenchmarkRunner.BenchmarkExecution simulateSequential(BenchmarkConfig config) {
         var board = new Board(new PhysicsEngine());
-        board.init(new SeededBoardConf(config.balls(), config.seed()));
+        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
         runSimulationLoop(board, config, null, null);
         return new BenchmarkRunner.BenchmarkExecution(checksum(board), BenchmarkInstrumentation.zero());
     }
@@ -149,7 +135,7 @@ public final class HeadlessSimulationRunner {
         try {
             PhysicsStepper stepper = threadedEngine != null ? threadedEngine : taskBasedEngine;
             var board = new Board(stepper);
-            board.init(new SeededBoardConf(config.balls(), config.seed()));
+            board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
             var instrumentation = runSimulationLoop(board, config, threadedEngine, taskBasedEngine);
             return new BenchmarkRunner.BenchmarkExecution(checksum(board), instrumentation);
         } finally {
@@ -236,7 +222,7 @@ public final class HeadlessSimulationRunner {
         }
     }
 
-    private static long hashBall(long hash, Ball ball) {
+    private static long hashBall(long hash, pcd.poool.model.physics.common.Ball ball) {
         hash = mix(hash, Double.doubleToLongBits(ball.getPos().x()));
         hash = mix(hash, Double.doubleToLongBits(ball.getPos().y()));
         hash = mix(hash, Double.doubleToLongBits(ball.getVel().x()));
@@ -281,87 +267,6 @@ public final class HeadlessSimulationRunner {
          */
         public double elapsedMillis() {
             return elapsedNanos / NANOS_PER_MILLISECOND;
-        }
-    }
-
-    private static final class SeededBoardConf implements BoardConf {
-
-        private static final double CUE_RADIUS = 0.05;
-        private static final double MAX_SMALL_BALL_RADIUS = 0.05;
-        private static final double MIN_SMALL_BALL_RADIUS = 0.004;
-        private static final double JITTER_FRACTION = 0.18;
-        private static final double VELOCITY_SCALE = 0.18;
-
-        private final int ballCount;
-        private final long seed;
-        private final List<Ball> smallBalls;
-
-        private SeededBoardConf(int ballCount, long seed) {
-            this.ballCount = ballCount;
-            this.seed = seed;
-            this.smallBalls = buildSmallBalls();
-        }
-
-        @Override
-        public Boundary getBoardBoundary() {
-            return BOARD_BOUNDARY;
-        }
-
-        @Override
-        public Ball getPlayerBall() {
-            return Ball.ofUniformMaterial(new P2d(0.0, -0.72), CUE_RADIUS, new V2d(0, 0));
-        }
-
-        @Override
-        public Ball getBotBall() {
-            return Ball.ofUniformMaterial(new P2d(0.0, 0.62), CUE_RADIUS, new V2d(0, 0));
-        }
-
-        @Override
-        public List<Ball> getSmallBalls() {
-            return List.copyOf(smallBalls);
-        }
-
-        private List<Ball> buildSmallBalls() {
-            if (ballCount == 0) {
-                return List.of();
-            }
-
-            double usableWidth = INNER_RIGHT - INNER_LEFT;
-            double usableHeight = INNER_TOP - INNER_BOTTOM;
-            int columns = Math.max(1, (int) Math.ceil(Math.sqrt(ballCount * (usableWidth / usableHeight))));
-            int rows = Math.max(1, (int) Math.ceil((double) ballCount / columns));
-            double cellWidth = usableWidth / columns;
-            double cellHeight = usableHeight / rows;
-            double radius = Math.max(
-                    MIN_SMALL_BALL_RADIUS,
-                    Math.min(MAX_SMALL_BALL_RADIUS, Math.min(cellWidth, cellHeight) * 0.22));
-            double jitterX = cellWidth * JITTER_FRACTION;
-            double jitterY = cellHeight * JITTER_FRACTION;
-            double velocityLimit = Math.min(VELOCITY_SCALE, Math.min(cellWidth, cellHeight));
-            var rng = new SplittableRandom(seed);
-            var balls = new ArrayList<Ball>(ballCount);
-
-            for (int index = 0; index < ballCount; index++) {
-                int row = index / columns;
-                int column = index % columns;
-                double baseX = INNER_LEFT + (column + 0.5) * cellWidth;
-                double baseY = INNER_BOTTOM + (row + 0.5) * cellHeight;
-                double x = clamp(baseX + centeredJitter(rng, jitterX), INNER_LEFT + radius, INNER_RIGHT - radius);
-                double y = clamp(baseY + centeredJitter(rng, jitterY), INNER_BOTTOM + radius, INNER_TOP - radius);
-                double vx = centeredJitter(rng, velocityLimit);
-                double vy = centeredJitter(rng, velocityLimit);
-                balls.add(Ball.ofUniformMaterial(new P2d(x, y), radius, new V2d(vx, vy)));
-            }
-            return balls;
-        }
-
-        private double centeredJitter(SplittableRandom rng, double amplitude) {
-            return (rng.nextDouble() * 2.0 - 1.0) * amplitude;
-        }
-
-        private double clamp(double value, double min, double max) {
-            return Math.max(min, Math.min(max, value));
         }
     }
 }
