@@ -182,11 +182,20 @@ jobs:
           cp "$CHART_ZIP" "$RELEASE_ZIP"
           RELEASE_TAG="latest"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber
+            :
           else
-            gh release create "$RELEASE_TAG" "$RELEASE_ZIP" \
+            gh release create "$RELEASE_TAG" \
               --target "$GITHUB_SHA" \
               --title "Latest Assignment Packages" \
-              --notes "Shared release for assignment delivery zips and benchmark chart archives. New assets are appended on successful workflow runs." \
-            || gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber
+              --notes "Shared release for assignment delivery zips and benchmark chart archives. New assets are appended on successful workflow runs."
           fi
+
+          for attempt in 1 2 3 4 5; do
+            if gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber; then
+              exit 0
+            fi
+            sleep "$attempt"
+          done
+
+          echo "failed to upload release asset after retries" >&2
+          exit 1
