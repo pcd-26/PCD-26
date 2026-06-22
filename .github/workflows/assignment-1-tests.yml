@@ -1,17 +1,25 @@
-name: Assignment 1 Maven CI
+name: Assignment 1 Tests CI
 
 on:
   pull_request:
     paths:
       - "assignment-1/**"
-      - ".github/workflows/assignment-1-maven.yml"
+      - "scripts/**"
+      - "requirements.txt"
+      - ".github/workflows/assignment-1-tests.yml"
+      - ".github/workflows/assignment-1-benchmark.yml"
+      - ".github/workflows/assignment-1-plots.yml"
   push:
     branches:
       - main
       - dev
     paths:
       - "assignment-1/**"
-      - ".github/workflows/assignment-1-maven.yml"
+      - "scripts/**"
+      - "requirements.txt"
+      - ".github/workflows/assignment-1-tests.yml"
+      - ".github/workflows/assignment-1-benchmark.yml"
+      - ".github/workflows/assignment-1-plots.yml"
   workflow_dispatch:
     inputs:
       test_selector:
@@ -45,16 +53,3 @@ jobs:
           else
             mvn -B clean verify
           fi
-
-      - name: Run benchmark smoke suite
-        if: github.event_name != 'workflow_dispatch' || inputs.test_selector == ''
-        working-directory: .
-        run: java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --smoke benchmarks/results/ci
-
-      - name: Upload benchmark CSV artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: assignment-1-benchmark-ci
-          path: benchmarks/results/ci/**
-          if-no-files-found: ignore

@@ -145,7 +145,7 @@ The runner reports elapsed time, completed steps, and a final state hash so
 the same scenario can be compared across implementations without opening the
 GUI.
 
-The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
+The GitHub Actions workflow `Assignment 1 Tests CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs. The benchmark and plot workflows are split out separately so the benchmark CSV generation and chart rendering can be triggered and validated independently.
 
 Additional architectural notes, including the feasibility assessment for the
 platform-thread implementation and the proposed spatial decomposition strategy,
