@@ -126,12 +126,14 @@ overhead, and GUI latency.
 The GitHub Actions workflows are split into three lanes: the tests workflow
 handles Maven verification on pull requests and pushes, the benchmark workflow
 runs the benchmark suite and uploads the CSV results, and the plots workflow
-downloads those CSV files, installs the Python plotting dependencies from
-`requirements.txt`, and generates the report-ready PNG charts. The plots
-workflow uploads the charts as a separate timestamped artifact so they stay
-outside the assignment zip and can be reused later when preparing the final
-document. CI benchmark numbers are only for regression checks; the report
-should use locally or controlled-machine generated results.
+downloads those CSV files, compiles the Java analyzers, generates the
+`speedup-table.csv` and `efficiency-table.csv` analysis outputs, installs the
+Python plotting dependencies from `requirements.txt`, and then generates the
+report-ready PNG charts. The plots workflow uploads the charts as a separate
+timestamped artifact so they stay outside the assignment zip and can be reused
+later when preparing the final document. CI benchmark numbers are only for
+regression checks; the report should use locally or controlled-machine
+generated results.
 
 To execute the full benchmark matrix in one command:
 
