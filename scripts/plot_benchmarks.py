@@ -251,7 +251,7 @@ def plot_thread_metric_panels(
         sharey=True,
         constrained_layout=True,
     )
-    fig.suptitle(title, fontsize=15, fontweight="bold")
+    fig.suptitle(title, fontsize=15, fontweight="bold", y=0.99)
     axes_list = axes.flatten()
 
     for index, ball in enumerate(balls_values):
@@ -283,7 +283,14 @@ def plot_thread_metric_panels(
 
     handles, labels = axes_list[0].get_legend_handles_labels()
     if handles:
-        fig.legend(handles, labels, loc="upper center", ncol=len(handles), frameon=False)
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.955),
+            ncol=len(handles),
+            frameon=False,
+        )
     save_figure(fig, output_file)
 
 
