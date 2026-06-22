@@ -162,9 +162,9 @@ timestamped `Assignment-01-<stamp>.zip` artifact with the delivery structure
 required below. On `main`, it also publishes the same zip as a timestamped
 GitHub Release asset so each update keeps its own delivery snapshot instead of
 overwriting the previous one. Benchmark charts are published separately by the
-plot workflow as a timestamped artifact outside the assignment zip, so they can
-be reused later when assembling the final report document. The package includes
-the assignment project files needed to build and inspect the solution,
+benchmark workflow as a timestamped artifact outside the assignment zip, so
+they can be reused later when assembling the final report document. The package
+includes the assignment project files needed to build and inspect the solution,
 excluding internal documentation, the LaTeX report source directory, and build
 outputs.
 

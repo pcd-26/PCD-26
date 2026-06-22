@@ -433,6 +433,7 @@ After the benchmark CSV files are available, generate the charts with:
 
 ```bash
 python -m pip install -r requirements.txt
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkScalabilityAnalyzer benchmarks/results/<timestamp>
 python scripts/plot_benchmarks.py --input-dir benchmarks/results/<timestamp> --output-dir benchmarks/charts
 ```
 
