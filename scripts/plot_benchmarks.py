@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
 import struct
 import zlib
 from pathlib import Path
@@ -29,6 +30,66 @@ IMPL_COLORS = {
 BALL_ORDER = [100, 500, 1000, 2000, 5000]
 THREAD_ORDER = [1, 2, 4, 8]
 HAS_MATPLOTLIB = plt is not None
+REPORT_CHART_DPI = 300
+
+if HAS_MATPLOTLIB:
+    matplotlib.rcParams.update(
+        {
+            "font.family": "DejaVu Sans",
+            "axes.titlesize": 15,
+            "axes.titleweight": "bold",
+            "axes.labelsize": 12,
+            "legend.fontsize": 11,
+            "xtick.labelsize": 10,
+            "ytick.labelsize": 10,
+            "figure.titlesize": 17,
+        }
+    )
+
+
+def warn(message: str) -> None:
+    print(f"warning: {message}", file=sys.stderr)
+
+
+def remove_output_pair(output_file: Path) -> None:
+    for candidate in (output_file, output_file.with_suffix(".svg")):
+        if candidate.exists():
+            candidate.unlink()
+
+
+def save_report_figure(fig: plt.Figure, output_file: Path) -> None:
+    fig.savefig(output_file, dpi=REPORT_CHART_DPI, bbox_inches="tight")
+    fig.savefig(output_file.with_suffix(".svg"), dpi=REPORT_CHART_DPI, bbox_inches="tight")
+    plt.close(fig)
+
+
+def complete_gui_data(gui: pd.DataFrame) -> tuple[bool, str | None]:
+    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis"}
+    missing = required - set(gui.columns)
+    if missing:
+        return False, f"missing required columns: {sorted(missing)}"
+
+    if gui.empty:
+        return False, "no GUI responsiveness rows were exported"
+
+    implementations = set(gui["implementation"].dropna().astype(str).str.lower())
+    missing_impls = [implementation for implementation in IMPL_ORDER if implementation not in implementations]
+    if missing_impls:
+        return False, f"missing implementations: {missing_impls}"
+
+    balls_values = set(gui["balls"].dropna().astype(int).tolist())
+    missing_balls = [ball for ball in BALL_ORDER if ball not in balls_values]
+    if missing_balls:
+        return False, f"missing ball counts: {missing_balls}"
+
+    return True, None
+
+
+def should_plot_gui_latency(gui: pd.DataFrame) -> bool:
+    complete, reason = complete_gui_data(gui)
+    if not complete:
+        warn(f"Skipping GUI latency chart: {reason}")
+    return complete
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,103 +124,95 @@ def main() -> None:
     if HAS_MATPLOTLIB:
         plot_best_by_ball(
             summary,
-            output_dir / "execution-time-vs-balls.png",
+            output_dir / "01_best_execution_time_vs_balls.png",
             value_col="meanMillis",
             ylabel="Mean execution time (ms)",
-            title="Execution Time vs Balls",
+            title="Best execution time vs number of balls",
             best_agg="min",
-            include_thread_annotations=True,
         )
         plot_best_by_ball(
             summary,
-            output_dir / "throughput-vs-balls.png",
+            output_dir / "02_best_throughput_vs_balls.png",
             value_col="meanThroughput",
             ylabel="Mean throughput (steps/s)",
-            title="Throughput vs Balls",
+            title="Best throughput vs number of balls",
             best_agg="max",
-            include_thread_annotations=True,
         )
 
         plot_thread_metric_panels(
             speedup,
-            output_dir / "speedup-vs-thread-count.png",
+            output_dir / "03_speedup_vs_thread_count.png",
             value_col="speedup",
             ylabel="Speedup",
-            title="Speedup vs Thread Count",
+            title="Speedup vs worker threads",
             add_reference_line=1.0,
+            implementations=("threads", "executor"),
         )
         plot_thread_metric_panels(
             efficiency,
-            output_dir / "efficiency-vs-thread-count.png",
+            output_dir / "04_efficiency_vs_thread_count.png",
             value_col="efficiency",
             ylabel="Efficiency",
-            title="Efficiency vs Thread Count",
+            title="Efficiency vs worker threads",
             add_reference_line=1.0,
+            implementations=("threads", "executor"),
         )
         plot_thread_metric_panels(
             summary,
-            output_dir / "cpu-utilization-vs-thread-count.png",
+            output_dir / "06_cpu_utilization_vs_thread_count.png",
             value_col="meanCpuUtilizationPercent",
             ylabel="CPU utilization (%)",
-            title="CPU Utilization vs Thread Count",
+            title="CPU utilization vs worker threads",
         )
-        plot_sync_overhead_panels(
+        plot_coordination_overhead_panels(
             runs,
-            output_dir / "synchronization-overhead-vs-thread-count.png",
+            output_dir / "05_coordination_overhead_vs_thread_count.png",
         )
-        if gui.empty:
-            write_placeholder_chart(
-                output_dir / "gui-latency-vs-balls.png",
-                "GUI Latency vs Balls",
-            )
-        else:
+        if should_plot_gui_latency(gui):
             plot_gui_latency(
                 gui,
-                output_dir / "gui-latency-vs-balls.png",
+                output_dir / "07_gui_latency_vs_balls.png",
             )
     else:
         fallback_plot_best_by_ball(
             summary,
-            output_dir / "execution-time-vs-balls.png",
+            output_dir / "01_best_execution_time_vs_balls.png",
             value_col="meanMillis",
             best_agg="min",
         )
         fallback_plot_best_by_ball(
             summary,
-            output_dir / "throughput-vs-balls.png",
+            output_dir / "02_best_throughput_vs_balls.png",
             value_col="meanThroughput",
             best_agg="max",
         )
         fallback_plot_thread_metric_panels(
             speedup,
-            output_dir / "speedup-vs-thread-count.png",
+            output_dir / "03_speedup_vs_thread_count.png",
             value_col="speedup",
             add_reference_line=1.0,
+            implementations=("threads", "executor"),
         )
         fallback_plot_thread_metric_panels(
             efficiency,
-            output_dir / "efficiency-vs-thread-count.png",
+            output_dir / "04_efficiency_vs_thread_count.png",
             value_col="efficiency",
             add_reference_line=1.0,
+            implementations=("threads", "executor"),
         )
         fallback_plot_thread_metric_panels(
             summary,
-            output_dir / "cpu-utilization-vs-thread-count.png",
+            output_dir / "06_cpu_utilization_vs_thread_count.png",
             value_col="meanCpuUtilizationPercent",
         )
-        fallback_plot_sync_overhead_panels(
+        fallback_plot_coordination_overhead_panels(
             runs,
-            output_dir / "synchronization-overhead-vs-thread-count.png",
+            output_dir / "05_coordination_overhead_vs_thread_count.png",
         )
-        if gui.empty:
-            write_placeholder_chart(
-                output_dir / "gui-latency-vs-balls.png",
-                "GUI Latency vs Balls",
-            )
-        else:
+        if should_plot_gui_latency(gui):
             fallback_plot_gui_latency(
                 gui,
-                output_dir / "gui-latency-vs-balls.png",
+                output_dir / "07_gui_latency_vs_balls.png",
             )
 
     print(f"charts_written output_dir={output_dir}")
@@ -180,15 +233,15 @@ def plot_best_by_ball(
     ylabel: str,
     title: str,
     best_agg: str,
-    include_thread_annotations: bool = False,
 ) -> None:
     required = {"balls", "implementation", value_col, "threads"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
 
-    fig, ax = plt.subplots(figsize=(10, 6), constrained_layout=True)
-    fig.suptitle(title, fontsize=15, fontweight="bold")
+    fig, ax = plt.subplots(figsize=(10.5, 6.2), constrained_layout=True)
+    fig.suptitle(title, fontsize=16, fontweight="bold", y=0.98)
+    ax.set_title("Best measured worker-thread count per implementation", fontsize=10, pad=10)
     for implementation in IMPL_ORDER:
         subset = df[df["implementation"] == implementation].copy()
         if subset.empty:
@@ -206,24 +259,13 @@ def plot_best_by_ball(
             color=IMPL_COLORS.get(implementation),
             label=implementation,
         )
-        if include_thread_annotations:
-            for _, row in best.iterrows():
-                ax.annotate(
-                    f"t{int(row['threads'])}",
-                    (row["balls"], row[value_col]),
-                    textcoords="offset points",
-                    xytext=(0, 7),
-                    ha="center",
-                    fontsize=8,
-                    color=IMPL_COLORS.get(implementation),
-                )
 
-    ax.set_xlabel("Balls")
+    ax.set_xlabel("Number of balls")
     ax.set_ylabel(ylabel)
     ax.set_xticks(BALL_ORDER)
     ax.grid(True, alpha=0.25)
     ax.legend(frameon=False)
-    save_figure(fig, output_file)
+    save_report_figure(fig, output_file)
 
 
 def plot_thread_metric_panels(
@@ -233,6 +275,7 @@ def plot_thread_metric_panels(
     ylabel: str,
     title: str,
     add_reference_line: float | None = None,
+    implementations: Sequence[str] = IMPL_ORDER,
 ) -> None:
     required = {"balls", "implementation", "threads", value_col}
     missing = required - set(df.columns)
@@ -246,18 +289,19 @@ def plot_thread_metric_panels(
     fig, axes = plt.subplots(
         nrows=2,
         ncols=3,
-        figsize=(15, 8),
+        figsize=(15.5, 8.9),
         sharex=False,
         sharey=True,
         constrained_layout=True,
     )
-    fig.suptitle(title, fontsize=15, fontweight="bold", y=0.99)
+    fig.set_constrained_layout_pads(h_pad=0.12, hspace=0.12, w_pad=0.04, wspace=0.04)
+    fig.suptitle(title, fontsize=16, fontweight="bold", y=1.02)
     axes_list = axes.flatten()
 
     for index, ball in enumerate(balls_values):
         ax = axes_list[index]
         subset = df[df["balls"] == ball]
-        for implementation in IMPL_ORDER:
+        for implementation in implementations:
             impl_subset = subset[subset["implementation"] == implementation].copy()
             if impl_subset.empty:
                 continue
@@ -273,7 +317,7 @@ def plot_thread_metric_panels(
         if add_reference_line is not None:
             ax.axhline(add_reference_line, color="#666666", linestyle="--", linewidth=1.0, alpha=0.7)
         ax.set_title(f"{ball} balls", fontsize=11)
-        ax.set_xlabel("Threads")
+        ax.set_xlabel("Worker threads")
         ax.set_ylabel(ylabel)
         ax.set_xticks(sorted(set(int(v) for v in subset["threads"].tolist())))
         ax.grid(True, alpha=0.25)
@@ -286,15 +330,15 @@ def plot_thread_metric_panels(
         fig.legend(
             handles,
             labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, 0.955),
+            loc="lower center",
+            bbox_to_anchor=(0.5, 0.0),
             ncol=len(handles),
             frameon=False,
         )
-    save_figure(fig, output_file)
+    save_report_figure(fig, output_file)
 
 
-def plot_sync_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
+def plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
     required = {
         "balls",
         "implementation",
@@ -323,18 +367,13 @@ def plot_sync_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
         output_file,
         value_col="coordinationMillis",
         ylabel="Coordination time (ms)",
-        title="Synchronization Overhead vs Thread Count",
+        title="Coordination overhead vs worker threads",
     )
 
 
 def plot_gui_latency(gui: pd.DataFrame, output_file: Path) -> None:
-    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis"}
-    missing = required - set(gui.columns)
-    if missing:
-        raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
-
-    fig, ax = plt.subplots(figsize=(10, 6), constrained_layout=True)
-    fig.suptitle("GUI Latency vs Balls", fontsize=15, fontweight="bold")
+    fig, ax = plt.subplots(figsize=(10.5, 6.2), constrained_layout=True)
+    fig.suptitle("GUI update latency vs number of balls", fontsize=16, fontweight="bold", y=0.98)
 
     for implementation in IMPL_ORDER:
         subset = gui[gui["implementation"] == implementation].copy()
@@ -355,30 +394,12 @@ def plot_gui_latency(gui: pd.DataFrame, output_file: Path) -> None:
             label=implementation,
         )
 
-    ax.set_xlabel("Balls")
+    ax.set_xlabel("Number of balls")
     ax.set_ylabel("Mean update latency (ms)")
     ax.set_xticks(BALL_ORDER)
     ax.grid(True, alpha=0.25)
     ax.legend(frameon=False)
-    save_figure(fig, output_file)
-
-
-def save_figure(fig: plt.Figure, output_file: Path) -> None:
-    fig.savefig(output_file, dpi=180)
-    plt.close(fig)
-
-
-def write_placeholder_chart(output_file: Path, title: str) -> None:
-    canvas = Canvas(1200, 800)
-    canvas.fill((255, 255, 255))
-    canvas.frame_title(title)
-    canvas.rect(140, 140, 1060, 660, (210, 210, 210))
-    canvas.line(220, 620, 1020, 620, (130, 130, 130))
-    canvas.line(220, 620, 220, 220, (130, 130, 130))
-    canvas.circle(380, 500, 14, (31, 119, 180))
-    canvas.circle(600, 420, 14, (214, 39, 40))
-    canvas.circle(820, 330, 14, (44, 160, 44))
-    canvas.save(output_file)
+    save_report_figure(fig, output_file)
 
 
 def fallback_plot_best_by_ball(
@@ -400,8 +421,8 @@ def fallback_plot_best_by_ball(
         grouped.append((implementation, best["balls"].tolist(), best[value_col].tolist()))
     render_simple_line_chart(
         output_file,
-        title="Execution Time vs Balls" if value_col == "meanMillis" else "Throughput vs Balls",
-        x_label="Balls",
+        title="Best execution time vs number of balls" if value_col == "meanMillis" else "Best throughput vs number of balls",
+        x_label="Number of balls",
         y_label="Value",
         series=grouped,
     )
@@ -412,6 +433,7 @@ def fallback_plot_thread_metric_panels(
     output_file: Path,
     value_col: str,
     add_reference_line: float | None = None,
+    implementations: Sequence[str] = IMPL_ORDER,
 ) -> None:
     balls_values = [ball for ball in BALL_ORDER if ball in set(df["balls"].tolist())]
     if not balls_values:
@@ -420,7 +442,7 @@ def fallback_plot_thread_metric_panels(
     for ball in balls_values:
         subset = df[df["balls"] == ball]
         series = []
-        for implementation in IMPL_ORDER:
+        for implementation in implementations:
             impl_subset = subset[subset["implementation"] == implementation].copy()
             if impl_subset.empty:
                 continue
@@ -429,15 +451,15 @@ def fallback_plot_thread_metric_panels(
         panels.append((f"{ball} balls", series))
     render_simple_panel_chart(
         output_file,
-        title="Metric vs Thread Count",
+        title="Metric vs worker threads",
         panels=panels,
-        x_label="Threads",
+        x_label="Worker threads",
         y_label="Value",
         add_reference_line=add_reference_line,
     )
 
 
-def fallback_plot_sync_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
+def fallback_plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
     required = {
         "balls",
         "implementation",
@@ -485,8 +507,8 @@ def fallback_plot_gui_latency(gui: pd.DataFrame, output_file: Path) -> None:
         )
     render_simple_line_chart(
         output_file,
-        title="GUI Latency vs Balls",
-        x_label="Balls",
+        title="GUI update latency vs number of balls",
+        x_label="Number of balls",
         y_label="Mean update latency (ms)",
         series=panels,
     )
