@@ -40,6 +40,129 @@ final class PhysicsBenchmarkSupport {
         return new ArrayList<>(workers);
     }
 
+    static BenchmarkSummary runSequentialScenario(Scenario scenario, BenchmarkConfig config) {
+        return runSequentialScenario(scenario, config.steps(), config.warmupRuns(), config.measuredRuns());
+    }
+
+    static BenchmarkSummary runThreadedScenario(Scenario scenario, BenchmarkConfig config) {
+        return runThreadedScenario(scenario, config.effectiveThreads(), config.steps(), config.warmupRuns(), config.measuredRuns());
+    }
+
+    static BenchmarkSummary runTaskScenario(Scenario scenario, BenchmarkConfig config) {
+        return runTaskScenario(scenario, config.effectiveThreads(), config.steps(), config.warmupRuns(), config.measuredRuns());
+    }
+
+    static void printSequentialSummary(String benchmark, Scenario scenario, BenchmarkConfig config) {
+        var summary = runSequentialScenario(scenario, config);
+        System.out.printf(Locale.US,
+                "benchmark=%s engine=sequential scenario=%s config=%s workers=1 balls=%d elapsed_ms=%.3f avg_step_ms=%.6f min_step_ms=%.6f max_step_ms=%.6f stddev_step_ms=%.6f throughput_steps_per_sec=%.3f checksum=%d%n",
+                benchmark,
+                scenario.name(),
+                config.toKeyValueString(),
+                summary.balls(),
+                summary.elapsedMillis(),
+                summary.avgStepMillis(),
+                summary.minStepMillis(),
+                summary.maxStepMillis(),
+                summary.stddevStepMillis(),
+                summary.throughputStepsPerSecond(),
+                summary.checksum());
+    }
+
+    static void printTaskSummary(String benchmark, Scenario scenario, BenchmarkConfig config) {
+        var summary = runTaskScenario(scenario, config);
+        System.out.printf(Locale.US,
+                "benchmark=%s engine=task scenario=%s config=%s workers=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f checksum=%d%n",
+                benchmark,
+                scenario.name(),
+                config.toKeyValueString(),
+                config.effectiveThreads(),
+                summary.balls(),
+                summary.elapsedMillis(),
+                summary.avgStepMillis(),
+                summary.checksum());
+    }
+
+    static void printComparison(String benchmark, Scenario scenario, BenchmarkConfig config) {
+        var task = runTaskScenario(scenario, config);
+        var threaded = runThreadedScenario(scenario, config);
+        double speedup = threaded.avgStepMillis() / task.avgStepMillis();
+        System.out.printf(Locale.US,
+                "benchmark=%s scenario=%s config=%s workers=%d balls=%d task_elapsed_ms=%.3f task_avg_step_ms=%.6f threaded_elapsed_ms=%.3f threaded_avg_step_ms=%.6f speedup_vs_threaded=%.3f checksum=%d%n",
+                benchmark,
+                scenario.name(),
+                config.toKeyValueString(),
+                config.effectiveThreads(),
+                task.balls(),
+                task.elapsedMillis(),
+                task.avgStepMillis(),
+                threaded.elapsedMillis(),
+                threaded.avgStepMillis(),
+                speedup,
+                task.checksum());
+    }
+
+    static void printCompleteComparison(String benchmark, Scenario scenario, BenchmarkConfig config) {
+        var sequentialConfig = config.withThreads(1);
+        var sequential = runSequentialScenario(scenario, sequentialConfig);
+        printCompleteLine(benchmark, scenario, "sequential", 1, sequentialConfig, sequential, sequential);
+
+        var bestEngine = "sequential";
+        var bestWorkers = 1;
+        var bestAvgStepMillis = sequential.avgStepMillis();
+        var bestSummary = sequential;
+
+        for (var workers : workerCounts()) {
+            var workerConfig = config.withThreads(workers);
+            var threaded = runThreadedScenario(scenario, workerConfig);
+            printCompleteLine(benchmark, scenario, "threaded", workers, workerConfig, threaded, sequential);
+            if (threaded.avgStepMillis() < bestAvgStepMillis) {
+                bestEngine = "threaded";
+                bestWorkers = workers;
+                bestAvgStepMillis = threaded.avgStepMillis();
+                bestSummary = threaded;
+            }
+
+            var task = runTaskScenario(scenario, workerConfig);
+            printCompleteLine(benchmark, scenario, "task", workers, workerConfig, task, sequential);
+            if (task.avgStepMillis() < bestAvgStepMillis) {
+                bestEngine = "task";
+                bestWorkers = workers;
+                bestAvgStepMillis = task.avgStepMillis();
+                bestSummary = task;
+            }
+        }
+
+        double bestSpeedup = sequential.avgStepMillis() / bestSummary.avgStepMillis();
+        System.out.printf(Locale.US,
+                "benchmark=%s kind=recommendation scenario=%s config=%s best_engine=%s best_workers=%d best_avg_step_ms=%.6f speedup_vs_sequential=%.3f note=%s%n",
+                benchmark,
+                scenario.name(),
+                config.toKeyValueString(),
+                bestEngine,
+                bestWorkers,
+                bestSummary.avgStepMillis(),
+                bestSpeedup,
+                recommendationNote(bestEngine, bestSpeedup));
+    }
+
+    static void printTaskProfiling(String benchmark, Scenario scenario, BenchmarkConfig config) {
+        var summary = runTaskScenario(scenario, config);
+        var baseline = runTaskScenario(scenario, config.withThreads(1));
+        double speedup = baseline.avgStepMillis() / summary.avgStepMillis();
+        System.out.printf(Locale.US,
+                "benchmark=%s scenario=%s config=%s workers=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f speedup_vs_1_worker=%.3f checksum=%d%n",
+                benchmark,
+                scenario.name(),
+                config.toKeyValueString(),
+                config.effectiveThreads(),
+                summary.balls(),
+                summary.elapsedMillis(),
+                summary.avgStepMillis(),
+                speedup,
+                summary.checksum());
+    }
+
     static BenchmarkSummary runTaskScenario(
             Scenario scenario,
             int workers,
@@ -70,143 +193,23 @@ final class PhysicsBenchmarkSupport {
         return runTaskScenario(scenario, Math.max(1, Runtime.getRuntime().availableProcessors()), steps, warmupSteps, repeats);
     }
 
-    static void printTaskSummary(String benchmark, Scenario scenario, int workers, int steps, int warmupSteps, int repeats) {
-        var summary = runTaskScenario(scenario, workers, steps, warmupSteps, repeats);
-        System.out.printf(Locale.US,
-                "benchmark=%s engine=task scenario=%s workers=%d steps=%d warmup=%d repeats=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f checksum=%d%n",
-                benchmark,
-                scenario.name(),
-                workers,
-                steps,
-                warmupSteps,
-                repeats,
-                summary.balls(),
-                summary.elapsedMillis(),
-                summary.avgStepMillis(),
-                summary.checksum());
-    }
-
-    static void printSequentialSummary(String benchmark, Scenario scenario, int steps, int warmupSteps, int repeats) {
-        var summary = runSequentialScenario(scenario, steps, warmupSteps, repeats);
-        System.out.printf(Locale.US,
-                "benchmark=%s engine=sequential scenario=%s workers=1 steps=%d warmup=%d repeats=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f min_step_ms=%.6f max_step_ms=%.6f stddev_step_ms=%.6f throughput_steps_per_sec=%.3f checksum=%d%n",
-                benchmark,
-                scenario.name(),
-                steps,
-                warmupSteps,
-                repeats,
-                summary.balls(),
-                summary.elapsedMillis(),
-                summary.avgStepMillis(),
-                summary.minStepMillis(),
-                summary.maxStepMillis(),
-                summary.stddevStepMillis(),
-                summary.throughputStepsPerSecond(),
-                summary.checksum());
-    }
-
-    static void printComparison(String benchmark, Scenario scenario, int workers, int steps, int warmupSteps, int repeats) {
-        var task = runTaskScenario(scenario, workers, steps, warmupSteps, repeats);
-        var threaded = runThreadedScenario(scenario, workers, steps, warmupSteps, repeats);
-        double speedup = threaded.avgStepMillis() / task.avgStepMillis();
-        System.out.printf(Locale.US,
-                "benchmark=%s scenario=%s workers=%d steps=%d warmup=%d repeats=%d balls=%d task_elapsed_ms=%.3f task_avg_step_ms=%.6f threaded_elapsed_ms=%.3f threaded_avg_step_ms=%.6f speedup_vs_threaded=%.3f checksum=%d%n",
-                benchmark,
-                scenario.name(),
-                workers,
-                steps,
-                warmupSteps,
-                repeats,
-                task.balls(),
-                task.elapsedMillis(),
-                task.avgStepMillis(),
-                threaded.elapsedMillis(),
-                threaded.avgStepMillis(),
-                speedup,
-                task.checksum());
-    }
-
-    static void printCompleteComparison(String benchmark, Scenario scenario, int steps, int warmupSteps, int repeats) {
-        var sequential = runSequentialScenario(scenario, steps, warmupSteps, repeats);
-        printCompleteLine(benchmark, scenario, "sequential", 1, steps, warmupSteps, repeats, sequential, sequential);
-
-        var bestEngine = "sequential";
-        var bestWorkers = 1;
-        var bestAvgStepMillis = sequential.avgStepMillis();
-        var bestSummary = sequential;
-
-        for (var workers : workerCounts()) {
-            var threaded = runThreadedScenario(scenario, workers, steps, warmupSteps, repeats);
-            printCompleteLine(benchmark, scenario, "threaded", workers, steps, warmupSteps, repeats, threaded, sequential);
-            if (threaded.avgStepMillis() < bestAvgStepMillis) {
-                bestEngine = "threaded";
-                bestWorkers = workers;
-                bestAvgStepMillis = threaded.avgStepMillis();
-                bestSummary = threaded;
-            }
-
-            var task = runTaskScenario(scenario, workers, steps, warmupSteps, repeats);
-            printCompleteLine(benchmark, scenario, "task", workers, steps, warmupSteps, repeats, task, sequential);
-            if (task.avgStepMillis() < bestAvgStepMillis) {
-                bestEngine = "task";
-                bestWorkers = workers;
-                bestAvgStepMillis = task.avgStepMillis();
-                bestSummary = task;
-            }
-        }
-
-        double bestSpeedup = sequential.avgStepMillis() / bestSummary.avgStepMillis();
-        System.out.printf(Locale.US,
-                "benchmark=%s kind=recommendation scenario=%s best_engine=%s best_workers=%d best_avg_step_ms=%.6f speedup_vs_sequential=%.3f note=%s%n",
-                benchmark,
-                scenario.name(),
-                bestEngine,
-                bestWorkers,
-                bestSummary.avgStepMillis(),
-                bestSpeedup,
-                recommendationNote(bestEngine, bestSpeedup));
-    }
-
-    static void printTaskProfiling(String benchmark, Scenario scenario, int workers, int steps, int warmupSteps, int repeats) {
-        var summary = runTaskScenario(scenario, workers, steps, warmupSteps, repeats);
-        var baseline = runTaskScenario(scenario, 1, steps, warmupSteps, repeats);
-        double speedup = baseline.avgStepMillis() / summary.avgStepMillis();
-        System.out.printf(Locale.US,
-                "benchmark=%s scenario=%s workers=%d steps=%d warmup=%d repeats=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f speedup_vs_1_worker=%.3f checksum=%d%n",
-                benchmark,
-                scenario.name(),
-                workers,
-                steps,
-                warmupSteps,
-                repeats,
-                summary.balls(),
-                summary.elapsedMillis(),
-                summary.avgStepMillis(),
-                speedup,
-                summary.checksum());
-    }
-
     private static void printCompleteLine(
             String benchmark,
             Scenario scenario,
             String engine,
             int workers,
-            int steps,
-            int warmupSteps,
-            int repeats,
+            BenchmarkConfig config,
             BenchmarkSummary summary,
             BenchmarkSummary sequentialBaseline) {
         double speedup = sequentialBaseline.avgStepMillis() / summary.avgStepMillis();
         boolean checksumMatchesSequential = summary.checksum() == sequentialBaseline.checksum();
         System.out.printf(Locale.US,
-                "benchmark=%s kind=result scenario=%s engine=%s workers=%d steps=%d warmup=%d repeats=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f min_step_ms=%.6f max_step_ms=%.6f stddev_step_ms=%.6f throughput_steps_per_sec=%.3f speedup_vs_sequential=%.3f checksum=%d checksum_matches_sequential=%s diagnosis=%s%n",
+                "benchmark=%s kind=result scenario=%s engine=%s workers=%d config=%s balls=%d elapsed_ms=%.3f avg_step_ms=%.6f min_step_ms=%.6f max_step_ms=%.6f stddev_step_ms=%.6f throughput_steps_per_sec=%.3f speedup_vs_sequential=%.3f checksum=%d checksum_matches_sequential=%s diagnosis=%s%n",
                 benchmark,
                 scenario.name(),
                 engine,
                 workers,
-                steps,
-                warmupSteps,
-                repeats,
+                config.toKeyValueString(),
                 summary.balls(),
                 summary.elapsedMillis(),
                 summary.avgStepMillis(),

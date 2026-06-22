@@ -15,6 +15,50 @@ controlled workloads and report timing data useful for the assignment report.
 - `SequentialGameBenchmark.java`
   Benchmarks the integrated sequential gameplay loop, including physics and
   game-rule progression.
+- `BenchmarkConfig.java`
+  Shared benchmark configuration model used by all benchmark runners.
+- `BenchmarkRunner.java`
+  Shared timing and aggregation infrastructure. It produces raw
+  `BenchmarkRunResult` values for each warmup and measured run, then
+  summarizes the measured runs into a `BenchmarkSummary`.
+- `BenchmarkRunResult.java`
+  Immutable raw measurement for a single run, including elapsed time,
+  throughput, checksum, synchronization metrics, and status.
+- `BenchmarkSummary.java`
+  Aggregate statistics for a benchmark session, kept separate from the raw
+  per-run measurements.
+- `BenchmarkCsvWriter.java`
+  Appends raw runs and aggregate summaries to stable CSV files in the
+  configured output directory. Raw run rows include the synchronization
+  overhead columns used by the benchmark report.
+- `BenchmarkScalabilityAnalyzer.java`
+  Reads `benchmark-summary.csv` and writes `speedup-table.csv`,
+  `efficiency-table.csv`, and `scalability-table.csv` for report-ready
+  post-processing.
+- `scripts/plot_benchmarks.py`
+  Generates report-ready PNG charts from the benchmark CSV files and stores
+  them in `benchmarks/charts/`.
+- `BenchmarkSuite.java`
+  Executes the full benchmark matrix or the lightweight CI smoke matrix,
+  prints progress, and stores all results in a timestamped directory under
+  `benchmarks/results/` or `benchmarks/results/ci/`.
+- `RuntimeTelemetry.java`
+  Captures JVM, OS, heap, CPU-count, and optional process CPU-time metadata
+  for benchmark interpretation.
+- `RuntimeTelemetryCsvWriter.java`
+  Exports the telemetry snapshot to `environment.csv` alongside benchmark
+  results.
+- `HeadlessSimulationRunner.java`
+  Runs a seeded simulation without GUI rendering and reports elapsed time,
+  completed steps, a final board-state hash, and optional coordination
+  metrics for the selected execution strategy.
+- `GuiResponsivenessBenchmark.java`
+  Runs a scripted Swing benchmark that measures render latency, EDT delay, and
+  update rate separately from headless throughput.
+- `GuiResponsivenessMonitor.java`
+  Collects GUI timing metrics for request, EDT, and render completion phases.
+- `GuiResponsivenessCsvWriter.java`
+  Exports GUI responsiveness measurements to `gui-responsiveness.csv`.
 - `ThreadedPhysicsBenchmark.java`
   Benchmarks the multithreaded physics engine and can optionally choose the
   number of worker threads.
@@ -32,6 +76,75 @@ controlled workloads and report timing data useful for the assignment report.
   platform-threaded, and task-based physics engines. It uses the same
   deterministic scenarios, warmup, repeat count, and checksum validation for
   every implementation.
+
+## Headless simulation runner
+
+The headless runner is the preferred benchmark entry point when the goal is to
+compare the simulation logic without Swing rendering:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+```
+
+Arguments are:
+
+```text
+implementation_type balls_count thread_count simulation_steps random_seed
+```
+
+The runner keeps GUI code out of the benchmark path and returns a final state
+hash so repeated runs of the same scenario can be validated.
+
+All benchmark entry points now consume the shared `BenchmarkConfig` model, so
+defaults, validation, and exported configuration values stay centralized.
+The measurement infrastructure is shared through `BenchmarkRunner`, which
+keeps warmup runs, measured runs, raw per-run results, and summary statistics
+separate.
+`BenchmarkCsvWriter` writes `benchmark-runs.csv` and `benchmark-summary.csv`
+with stable headers so the results can be fed directly into charts or report
+tables. The raw run export includes the `syncTimeMillis`,
+`aggregationTimeMillis`, `taskSubmissionTimeMillis`,
+`joinOrFutureWaitMillis`, `lockAcquisitions`, and `submittedTasks` columns
+when instrumentation is enabled. Failed runs are exported with `status=FAILED`
+and a `failureReason` column so correctness problems remain visible in the raw
+data.
+The full benchmark suite also checks that sequential, threaded, and
+executor-based runs agree on the same scenario before their results are used
+for aggregate comparisons.
+`RuntimeTelemetryCsvWriter` writes `environment.csv` with one stable header and
+one snapshot row so the benchmark report can state the runtime conditions.
+`GuiResponsivenessCsvWriter` writes `gui-responsiveness.csv` with the GUI
+latency, delay, and update-rate measurements collected by the Swing benchmark.
+`BenchmarkScalabilityAnalyzer` consumes `benchmark-summary.csv` and produces
+speedup, efficiency, and scalability tables that can be copied directly into
+the report.
+`scripts/plot_benchmarks.py` turns the CSV exports into charts for execution
+time, throughput, speedup, efficiency, CPU utilization, synchronization
+overhead, and GUI latency.
+The GitHub Actions workflows are split into three lanes: the tests workflow
+handles Maven verification on pull requests and pushes, the benchmark workflow
+runs the benchmark suite and uploads the CSV results, and the plots workflow
+downloads those CSV files, installs the Python plotting dependencies from
+`requirements.txt`, and generates the report-ready PNG charts. CI benchmark
+numbers are only for regression checks; the report should use locally or
+controlled-machine generated results.
+
+To execute the full benchmark matrix in one command:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite
+```
+
+To execute the CI smoke matrix locally:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --smoke benchmarks/results/ci
+```
+
+The suite stores its output in a timestamped directory under
+`benchmarks/results/`, for example `benchmarks/results/20260621-131530-000/`.
 
 ## Recommended comparison
 

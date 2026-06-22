@@ -1,0 +1,61 @@
+name: Assignment 1 Benchmark CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - "assignment-1/**"
+      - "scripts/**"
+      - "requirements.txt"
+      - ".github/workflows/assignment-1-benchmark.yml"
+  workflow_dispatch:
+    inputs:
+      benchmark_mode:
+        description: "Benchmark mode"
+        required: true
+        type: choice
+        default: smoke
+        options:
+          - smoke
+          - full
+      results_root:
+        description: "Benchmark results root directory"
+        required: false
+        default: "benchmarks/results/ci"
+
+jobs:
+  benchmark:
+    name: Run assignment-1 benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build assignment-1
+        working-directory: assignment-1
+        run: mvn -B clean verify
+
+      - name: Run benchmark suite
+        run: |
+          if [ "${{ inputs.benchmark_mode }}" = "full" ]; then
+            java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --full "${{ inputs.results_root }}"
+          else
+            java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --smoke "${{ inputs.results_root }}"
+          fi
+
+      - name: Upload benchmark CSV artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-1-benchmark-results
+          path: ${{ inputs.results_root }}/**
+          if-no-files-found: error

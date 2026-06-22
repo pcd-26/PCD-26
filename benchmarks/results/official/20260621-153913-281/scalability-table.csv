@@ -1,0 +1,6 @@
+balls,steps,sequentialThroughput,threadedBestThreads,threadedBestThroughput,threadedCpuUtilization,threadedSpeedup,threadedEfficiency,threadedSaturationPoint,threadedSlowerThanSequential,threadedEfficiencyDegradation,executorBestThreads,executorBestThroughput,executorCpuUtilization,executorSpeedup,executorEfficiency,executorSaturationPoint,executorSlowerThanThreaded,executorEfficiencyDegradation
+100,600,11055.843001,1,2095.412949,13.597397,0.193856,0.193856,1,true,true,8,5617.842367,10.169705,0.564642,0.070580,8,false,true
+500,600,1288.819423,2,808.896075,13.584426,0.660065,0.330033,2,true,true,8,951.601009,16.336285,0.794169,0.099271,8,false,true
+1000,600,850.753465,2,389.395812,15.105054,0.444150,0.222075,2,true,true,2,485.374245,13.974692,0.563978,0.281989,2,false,true
+2000,600,294.474130,8,216.158896,18.026368,0.748100,0.093513,8,true,true,4,261.308501,14.962756,0.904628,0.226157,4,false,true
+5000,600,70.861420,8,125.821774,17.770747,1.742838,0.217855,8,false,true,8,156.157706,17.012775,1.934851,0.241856,8,false,true

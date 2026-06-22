@@ -130,9 +130,16 @@ public class View {
 	/**
 	 * Requests rendering of the current view model.
 	 */
-	public void render() {
-		frame.render();
-	}
+    public void render() {
+        frame.render();
+    }
+
+    /**
+     * Disposes the Swing window created by this view.
+     */
+    public void close() {
+        frame.close();
+    }
 	
 	/**
 	 * Gets the model rendered by this view.

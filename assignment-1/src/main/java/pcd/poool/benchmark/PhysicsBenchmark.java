@@ -11,10 +11,6 @@ import pcd.poool.model.physics.config.MassiveBoardConf;
  */
 public class PhysicsBenchmark {
 
-    private static final int DEFAULT_STEPS = 600;
-    private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
-    private static final String OUTPUT_FORMAT = "steps=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f%n";
-
     /**
      * Utility class; not meant to be instantiated.
      */
@@ -27,20 +23,25 @@ public class PhysicsBenchmark {
      * @param args optional first argument: number of physics steps
      */
     public static void main(String[] args) {
-        int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
+        var config = BenchmarkConfig.physicsBenchmarkDefaults();
+        if (args.length > 0) {
+            config = config.withSteps(Integer.parseInt(args[0]));
+        }
         var board = new Board(new PhysicsEngine());
         board.init(new MassiveBoardConf());
 
         long start = System.nanoTime();
-        for (int i = 0; i < steps; i++) {
+        for (int i = 0; i < config.steps(); i++) {
             board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
         }
         long elapsed = System.nanoTime() - start;
 
-        double elapsedMillis = elapsed / NANOS_PER_MILLISECOND;
-        double avgStepMillis = elapsedMillis / steps;
-        System.out.printf(Locale.US, OUTPUT_FORMAT,
-                steps,
+        double elapsedMillis = elapsed / 1_000_000.0;
+        double avgStepMillis = elapsedMillis / config.steps();
+        System.out.printf(Locale.US,
+                "config=%s steps=%d balls=%d elapsed_ms=%.3f avg_step_ms=%.6f%n",
+                config.toKeyValueString(),
+                config.steps(),
                 board.getBalls().size(),
                 elapsedMillis,
                 avgStepMillis);
