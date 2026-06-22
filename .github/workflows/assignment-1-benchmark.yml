@@ -129,7 +129,7 @@ jobs:
         run: java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkScalabilityAnalyzer "${{ steps.benchmark_input.outputs.input_dir }}"
 
       - name: Generate charts
-        run: python scripts/plot_benchmarks.py --input-dir "${{ steps.benchmark_input.outputs.input_dir }}" --output-dir benchmarks/charts
+        run: python scripts/plot_benchmarks.py --input-dir "${{ steps.benchmark_input.outputs.input_dir }}" --output-dir benchmarks/charts/report
 
       - name: Prepare chart artifact metadata
         id: chart_meta
@@ -145,5 +145,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.chart_meta.outputs.artifact_name }}
-          path: benchmarks/charts/**
+          path: benchmarks/charts/report/**
           if-no-files-found: error

@@ -434,7 +434,7 @@ After the benchmark CSV files are available, generate the charts with:
 ```bash
 python -m pip install -r requirements.txt
 java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkScalabilityAnalyzer benchmarks/results/<timestamp>
-python scripts/plot_benchmarks.py --input-dir benchmarks/results/<timestamp> --output-dir benchmarks/charts
+python scripts/plot_benchmarks.py --input-dir benchmarks/results/<timestamp> --output-dir benchmarks/charts/report
 ```
 
 This script reads:
@@ -445,10 +445,11 @@ This script reads:
 - `efficiency-table.csv`
 - `gui-responsiveness.csv`
 
-It writes the PNG figures used in the report into `benchmarks/charts/`.
+It writes the PDF-ready PNG and SVG figures used in the report into
+`benchmarks/charts/report/`.
 If `gui-responsiveness.csv` is not present in the input directory, the plot
-script keeps the other charts and emits a placeholder for the GUI chart so CI
-can remain headless.
+script keeps the other charts and skips the GUI chart with a warning so CI can
+remain headless without producing a misleading partial figure.
 
 ### 11.7 Output directory structure
 
@@ -470,10 +471,10 @@ efficiency-table.csv
 scalability-table.csv
 ```
 
-The chart generator writes PNG files to:
+The chart generator writes PNG and SVG files to:
 
 ```text
-benchmarks/charts/
+benchmarks/charts/report/
 ```
 
 ### 11.8 CSV file meanings
@@ -487,6 +488,8 @@ benchmarks/charts/
   headless throughput measurements.
 - `speedup-table.csv`, `efficiency-table.csv`, and `scalability-table.csv`
   are derived analysis tables for the report.
+- The chart set is exported as paired PNG and SVG files for direct inclusion
+  in the final PDF report.
 
 ### 11.9 Benchmark environment fields
 

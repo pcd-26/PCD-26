@@ -36,8 +36,8 @@ controlled workloads and report timing data useful for the assignment report.
   `efficiency-table.csv`, and `scalability-table.csv` for report-ready
   post-processing.
 - `scripts/plot_benchmarks.py`
-  Generates report-ready PNG charts from the benchmark CSV files and stores
-  them in `benchmarks/charts/`.
+  Generates report-ready PNG and SVG charts from the benchmark CSV files and
+  stores them in `benchmarks/charts/report/`.
 - `BenchmarkSuite.java`
   Executes the full benchmark matrix or the lightweight CI smoke matrix,
   prints progress, and stores all results in a timestamped directory under
@@ -121,15 +121,16 @@ latency, delay, and update-rate measurements collected by the Swing benchmark.
 speedup, efficiency, and scalability tables that can be copied directly into
 the report.
 `scripts/plot_benchmarks.py` turns the CSV exports into charts for execution
-time, throughput, speedup, efficiency, CPU utilization, synchronization
+time, throughput, speedup, efficiency, CPU utilization, coordination
 overhead, and GUI latency.
 The GitHub Actions workflows are split into two lanes: the tests workflow
 handles Maven verification on pull requests and pushes, and the benchmark
 workflow runs the benchmark suite, generates the derived scalability tables,
-and uploads the report-ready PNG charts as a separate timestamped artifact.
-The charts stay outside the assignment zip and can be reused later when
-preparing the final document. CI benchmark numbers are only for regression
-checks; the report should use locally or controlled-machine generated results.
+and uploads the report-ready chart set as a separate timestamped artifact.
+The report charts stay outside the assignment zip under
+`benchmarks/charts/report/` and can be reused later when preparing the final
+document. CI benchmark numbers are only for regression checks; the report
+should use locally or controlled-machine generated results.
 
 To execute the full benchmark matrix in one command:
 
