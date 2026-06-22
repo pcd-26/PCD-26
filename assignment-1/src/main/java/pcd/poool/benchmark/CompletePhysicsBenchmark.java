@@ -11,10 +11,6 @@ package pcd.poool.benchmark;
  */
 public class CompletePhysicsBenchmark {
 
-    private static final int DEFAULT_STEPS = 30;
-    private static final int DEFAULT_WARMUP_STEPS = 5;
-    private static final int DEFAULT_REPEATS = 2;
-
     private CompletePhysicsBenchmark() {
     }
 
@@ -25,17 +21,22 @@ public class CompletePhysicsBenchmark {
      *             and repeat count
      */
     public static void main(String[] args) {
-        int steps = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_STEPS;
-        int warmupSteps = args.length > 1 ? Integer.parseInt(args[1]) : DEFAULT_WARMUP_STEPS;
-        int repeats = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_REPEATS;
+        var config = BenchmarkConfig.completeComparisonDefaults();
+        if (args.length > 0) {
+            config = config.withSteps(Integer.parseInt(args[0]));
+        }
+        if (args.length > 1) {
+            config = config.withWarmupRuns(Integer.parseInt(args[1]));
+        }
+        if (args.length > 2) {
+            config = config.withMeasuredRuns(Integer.parseInt(args[2]));
+        }
 
         for (var scenario : PhysicsBenchmarkSupport.scenarios()) {
             PhysicsBenchmarkSupport.printCompleteComparison(
                     "complete-physics",
                     scenario,
-                    steps,
-                    warmupSteps,
-                    repeats);
+                    config);
         }
     }
 }

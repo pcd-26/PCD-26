@@ -1,0 +1,58 @@
+name: Assignment 1 Benchmark Plots CI
+
+on:
+  workflow_run:
+    workflows:
+      - Assignment 1 Benchmark CI
+    types:
+      - completed
+
+jobs:
+  plot:
+    name: Generate benchmark plots
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install plotting dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          name: assignment-1-benchmark-results
+          path: benchmarks/results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve benchmark input directory
+        id: benchmark_input
+        shell: pwsh
+        run: |
+          $summary = Get-ChildItem -Path benchmarks/results -Recurse -Filter benchmark-summary.csv | Sort-Object FullName | Select-Object -First 1
+          if (-not $summary) {
+            throw "benchmark-summary.csv not found in downloaded artifact"
+          }
+          "input_dir=$($summary.Directory.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Generate charts
+        run: python scripts/plot_benchmarks.py --input-dir "${{ steps.benchmark_input.outputs.input_dir }}" --output-dir benchmarks/charts
+
+      - name: Upload chart artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-1-benchmark-charts
+          path: benchmarks/charts/**
+          if-no-files-found: error

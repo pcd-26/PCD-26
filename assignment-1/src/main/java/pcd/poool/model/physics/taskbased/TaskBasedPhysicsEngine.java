@@ -166,13 +166,13 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 profile.integrationWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
             }
             return null;
-        });
+        }, profile);
         if (profile != null) {
             profile.integrationNanos += System.nanoTime() - integrationStart;
         }
 
         long holeStart = profile == null ? 0 : System.nanoTime();
-        var holeInteractions = detectHoleInteractions(board.getHoles(), activeBalls);
+        var holeInteractions = detectHoleInteractions(board.getHoles(), activeBalls, profile);
         board.applyHoleInteractions(holeInteractions);
         if (profile != null) {
             profile.holeInteractionNanos += System.nanoTime() - holeStart;
@@ -209,7 +209,10 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return activeBalls;
     }
 
-    private Board.HoleInteractions detectHoleInteractions(List<Hole> holes, List<ActiveBall> activeBalls) {
+    private Board.HoleInteractions detectHoleInteractions(
+            List<Hole> holes,
+            List<ActiveBall> activeBalls,
+            StepProfileAccumulator profile) {
         if (holes.isEmpty() || activeBalls.isEmpty()) {
             return new Board.HoleInteractions(false, false, List.of());
         }
@@ -231,8 +234,9 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 }
             }
             return new HoleTaskResult(playerBallPocketed, botBallPocketed, pocketedSmallBalls);
-        });
+        }, profile);
 
+        long aggregationStart = profile == null ? 0 : System.nanoTime();
         boolean playerBallPocketed = false;
         boolean botBallPocketed = false;
         var pocketedSmallBalls = new ArrayList<Ball>();
@@ -240,6 +244,9 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             playerBallPocketed |= result.playerBallPocketed();
             botBallPocketed |= result.botBallPocketed();
             pocketedSmallBalls.addAll(result.pocketedSmallBalls());
+        }
+        if (profile != null) {
+            profile.aggregationNanos += System.nanoTime() - aggregationStart;
         }
         return new Board.HoleInteractions(playerBallPocketed, botBallPocketed, List.copyOf(pocketedSmallBalls));
     }
@@ -275,12 +282,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 profile.localGridWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
             }
             return localGrid;
-        });
+        }, profile);
         if (profile != null) {
             profile.localGridBuildNanos += System.nanoTime() - localGridStart;
         }
 
-        long mergeStart = profile == null ? 0 : System.nanoTime();
+        long aggregationStart = profile == null ? 0 : System.nanoTime();
         var mergedGrid = new java.util.HashMap<SpatialGridSupport.GridCell, List<Integer>>();
         for (var localGrid : localGrids) {
             if (localGrid == null) {
@@ -291,7 +298,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }
         if (profile != null) {
-            profile.gridMergeNanos += System.nanoTime() - mergeStart;
+            profile.gridMergeNanos += System.nanoTime() - aggregationStart;
         }
 
         long pairStart = profile == null ? 0 : System.nanoTime();
@@ -305,6 +312,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.pairCollectionNanos += System.nanoTime() - pairStart;
             profile.mergedCells += mergedGrid.size();
             profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
+            profile.aggregationNanos += System.nanoTime() - aggregationStart;
         }
         long[] orderedPairs = pairs.toArray();
         java.util.Arrays.sort(orderedPairs);
@@ -337,7 +345,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                     Ball.resolveCollision(balls.get(firstIndex(pair)), balls.get(secondIndex(pair)));
                 }
                 return null;
-            });
+            }, profile);
         }
     }
 
@@ -354,8 +362,9 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
             localAccumulators[workerIndex] = accumulator;
             return null;
-        });
+        }, profile);
 
+        long aggregationStart = profile == null ? 0 : System.nanoTime();
         var merged = new CollisionAccumulator(balls.size());
         for (var accumulator : localAccumulators) {
             if (accumulator != null) {
@@ -379,7 +388,10 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 profile.applyWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
             }
             return null;
-        });
+        }, profile);
+        if (profile != null) {
+            profile.aggregationNanos += System.nanoTime() - aggregationStart;
+        }
     }
 
     List<List<SpatialCollisionDetector.Pair>> buildCollisionRounds(
@@ -438,7 +450,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return rounds;
     }
 
-    private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask) {
+    private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask, StepProfileAccumulator profile) {
         if (itemCount == 0) {
             return List.of();
         }
@@ -450,21 +462,24 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             result.add(rangeTask.run(range.fromInclusive(), range.toExclusive(), 0));
             return result;
         }
-        var tasks = new ArrayList<Callable<T>>(ranges.size());
-        for (var range : ranges) {
-            tasks.add(() -> {
-                return rangeTask.run(range.fromInclusive(), range.toExclusive(), range.workerIndex());
-            });
-        }
-        return invokeAll(tasks);
-    }
-
-    private <T> List<T> invokeAll(List<Callable<T>> tasks) {
         try {
-            List<Future<T>> futures = executor.invokeAll(tasks);
+            long submissionStart = profile == null ? 0 : System.nanoTime();
+            var futures = new ArrayList<Future<T>>(ranges.size());
+            for (var range : ranges) {
+                futures.add(executor.submit(() -> rangeTask.run(range.fromInclusive(), range.toExclusive(), range.workerIndex())));
+            }
+            if (profile != null) {
+                profile.taskSubmissionNanos += System.nanoTime() - submissionStart;
+                profile.submittedTasks += ranges.size();
+                profile.lockAcquisitions += ranges.size() + 1L;
+            }
+            long waitStart = profile == null ? 0 : System.nanoTime();
             var results = new ArrayList<T>(futures.size());
             for (var future : futures) {
                 results.add(future.get());
+            }
+            if (profile != null) {
+                profile.joinOrFutureWaitNanos += System.nanoTime() - waitStart;
             }
             return results;
         } catch (InterruptedException ex) {
@@ -701,6 +716,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
      * @param gridMergeMillis merged-grid assembly time in milliseconds
      * @param pairCollectionMillis candidate-pair generation and sorting time in milliseconds
      * @param collisionResolutionMillis collision resolution time in milliseconds
+     * @param syncTimeMillis total coordination time in milliseconds
+     * @param aggregationTimeMillis result aggregation and merge time in milliseconds
+     * @param taskSubmissionTimeMillis task submission time in milliseconds
+     * @param joinOrFutureWaitMillis worker wait time in milliseconds
+     * @param lockAcquisitions estimated number of lock acquisitions
+     * @param submittedTasks estimated number of submitted tasks
      * @param integrationWorkerMillis per-task integration time in milliseconds
      * @param localGridWorkerMillis per-task local-grid build time in milliseconds
      * @param applyWorkerMillis per-task final application time in milliseconds
@@ -720,6 +741,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             double gridMergeMillis,
             double pairCollectionMillis,
             double collisionResolutionMillis,
+            double syncTimeMillis,
+            double aggregationTimeMillis,
+            double taskSubmissionTimeMillis,
+            double joinOrFutureWaitMillis,
+            long lockAcquisitions,
+            long submittedTasks,
             List<Double> integrationWorkerMillis,
             List<Double> localGridWorkerMillis,
             List<Double> applyWorkerMillis,
@@ -835,6 +862,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         private long gridMergeNanos;
         private long pairCollectionNanos;
         private long collisionResolutionNanos;
+        private long syncNanos;
+        private long aggregationNanos;
+        private long taskSubmissionNanos;
+        private long joinOrFutureWaitNanos;
+        private long lockAcquisitions;
+        private long submittedTasks;
 
         private StepProfileAccumulator(int workerCount) {
             integrationWorkerNanos = new long[workerCount];
@@ -846,6 +879,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         private StepProfile toProfile() {
+            long measuredSyncNanos = taskSubmissionNanos + joinOrFutureWaitNanos;
             return new StepProfile(
                     activeBalls,
                     collisionBalls,
@@ -858,6 +892,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                     gridMergeNanos / NANOS_PER_MILLISECOND,
                     pairCollectionNanos / NANOS_PER_MILLISECOND,
                     collisionResolutionNanos / NANOS_PER_MILLISECOND,
+                    measuredSyncNanos / NANOS_PER_MILLISECOND,
+                    aggregationNanos / NANOS_PER_MILLISECOND,
+                    taskSubmissionNanos / NANOS_PER_MILLISECOND,
+                    joinOrFutureWaitNanos / NANOS_PER_MILLISECOND,
+                    lockAcquisitions,
+                    submittedTasks,
                     toMillisList(integrationWorkerNanos),
                     toMillisList(localGridWorkerNanos),
                     toMillisList(applyWorkerNanos),

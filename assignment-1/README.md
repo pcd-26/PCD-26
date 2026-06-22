@@ -131,7 +131,21 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.ThreadedPhysicsBenchmar
 java -cp assignment-1/target/classes pcd.poool.benchmark.ThreadedPhysicsBenchmark 600 8
 ```
 
-The GitHub Actions workflow `Assignment 1 Maven CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs.
+For headless comparisons that must stay free of GUI rendering, use the seeded
+simulation runner. It accepts the implementation type, ball count, thread
+count, number of simulation steps, and random seed:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+```
+
+The runner reports elapsed time, completed steps, and a final state hash so
+the same scenario can be compared across implementations without opening the
+GUI.
+
+The GitHub Actions workflow `Assignment 1 Tests CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs. The benchmark and plot workflows are split out separately so the benchmark CSV generation and chart rendering can be triggered and validated independently.
 
 Additional architectural notes, including the feasibility assessment for the
 platform-thread implementation and the proposed spatial decomposition strategy,
