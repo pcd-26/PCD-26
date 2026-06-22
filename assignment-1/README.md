@@ -156,17 +156,18 @@ An implementation-oriented architecture map, covering package responsibilities,
 state ownership, and component interactions, is available in
 [`docs/runtime-architecture.md`](docs/runtime-architecture.md).
 
-The GitHub Actions workflow `Assignment 1 Delivery Package` runs on pushes to
-`main` and can also be started manually. It builds the report PDF and uploads a
+The GitHub Actions workflow `Assignment 1 Delivery Package` runs on every
+push and can also be started manually. It builds the report PDF and uploads a
 timestamped `Assignment-01-<stamp>.zip` artifact with the delivery structure
-required below. On `main`, it also publishes the same zip as a timestamped
-GitHub Release asset so each update keeps its own delivery snapshot instead of
-overwriting the previous one. Benchmark charts are published separately by the
-benchmark workflow as a timestamped artifact outside the assignment zip, so
-they can be reused later when assembling the final report document. The package
-includes the assignment project files needed to build and inspect the solution,
-excluding internal documentation, the LaTeX report source directory, and build
-outputs.
+required below. Every successful publish also updates the shared GitHub
+Release named `latest`, which acts as a container for multiple zip assets
+instead of a single file. The delivery zip, the assignment 1 chart archive, and
+future assignment-specific archives can all live in that same release as
+separate assets. Benchmark charts are also uploaded as a timestamped artifact
+outside the assignment zip, so they can be reused later when assembling the
+final report document. The package includes the assignment project files needed
+to build and inspect the solution, excluding internal documentation, the LaTeX
+report source directory, and build outputs.
 
 
 

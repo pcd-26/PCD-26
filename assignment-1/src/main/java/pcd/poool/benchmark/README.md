@@ -127,10 +127,12 @@ The GitHub Actions workflows are split into two lanes: the tests workflow
 handles Maven verification on pull requests and pushes, and the benchmark
 workflow runs the benchmark suite, generates the derived scalability tables,
 and uploads the report-ready chart set as a separate timestamped artifact.
-The report charts stay outside the assignment zip under
-`benchmarks/charts/report/` and can be reused later when preparing the final
-document. CI benchmark numbers are only for regression checks; the report
-should use locally or controlled-machine generated results.
+The chart workflow also packages the report figures into a separate
+assignment-specific zip and publishes it to the shared `latest` GitHub Release
+alongside the delivery zip. The report charts stay outside the assignment zip
+under `benchmarks/charts/report/` and can be reused later when preparing the
+final document. CI benchmark numbers are only for regression checks; the
+report should use locally or controlled-machine generated results.
 
 To execute the full benchmark matrix in one command:
 
