@@ -80,7 +80,7 @@ jobs:
     needs: benchmark
     permissions:
       actions: read
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout
@@ -128,19 +128,62 @@ jobs:
       - name: Generate charts
         run: python scripts/plot_benchmarks.py --input-dir "${{ steps.benchmark_input.outputs.input_dir }}" --output-dir benchmarks/charts/report
 
-      - name: Prepare chart artifact metadata
-        id: chart_meta
+      - name: Prepare chart archive metadata
+        id: chart_archive_meta
         shell: bash
         run: |
           set -euo pipefail
 
           stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
           echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
-          echo "artifact_name=assignment-1-benchmark-charts-$stamp" >> "$GITHUB_OUTPUT"
+          echo "zip_name=Assignment-01-benchmark-charts-$stamp.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create chart archive
+        shell: bash
+        env:
+          CHART_ZIP: ${{ steps.chart_archive_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          rm -f "$CHART_ZIP"
+          rm -rf chart-package
+          mkdir -p chart-package/Assignment-01/charts
+          cp -R benchmarks/charts/report chart-package/Assignment-01/charts/
+          (cd chart-package && zip -r "../$CHART_ZIP" Assignment-01)
+
+      - name: Check chart archive contents
+        shell: bash
+        env:
+          CHART_ZIP: ${{ steps.chart_archive_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          unzip -l "$CHART_ZIP"
+          test -f chart-package/Assignment-01/charts/report/01_best_execution_time_vs_balls.png
+          test -f chart-package/Assignment-01/charts/report/01_best_execution_time_vs_balls.svg
 
       - name: Upload chart artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.chart_meta.outputs.artifact_name }}
+          name: assignment-1-benchmark-charts-${{ steps.chart_archive_meta.outputs.stamp }}
           path: benchmarks/charts/report/**
           if-no-files-found: error
+
+      - name: Publish chart archive to latest release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHART_ZIP: ${{ steps.chart_archive_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_TAG="latest"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$CHART_ZIP" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$CHART_ZIP" \
+              --target "$GITHUB_SHA" \
+              --title "Latest Assignment Packages" \
+              --notes "Shared release for assignment delivery zips and benchmark chart archives. New assets are appended on successful workflow runs." \
+            || gh release upload "$RELEASE_TAG" "$CHART_ZIP" --clobber
+          fi

@@ -490,6 +490,10 @@ benchmarks/charts/report/
   are derived analysis tables for the report.
 - The chart set is exported as paired PNG and SVG files for direct inclusion
   in the final PDF report.
+- The benchmark workflow also packages the chart set into an assignment-specific
+  zip and publishes it to the shared `latest` GitHub Release, alongside the
+  delivery zip. This makes it easy to collect the report figures separately
+  from the submission package.
 
 ### 11.9 Benchmark environment fields
 
