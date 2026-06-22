@@ -8,9 +8,6 @@ on:
       - "requirements.txt"
       - ".github/workflows/assignment-1-benchmark.yml"
   push:
-    branches:
-      - main
-      - dev
     paths:
       - "assignment-1/**"
       - "scripts/**"
