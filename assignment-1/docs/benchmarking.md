@@ -492,8 +492,11 @@ benchmarks/charts/report/
   in the final PDF report.
 - The benchmark workflow also packages the chart set into an assignment-specific
   zip and publishes it to the shared `latest` GitHub Release, alongside the
-  delivery zip. This makes it easy to collect the report figures separately
-  from the submission package.
+  delivery zip. The release reuses fixed asset names, so it always keeps only
+  the most recent `Assignment-01-latest.zip` and
+  `Assignment-01-benchmark-charts-latest.zip` files. This makes it easy to
+  collect the report figures separately from the submission package while
+  keeping the release tidy.
 
 ### 11.9 Benchmark environment fields
 

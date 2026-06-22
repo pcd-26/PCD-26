@@ -54,6 +54,7 @@ jobs:
           stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
           echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
           echo "zip_name=Assignment-01-$stamp.zip" >> "$GITHUB_OUTPUT"
+          echo "release_zip_name=Assignment-01-latest.zip" >> "$GITHUB_OUTPUT"
           echo "release_tag=latest" >> "$GITHUB_OUTPUT"
 
       - name: Install packaging tools
@@ -113,17 +114,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+          RELEASE_ZIP: ${{ steps.delivery_meta.outputs.release_zip_name }}
           RELEASE_TAG: ${{ steps.delivery_meta.outputs.release_tag }}
         run: |
           set -euo pipefail
 
-          release_stamp="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          cp "$DELIVERY_ZIP" "$RELEASE_ZIP"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$DELIVERY_ZIP" --clobber
+            gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber
           else
-            gh release create "$RELEASE_TAG" "$DELIVERY_ZIP" \
+            gh release create "$RELEASE_TAG" "$RELEASE_ZIP" \
               --target "$GITHUB_SHA" \
               --title "Latest Assignment Packages" \
               --notes "Shared release for assignment delivery zips and benchmark chart archives. New assets are appended on successful workflow runs." \
-            || gh release upload "$RELEASE_TAG" "$DELIVERY_ZIP" --clobber
+            || gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber
           fi
