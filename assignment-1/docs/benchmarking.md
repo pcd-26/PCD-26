@@ -446,6 +446,9 @@ This script reads:
 - `gui-responsiveness.csv`
 
 It writes the PNG figures used in the report into `benchmarks/charts/`.
+If `gui-responsiveness.csv` is not present in the input directory, the plot
+script keeps the other charts and emits a placeholder for the GUI chart so CI
+can remain headless.
 
 ### 11.7 Output directory structure
 

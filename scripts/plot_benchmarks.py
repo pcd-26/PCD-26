@@ -58,7 +58,7 @@ def main() -> None:
     speedup = read_csv(input_dir / "speedup-table.csv", required=True)
     efficiency = read_csv(input_dir / "efficiency-table.csv", required=True)
     runs = read_csv(input_dir / "benchmark-runs.csv", required=True)
-    gui = read_csv(input_dir / "gui-responsiveness.csv", required=True)
+    gui = read_csv(input_dir / "gui-responsiveness.csv", required=False)
 
     if HAS_MATPLOTLIB:
         plot_best_by_ball(
@@ -107,10 +107,16 @@ def main() -> None:
             runs,
             output_dir / "synchronization-overhead-vs-thread-count.png",
         )
-        plot_gui_latency(
-            gui,
-            output_dir / "gui-latency-vs-balls.png",
-        )
+        if gui.empty:
+            write_placeholder_chart(
+                output_dir / "gui-latency-vs-balls.png",
+                "GUI Latency vs Balls",
+            )
+        else:
+            plot_gui_latency(
+                gui,
+                output_dir / "gui-latency-vs-balls.png",
+            )
     else:
         fallback_plot_best_by_ball(
             summary,
