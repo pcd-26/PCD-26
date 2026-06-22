@@ -123,9 +123,11 @@ the report.
 `scripts/plot_benchmarks.py` turns the CSV exports into charts for execution
 time, throughput, speedup, efficiency, CPU utilization, synchronization
 overhead, and GUI latency.
-The GitHub Actions CI workflow runs the smoke benchmark matrix on pull
-requests, uploads the generated CSV files as artifacts, and keeps the full
-benchmark matrix available as a manually triggered workflow. CI benchmark
+The GitHub Actions workflows are split into three lanes: the tests workflow
+handles Maven verification on pull requests and pushes, the benchmark workflow
+runs the benchmark suite and uploads the CSV results, and the plots workflow
+downloads those CSV files, installs the Python plotting dependencies from
+`requirements.txt`, and generates the report-ready PNG charts. CI benchmark
 numbers are only for regression checks; the report should use locally or
 controlled-machine generated results.
 
