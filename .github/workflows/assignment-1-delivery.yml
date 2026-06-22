@@ -25,6 +25,15 @@ jobs:
           java-version: "17"
           cache: maven
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install plotting dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
       - name: Build and test assignment-1
         working-directory: assignment-1
         run: mvn -B clean verify
