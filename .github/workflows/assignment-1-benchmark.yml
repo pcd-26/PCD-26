@@ -29,6 +29,8 @@ jobs:
   benchmark:
     name: Run assignment-1 benchmarks
     runs-on: ubuntu-latest
+    env:
+      RESULTS_ROOT: ${{ github.event_name == 'workflow_dispatch' && inputs.results_root || 'benchmarks/results/ci' }}
 
     steps:
       - name: Checkout
@@ -57,14 +59,14 @@ jobs:
       - name: Run benchmark suite
         run: |
           if [ "${{ inputs.benchmark_mode }}" = "full" ]; then
-            java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --full "${{ inputs.results_root }}"
+            java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --full "$RESULTS_ROOT"
           else
-            java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --smoke "${{ inputs.results_root }}"
+            java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --smoke "$RESULTS_ROOT"
           fi
 
       - name: Upload benchmark CSV artifacts
         uses: actions/upload-artifact@v4
         with:
           name: assignment-1-benchmark-results
-          path: ${{ inputs.results_root }}/**
+          path: ${{ env.RESULTS_ROOT }}/**
           if-no-files-found: error
