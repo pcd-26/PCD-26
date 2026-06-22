@@ -137,6 +137,7 @@ jobs:
           stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
           echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
           echo "zip_name=Assignment-01-benchmark-charts-$stamp.zip" >> "$GITHUB_OUTPUT"
+          echo "release_zip_name=Assignment-01-benchmark-charts-latest.zip" >> "$GITHUB_OUTPUT"
 
       - name: Create chart archive
         shell: bash
@@ -174,16 +175,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CHART_ZIP: ${{ steps.chart_archive_meta.outputs.zip_name }}
+          RELEASE_ZIP: ${{ steps.chart_archive_meta.outputs.release_zip_name }}
         run: |
           set -euo pipefail
 
+          cp "$CHART_ZIP" "$RELEASE_ZIP"
           RELEASE_TAG="latest"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$CHART_ZIP" --clobber
+            gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber
           else
-            gh release create "$RELEASE_TAG" "$CHART_ZIP" \
+            gh release create "$RELEASE_TAG" "$RELEASE_ZIP" \
               --target "$GITHUB_SHA" \
               --title "Latest Assignment Packages" \
               --notes "Shared release for assignment delivery zips and benchmark chart archives. New assets are appended on successful workflow runs." \
-            || gh release upload "$RELEASE_TAG" "$CHART_ZIP" --clobber
+            || gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber
           fi
