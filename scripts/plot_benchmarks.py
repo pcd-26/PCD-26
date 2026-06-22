@@ -151,10 +151,16 @@ def main() -> None:
             runs,
             output_dir / "synchronization-overhead-vs-thread-count.png",
         )
-        fallback_plot_gui_latency(
-            gui,
-            output_dir / "gui-latency-vs-balls.png",
-        )
+        if gui.empty:
+            write_placeholder_chart(
+                output_dir / "gui-latency-vs-balls.png",
+                "GUI Latency vs Balls",
+            )
+        else:
+            fallback_plot_gui_latency(
+                gui,
+                output_dir / "gui-latency-vs-balls.png",
+            )
 
     print(f"charts_written output_dir={output_dir}")
 
@@ -353,6 +359,19 @@ def plot_gui_latency(gui: pd.DataFrame, output_file: Path) -> None:
 def save_figure(fig: plt.Figure, output_file: Path) -> None:
     fig.savefig(output_file, dpi=180)
     plt.close(fig)
+
+
+def write_placeholder_chart(output_file: Path, title: str) -> None:
+    canvas = Canvas(1200, 800)
+    canvas.fill((255, 255, 255))
+    canvas.frame_title(title)
+    canvas.rect(140, 140, 1060, 660, (210, 210, 210))
+    canvas.line(220, 620, 1020, 620, (130, 130, 130))
+    canvas.line(220, 620, 220, 220, (130, 130, 130))
+    canvas.circle(380, 500, 14, (31, 119, 180))
+    canvas.circle(600, 420, 14, (214, 39, 40))
+    canvas.circle(820, 330, 14, (44, 160, 44))
+    canvas.save(output_file)
 
 
 def fallback_plot_best_by_ball(
