@@ -113,7 +113,8 @@ public final class HeadlessBenchmarkRunner {
         }
 
         HeadlessBenchmarkCsvWriter.write(request.outputFile(), rows);
-        return new BenchmarkReport(request.outputFile(), List.copyOf(rows));
+        var derived = HeadlessBenchmarkResultsPostProcessor.process(request.outputFile());
+        return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), derived.speedupFile(), List.copyOf(rows));
     }
 
     /**
@@ -452,7 +453,7 @@ public final class HeadlessBenchmarkRunner {
      * @param outputFile CSV output path
      * @param rows measured benchmark rows
      */
-    public record BenchmarkReport(Path outputFile, List<BenchmarkRow> rows) {
+    public record BenchmarkReport(Path outputFile, Path aggregatedOutputFile, Path speedupOutputFile, List<BenchmarkRow> rows) {
     }
 
     /**

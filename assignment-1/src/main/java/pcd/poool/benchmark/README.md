@@ -55,7 +55,9 @@ controlled workloads and report timing data useful for the assignment report.
 - `HeadlessBenchmarkRunner.java`
   Runs the reproducible comparison benchmark for sequential, threaded, and
   executor-based simulations, measures only the simulation loop, and writes
-  raw CSV rows to `benchmark/results/raw-results.csv`.
+  raw CSV rows to `benchmark/results/raw-results.csv`. It also triggers the
+  derived aggregation step that writes `benchmark/results/aggregated-results.csv`
+  and `benchmark/results/speedup-results.csv`.
 - `GuiResponsivenessBenchmark.java`
   Runs a scripted Swing benchmark that measures render latency, EDT delay, and
   update rate separately from headless throughput.
@@ -131,6 +133,11 @@ The CSV rows contain the implementation, ball count, worker count, step count,
 seed, run index, warmup flag, elapsed milliseconds, throughput, final state
 hash, JVM identification, operating-system identification, and available CPU
 count.
+
+After the raw export, the post-processor groups rows by
+`implementation+balls+workers+steps+seed`, computes average and standard
+deviation for elapsed time and throughput, and then derives speedup rows using
+the sequential baseline for the same `balls`, `steps`, and `seed`.
 
 All benchmark entry points now consume the shared `BenchmarkConfig` model, so
 defaults, validation, and exported configuration values stay centralized.

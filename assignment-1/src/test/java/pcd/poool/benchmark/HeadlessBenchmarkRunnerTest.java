@@ -42,6 +42,8 @@ class HeadlessBenchmarkRunnerTest {
         var report = HeadlessBenchmarkRunner.run(request);
 
         assertEquals(tempDir.resolve("raw-results.csv"), report.outputFile());
+        assertEquals(tempDir.resolve("aggregated-results.csv"), report.aggregatedOutputFile());
+        assertEquals(tempDir.resolve("speedup-results.csv"), report.speedupOutputFile());
         assertEquals(12, report.rows().size());
 
         var lines = Files.readAllLines(report.outputFile());
@@ -50,6 +52,8 @@ class HeadlessBenchmarkRunnerTest {
         assertTrue(lines.stream().skip(1).allMatch(line -> line.contains(",false,")));
         assertTrue(report.rows().stream().allMatch(row -> row.elapsedMs() > 0.0));
         assertTrue(report.rows().stream().allMatch(row -> row.availableProcessors() > 0));
+        assertTrue(Files.exists(report.aggregatedOutputFile()));
+        assertTrue(Files.exists(report.speedupOutputFile()));
     }
 
     @Test
