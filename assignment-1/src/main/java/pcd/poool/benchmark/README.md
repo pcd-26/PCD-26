@@ -58,6 +58,11 @@ controlled workloads and report timing data useful for the assignment report.
   raw CSV rows to `benchmark/results/raw-results.csv`. It also triggers the
   derived aggregation step that writes `benchmark/results/aggregated-results.csv`
   and `benchmark/results/speedup-results.csv`.
+- `ScalabilityBenchmarkRunner.java`
+  Runs the worker-count scalability benchmark for the threaded and executor
+  implementations, using the medium and heavy workloads, and writes raw CSV
+  rows to `benchmark/results/raw-scalability-results.csv` plus aggregated rows
+  to `benchmark/results/aggregated-scalability-results.csv`.
 - `GuiResponsivenessBenchmark.java`
   Runs a scripted Swing benchmark that measures render latency, EDT delay, and
   update rate separately from headless throughput.
@@ -138,6 +143,24 @@ After the raw export, the post-processor groups rows by
 `implementation+balls+workers+steps+seed`, computes average and standard
 deviation for elapsed time and throughput, and then derives speedup rows using
 the sequential baseline for the same `balls`, `steps`, and `seed`.
+
+## Scalability benchmark
+
+The scalability runner focuses on worker-count scaling for the concurrent
+implementations only:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.ScalabilityBenchmarkRunner
+```
+
+By default it measures the `2500`-ball medium workload and the `10000`-ball
+heavy workload with worker counts `1, 2, 4, 8, availableProcessors,`
+and `availableProcessors + 1`. The benchmark uses a fixed step count, seed,
+warmup runs, and measured runs so repeated executions stay comparable.
+
+Supported options mirror the headless runner, with `--workers` accepting a
+comma-separated worker list and `--implementation` limited to `threads`,
+`executor`, or `all`.
 
 All benchmark entry points now consume the shared `BenchmarkConfig` model, so
 defaults, validation, and exported configuration values stay centralized.
