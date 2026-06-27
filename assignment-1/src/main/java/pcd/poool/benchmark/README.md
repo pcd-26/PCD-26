@@ -66,6 +66,11 @@ controlled workloads and report timing data useful for the assignment report.
 - `GuiResponsivenessBenchmark.java`
   Runs a scripted Swing benchmark that measures render latency, EDT delay, and
   update rate separately from headless throughput.
+- `GuiResponsivenessBenchmarkRunner.java`
+  Runs the dedicated GUI responsiveness benchmark across sequential,
+  threaded, and executor implementations and writes
+  `benchmark/results/raw-gui-results.csv` plus
+  `benchmark/results/aggregated-gui-results.csv`.
 - `GuiResponsivenessMonitor.java`
   Collects GUI timing metrics for request, EDT, and render completion phases.
 - `GuiResponsivenessCsvWriter.java`
@@ -186,6 +191,9 @@ coordination cost and ratio alongside the existing timing metrics.
 one snapshot row so the benchmark report can state the runtime conditions.
 `GuiResponsivenessCsvWriter` writes `gui-responsiveness.csv` with the GUI
 latency, delay, and update-rate measurements collected by the Swing benchmark.
+`GuiResponsivenessBenchmarkRunner` is a separate GUI load benchmark that keeps
+its raw and aggregated rows in dedicated CSV files so the GUI measurements do
+not mix with the headless comparison results.
 `BenchmarkScalabilityAnalyzer` consumes `benchmark-summary.csv` and produces
 speedup, efficiency, and scalability tables that can be copied directly into
 the report.
