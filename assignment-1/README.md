@@ -63,14 +63,6 @@ Specific JUnit 5 tests can be added under `assignment-1/src/test/java` and run w
 mvn -f assignment-1/pom.xml -Dtest=ClassName test
 ```
 
-The sequential physics engine can also be benchmarked independently after
-compilation:
-
-```bash
-mvn -f assignment-1/pom.xml test
-java -cp assignment-1/target/classes pcd.poool.benchmark.PhysicsBenchmark 600
-```
-
 The playable sequential baseline uses the physics engine as its computational
 core. It runs in one thread but models the two players independently: the human
 and the bot can each kick their own cue ball whenever that specific ball is
@@ -91,12 +83,7 @@ red bot ball is controlled by a simple deterministic sequential strategy and
 shows the same preview vector shortly before shooting. The HUD shows the
 remaining small balls, frame rate, score, player readiness, and average physics step
 time. When the game ends, a full-screen overlay shows the winner and final
-score; press R to start a new game. A baseline metric for the integrated
-sequential game loop can be collected with:
-
-```bash
-java -cp assignment-1/target/classes pcd.poool.benchmark.SequentialGameBenchmark 600
-```
+score; press R to start a new game.
 
 The first platform-thread implementation is available through the reusable
 `pcd.poool.threaded.ThreadedGameRunner`. It keeps the sequential game model as
@@ -123,14 +110,6 @@ private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
 The `thousand` profile creates 1000 small balls and is the recommended first
 manual stress test for the multithreaded version.
 
-The threaded physics benchmark uses the massive board configuration and can be
-run with an optional worker count:
-
-```bash
-java -cp assignment-1/target/classes pcd.poool.benchmark.ThreadedPhysicsBenchmark 600
-java -cp assignment-1/target/classes pcd.poool.benchmark.ThreadedPhysicsBenchmark 600 8
-```
-
 For headless comparisons that must stay free of GUI rendering, use the seeded
 simulation runner. It accepts the implementation type, ball count, thread
 count, number of simulation steps, and random seed:
@@ -144,6 +123,16 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunne
 The runner reports elapsed time, completed steps, and a final state hash so
 the same scenario can be compared across implementations without opening the
 GUI.
+
+The benchmark pipeline that feeds the final charts and report can be launched
+with one command:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline
+```
+
+It writes the raw CSV files under `benchmark/results`, generates the charts in
+`benchmark/charts`, and fails fast if any benchmark stage fails.
 
 The GitHub Actions workflow `Assignment 1 Tests CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs. The benchmark and plot workflows are split out separately so the benchmark CSV generation and chart rendering can be triggered and validated independently.
 

@@ -10,11 +10,6 @@ controlled workloads and report timing data useful for the assignment report.
 
 ## Files
 
-- `PhysicsBenchmark.java`
-  Benchmarks the sequential physics engine on a large physical configuration.
-- `SequentialGameBenchmark.java`
-  Benchmarks the integrated sequential gameplay loop, including physics and
-  game-rule progression.
 - `BenchmarkConfig.java`
   Shared benchmark configuration model used by all benchmark runners.
 - `BenchmarkRunner.java`
@@ -52,10 +47,6 @@ controlled workloads and report timing data useful for the assignment report.
 - `RuntimeTelemetryCsvWriter.java`
   Exports the telemetry snapshot to `environment.csv` alongside benchmark
   results.
-- `HeadlessSimulationRunner.java`
-  Runs a seeded simulation without GUI rendering and reports elapsed time,
-  completed steps, a final board-state hash, and optional coordination
-  metrics for the selected execution strategy.
 - `HeadlessBenchmarkRunner.java`
   Runs the reproducible comparison benchmark for sequential, threaded, and
   executor-based simulations, measures only the simulation loop, and writes
@@ -67,35 +58,11 @@ controlled workloads and report timing data useful for the assignment report.
   implementations, using the medium and heavy workloads, and writes raw CSV
   rows to `benchmark/results/raw-scalability-results.csv` plus aggregated rows
   to `benchmark/results/aggregated-scalability-results.csv`.
-- `GuiResponsivenessBenchmark.java`
-  Runs a scripted Swing benchmark that measures render latency, EDT delay, and
-  update rate separately from headless throughput.
 - `GuiResponsivenessBenchmarkRunner.java`
   Runs the dedicated GUI responsiveness benchmark across sequential,
   threaded, and executor implementations and writes
   `benchmark/results/raw-gui-results.csv` plus
   `benchmark/results/aggregated-gui-results.csv`.
-- `GuiResponsivenessMonitor.java`
-  Collects GUI timing metrics for request, EDT, and render completion phases.
-- `GuiResponsivenessCsvWriter.java`
-  Exports GUI responsiveness measurements to `gui-responsiveness.csv`.
-- `ThreadedPhysicsBenchmark.java`
-  Benchmarks the multithreaded physics engine and can optionally choose the
-  number of worker threads.
-- `ThreadedPhysicsProfilingBenchmark.java`
-  Profiles the threaded physics pipeline phase by phase and compares a sparse
-  and a clustered layout to highlight possible bottlenecks in broad-phase
-  collision handling.
-- `TaskBasedPhysicsProfilingBenchmark.java`
-  Profiles the task-based physics pipeline phase by phase using the engine's
-  internal profiling snapshot. It reports the time spent in integration, hole
-  handling, grid construction, merge, pair collection, collision resolution,
-  and final apply.
-- `CompletePhysicsBenchmark.java`
-  Runs the recommended automatic comparison across the sequential,
-  platform-threaded, and task-based physics engines. It uses the same
-  deterministic scenarios, warmup, repeat count, and checksum validation for
-  every implementation.
 
 ## Headless simulation runner
 
@@ -193,8 +160,6 @@ elapsed time and throughput, so the derived CSVs can report average
 coordination cost and ratio alongside the existing timing metrics.
 `RuntimeTelemetryCsvWriter` writes `environment.csv` with one stable header and
 one snapshot row so the benchmark report can state the runtime conditions.
-`GuiResponsivenessCsvWriter` writes `gui-responsiveness.csv` with the GUI
-latency, delay, and update-rate measurements collected by the Swing benchmark.
 `GuiResponsivenessBenchmarkRunner` is a separate GUI load benchmark that keeps
 its raw and aggregated rows in dedicated CSV files so the GUI measurements do
 not mix with the headless comparison results.
@@ -214,13 +179,13 @@ The pipeline runs the headless benchmark, the benchmark suite aggregation and
 coordination collection, the worker-count scalability benchmark, the GUI
 responsiveness benchmark, and the chart-generation step. Raw CSV files are
 written under `benchmark/results/<timestamp>/` and chart files are written
-under `benchmark/charts/report/`.
+under `benchmark/charts/`.
 
 The pipeline also accepts optional output-root overrides:
 
 ```text
 --results-root benchmark/results
---charts-root benchmark/charts/report
+--charts-root benchmark/charts
 ```
 
 `scripts/plot_benchmarks.py` turns the CSV exports into charts for execution
@@ -254,44 +219,6 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite --smoke 
 
 The suite stores its output in a timestamped directory under
 `benchmarks/results/`, for example `benchmarks/results/20260621-131530-000/`.
-
-## Recommended comparison
-
-Run the complete benchmark from the repository root after compiling:
-
-```bash
-mvn -f assignment-1/pom.xml package
-java -cp assignment-1/target/classes pcd.poool.benchmark.CompletePhysicsBenchmark 30 5 2
-```
-
-Arguments are:
-
-```text
-measured_steps warmup_steps repeats
-```
-
-The output is line-oriented. `kind=result` lines contain the raw comparable
-measurements:
-
-- `scenario`: small, medium, or high-load board
-- `engine`: sequential, threaded, or task
-- `workers`: worker count used by threaded/task engines
-- `avg_step_ms`, `min_step_ms`, `max_step_ms`, `stddev_step_ms`
-- `throughput_steps_per_sec`
-- `speedup_vs_sequential`
-- `checksum_matches_sequential`
-- `diagnosis`
-
-`kind=recommendation` lines report the fastest engine for each scenario. A
-diagnosis of `parallel_overhead_dominates` means the concurrent strategy is
-slower than the sequential baseline for that workload. A diagnosis of
-`different_trajectory_check_rules` means the implementation is deterministic
-across repeats but produced a different final floating-point trajectory from
-the sequential immediate-resolution baseline; in that case gameplay rule tests
-should be used together with timing data. The task-based engine uses
-deterministic collision rounds for small contact sets and a parallel
-accumulated-impulse solver for larger contact sets, so the benchmark output is
-the intended source for understanding the consistency/performance tradeoff.
 
 ## Relationships
 

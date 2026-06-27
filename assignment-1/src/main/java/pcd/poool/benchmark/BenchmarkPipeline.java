@@ -18,7 +18,7 @@ import java.util.Objects;
 public final class BenchmarkPipeline {
 
     private static final Path DEFAULT_RESULTS_ROOT = Path.of("benchmark", "results");
-    private static final Path DEFAULT_CHARTS_ROOT = Path.of("benchmark", "charts", "report");
+    private static final Path DEFAULT_CHARTS_ROOT = Path.of("benchmark", "charts");
     private static final DateTimeFormatter DIRECTORY_FORMATTER =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
 
