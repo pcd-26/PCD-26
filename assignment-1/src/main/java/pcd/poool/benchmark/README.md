@@ -52,6 +52,10 @@ controlled workloads and report timing data useful for the assignment report.
   Runs a seeded simulation without GUI rendering and reports elapsed time,
   completed steps, a final board-state hash, and optional coordination
   metrics for the selected execution strategy.
+- `HeadlessBenchmarkRunner.java`
+  Runs the reproducible comparison benchmark for sequential, threaded, and
+  executor-based simulations, measures only the simulation loop, and writes
+  raw CSV rows to `benchmark/results/raw-results.csv`.
 - `GuiResponsivenessBenchmark.java`
   Runs a scripted Swing benchmark that measures render latency, EDT delay, and
   update rate separately from headless throughput.
@@ -96,6 +100,37 @@ implementation_type balls_count thread_count simulation_steps random_seed
 
 The runner keeps GUI code out of the benchmark path and returns a final state
 hash so repeated runs of the same scenario can be validated.
+
+## Headless benchmark runner
+
+The headless benchmark runner compares the three simulation implementations in
+one command and writes a raw CSV file without any GUI rendering overhead:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessBenchmarkRunner
+```
+
+By default it benchmarks ball counts `100, 500, 1000, 2500, 5000, 10000` with
+seed `42`, at least two warmup runs, and at least five measured runs. The raw
+output is written to `benchmark/results/raw-results.csv`.
+
+Supported options are:
+
+```text
+--implementation all|sequential|threads|executor
+--balls 100,500,...
+--steps N
+--seed N
+--workers N
+--warmup N
+--measured N
+--output benchmark/results/raw-results.csv
+```
+
+The CSV rows contain the implementation, ball count, worker count, step count,
+seed, run index, warmup flag, elapsed milliseconds, throughput, final state
+hash, JVM identification, operating-system identification, and available CPU
+count.
 
 All benchmark entry points now consume the shared `BenchmarkConfig` model, so
 defaults, validation, and exported configuration values stay centralized.
