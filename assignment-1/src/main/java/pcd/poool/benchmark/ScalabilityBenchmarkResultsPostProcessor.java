@@ -21,7 +21,7 @@ final class ScalabilityBenchmarkResultsPostProcessor {
     static final String AGGREGATED_FILE_NAME = "aggregated-scalability-results.csv";
 
     private static final String AGGREGATED_HEADER =
-            "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput";
+            "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted";
 
     private ScalabilityBenchmarkResultsPostProcessor() {
     }
@@ -70,7 +70,12 @@ final class ScalabilityBenchmarkResultsPostProcessor {
                     mean(rows, RawRunRow::elapsedMs),
                     stddev(rows, RawRunRow::elapsedMs),
                     mean(rows, RawRunRow::throughput),
-                    stddev(rows, RawRunRow::throughput)));
+                    stddev(rows, RawRunRow::throughput),
+                    mean(rows, RawRunRow::coordinationMs),
+                    stddev(rows, RawRunRow::coordinationMs),
+                    mean(rows, RawRunRow::coordinationRatio),
+                    stddev(rows, RawRunRow::coordinationRatio),
+                    mean(rows, row -> row.tasksSubmitted())));
         }
 
         aggregatedRows.sort(Comparator
@@ -109,6 +114,9 @@ final class ScalabilityBenchmarkResultsPostProcessor {
                     parseBoolean(cells, columns, "warmup"),
                     parseDouble(cells, columns, "elapsedMs"),
                     parseDouble(cells, columns, "throughput"),
+                    parseDouble(cells, columns, "coordinationMs"),
+                    parseDouble(cells, columns, "coordinationRatio"),
+                    parseLong(cells, columns, "tasksSubmitted"),
                     value(cells, columns, "jvm"),
                     value(cells, columns, "os"),
                     parseInt(cells, columns, "availableProcessors")));
@@ -265,6 +273,9 @@ final class ScalabilityBenchmarkResultsPostProcessor {
             boolean warmup,
             double elapsedMs,
             double throughput,
+            double coordinationMs,
+            double coordinationRatio,
+            long tasksSubmitted,
             String jvm,
             String os,
             int availableProcessors) {
@@ -283,7 +294,12 @@ final class ScalabilityBenchmarkResultsPostProcessor {
             double avgElapsedMs,
             double stdElapsedMs,
             double avgThroughput,
-            double stdThroughput) implements CsvRow {
+            double stdThroughput,
+            double avgCoordinationMs,
+            double stdCoordinationMs,
+            double avgCoordinationRatio,
+            double stdCoordinationRatio,
+            double avgTasksSubmitted) implements CsvRow {
 
         @Override
         public String toCsv() {
@@ -296,7 +312,12 @@ final class ScalabilityBenchmarkResultsPostProcessor {
                     formatDouble(avgElapsedMs),
                     formatDouble(stdElapsedMs),
                     formatDouble(avgThroughput),
-                    formatDouble(stdThroughput));
+                    formatDouble(stdThroughput),
+                    formatDouble(avgCoordinationMs),
+                    formatDouble(stdCoordinationMs),
+                    formatDouble(avgCoordinationRatio),
+                    formatDouble(stdCoordinationRatio),
+                    formatDouble(avgTasksSubmitted));
         }
     }
 
