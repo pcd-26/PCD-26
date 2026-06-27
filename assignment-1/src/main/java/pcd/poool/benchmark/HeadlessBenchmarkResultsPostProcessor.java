@@ -23,7 +23,7 @@ final class HeadlessBenchmarkResultsPostProcessor {
     static final String SPEEDUP_FILE_NAME = "speedup-results.csv";
 
     private static final String AGGREGATED_HEADER =
-            "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput";
+            "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted";
     private static final String SPEEDUP_HEADER =
             "balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup";
 
@@ -78,7 +78,12 @@ final class HeadlessBenchmarkResultsPostProcessor {
                     mean(rows, RawRunRow::elapsedMs),
                     stddev(rows, RawRunRow::elapsedMs),
                     mean(rows, RawRunRow::throughput),
-                    stddev(rows, RawRunRow::throughput)));
+                    stddev(rows, RawRunRow::throughput),
+                    mean(rows, RawRunRow::coordinationMs),
+                    stddev(rows, RawRunRow::coordinationMs),
+                    mean(rows, RawRunRow::coordinationRatio),
+                    stddev(rows, RawRunRow::coordinationRatio),
+                    mean(rows, row -> row.tasksSubmitted())));
         }
 
         aggregatedRows.sort(Comparator
@@ -163,6 +168,9 @@ final class HeadlessBenchmarkResultsPostProcessor {
                     parseBoolean(cells, columns, "warmup"),
                     parseDouble(cells, columns, "elapsedMs"),
                     parseDouble(cells, columns, "throughput"),
+                    parseDouble(cells, columns, "coordinationMs"),
+                    parseDouble(cells, columns, "coordinationRatio"),
+                    parseLong(cells, columns, "tasksSubmitted"),
                     parseLong(cells, columns, "stateHash"),
                     value(cells, columns, "jvm"),
                     value(cells, columns, "os"),
@@ -323,6 +331,9 @@ final class HeadlessBenchmarkResultsPostProcessor {
             boolean warmup,
             double elapsedMs,
             double throughput,
+            double coordinationMs,
+            double coordinationRatio,
+            long tasksSubmitted,
             long stateHash,
             String jvm,
             String os,
@@ -342,7 +353,12 @@ final class HeadlessBenchmarkResultsPostProcessor {
             double avgElapsedMs,
             double stdElapsedMs,
             double avgThroughput,
-            double stdThroughput) implements CsvRow {
+            double stdThroughput,
+            double avgCoordinationMs,
+            double stdCoordinationMs,
+            double avgCoordinationRatio,
+            double stdCoordinationRatio,
+            double avgTasksSubmitted) implements CsvRow {
 
         @Override
         public String toCsv() {
@@ -355,7 +371,12 @@ final class HeadlessBenchmarkResultsPostProcessor {
                     formatDouble(avgElapsedMs),
                     formatDouble(stdElapsedMs),
                     formatDouble(avgThroughput),
-                    formatDouble(stdThroughput));
+                    formatDouble(stdThroughput),
+                    formatDouble(avgCoordinationMs),
+                    formatDouble(stdCoordinationMs),
+                    formatDouble(avgCoordinationRatio),
+                    formatDouble(stdCoordinationRatio),
+                    formatDouble(avgTasksSubmitted));
         }
     }
 

@@ -52,8 +52,9 @@ class ScalabilityBenchmarkRunnerTest {
 
         var rawLines = Files.readAllLines(report.outputFile());
         var aggregatedLines = Files.readAllLines(report.aggregatedOutputFile());
-        assertEquals("implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,jvm,os,availableProcessors", rawLines.get(0));
-        assertEquals("implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput", aggregatedLines.get(0));
+        assertEquals("implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,jvm,os,availableProcessors", rawLines.get(0));
+        assertEquals("implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted", aggregatedLines.get(0));
         assertEquals(9, aggregatedLines.size());
+        assertTrue(report.rows().stream().filter(row -> row.implementation().equals("threads") || row.implementation().equals("executor")).allMatch(row -> row.coordinationMs() >= 0.0 && row.coordinationRatio() >= 0.0 && row.tasksSubmitted() >= 0L));
     }
 }

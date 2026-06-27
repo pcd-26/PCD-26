@@ -135,14 +135,15 @@ Supported options are:
 ```
 
 The CSV rows contain the implementation, ball count, worker count, step count,
-seed, run index, warmup flag, elapsed milliseconds, throughput, final state
-hash, JVM identification, operating-system identification, and available CPU
-count.
+seed, run index, warmup flag, elapsed milliseconds, throughput, coordination
+milliseconds, coordination ratio, submitted task count, final state hash, JVM
+identification, operating-system identification, and available CPU count.
 
 After the raw export, the post-processor groups rows by
 `implementation+balls+workers+steps+seed`, computes average and standard
-deviation for elapsed time and throughput, and then derives speedup rows using
-the sequential baseline for the same `balls`, `steps`, and `seed`.
+deviation for elapsed time, throughput, and coordination metrics, and then
+derives speedup rows using the sequential baseline for the same `balls`,
+`steps`, and `seed`.
 
 ## Scalability benchmark
 
@@ -178,6 +179,9 @@ data.
 The full benchmark suite also checks that sequential, threaded, and
 executor-based runs agree on the same scenario before their results are used
 for aggregate comparisons.
+Both benchmark runners export per-run coordination estimates in addition to
+elapsed time and throughput, so the derived CSVs can report average
+coordination cost and ratio alongside the existing timing metrics.
 `RuntimeTelemetryCsvWriter` writes `environment.csv` with one stable header and
 one snapshot row so the benchmark report can state the runtime conditions.
 `GuiResponsivenessCsvWriter` writes `gui-responsiveness.csv` with the GUI

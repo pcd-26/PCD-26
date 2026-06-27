@@ -14,7 +14,7 @@ import java.util.Objects;
 final class ScalabilityBenchmarkCsvWriter {
 
     private static final String HEADER =
-            "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,jvm,os,availableProcessors";
+            "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,jvm,os,availableProcessors";
 
     private ScalabilityBenchmarkCsvWriter() {
     }
@@ -48,6 +48,9 @@ final class ScalabilityBenchmarkCsvWriter {
                             Boolean.toString(row.warmup()),
                             formatDouble(row.elapsedMs()),
                             formatDouble(row.throughput()),
+                            formatDouble(row.coordinationMs()),
+                            formatDouble(row.coordinationRatio()),
+                            Long.toString(row.tasksSubmitted()),
                             row.jvm(),
                             row.os(),
                             Integer.toString(row.availableProcessors())))

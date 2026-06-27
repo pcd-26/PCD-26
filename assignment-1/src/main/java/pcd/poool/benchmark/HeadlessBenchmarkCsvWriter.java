@@ -14,7 +14,7 @@ import java.util.Objects;
 final class HeadlessBenchmarkCsvWriter {
 
     private static final String HEADER =
-            "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,stateHash,jvm,os,availableProcessors";
+            "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors";
 
     private HeadlessBenchmarkCsvWriter() {
     }
@@ -48,6 +48,9 @@ final class HeadlessBenchmarkCsvWriter {
                             Boolean.toString(row.warmup()),
                             formatDouble(row.elapsedMs()),
                             formatDouble(row.throughput()),
+                            formatDouble(row.coordinationMs()),
+                            formatDouble(row.coordinationRatio()),
+                            Long.toString(row.tasksSubmitted()),
                             Long.toString(row.stateHash()),
                             row.jvm(),
                             row.os(),
