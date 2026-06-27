@@ -132,7 +132,8 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline
 ```
 
 It writes the raw CSV files under `benchmark/results`, generates the charts in
-`benchmark/charts`, and fails fast if any benchmark stage fails.
+`benchmark/charts`, derives the scalability tables needed by the charts, and
+fails fast if any benchmark stage fails.
 
 The GitHub Actions workflow `Assignment 1 Tests CI` runs the Maven build on assignment-1 changes and also supports a manual `test_selector` input for targeted test runs. The benchmark and plot workflows are split out separately so the benchmark CSV generation and chart rendering can be triggered and validated independently.
 

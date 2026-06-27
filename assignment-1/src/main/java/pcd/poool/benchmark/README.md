@@ -32,7 +32,7 @@ controlled workloads and report timing data useful for the assignment report.
   post-processing.
 - `scripts/plot_benchmarks.py`
   Generates report-ready PNG and SVG charts from the benchmark CSV files and
-  stores them in `benchmarks/charts/report/`.
+  stores them in `benchmark/charts/`.
 - `BenchmarkSuite.java`
   Executes the full benchmark matrix or the lightweight CI smoke matrix,
   prints progress, and stores all results in a timestamped directory under
@@ -176,10 +176,11 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline
 ```
 
 The pipeline runs the headless benchmark, the benchmark suite aggregation and
-coordination collection, the worker-count scalability benchmark, the GUI
-responsiveness benchmark, and the chart-generation step. Raw CSV files are
-written under `benchmark/results/<timestamp>/` and chart files are written
-under `benchmark/charts/`.
+coordination collection, the derived scalability-table generation, the
+worker-count scalability benchmark, the GUI responsiveness benchmark, and the
+chart-generation step. Raw CSV files are written under
+`benchmark/results/<timestamp>/`, derived tables stay in the same directory,
+and chart files are written under `benchmark/charts/`.
 
 The pipeline also accepts optional output-root overrides:
 
@@ -201,7 +202,7 @@ alongside the delivery zip. The release uses fixed asset names, so every new
 run replaces the previous `Assignment-01-latest.zip` and
 `Assignment-01-benchmark-charts-latest.zip` files instead of adding dated
 copies. The report charts stay outside the assignment zip under
-`benchmarks/charts/report/` and can be reused later when preparing the final
+`benchmark/charts/` and can be reused later when preparing the final
 document. CI benchmark numbers are only for regression checks; the report
 should use locally or controlled-machine generated results.
 

@@ -90,6 +90,9 @@ class BenchmarkPipelineTest {
         assertTrue(Files.exists(resultsDir.resolve("raw-scalability-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("raw-gui-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("gui-responsiveness.csv")));
+        assertTrue(Files.exists(resultsDir.resolve(BenchmarkScalabilityAnalyzer.SPEEDUP_TABLE_FILE_NAME)));
+        assertTrue(Files.exists(resultsDir.resolve(BenchmarkScalabilityAnalyzer.EFFICIENCY_TABLE_FILE_NAME)));
+        assertTrue(Files.exists(resultsDir.resolve(BenchmarkScalabilityAnalyzer.SCALABILITY_TABLE_FILE_NAME)));
         assertTrue(Files.exists(tempDir.resolve("charts").resolve("chart.txt")));
         assertFalse(Files.exists(resultsDir.resolve("missing.txt")));
     }
