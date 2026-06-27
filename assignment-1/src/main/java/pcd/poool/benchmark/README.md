@@ -42,6 +42,10 @@ controlled workloads and report timing data useful for the assignment report.
   Executes the full benchmark matrix or the lightweight CI smoke matrix,
   prints progress, and stores all results in a timestamped directory under
   `benchmarks/results/` or `benchmarks/results/ci/`.
+- `BenchmarkPipeline.java`
+  Runs the complete benchmark flow in one command, including benchmark
+  execution, aggregation, coordination reporting, GUI responsiveness, and
+  chart generation.
 - `RuntimeTelemetry.java`
   Captures JVM, OS, heap, CPU-count, and optional process CPU-time metadata
   for benchmark interpretation.
@@ -197,6 +201,28 @@ not mix with the headless comparison results.
 `BenchmarkScalabilityAnalyzer` consumes `benchmark-summary.csv` and produces
 speedup, efficiency, and scalability tables that can be copied directly into
 the report.
+
+## Full benchmark pipeline
+
+Run the complete pipeline with one command:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline
+```
+
+The pipeline runs the headless benchmark, the benchmark suite aggregation and
+coordination collection, the worker-count scalability benchmark, the GUI
+responsiveness benchmark, and the chart-generation step. Raw CSV files are
+written under `benchmark/results/<timestamp>/` and chart files are written
+under `benchmark/charts/report/`.
+
+The pipeline also accepts optional output-root overrides:
+
+```text
+--results-root benchmark/results
+--charts-root benchmark/charts/report
+```
+
 `scripts/plot_benchmarks.py` turns the CSV exports into charts for execution
 time, throughput, speedup, efficiency, CPU utilization, coordination
 overhead, and GUI latency.
