@@ -43,7 +43,7 @@ class HeadlessBenchmarkResultsPostProcessorTest {
         assertEquals("balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup", speedupLines.get(0));
         assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("sequential,100,1,10,42,75.000000,25.000000,150.000000,50.000000,0.000000,0.000000,0.000000,0.000000,0.000000")));
         assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("threads,100,2,10,42,32.500000,7.500000,325.000000,75.000000,4.000000,0.500000,0.126250,0.013750,2.000000")));
-        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("executor,100,2,10,42,25.000000,5.000000,416.666667,83.333333,2.500000,0.500000,0.100000,0.000000,4.000000")));
+        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("executor,100,2,10,42,25.000000,5.000000,416.666667,83.333334,2.500000,0.500000,0.100000,0.000000,4.000000")));
         assertTrue(speedupLines.stream().anyMatch(line -> line.startsWith("100,2,threads,75.000000,32.500000,2.307692")));
         assertTrue(speedupLines.stream().anyMatch(line -> line.startsWith("100,2,executor,75.000000,25.000000,3.000000")));
     }

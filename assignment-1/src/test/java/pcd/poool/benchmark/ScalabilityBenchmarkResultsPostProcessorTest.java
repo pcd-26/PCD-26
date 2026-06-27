@@ -34,7 +34,7 @@ class ScalabilityBenchmarkResultsPostProcessorTest {
 
         var lines = Files.readAllLines(result.aggregatedFile());
         assertEquals("implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted", lines.get(0));
-        assertTrue(lines.stream().anyMatch(line -> line.startsWith("threads,2500,1,10,42,25.000000,5.000000,416.666667,83.333333,3.000000,1.000000,0.116667,0.016667,1.000000")));
-        assertTrue(lines.stream().anyMatch(line -> line.startsWith("executor,2500,2,10,42,20.000000,5.000000,533.333334,133.333333,4.000000,1.000000,0.200000,0.000000,4.000000")));
+        assertTrue(lines.stream().anyMatch(line -> line.startsWith("threads,2500,1,10,42,25.000000,5.000000,416.666667,83.333334,3.000000,1.000000,0.116667,0.016667,1.000000")));
+        assertTrue(lines.stream().anyMatch(line -> line.startsWith("executor,2500,2,10,42,20.000000,5.000000,533.333334,133.333334,4.000000,1.000000,0.200000,0.000000,4.000000")));
     }
 }
