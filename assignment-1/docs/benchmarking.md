@@ -576,9 +576,9 @@ machine when possible.
 
 When the benchmark workflow runs on `main`, the generated CSV files and chart
 images are mirrored back into the repository under
-`benchmarks/results/official/<timestamp>/` and
-`benchmarks/charts/official/<timestamp>/`, then committed with `[skip ci]` so
-the benchmark history stays versioned without retriggering the workflow.
+`benchmarks/results/official/<timestamp>/` and `benchmarks/charts/`, then
+committed with `[skip ci]` so the benchmark history stays versioned without
+retriggering the workflow.
 
 ### 12.3 CI benchmark numbers are not official
 

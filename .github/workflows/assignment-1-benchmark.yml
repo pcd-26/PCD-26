@@ -262,13 +262,13 @@ jobs:
 
           stamp="${{ steps.snapshot_paths.outputs.stamp }}"
           results_target="benchmarks/results/official/$stamp"
-          charts_target="benchmarks/charts/official/$stamp"
+          charts_target="benchmarks/charts"
 
           rm -rf "$results_target" "$charts_target"
-          mkdir -p "$(dirname "$results_target")" "$(dirname "$charts_target")"
+          mkdir -p "$(dirname "$results_target")" "$charts_target"
 
           cp -R "${{ steps.snapshot_paths.outputs.results_dir }}" "$results_target"
-          cp -R "${{ steps.snapshot_paths.outputs.charts_dir }}" "$charts_target"
+          cp -R "${{ steps.snapshot_paths.outputs.charts_dir }}/." "$charts_target"
 
       - name: Commit benchmark snapshots
         shell: bash
@@ -277,7 +277,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add benchmarks/results/official benchmarks/charts/official
+          git add benchmarks/results/official benchmarks/charts
 
           if git diff --cached --quiet; then
             echo "No benchmark snapshot changes to commit."
