@@ -66,6 +66,19 @@ def main() -> None:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if (input_dir / "aggregated-results.csv").exists():
+        render_new_layout(input_dir, output_dir)
+    elif (input_dir / "benchmark-summary.csv").exists():
+        render_legacy_layout(input_dir, output_dir)
+    else:
+        raise FileNotFoundError(
+            f"missing benchmark CSV layout in {input_dir}; expected either aggregated-results.csv or benchmark-summary.csv"
+        )
+
+    print(f"charts_written output_dir={output_dir}")
+
+
+def render_new_layout(input_dir: Path, output_dir: Path) -> None:
     headless = read_csv(input_dir / "aggregated-results.csv", required=True)
     speedup = read_csv(input_dir / "speedup-results.csv", required=True)
     scalability = read_csv(input_dir / "aggregated-scalability-results.csv", required=True)
@@ -91,7 +104,98 @@ def main() -> None:
         else:
             write_placeholder_pair(output_stem, title)
 
-    print(f"charts_written output_dir={output_dir}")
+
+def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
+    summary = read_csv(input_dir / "benchmark-summary.csv", required=True)
+    speedup = read_csv(input_dir / "speedup-table.csv", required=True)
+    efficiency = read_csv(input_dir / "efficiency-table.csv", required=True)
+    runs = read_csv(input_dir / "benchmark-runs.csv", required=True)
+    gui = read_csv(input_dir / "gui-responsiveness.csv", required=False)
+
+    if plt is not None:
+        plot_best_by_ball(
+            summary,
+            output_dir / "01_best_execution_time_vs_balls.png",
+            value_col="meanMillis",
+            ylabel="Mean execution time (ms)",
+            title="Best execution time vs number of balls",
+            best_agg="min",
+        )
+        plot_best_by_ball(
+            summary,
+            output_dir / "02_best_throughput_vs_balls.png",
+            value_col="meanThroughput",
+            ylabel="Mean throughput (steps/s)",
+            title="Best throughput vs number of balls",
+            best_agg="max",
+        )
+        plot_thread_metric_panels(
+            speedup,
+            output_dir / "03_speedup_vs_thread_count.png",
+            value_col="speedup",
+            ylabel="Speedup",
+            title="Speedup vs worker threads",
+            implementations=("threads", "executor"),
+        )
+        plot_thread_metric_panels(
+            efficiency,
+            output_dir / "04_efficiency_vs_thread_count.png",
+            value_col="efficiency",
+            ylabel="Efficiency",
+            title="Efficiency vs worker threads",
+            implementations=("threads", "executor"),
+        )
+        plot_coordination_overhead_panels(
+            runs,
+            output_dir / "05_coordination_overhead_vs_thread_count.png",
+        )
+        plot_best_by_ball(
+            summary,
+            output_dir / "06_cpu_utilization_vs_thread_count.png",
+            value_col="meanCpuUtilizationPercent",
+            ylabel="CPU utilization (%)",
+            title="CPU utilization vs worker threads",
+            best_agg="max",
+        )
+        if not gui.empty and should_plot_gui_latency(gui):
+            plot_gui_latency(gui, output_dir / "07_gui_latency_vs_balls.png")
+    else:
+        fallback_plot_best_by_ball(
+            summary,
+            output_dir / "01_best_execution_time_vs_balls.png",
+            value_col="meanMillis",
+            best_agg="min",
+        )
+        fallback_plot_best_by_ball(
+            summary,
+            output_dir / "02_best_throughput_vs_balls.png",
+            value_col="meanThroughput",
+            best_agg="max",
+        )
+        fallback_plot_thread_metric_panels(
+            speedup,
+            output_dir / "03_speedup_vs_thread_count.png",
+            value_col="speedup",
+            implementations=("threads", "executor"),
+        )
+        fallback_plot_thread_metric_panels(
+            efficiency,
+            output_dir / "04_efficiency_vs_thread_count.png",
+            value_col="efficiency",
+            implementations=("threads", "executor"),
+        )
+        fallback_plot_coordination_overhead_panels(
+            runs,
+            output_dir / "05_coordination_overhead_vs_thread_count.png",
+        )
+        fallback_plot_best_by_ball(
+            summary,
+            output_dir / "06_cpu_utilization_vs_thread_count.png",
+            value_col="meanCpuUtilizationPercent",
+            best_agg="max",
+        )
+        if not gui.empty and should_plot_gui_latency(gui):
+            fallback_plot_gui_latency(gui, output_dir / "07_gui_latency_vs_balls.png")
 
 
 def read_csv(path: Path, required: bool = False) -> pd.DataFrame:
