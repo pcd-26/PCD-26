@@ -196,8 +196,8 @@ handles Maven verification on pull requests and pushes, and the benchmark
 workflow runs the benchmark suite, generates the derived scalability tables,
 uploads the report-ready chart set as a separate timestamped artifact, and on
 `main` pushes mirrors the versioned CSV and chart snapshots back into
-`benchmarks/results/official/<timestamp>/` and
-`benchmarks/charts/official/<timestamp>/` using a `[skip ci]` commit so the
+`benchmarks/results/official/<timestamp>/` and the stable
+`benchmarks/charts/` folder using a `[skip ci]` commit so the
 repository keeps a stable benchmark history without creating a workflow loop.
 The chart workflow also packages the report figures into a separate
 assignment-specific zip and publishes it to the shared `latest` GitHub Release
