@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,11 +36,17 @@ class BenchmarkPipelineTest {
             public HeadlessBenchmarkRunner.BenchmarkReport runHeadless(HeadlessBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
                 events.add("headless");
                 Files.createDirectories(benchmarkRequest.outputFile().getParent());
-                Files.writeString(benchmarkRequest.outputFile(), "headless");
+                writeCsv(benchmarkRequest.outputFile(), List.of(
+                        "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors",
+                        "sequential,100,1,10,42,1,false,10.000000,1000.000000,0.000000,0.000000,0,JVM,OS,8"));
                 var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-results.csv");
                 var speedup = benchmarkRequest.outputFile().getParent().resolve("speedup-results.csv");
-                Files.writeString(aggregated, "agg");
-                Files.writeString(speedup, "speedup");
+                writeCsv(aggregated, List.of(
+                        "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
+                        "sequential,100,1,10,42,10.000000,0.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
+                writeCsv(speedup, List.of(
+                        "balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup",
+                        "100,1,sequential,10.000000,10.000000,1.000000"));
                 return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of());
             }
 
@@ -48,9 +55,12 @@ class BenchmarkPipelineTest {
                 events.add("suite");
                 Path outputDir = resultsRoot.resolve("20260621-131530-000");
                 Files.createDirectories(outputDir);
-                Files.writeString(outputDir.resolve(BenchmarkCsvWriter.SUMMARY_FILE_NAME), "summary");
-                Files.writeString(outputDir.resolve(BenchmarkCsvWriter.RUNS_FILE_NAME), "runs");
-                Files.writeString(outputDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME), "env");
+                writeCsv(outputDir.resolve(BenchmarkCsvWriter.RUNS_FILE_NAME), List.of(
+                        "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks",
+                        "2026-06-21T13:15:30Z,sequential,100,1,10,42,1,10.000000,1000.000000,50.000000,11,SUCCESS,,0.000000,0.000000,0.000000,0.000000,0,0"));
+                writeCsv(outputDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME), List.of(
+                        "jvmName,jvmVersion,osName,osVersion,osArch,availableProcessors",
+                        "JVM,17,OS,1,amd64,8"));
                 return new BenchmarkSuite.SuiteReport(outputDir, 1, 0);
             }
 
@@ -58,9 +68,13 @@ class BenchmarkPipelineTest {
             public ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
                 events.add("scalability");
                 Files.createDirectories(benchmarkRequest.outputFile().getParent());
-                Files.writeString(benchmarkRequest.outputFile(), "scalability");
+                writeCsv(benchmarkRequest.outputFile(), List.of(
+                        "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,jvm,os,availableProcessors",
+                        "threads,100,1,10,42,1,false,10.000000,1000.000000,1.000000,0.100000,1,JVM,OS,8"));
                 var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-scalability-results.csv");
-                Files.writeString(aggregated, "agg");
+                writeCsv(aggregated, List.of(
+                        "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
+                        "threads,100,1,10,42,10.000000,0.000000,1000.000000,0.000000,1.000000,0.000000,0.100000,0.000000,1.000000"));
                 return new ScalabilityBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of());
             }
 
@@ -68,9 +82,13 @@ class BenchmarkPipelineTest {
             public GuiResponsivenessBenchmarkRunner.BenchmarkReport runGui(GuiResponsivenessBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
                 events.add("gui");
                 Files.createDirectories(benchmarkRequest.outputFile().getParent());
-                Files.writeString(benchmarkRequest.outputFile(), "gui-raw");
+                writeCsv(benchmarkRequest.outputFile(), List.of(
+                        "implementation,balls,workers,steps,seed,runIndex,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,framesAbove16Ms,framesAbove33Ms,jvm,os,availableProcessors",
+                        "sequential,100,1,10,42,1,12.000000,13.000000,14.000000,83.333333,0,0,JVM,OS,8"));
                 var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-gui-results.csv");
-                Files.writeString(aggregated, "gui-agg");
+                writeCsv(aggregated, List.of(
+                        "implementation,balls,workers,steps,seed,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,avgFramesAbove16Ms,avgFramesAbove33Ms",
+                        "sequential,100,1,10,42,12.000000,13.000000,14.000000,83.333333,0.000000,0.000000"));
                 return new GuiResponsivenessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of());
             }
 
@@ -87,12 +105,13 @@ class BenchmarkPipelineTest {
         assertEquals(tempDir.resolve("charts"), report.chartsDir());
         assertEquals(List.of("headless", "suite", "scalability", "gui", "charts"), events);
         assertTrue(Files.exists(resultsDir.resolve("raw-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("aggregated-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("speedup-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("raw-scalability-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("aggregated-scalability-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("raw-gui-results.csv")));
-        assertTrue(Files.exists(resultsDir.resolve("gui-responsiveness.csv")));
-        assertTrue(Files.exists(resultsDir.resolve(BenchmarkScalabilityAnalyzer.SPEEDUP_TABLE_FILE_NAME)));
-        assertTrue(Files.exists(resultsDir.resolve(BenchmarkScalabilityAnalyzer.EFFICIENCY_TABLE_FILE_NAME)));
-        assertTrue(Files.exists(resultsDir.resolve(BenchmarkScalabilityAnalyzer.SCALABILITY_TABLE_FILE_NAME)));
+        assertTrue(Files.exists(resultsDir.resolve("aggregated-gui-results.csv")));
+        assertFalse(Files.exists(resultsDir.resolve(BenchmarkCsvWriter.SUMMARY_FILE_NAME)));
         assertTrue(Files.exists(tempDir.resolve("charts").resolve("chart.txt")));
         assertFalse(Files.exists(resultsDir.resolve("missing.txt")));
     }
@@ -140,5 +159,9 @@ class BenchmarkPipelineTest {
 
         assertTrue(ex.getMessage().contains("boom"));
         assertEquals(List.of("headless"), events);
+    }
+
+    private static void writeCsv(Path file, List<String> lines) throws IOException {
+        Files.writeString(file, String.join(System.lineSeparator(), lines) + System.lineSeparator(), StandardCharsets.UTF_8);
     }
 }

@@ -27,9 +27,9 @@ controlled workloads and report timing data useful for the assignment report.
   configured output directory. Raw run rows include the synchronization
   overhead columns used by the benchmark report.
 - `BenchmarkScalabilityAnalyzer.java`
-  Reads `benchmark-summary.csv` and writes `speedup-table.csv`,
-  `efficiency-table.csv`, and `scalability-table.csv` for report-ready
-  post-processing.
+  Legacy report helper that can derive `speedup-table.csv`,
+  `efficiency-table.csv`, and `scalability-table.csv` from a benchmark
+  summary CSV when report tables are needed outside the main pipeline.
 - `scripts/plot_benchmarks.py`
   Generates report-ready PNG and SVG charts from the benchmark CSV files and
   stores them in `benchmark/charts/`.
@@ -163,9 +163,9 @@ one snapshot row so the benchmark report can state the runtime conditions.
 `GuiResponsivenessBenchmarkRunner` is a separate GUI load benchmark that keeps
 its raw and aggregated rows in dedicated CSV files so the GUI measurements do
 not mix with the headless comparison results.
-`BenchmarkScalabilityAnalyzer` consumes `benchmark-summary.csv` and produces
-speedup, efficiency, and scalability tables that can be copied directly into
-the report.
+`BenchmarkScalabilityAnalyzer` is still available for manual report-table
+generation from benchmark summary CSVs, but the main pipeline and chart
+generation workflow no longer require that summary file.
 
 ## Full benchmark pipeline
 
@@ -176,11 +176,10 @@ java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline
 ```
 
 The pipeline runs the headless benchmark, the benchmark suite aggregation and
-coordination collection, the derived scalability-table generation, the
-worker-count scalability benchmark, the GUI responsiveness benchmark, and the
-chart-generation step. Raw CSV files are written under
-`benchmark/results/<timestamp>/`, derived tables stay in the same directory,
-and chart files are written under `benchmark/charts/`.
+coordination collection, the worker-count scalability benchmark, the GUI
+responsiveness benchmark, and the chart-generation step. Raw and aggregated
+CSV files are written under `benchmark/results/<timestamp>/`, and chart files
+are written under `benchmark/charts/`.
 
 The pipeline also accepts optional output-root overrides:
 
