@@ -310,6 +310,122 @@ def plot_worker_panels(
     save_figure(fig, output_file)
 
 
+def plot_thread_metric_panels(
+    df: pd.DataFrame,
+    output_file: Path,
+    value_col: str,
+    ylabel: str,
+    title: str,
+    implementations: tuple[str, ...] = ("threads", "executor"),
+) -> None:
+    plot_worker_panels(df, output_file, value_col, ylabel, title, implementations=implementations)
+
+
+def plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
+    required = {
+        "balls",
+        "implementation",
+        "threads",
+        "status",
+        "syncTimeMillis",
+        "aggregationTimeMillis",
+        "taskSubmissionTimeMillis",
+        "joinOrFutureWaitMillis",
+    }
+    missing = required - set(runs.columns)
+    if missing:
+        raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
+
+    filtered = runs[runs["status"] == "SUCCESS"].copy()
+    filtered["coordinationMillis"] = (
+        filtered["syncTimeMillis"].fillna(0.0)
+        + filtered["aggregationTimeMillis"].fillna(0.0)
+        + filtered["taskSubmissionTimeMillis"].fillna(0.0)
+        + filtered["joinOrFutureWaitMillis"].fillna(0.0)
+    )
+    grouped = filtered.groupby(["balls", "implementation", "threads"], as_index=False)["coordinationMillis"].mean()
+    plot_thread_metric_panels(
+        grouped,
+        output_file,
+        value_col="coordinationMillis",
+        ylabel="Coordination time (ms)",
+        title="Coordination overhead vs worker threads",
+        implementations=("threads", "executor"),
+    )
+
+
+def fallback_plot_best_by_ball(
+    df: pd.DataFrame,
+    output_file: Path,
+    value_col: str,
+    best_agg: str,
+) -> None:
+    if plt is not None:
+        raise RuntimeError("fallback_plot_best_by_ball should only be used without matplotlib")
+    write_placeholder_pair(output_file.with_suffix(""), output_file.stem)
+
+
+def fallback_plot_thread_metric_panels(
+    df: pd.DataFrame,
+    output_file: Path,
+    value_col: str,
+    implementations: tuple[str, ...] = ("threads", "executor"),
+) -> None:
+    if plt is not None:
+        raise RuntimeError("fallback_plot_thread_metric_panels should only be used without matplotlib")
+    write_placeholder_pair(output_file.with_suffix(""), output_file.stem)
+
+
+def fallback_plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
+    if plt is not None:
+        raise RuntimeError("fallback_plot_coordination_overhead_panels should only be used without matplotlib")
+    write_placeholder_pair(output_file.with_suffix(""), output_file.stem)
+
+
+def should_plot_gui_latency(gui: pd.DataFrame) -> bool:
+    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis"}
+    missing = required - set(gui.columns)
+    if missing:
+        return False
+    return not gui.empty
+
+
+def plot_gui_latency(gui: pd.DataFrame, output_file: Path) -> None:
+    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis"}
+    missing = required - set(gui.columns)
+    if missing:
+        raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
+
+    fig, ax = plt.subplots(figsize=(10.5, 6.2), constrained_layout=True)
+    fig.suptitle("GUI update latency vs number of balls", fontsize=16, fontweight="bold", y=0.98)
+
+    for implementation in IMPL_ORDER:
+        subset = gui[gui["implementation"].astype(str).str.lower() == implementation].copy()
+        if subset.empty:
+            continue
+        grouped = subset.groupby("balls", as_index=False)[["meanUpdateLatencyMillis", "maxUpdateLatencyMillis"]].mean()
+        grouped = grouped.sort_values("balls")
+        lower = grouped["meanUpdateLatencyMillis"].to_numpy() * 0.0
+        upper = (grouped["maxUpdateLatencyMillis"] - grouped["meanUpdateLatencyMillis"]).clip(lower=0.0).to_numpy()
+        ax.errorbar(
+            grouped["balls"],
+            grouped["meanUpdateLatencyMillis"],
+            yerr=[lower, upper],
+            marker="o",
+            linewidth=2.0,
+            capsize=3,
+            color=IMPL_COLORS.get(implementation),
+            label=implementation,
+        )
+
+    ax.set_xlabel("Number of balls")
+    ax.set_ylabel("Mean update latency (ms)")
+    ax.set_xticks(_xticks(gui["balls"]))
+    ax.grid(True, alpha=0.25)
+    ax.legend(frameon=False)
+    save_figure(fig, output_file)
+
+
 def save_figure(fig: plt.Figure, output_file: Path) -> None:
     fig.savefig(output_file, dpi=REPORT_CHART_DPI, bbox_inches="tight")
     fig.savefig(output_file.with_suffix(".svg"), dpi=REPORT_CHART_DPI, bbox_inches="tight")
