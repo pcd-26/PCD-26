@@ -133,7 +133,7 @@ final class ScalabilityBenchmarkResultsPostProcessor {
     }
 
     private static BenchmarkConfig.ImplementationType parseImplementation(List<String> cells, Map<String, Integer> columns, String column) {
-        return BenchmarkConfig.ImplementationType.valueOf(value(cells, columns, column).toUpperCase(Locale.ROOT));
+        return BenchmarkConfig.ImplementationType.parse(value(cells, columns, column));
     }
 
     private static int parseInt(List<String> cells, Map<String, Integer> columns, String column) {

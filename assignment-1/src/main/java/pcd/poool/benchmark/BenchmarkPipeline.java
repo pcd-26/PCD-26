@@ -77,10 +77,6 @@ public final class BenchmarkPipeline {
         var suiteReport = steps.runSuite(request.resultsRoot(), request.timestamp());
         printStep(request.out(), "suite-complete", suiteReport.outputDir());
 
-        printStep(request.out(), "suite-analysis-start", resultsDir);
-        BenchmarkScalabilityAnalyzer.analyze(resultsDir, resultsDir);
-        printStep(request.out(), "suite-analysis-complete", resultsDir);
-
         printStep(request.out(), "scalability-benchmark-start", resultsDir);
         var scalabilityRequest = ScalabilityBenchmarkRunner.defaults()
                 .withOutputFile(resultsDir.resolve("raw-scalability-results.csv"));
