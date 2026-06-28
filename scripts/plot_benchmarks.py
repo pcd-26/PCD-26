@@ -135,6 +135,7 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
             value_col="speedup",
             ylabel="Speedup",
             title="Speedup vs worker threads",
+            x_col="threads",
             implementations=("threads", "executor"),
         )
         plot_thread_metric_panels(
@@ -143,6 +144,7 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
             value_col="efficiency",
             ylabel="Efficiency",
             title="Efficiency vs worker threads",
+            x_col="threads",
             implementations=("threads", "executor"),
         )
         plot_coordination_overhead_panels(
@@ -176,12 +178,14 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
             speedup,
             output_dir / "03_speedup_vs_thread_count.png",
             value_col="speedup",
+            x_col="threads",
             implementations=("threads", "executor"),
         )
         fallback_plot_thread_metric_panels(
             efficiency,
             output_dir / "04_efficiency_vs_thread_count.png",
             value_col="efficiency",
+            x_col="threads",
             implementations=("threads", "executor"),
         )
         fallback_plot_coordination_overhead_panels(
@@ -255,9 +259,10 @@ def plot_worker_panels(
     value_col: str,
     ylabel: str,
     title: str,
+    x_col: str = "workers",
     implementations: tuple[str, ...] = ("threads", "executor"),
 ) -> None:
-    required = {"balls", "implementation", "workers", value_col}
+    required = {"balls", "implementation", x_col, value_col}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
@@ -286,9 +291,9 @@ def plot_worker_panels(
             impl_subset = subset[subset["implementation"].astype(str).str.lower() == implementation].copy()
             if impl_subset.empty:
                 continue
-            impl_subset = impl_subset.sort_values("workers")
+            impl_subset = impl_subset.sort_values(x_col)
             ax.plot(
-                impl_subset["workers"],
+                impl_subset[x_col],
                 impl_subset[value_col],
                 marker="o",
                 linewidth=2.0,
@@ -296,9 +301,9 @@ def plot_worker_panels(
                 label=implementation,
             )
         ax.set_title(f"{ball} balls", fontsize=11)
-        ax.set_xlabel("Worker threads")
+        ax.set_xlabel("Worker threads" if x_col == "workers" else "Threads")
         ax.set_ylabel(ylabel)
-        ax.set_xticks(_xticks(subset["workers"]))
+        ax.set_xticks(_xticks(subset[x_col]))
         ax.grid(True, alpha=0.25)
 
     for ax in axes_list[len(balls_values):]:
@@ -316,9 +321,10 @@ def plot_thread_metric_panels(
     value_col: str,
     ylabel: str,
     title: str,
+    x_col: str = "workers",
     implementations: tuple[str, ...] = ("threads", "executor"),
 ) -> None:
-    plot_worker_panels(df, output_file, value_col, ylabel, title, implementations=implementations)
+    plot_worker_panels(df, output_file, value_col, ylabel, title, x_col=x_col, implementations=implementations)
 
 
 def plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
@@ -350,6 +356,7 @@ def plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> 
         value_col="coordinationMillis",
         ylabel="Coordination time (ms)",
         title="Coordination overhead vs worker threads",
+        x_col="threads",
         implementations=("threads", "executor"),
     )
 
@@ -369,6 +376,7 @@ def fallback_plot_thread_metric_panels(
     df: pd.DataFrame,
     output_file: Path,
     value_col: str,
+    x_col: str = "workers",
     implementations: tuple[str, ...] = ("threads", "executor"),
 ) -> None:
     if plt is not None:
