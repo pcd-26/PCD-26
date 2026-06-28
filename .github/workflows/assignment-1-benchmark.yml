@@ -8,6 +8,8 @@ on:
       - "requirements.txt"
       - ".github/workflows/assignment-1-benchmark.yml"
   push:
+    branches:
+      - main
     paths:
       - "assignment-1/**"
       - "scripts/**"
@@ -78,6 +80,8 @@ jobs:
     name: Generate benchmark plots
     runs-on: ubuntu-latest
     needs: benchmark
+    outputs:
+      chart_stamp: ${{ steps.chart_archive_meta.outputs.stamp }}
     permissions:
       actions: read
       contents: write
@@ -199,3 +203,86 @@ jobs:
 
           echo "failed to upload release asset after retries" >&2
           exit 1
+
+  persist-snapshots:
+    name: Persist benchmark snapshots
+    runs-on: ubuntu-latest
+    needs: plots
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.actor != 'github-actions[bot]'
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          name: assignment-1-benchmark-results
+          path: .benchmark-artifacts/results
+
+      - name: Download benchmark charts
+        uses: actions/download-artifact@v4
+        with:
+          name: assignment-1-benchmark-charts-${{ needs.plots.outputs.chart_stamp }}
+          path: .benchmark-artifacts/charts
+
+      - name: Resolve snapshot paths
+        id: snapshot_paths
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          results_summary="$(find .benchmark-artifacts/results -type f -name benchmark-summary.csv | head -n 1)"
+          if [ -z "$results_summary" ]; then
+            echo "benchmark-summary.csv not found in downloaded results artifact" >&2
+            exit 1
+          fi
+
+          charts_sample="$(find .benchmark-artifacts/charts -type f \( -name '*.png' -o -name '*.svg' \) | head -n 1)"
+          if [ -z "$charts_sample" ]; then
+            echo "chart files not found in downloaded charts artifact" >&2
+            exit 1
+          fi
+
+          results_dir="$(dirname "$results_summary")"
+          charts_dir="$(dirname "$charts_sample")"
+          stamp="$(basename "$results_dir")"
+
+          echo "results_dir=$results_dir" >> "$GITHUB_OUTPUT"
+          echo "charts_dir=$charts_dir" >> "$GITHUB_OUTPUT"
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+
+      - name: Mirror benchmark snapshots into the repository
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          stamp="${{ steps.snapshot_paths.outputs.stamp }}"
+          results_target="benchmarks/results/official/$stamp"
+          charts_target="benchmarks/charts/official/$stamp"
+
+          rm -rf "$results_target" "$charts_target"
+          mkdir -p "$(dirname "$results_target")" "$(dirname "$charts_target")"
+
+          cp -R "${{ steps.snapshot_paths.outputs.results_dir }}" "$results_target"
+          cp -R "${{ steps.snapshot_paths.outputs.charts_dir }}" "$charts_target"
+
+      - name: Commit benchmark snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benchmarks/results/official benchmarks/charts/official
+
+          if git diff --cached --quiet; then
+            echo "No benchmark snapshot changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(assignment-1): publish benchmark snapshot [skip ci]"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
