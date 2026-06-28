@@ -89,6 +89,42 @@ class BenchmarkChartGenerationTest {
         assertChartPairExists(outputDir, "gui-fps-vs-balls");
     }
 
+    @Test
+    void scriptSupportsLegacyBenchmarkSuiteLayout() throws Exception {
+        Path inputDir = tempDir.resolve("legacy-results");
+        Path outputDir = tempDir.resolve("legacy-charts");
+        Files.createDirectories(inputDir);
+
+        write(inputDir.resolve("benchmark-summary.csv"), List.of(
+                "implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,meanCpuUtilizationPercent,speedup,efficiency",
+                "sequential,100,1,100,1,10.000000,10.000000,10.000000,0.000000,1000.000000,55.000000,1.000000,1.000000",
+                "threads,100,2,100,1,6.000000,6.000000,6.000000,0.000000,1666.666667,72.000000,1.666667,0.833333",
+                "executor,100,2,100,1,7.000000,7.000000,7.000000,0.000000,1428.571429,68.000000,1.428571,0.714286"));
+        write(inputDir.resolve("speedup-table.csv"), List.of(
+                "balls,steps,implementation,threads,meanMillis,meanThroughput,meanCpuUtilizationPercent,sequentialMeanMillis,speedup,speedupBelowOne",
+                "100,100,threads,2,6.000000,1666.666667,72.000000,10.000000,1.666667,false",
+                "100,100,executor,2,7.000000,1428.571429,68.000000,10.000000,1.428571,false"));
+        write(inputDir.resolve("efficiency-table.csv"), List.of(
+                "balls,steps,implementation,threads,meanMillis,meanThroughput,meanCpuUtilizationPercent,sequentialMeanMillis,speedup,efficiency,efficiencyDegradation",
+                "100,100,threads,2,6.000000,1666.666667,72.000000,10.000000,1.666667,0.833333,false",
+                "100,100,executor,2,7.000000,1428.571429,68.000000,10.000000,1.428571,0.714286,false"));
+        write(inputDir.resolve("benchmark-runs.csv"), List.of(
+                "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks",
+                "2026-06-21T13:15:30Z,threads,100,2,100,1,1,6.000000,1666.666667,72.000000,11,SUCCESS,,0.600000,0.300000,0.150000,0.120000,4,8"));
+        write(inputDir.resolve("gui-responsiveness.csv"), List.of(
+                "timestamp,implementation,balls,threads,steps,seed,requestedUpdates,completedUpdates,elapsedMillis,meanUpdateIntervalMillis,meanUpdateLatencyMillis,maxUpdateLatencyMillis,updateRatePerSecond,meanEdtDelayMillis,maxEdtDelayMillis,delayedUpdates",
+                "2026-06-21T13:15:30Z,sequential,100,1,100,1,20,20,30.000000,1.500000,2.000000,3.000000,666.666667,1.200000,2.500000,0"));
+
+        runScript(inputDir, outputDir);
+
+        assertChartPairExists(outputDir, "01_best_execution_time_vs_balls");
+        assertChartPairExists(outputDir, "02_best_throughput_vs_balls");
+        assertChartPairExists(outputDir, "03_speedup_vs_thread_count");
+        assertChartPairExists(outputDir, "04_efficiency_vs_thread_count");
+        assertChartPairExists(outputDir, "05_coordination_overhead_vs_thread_count");
+        assertChartPairExists(outputDir, "06_cpu_utilization_vs_thread_count");
+    }
+
     private static void write(Path file, List<String> lines) throws IOException {
         Files.writeString(file, String.join(System.lineSeparator(), lines) + System.lineSeparator(), StandardCharsets.UTF_8);
     }
