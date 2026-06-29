@@ -49,6 +49,7 @@ class HeadlessBenchmarkRunnerTest {
         var lines = Files.readAllLines(report.outputFile());
         assertEquals("implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors", lines.get(0));
         assertEquals(13, lines.size());
+        assertTrue(Files.exists(tempDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME)));
         assertTrue(lines.stream().skip(1).allMatch(line -> line.contains(",false,")));
         assertTrue(report.rows().stream().allMatch(row -> row.elapsedMs() > 0.0));
         assertTrue(report.rows().stream().allMatch(row -> row.availableProcessors() > 0));

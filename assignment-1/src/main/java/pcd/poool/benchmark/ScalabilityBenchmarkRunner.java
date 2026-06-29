@@ -74,6 +74,8 @@ public final class ScalabilityBenchmarkRunner {
     public static BenchmarkReport run(BenchmarkRequest request) throws IOException {
         var telemetry = RuntimeTelemetry.capture();
         var rows = new ArrayList<BenchmarkRow>();
+        Path outputDir = request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent();
+        RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
         ScalabilityBenchmarkCsvWriter.initialize(request.outputFile());
 
         for (int ballCount : request.balls()) {
@@ -89,7 +91,7 @@ public final class ScalabilityBenchmarkRunner {
                             request.measuredRuns(),
                             false,
                             false,
-                            request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent());
+                            outputDir);
 
                     runWarmups(config);
                     for (int runIndex = 1; runIndex <= request.measuredRuns(); runIndex++) {
