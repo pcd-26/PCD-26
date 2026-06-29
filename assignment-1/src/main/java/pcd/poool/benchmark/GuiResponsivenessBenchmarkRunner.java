@@ -97,6 +97,7 @@ public final class GuiResponsivenessBenchmarkRunner {
                         false,
                         outputDir);
 
+                printScenarioStart(config);
                 runWarmups(config);
                 for (int runIndex = 1; runIndex <= request.measuredRuns(); runIndex++) {
                     var result = measureRun(config, runIndex);
@@ -104,6 +105,7 @@ public final class GuiResponsivenessBenchmarkRunner {
                     rows.add(row);
                     GuiResponsivenessBenchmarkCsvWriter.append(request.outputFile(), row);
                 }
+                printScenarioDone(config, request.measuredRuns());
             }
         }
 
@@ -243,6 +245,24 @@ public final class GuiResponsivenessBenchmarkRunner {
 
     private static boolean isFlagWithoutValue(String key) {
         return "--help".equals(key) || "-h".equals(key);
+    }
+
+    static String scenarioLabel(BenchmarkConfig config) {
+        return String.format(
+                Locale.US,
+                "implementation=%s balls=%d workers=%d steps=%d",
+                config.implementation().name().toLowerCase(Locale.ROOT),
+                config.balls(),
+                config.effectiveThreads(),
+                config.steps());
+    }
+
+    private static void printScenarioStart(BenchmarkConfig config) {
+        System.out.printf(Locale.US, "scenario_start %s%n", scenarioLabel(config));
+    }
+
+    private static void printScenarioDone(BenchmarkConfig config, int measuredRuns) {
+        System.out.printf(Locale.US, "scenario_done %s measured_runs=%d%n", scenarioLabel(config), measuredRuns);
     }
 
     private static List<Integer> parseBalls(String value) {
