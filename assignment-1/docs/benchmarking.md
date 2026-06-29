@@ -478,6 +478,10 @@ benchmarks/charts/
 The exported `environment.csv` records:
 
 - `availableProcessors`
+- `cpuModel`
+- `physicalCores`
+- `logicalCpuCount`
+- `totalPhysicalMemoryBytes`
 - `jvmName`
 - `jvmVersion`
 - `osName`
@@ -491,6 +495,10 @@ The exported `environment.csv` records:
 
 `processCpuTimeNanos` is populated only when the JVM exposes process CPU time
 through the operating system bean.
+
+When `environment.csv` is present, the chart generator also embeds the most
+important machine details directly into each PNG/SVG chart so screenshots or
+report excerpts keep the benchmark context visible.
 
 ### 11.9 Known limitations
 

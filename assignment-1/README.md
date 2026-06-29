@@ -133,7 +133,11 @@ python scripts/run_benchmarks.py
 It builds `assignment-1`, runs the benchmark pipeline, writes CSV
 results under `benchmarks/results/`, and refreshes `benchmarks/charts/`. The
 chart directory is cleared before every run so it keeps only the latest chart
-set. This standard command always runs the full benchmark flow.
+set. This standard command always runs the full benchmark flow. The exported
+`environment.csv` also captures the benchmark machine context automatically,
+including CPU model, physical cores, logical threads, JVM-visible processors,
+JVM, OS, and total RAM; the same key metadata is printed inside the generated
+chart images.
 
 If you need the reduced benchmark suite for a specific case, pass:
 

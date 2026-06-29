@@ -49,6 +49,8 @@ The wrapper:
 - compiles `assignment-1`
 - runs the Java benchmark pipeline
 - writes benchmark results under `benchmarks/results/`
+- exports `environment.csv` with CPU model, physical cores, logical threads,
+  JVM-visible processors, JVM, OS, and RAM
 - refreshes `benchmarks/charts/`
 - clears `benchmarks/charts/` before every run so only the latest chart set is
   kept
@@ -63,4 +65,5 @@ python scripts/plot_benchmarks.py --input-dir benchmarks/results --output-dir be
 The chart generator supports both the current benchmark layout and older
 legacy result snapshots. In both cases it writes the latest chart set directly
 into the chosen output directory after clearing it, so only the latest PNG and
-SVG files are kept.
+SVG files are kept. When `environment.csv` is available, the generator also
+prints the key benchmark machine specs inside every chart.

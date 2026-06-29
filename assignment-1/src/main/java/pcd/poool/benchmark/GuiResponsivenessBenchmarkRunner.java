@@ -79,6 +79,8 @@ public final class GuiResponsivenessBenchmarkRunner {
 
         var telemetry = RuntimeTelemetry.capture();
         var rows = new ArrayList<BenchmarkRow>();
+        Path outputDir = request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent();
+        RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
         GuiResponsivenessBenchmarkCsvWriter.initialize(request.outputFile());
 
         for (int ballCount : request.balls()) {
@@ -93,7 +95,7 @@ public final class GuiResponsivenessBenchmarkRunner {
                         request.measuredRuns(),
                         true,
                         false,
-                        request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent());
+                        outputDir);
 
                 runWarmups(config);
                 for (int runIndex = 1; runIndex <= request.measuredRuns(); runIndex++) {

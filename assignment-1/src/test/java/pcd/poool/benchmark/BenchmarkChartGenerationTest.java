@@ -62,6 +62,9 @@ class BenchmarkChartGenerationTest {
                 "sequential,500,1,100,1,20.000000,21.000000,22.000000,50.000000,0.000000,0.000000",
                 "threads,500,4,100,1,10.000000,11.000000,12.000000,100.000000,0.000000,0.000000",
                 "executor,500,4,100,1,11.000000,12.000000,13.000000,90.909091,0.000000,0.000000"));
+        write(inputDir.resolve("environment.csv"), List.of(
+                "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
+                "8,Test CPU,4,8,17179869184,JVM,21,Windows 11,10.0,amd64,1,1,1,true,123"));
 
         write(inputDir.resolve("raw-results.csv"), List.of(
                 "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors",
@@ -125,6 +128,9 @@ class BenchmarkChartGenerationTest {
         assertChartPairExists(outputDir, "coordination-overhead-vs-workers");
         assertChartPairExists(outputDir, "gui-frame-time-vs-balls");
         assertChartPairExists(outputDir, "gui-fps-vs-balls");
+        assertTrue(Files.readString(outputDir.resolve("execution-time-vs-balls.svg")).contains("CPU: Test CPU"));
+        assertTrue(Files.readString(outputDir.resolve("execution-time-vs-balls.svg")).contains("JVM: JVM 21"));
+        assertTrue(Files.readString(outputDir.resolve("execution-time-vs-balls.svg")).contains("OS: Windows 11"));
     }
 
     private static void write(Path file, List<String> lines) throws IOException {
