@@ -16,7 +16,7 @@ class BenchmarkScenarioLoggingTest {
 
         assertEquals(
                 "implementation=threads balls=500 workers=4 steps=1000",
-                HeadlessBenchmarkRunner.scenarioLabel(config));
+                BenchmarkScenarioLogging.scenarioLabel(config));
     }
 
     @Test
@@ -29,7 +29,7 @@ class BenchmarkScenarioLoggingTest {
 
         assertEquals(
                 "implementation=executor balls=2500 workers=8 steps=1000",
-                ScalabilityBenchmarkRunner.scenarioLabel(config));
+                BenchmarkScenarioLogging.scenarioLabel(config));
     }
 
     @Test
@@ -42,6 +42,6 @@ class BenchmarkScenarioLoggingTest {
 
         assertEquals(
                 "implementation=sequential balls=100 workers=1 steps=240",
-                GuiResponsivenessBenchmarkRunner.scenarioLabel(config));
+                BenchmarkScenarioLogging.scenarioLabel(config));
     }
 }

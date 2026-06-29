@@ -93,6 +93,7 @@ public final class ScalabilityBenchmarkRunner {
                             false,
                             outputDir);
 
+                    BenchmarkScenarioLogging.printScenarioStart(config);
                     runWarmups(config);
                     for (int runIndex = 1; runIndex <= request.measuredRuns(); runIndex++) {
                         var result = measureRun(config, runIndex);
@@ -103,6 +104,7 @@ public final class ScalabilityBenchmarkRunner {
                         rows.add(row);
                         ScalabilityBenchmarkCsvWriter.append(request.outputFile(), row);
                     }
+                    BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
                 }
             }
         }
