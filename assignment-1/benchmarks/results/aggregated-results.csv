@@ -1,0 +1,2 @@
+implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted
+sequential,100,1,10,42,53.964600,0.000000,185.306664,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000

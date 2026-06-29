@@ -51,16 +51,16 @@ class BenchmarkPipelineTest {
             }
 
             @Override
-            public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot, Instant timestamp) throws Exception {
+            public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot) throws Exception {
                 events.add("suite");
-                Path outputDir = resultsRoot.resolve("20260621-131530-000");
+                Path outputDir = resultsRoot;
                 Files.createDirectories(outputDir);
                 writeCsv(outputDir.resolve(BenchmarkCsvWriter.RUNS_FILE_NAME), List.of(
                         "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks",
                         "2026-06-21T13:15:30Z,sequential,100,1,10,42,1,10.000000,1000.000000,50.000000,11,SUCCESS,,0.000000,0.000000,0.000000,0.000000,0,0"));
                 writeCsv(outputDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME), List.of(
-                        "jvmName,jvmVersion,osName,osVersion,osArch,availableProcessors",
-                        "JVM,17,OS,1,amd64,8"));
+                        "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
+                        "8,Test CPU,4,8,17179869184,JVM,17,OS,1,amd64,1,1,1,true,123"));
                 return new BenchmarkSuite.SuiteReport(outputDir, 1, 0);
             }
 
@@ -100,7 +100,7 @@ class BenchmarkPipelineTest {
             }
         });
 
-        Path resultsDir = tempDir.resolve("results").resolve("20260621-131530-000");
+        Path resultsDir = tempDir.resolve("results");
         assertEquals(resultsDir, report.resultsDir());
         assertEquals(tempDir.resolve("charts"), report.chartsDir());
         assertEquals(List.of("headless", "suite", "scalability", "gui", "charts"), events);
@@ -133,7 +133,7 @@ class BenchmarkPipelineTest {
             }
 
             @Override
-            public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot, Instant timestamp) {
+            public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot) {
                 events.add("suite");
                 throw new IllegalStateException("should not run");
             }

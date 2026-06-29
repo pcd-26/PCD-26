@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import base64
 import math
+import shutil
 import sys
+import textwrap
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +34,7 @@ if plt is not None:
     matplotlib.rcParams.update(
         {
             "font.family": "DejaVu Sans",
+            "svg.fonttype": "none",
             "axes.titlesize": 15,
             "axes.titleweight": "bold",
             "axes.labelsize": 12,
@@ -64,7 +67,7 @@ def main() -> None:
     args = parse_args()
     input_dir = args.input_dir
     output_dir = args.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
+    reset_chart_output(output_dir)
 
     if (input_dir / "aggregated-results.csv").exists():
         render_new_layout(input_dir, output_dir)
@@ -78,11 +81,23 @@ def main() -> None:
     print(f"charts_written output_dir={output_dir}")
 
 
+def reset_chart_output(output_dir: Path) -> None:
+    if output_dir.exists():
+        for child in output_dir.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+
 def render_new_layout(input_dir: Path, output_dir: Path) -> None:
     headless = read_csv(input_dir / "aggregated-results.csv", required=True)
     speedup = read_csv(input_dir / "speedup-results.csv", required=True)
     scalability = read_csv(input_dir / "aggregated-scalability-results.csv", required=True)
     gui = read_csv(input_dir / "aggregated-gui-results.csv", required=True)
+    environment = read_csv(input_dir / "environment.csv", required=False)
+    chart_context = build_chart_context(environment)
 
     charts = [
         (headless, output_dir / "execution-time-vs-balls", "avgElapsedMs", "Mean execution time (ms)", "Execution time vs number of balls", "min", plot_best_by_ball),
@@ -98,9 +113,9 @@ def render_new_layout(input_dir: Path, output_dir: Path) -> None:
     for df, output_stem, value_col, ylabel, title, best_agg, plotter in charts:
         if plt is not None:
             if plotter is plot_best_by_ball:
-                plot_best_by_ball(df, output_stem.with_suffix(".png"), value_col, ylabel, title, best_agg)
+                plot_best_by_ball(df, output_stem.with_suffix(".png"), value_col, ylabel, title, best_agg, chart_context)
             else:
-                plot_worker_panels(df, output_stem.with_suffix(".png"), value_col, ylabel, title)
+                plot_worker_panels(df, output_stem.with_suffix(".png"), value_col, ylabel, title, chart_context=chart_context)
         else:
             write_placeholder_pair(output_stem, title)
 
@@ -108,98 +123,129 @@ def render_new_layout(input_dir: Path, output_dir: Path) -> None:
 def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
     summary = read_csv(input_dir / "benchmark-summary.csv", required=True)
     speedup = read_csv(input_dir / "speedup-table.csv", required=True)
-    efficiency = read_csv(input_dir / "efficiency-table.csv", required=True)
     runs = read_csv(input_dir / "benchmark-runs.csv", required=True)
     gui = read_csv(input_dir / "gui-responsiveness.csv", required=False)
+    environment = read_csv(input_dir / "environment.csv", required=False)
+    chart_context = build_chart_context(environment)
 
     if plt is not None:
         plot_best_by_ball(
             summary,
-            output_dir / "01_best_execution_time_vs_balls.png",
+            output_dir / "execution-time-vs-balls.png",
             value_col="meanMillis",
             ylabel="Mean execution time (ms)",
-            title="Best execution time vs number of balls",
+            title="Execution time vs number of balls",
             best_agg="min",
+            chart_context=chart_context,
+        )
+        plot_best_by_ball(
+            speedup,
+            output_dir / "speedup-vs-balls.png",
+            value_col="speedup",
+            ylabel="Speedup",
+            title="Speedup vs number of balls",
+            best_agg="max",
+            chart_context=chart_context,
         )
         plot_best_by_ball(
             summary,
-            output_dir / "02_best_throughput_vs_balls.png",
+            output_dir / "throughput-vs-balls.png",
             value_col="meanThroughput",
             ylabel="Mean throughput (steps/s)",
-            title="Best throughput vs number of balls",
+            title="Throughput vs number of balls",
             best_agg="max",
+            chart_context=chart_context,
         )
-        plot_thread_metric_panels(
-            speedup,
-            output_dir / "03_speedup_vs_thread_count.png",
-            value_col="speedup",
-            ylabel="Speedup",
-            title="Speedup vs worker threads",
+        plot_worker_panels(
+            summary,
+            output_dir / "scalability-elapsed-time-vs-workers.png",
+            value_col="meanMillis",
+            ylabel="Elapsed time (ms)",
+            title="Scalability elapsed time vs worker threads",
             x_col="threads",
-            implementations=("threads", "executor"),
+            chart_context=chart_context,
         )
-        plot_thread_metric_panels(
-            efficiency,
-            output_dir / "04_efficiency_vs_thread_count.png",
-            value_col="efficiency",
-            ylabel="Efficiency",
-            title="Efficiency vs worker threads",
+        plot_worker_panels(
+            summary,
+            output_dir / "scalability-throughput-vs-workers.png",
+            value_col="meanThroughput",
+            ylabel="Throughput (steps/s)",
+            title="Scalability throughput vs worker threads",
             x_col="threads",
-            implementations=("threads", "executor"),
+            chart_context=chart_context,
         )
         plot_coordination_overhead_panels(
             runs,
-            output_dir / "05_coordination_overhead_vs_thread_count.png",
-        )
-        plot_best_by_ball(
-            summary,
-            output_dir / "06_cpu_utilization_vs_thread_count.png",
-            value_col="meanCpuUtilizationPercent",
-            ylabel="CPU utilization (%)",
-            title="CPU utilization vs worker threads",
-            best_agg="max",
+            output_dir / "coordination-overhead-vs-workers.png",
+            chart_context=chart_context,
         )
         if not gui.empty and should_plot_gui_latency(gui):
-            plot_gui_latency(gui, output_dir / "07_gui_latency_vs_balls.png")
+            plot_best_by_ball(
+                gui,
+                output_dir / "gui-frame-time-vs-balls.png",
+                value_col="meanUpdateLatencyMillis",
+                ylabel="Average frame time (ms)",
+                title="GUI frame time vs number of balls",
+                best_agg="min",
+                chart_context=chart_context,
+            )
+            plot_best_by_ball(
+                gui,
+                output_dir / "gui-fps-vs-balls.png",
+                value_col="updateRatePerSecond",
+                ylabel="Average frames per second",
+                title="GUI FPS vs number of balls",
+                best_agg="max",
+                chart_context=chart_context,
+            )
     else:
         fallback_plot_best_by_ball(
             summary,
-            output_dir / "01_best_execution_time_vs_balls.png",
+            output_dir / "execution-time-vs-balls.png",
             value_col="meanMillis",
             best_agg="min",
         )
         fallback_plot_best_by_ball(
+            speedup,
+            output_dir / "speedup-vs-balls.png",
+            value_col="speedup",
+            best_agg="max",
+        )
+        fallback_plot_best_by_ball(
             summary,
-            output_dir / "02_best_throughput_vs_balls.png",
+            output_dir / "throughput-vs-balls.png",
             value_col="meanThroughput",
             best_agg="max",
         )
         fallback_plot_thread_metric_panels(
-            speedup,
-            output_dir / "03_speedup_vs_thread_count.png",
-            value_col="speedup",
+            summary,
+            output_dir / "scalability-elapsed-time-vs-workers.png",
+            value_col="meanMillis",
             x_col="threads",
-            implementations=("threads", "executor"),
         )
         fallback_plot_thread_metric_panels(
-            efficiency,
-            output_dir / "04_efficiency_vs_thread_count.png",
-            value_col="efficiency",
+            summary,
+            output_dir / "scalability-throughput-vs-workers.png",
+            value_col="meanThroughput",
             x_col="threads",
-            implementations=("threads", "executor"),
         )
         fallback_plot_coordination_overhead_panels(
             runs,
-            output_dir / "05_coordination_overhead_vs_thread_count.png",
-        )
-        fallback_plot_best_by_ball(
-            summary,
-            output_dir / "06_cpu_utilization_vs_thread_count.png",
-            value_col="meanCpuUtilizationPercent",
-            best_agg="max",
+            output_dir / "coordination-overhead-vs-workers.png",
         )
         if not gui.empty and should_plot_gui_latency(gui):
-            fallback_plot_gui_latency(gui, output_dir / "07_gui_latency_vs_balls.png")
+            fallback_plot_best_by_ball(
+                gui,
+                output_dir / "gui-frame-time-vs-balls.png",
+                value_col="meanUpdateLatencyMillis",
+                best_agg="min",
+            )
+            fallback_plot_best_by_ball(
+                gui,
+                output_dir / "gui-fps-vs-balls.png",
+                value_col="updateRatePerSecond",
+                best_agg="max",
+            )
 
 
 def read_csv(path: Path, required: bool = False) -> pd.DataFrame:
@@ -217,15 +263,18 @@ def plot_best_by_ball(
     ylabel: str,
     title: str,
     best_agg: str,
+    chart_context: str | None = None,
 ) -> None:
     required = {"balls", "implementation", value_col}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
 
-    fig, ax = plt.subplots(figsize=(10.5, 6.2), constrained_layout=True)
-    fig.suptitle(title, fontsize=16, fontweight="bold", y=0.98)
-    ax.set_title("Best measured worker count per implementation", fontsize=10, pad=10)
+    fig, ax = plt.subplots(figsize=(14.0, 8.8), constrained_layout=False)
+    fig.subplots_adjust(top=0.78, bottom=0.25, left=0.09, right=0.98)
+    fig.suptitle(title, fontsize=16, fontweight="bold", y=0.96)
+    ax.set_title("Best measured worker count per implementation", fontsize=10, pad=14)
+    add_chart_context(fig, chart_context)
 
     for implementation in IMPL_ORDER:
         subset = df[df["implementation"].astype(str).str.lower() == implementation].copy()
@@ -249,7 +298,16 @@ def plot_best_by_ball(
     ax.set_ylabel(ylabel)
     ax.set_xticks(_xticks(df["balls"]))
     ax.grid(True, alpha=0.25)
-    ax.legend(frameon=False)
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.885),
+            ncol=max(1, len(handles)),
+            frameon=False,
+        )
     save_figure(fig, output_file)
 
 
@@ -261,6 +319,7 @@ def plot_worker_panels(
     title: str,
     x_col: str = "workers",
     implementations: tuple[str, ...] = ("threads", "executor"),
+    chart_context: str | None = None,
 ) -> None:
     required = {"balls", "implementation", x_col, value_col}
     missing = required - set(df.columns)
@@ -276,12 +335,14 @@ def plot_worker_panels(
     fig, axes = plt.subplots(
         nrows=rows,
         ncols=cols,
-        figsize=(5.1 * cols, 4.4 * rows),
+        figsize=(7.0 * cols, 5.4 * rows),
         sharex=False,
         sharey=True,
-        constrained_layout=True,
+        constrained_layout=False,
     )
-    fig.suptitle(title, fontsize=16, fontweight="bold", y=1.02)
+    fig.subplots_adjust(top=0.80, bottom=0.25, left=0.06, right=0.98, hspace=0.34, wspace=0.22)
+    fig.suptitle(title, fontsize=16, fontweight="bold", y=0.97)
+    add_chart_context(fig, chart_context)
     axes_list = axes.flatten() if hasattr(axes, "flatten") else [axes]
 
     for index, ball in enumerate(balls_values):
@@ -311,7 +372,14 @@ def plot_worker_panels(
 
     handles, labels = axes_list[0].get_legend_handles_labels()
     if handles:
-        fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=len(handles), frameon=False)
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.90),
+            ncol=max(1, len(handles)),
+            frameon=False,
+        )
     save_figure(fig, output_file)
 
 
@@ -323,11 +391,25 @@ def plot_thread_metric_panels(
     title: str,
     x_col: str = "workers",
     implementations: tuple[str, ...] = ("threads", "executor"),
+    chart_context: str | None = None,
 ) -> None:
-    plot_worker_panels(df, output_file, value_col, ylabel, title, x_col=x_col, implementations=implementations)
+    plot_worker_panels(
+        df,
+        output_file,
+        value_col,
+        ylabel,
+        title,
+        x_col=x_col,
+        implementations=implementations,
+        chart_context=chart_context,
+    )
 
 
-def plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> None:
+def plot_coordination_overhead_panels(
+    runs: pd.DataFrame,
+    output_file: Path,
+    chart_context: str | None = None,
+) -> None:
     required = {
         "balls",
         "implementation",
@@ -358,6 +440,7 @@ def plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: Path) -> 
         title="Coordination overhead vs worker threads",
         x_col="threads",
         implementations=("threads", "executor"),
+        chart_context=chart_context,
     )
 
 
@@ -391,7 +474,7 @@ def fallback_plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: 
 
 
 def should_plot_gui_latency(gui: pd.DataFrame) -> bool:
-    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis"}
+    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis", "updateRatePerSecond"}
     missing = required - set(gui.columns)
     if missing:
         return False
@@ -440,6 +523,62 @@ def save_figure(fig: plt.Figure, output_file: Path) -> None:
     plt.close(fig)
 
 
+def build_chart_context(environment: pd.DataFrame) -> str | None:
+    if environment.empty:
+        return None
+    row = environment.iloc[0].fillna("")
+    parts: list[str] = []
+
+    cpu = _clean_text(row.get("cpuModel", ""))
+    physical = _safe_int(row.get("physicalCores"))
+    logical = _safe_int(row.get("logicalCpuCount"))
+    available = _safe_int(row.get("availableProcessors"))
+    ram_bytes = _safe_int(row.get("totalPhysicalMemoryBytes"))
+    os_name = _clean_text(row.get("osName", ""))
+    jvm_name = _clean_text(row.get("jvmName", ""))
+    jvm_version = _clean_text(row.get("jvmVersion", ""))
+
+    if cpu:
+        parts.append(f"CPU: {cpu}")
+    cpu_counts: list[str] = []
+    if physical is not None:
+        cpu_counts.append(f"{physical} physical cores")
+    if logical is not None:
+        cpu_counts.append(f"{logical} logical threads")
+    if available is not None:
+        cpu_counts.append(f"JVM available={available}")
+    if cpu_counts:
+        parts.append(", ".join(cpu_counts))
+    if ram_bytes is not None:
+        parts.append(f"RAM: {ram_bytes / (1024 ** 3):.1f} GiB")
+    if jvm_version or jvm_name:
+        parts.append(f"JVM: {jvm_version or jvm_name}")
+    if os_name:
+        parts.append(f"OS: {os_name}")
+    return " | ".join(parts) if parts else None
+
+
+def add_chart_context(fig: plt.Figure, chart_context: str | None) -> None:
+    if not chart_context:
+        return
+    wrapped = "\n".join(textwrap.wrap(chart_context, width=150))
+    fig.text(
+        0.5,
+        0.03,
+        wrapped,
+        ha="center",
+        va="bottom",
+        fontsize=8.5,
+        color="#444444",
+        bbox={
+            "boxstyle": "round,pad=0.35",
+            "facecolor": "#f7f7f7",
+            "edgecolor": "#d9d9d9",
+            "alpha": 0.95,
+        },
+    )
+
+
 def write_placeholder_pair(output_stem: Path, title: str) -> None:
     png = output_stem.with_suffix(".png")
     svg = output_stem.with_suffix(".svg")
@@ -464,6 +603,25 @@ def _placeholder_png() -> bytes:
 def _xticks(values: pd.Series) -> list[int]:
     unique = sorted({int(value) for value in values.dropna().tolist()})
     return unique if unique else BALL_ORDER
+
+
+def _safe_int(value: object) -> int | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return None
+    try:
+        return int(float(text))
+    except ValueError:
+        return None
+
+
+def _clean_text(value: object) -> str:
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return ""
+    return text
 
 
 if __name__ == "__main__":

@@ -3,9 +3,6 @@ package pcd.poool.benchmark;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,10 +22,8 @@ public final class BenchmarkSuite {
     private static final int CI_SMOKE_STEPS = 1_000;
     private static final int CI_SMOKE_WARMUP = 1;
     private static final int CI_SMOKE_MEASURED = 1;
-    private static final Path DEFAULT_RESULTS_ROOT = Path.of("benchmarks", "results");
-    private static final Path CI_RESULTS_ROOT = Path.of("benchmarks", "results", "ci");
-    private static final DateTimeFormatter DIRECTORY_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
+    private static final Path DEFAULT_RESULTS_ROOT = Path.of("assignment-1", "benchmarks", "results");
+    private static final Path CI_RESULTS_ROOT = DEFAULT_RESULTS_ROOT;
 
     private BenchmarkSuite() {
     }
@@ -49,7 +44,8 @@ public final class BenchmarkSuite {
                 ? Path.of(args[argIndex])
                 : mode == Mode.SMOKE ? CI_RESULTS_ROOT : DEFAULT_RESULTS_ROOT;
         try {
-            var report = run(resultsRoot, Instant.now(), System.out, System.err, mode);
+            resetDirectory(resultsRoot);
+            var report = run(resultsRoot, System.out, System.err, mode);
             System.out.printf(Locale.US,
                     "suite_completed output_dir=%s configs=%d failed_configs=%d%n",
                     report.outputDir(),
@@ -65,39 +61,34 @@ public final class BenchmarkSuite {
     /**
      * Runs the suite using the default headless benchmark workload.
      *
-     * @param resultsRoot root directory under which the timestamped run
-     *                    directory will be created
-     * @param timestamp instant used to name the output directory
+     * @param resultsRoot root directory that will contain the latest run
      * @param out progress stream
      * @param err error stream
      * @return suite execution report
      * @throws Exception if directory creation fails
      */
-    public static SuiteReport run(Path resultsRoot, Instant timestamp, PrintStream out, PrintStream err) throws Exception {
-        return run(resultsRoot, timestamp, out, err, Mode.FULL);
+    public static SuiteReport run(Path resultsRoot, PrintStream out, PrintStream err) throws Exception {
+        return run(resultsRoot, out, err, Mode.FULL);
     }
 
     /**
      * Runs the suite in the requested mode using the default headless
      * benchmark workload.
      *
-     * @param resultsRoot root directory under which the timestamped run
-     *                    directory will be created
-     * @param timestamp instant used to name the output directory
+     * @param resultsRoot root directory that will contain the latest run
      * @param out progress stream
      * @param err error stream
      * @param mode suite execution mode
      * @return suite execution report
      * @throws Exception if directory creation fails
      */
-    public static SuiteReport run(Path resultsRoot, Instant timestamp, PrintStream out, PrintStream err, Mode mode) throws Exception {
+    public static SuiteReport run(Path resultsRoot, PrintStream out, PrintStream err, Mode mode) throws Exception {
         var correctnessGuard = new BenchmarkCorrectnessGuard();
         return run(
-                mode == Mode.SMOKE ? buildSmokeMatrix(resultsRoot, timestamp) : buildMatrix(resultsRoot, timestamp),
+                mode == Mode.SMOKE ? buildSmokeMatrix(resultsRoot) : buildMatrix(resultsRoot),
                 config -> correctnessGuard.wrap(config, () -> HeadlessSimulationRunner.simulateExecution(config)),
                 out,
-                err,
-                timestamp);
+                err);
     }
 
     /**
@@ -108,7 +99,6 @@ public final class BenchmarkSuite {
      * @param workloadFactory factory that builds the timed workload for each config
      * @param out progress stream
      * @param err error stream
-     * @param timestamp instant used to name the output directory
      * @return suite execution report
      * @throws Exception if directory creation or export fails unexpectedly
      */
@@ -116,13 +106,11 @@ public final class BenchmarkSuite {
             List<BenchmarkConfig> configs,
             WorkloadFactory workloadFactory,
             PrintStream out,
-            PrintStream err,
-            Instant timestamp) throws Exception {
+            PrintStream err) throws Exception {
         Objects.requireNonNull(configs, "configs");
         Objects.requireNonNull(workloadFactory, "workloadFactory");
         Objects.requireNonNull(out, "out");
         Objects.requireNonNull(err, "err");
-        Objects.requireNonNull(timestamp, "timestamp");
 
         if (configs.isEmpty()) {
             throw new IllegalArgumentException("configs must not be empty");
@@ -214,15 +202,13 @@ public final class BenchmarkSuite {
     /**
      * Builds the benchmark matrix for the suite.
      *
-     * @param resultsRoot root directory that will contain the timestamped run directory
-     * @param timestamp instant used to create the directory name
-     * @return benchmark configurations with a shared timestamped output directory
+     * @param resultsRoot root directory that will contain the latest run
+     * @return benchmark configurations with a shared output directory
      * @throws Exception if the output directory cannot be created
      */
-    public static List<BenchmarkConfig> buildMatrix(Path resultsRoot, Instant timestamp) throws Exception {
+    public static List<BenchmarkConfig> buildMatrix(Path resultsRoot) throws Exception {
         Objects.requireNonNull(resultsRoot, "resultsRoot");
-        Objects.requireNonNull(timestamp, "timestamp");
-        Path outputDir = resultsRoot.resolve(DIRECTORY_FORMATTER.format(timestamp));
+        Path outputDir = resultsRoot;
         Files.createDirectories(outputDir);
 
         var configs = new ArrayList<BenchmarkConfig>();
@@ -253,15 +239,13 @@ public final class BenchmarkSuite {
     /**
      * Builds the lightweight smoke benchmark matrix used by CI.
      *
-     * @param resultsRoot root directory that will contain the timestamped run directory
-     * @param timestamp instant used to create the directory name
+     * @param resultsRoot root directory that will contain the latest run
      * @return benchmark configurations for the smoke suite
      * @throws Exception if the output directory cannot be created
      */
-    public static List<BenchmarkConfig> buildSmokeMatrix(Path resultsRoot, Instant timestamp) throws Exception {
+    public static List<BenchmarkConfig> buildSmokeMatrix(Path resultsRoot) throws Exception {
         Objects.requireNonNull(resultsRoot, "resultsRoot");
-        Objects.requireNonNull(timestamp, "timestamp");
-        Path outputDir = resultsRoot.resolve(DIRECTORY_FORMATTER.format(timestamp));
+        Path outputDir = resultsRoot;
         Files.createDirectories(outputDir);
 
         var configs = new ArrayList<BenchmarkConfig>();
@@ -420,7 +404,7 @@ public final class BenchmarkSuite {
     /**
      * Immutable report for a suite execution.
      *
-     * @param outputDir timestamped output directory
+     * @param outputDir output directory containing the latest benchmark files
      * @param completedConfigs number of configs completed successfully
      * @param failedConfigs number of configs that failed during export
      */
@@ -428,5 +412,22 @@ public final class BenchmarkSuite {
     }
 
     private record ScenarioKey(int balls, int steps, long seed) {
+    }
+
+    private static void resetDirectory(Path directory) throws Exception {
+        if (!Files.exists(directory)) {
+            return;
+        }
+        try (var paths = Files.walk(directory)) {
+            paths.sorted(java.util.Comparator.reverseOrder())
+                    .filter(path -> !path.equals(directory))
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (Exception ex) {
+                            throw new IllegalStateException("failed to clear directory: " + directory, ex);
+                        }
+                    });
+        }
     }
 }

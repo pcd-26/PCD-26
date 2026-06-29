@@ -28,11 +28,7 @@ public final class RuntimeTelemetryCsvWriter {
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(ENVIRONMENT_FILE_NAME);
         String content = RuntimeTelemetry.csvHeader() + System.lineSeparator() + telemetry.toCsvRow() + System.lineSeparator();
-        if (Files.exists(file)) {
-            Files.writeString(file, content, StandardCharsets.UTF_8, StandardOpenOption.APPEND, StandardOpenOption.WRITE);
-        } else {
-            Files.writeString(file, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-        }
+        Files.writeString(file, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
         return file;
     }
 }

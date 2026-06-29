@@ -22,6 +22,6 @@ class GuiResponsivenessBenchmarkRunnerTest {
         assertEquals(42L, request.seed());
         assertTrue(request.warmupRuns() >= 2);
         assertTrue(request.measuredRuns() >= 5);
-        assertEquals(Path.of("benchmark", "results", "raw-gui-results.csv"), request.outputFile());
+        assertEquals(Path.of("benchmarks", "results", "raw-gui-results.csv"), request.outputFile());
     }
 }
