@@ -113,8 +113,8 @@ class BenchmarkChartGenerationTest {
                 "100,100,threads,2,6.000000,1666.666667,72.000000,10.000000,1.666667,0.833333,false",
                 "100,100,executor,2,7.000000,1428.571429,68.000000,10.000000,1.428571,0.714286,false"));
         write(inputDir.resolve("benchmark-runs.csv"), List.of(
-                "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks",
-                "2026-06-21T13:15:30Z,threads,100,2,100,1,1,6.000000,1666.666667,72.000000,11,SUCCESS,,0.600000,0.300000,0.150000,0.120000,4,8"));
+                "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks,stateReadTimeMillis,partitionTimeMillis,movementTimeMillis,holeInteractionTimeMillis,collisionDetectionTimeMillis,collisionResolutionTimeMillis,mergeApplyTimeMillis",
+                "2026-06-21T13:15:30Z,threads,100,2,100,1,1,6.000000,1666.666667,72.000000,11,SUCCESS,,0.600000,0.300000,0.150000,0.120000,4,8,0.010000,0.020000,0.030000,0.040000,0.050000,0.060000,0.070000"));
         write(inputDir.resolve("gui-responsiveness.csv"), List.of(
                 "timestamp,implementation,balls,threads,steps,seed,requestedUpdates,completedUpdates,elapsedMillis,meanUpdateIntervalMillis,meanUpdateLatencyMillis,maxUpdateLatencyMillis,updateRatePerSecond,meanEdtDelayMillis,maxEdtDelayMillis,delayedUpdates",
                 "2026-06-21T13:15:30Z,sequential,100,1,100,1,20,20,30.000000,1.500000,2.000000,3.000000,666.666667,1.200000,2.500000,0"));

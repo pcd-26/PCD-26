@@ -557,7 +557,14 @@ public final class HeadlessBenchmarkRunner {
                 profile.taskSubmissionTimeMillis(),
                 profile.joinOrFutureWaitMillis(),
                 profile.lockAcquisitions(),
-                profile.submittedTasks());
+                profile.submittedTasks(),
+                profile.stateReadMillis(),
+                profile.partitionMillis(),
+                profile.movementMillis(),
+                profile.holeInteractionMillis(),
+                profile.collisionDetectionMillis(),
+                profile.collisionResolutionMillis(),
+                profile.mergeApplyMillis());
     }
 
     private static BenchmarkInstrumentation toInstrumentation(TaskBasedPhysicsEngine.StepProfile profile) {
@@ -570,6 +577,13 @@ public final class HeadlessBenchmarkRunner {
                 profile.taskSubmissionTimeMillis(),
                 profile.joinOrFutureWaitMillis(),
                 profile.lockAcquisitions(),
-                profile.submittedTasks());
+                profile.submittedTasks(),
+                profile.stateReadMillis(),
+                profile.partitionMillis(),
+                profile.movementMillis(),
+                profile.holeInteractionMillis(),
+                profile.collisionDetectionMillis(),
+                profile.collisionResolutionMillis(),
+                profile.mergeApplyMillis());
     }
 }
