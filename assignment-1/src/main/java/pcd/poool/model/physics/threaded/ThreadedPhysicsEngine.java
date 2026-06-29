@@ -138,8 +138,10 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private void stepOnce(Board board, long dt, StepProfileAccumulator profile) {
         var bounds = board.getBounds();
+        long stateReadStart = profile == null ? 0 : System.nanoTime();
         var activeBalls = activeBalls(board);
         if (profile != null) {
+            profile.stateReadNanos += System.nanoTime() - stateReadStart;
             profile.activeBalls += activeBalls.size();
         }
         long integrationStart = profile == null ? 0 : System.nanoTime();
@@ -154,7 +156,9 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }, profile);
         if (profile != null) {
-            profile.integrationNanos += System.nanoTime() - integrationStart;
+            long integrationNanos = System.nanoTime() - integrationStart;
+            profile.integrationNanos += integrationNanos;
+            profile.movementNanos += integrationNanos;
         }
 
         long holeStart = profile == null ? 0 : System.nanoTime();
@@ -163,8 +167,10 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.holeInteractionNanos += System.nanoTime() - holeStart;
         }
 
+        long stateReadContinueStart = profile == null ? 0 : System.nanoTime();
         var collisionBalls = board.getCollisionBalls();
         if (profile != null) {
+            profile.stateReadNanos += System.nanoTime() - stateReadContinueStart;
             profile.collisionBalls += collisionBalls.size();
         }
         var detection = detectCollisionPairs(collisionBalls, profile);
@@ -185,6 +191,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return;
         }
 
+        long collisionResolutionStart = profile == null ? 0 : System.nanoTime();
         var localDeltas = new CollisionDeltaAccumulator[Math.min(workers.length, pairs.size())];
         runRanges(pairs.size(), (from, to, workerIndex) -> {
             var accumulator = new CollisionDeltaAccumulator(balls.size());
@@ -193,8 +200,11 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
             localDeltas[workerIndex] = accumulator;
         }, profile);
+        if (profile != null) {
+            profile.collisionResolutionNanos += System.nanoTime() - collisionResolutionStart;
+        }
 
-        long aggregationStart = profile == null ? 0 : System.nanoTime();
+        long mergeApplyStart = profile == null ? 0 : System.nanoTime();
         var merged = new CollisionDeltaAccumulator(balls.size());
         for (var delta : localDeltas) {
             if (delta != null) {
@@ -215,7 +225,9 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }, profile);
         if (profile != null) {
-            profile.aggregationNanos += System.nanoTime() - aggregationStart;
+            long mergeApplyNanos = System.nanoTime() - mergeApplyStart;
+            profile.mergeApplyNanos += mergeApplyNanos;
+            profile.aggregationNanos += mergeApplyNanos;
         }
     }
 
@@ -289,6 +301,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return new DetectionResult(List.of(), 0, 0);
         }
 
+        long collisionDetectionStart = profile == null ? 0 : System.nanoTime();
         double cellSize = SpatialGridSupport.computeCellSize(balls);
         @SuppressWarnings("unchecked")
         Map<SpatialGridSupport.GridCell, List<Integer>>[] localGrids = new Map[workers.length];
@@ -340,6 +353,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 .thenComparingInt(CollisionPair::secondIndex));
         if (profile != null) {
             profile.pairCollectionNanos += System.nanoTime() - pairStart;
+            profile.collisionDetectionNanos += System.nanoTime() - collisionDetectionStart;
             profile.mergedCells += mergedGrid.size();
             profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
             profile.aggregationNanos += System.nanoTime() - aggregationStart;
@@ -363,9 +377,13 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         int workerCount = Math.min(workers.length, itemCount);
         var completion = new WorkerCompletionMonitor(workerCount);
+        long partitionStart = profile == null ? 0 : System.nanoTime();
         int baseChunk = itemCount / workerCount;
         int remainder = itemCount % workerCount;
         int from = 0;
+        if (profile != null) {
+            profile.partitionNanos += System.nanoTime() - partitionStart;
+        }
         long submissionStart = profile == null ? 0 : System.nanoTime();
         for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
             int chunkSize = baseChunk + (workerIndex < remainder ? 1 : 0);
@@ -492,12 +510,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             int candidatePairs,
             int mergedCells,
             int maxCellOccupancy,
-            double integrationMillis,
+            double stateReadMillis,
+            double partitionMillis,
+            double movementMillis,
             double holeInteractionMillis,
+            double collisionDetectionMillis,
+            double collisionResolutionMillis,
+            double mergeApplyMillis,
+            double integrationMillis,
             double localGridBuildMillis,
             double gridMergeMillis,
             double pairCollectionMillis,
-            double collisionResolutionMillis,
             double syncTimeMillis,
             double aggregationTimeMillis,
             double taskSubmissionTimeMillis,
@@ -520,12 +543,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         private int candidatePairs;
         private int mergedCells;
         private int maxCellOccupancy;
+        private long stateReadNanos;
+        private long partitionNanos;
+        private long movementNanos;
         private long integrationNanos;
         private long holeInteractionNanos;
+        private long collisionDetectionNanos;
+        private long collisionResolutionNanos;
+        private long mergeApplyNanos;
         private long localGridBuildNanos;
         private long gridMergeNanos;
         private long pairCollectionNanos;
-        private long collisionResolutionNanos;
         private long syncNanos;
         private long aggregationNanos;
         private long taskSubmissionNanos;
@@ -548,12 +576,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                     candidatePairs,
                     mergedCells,
                     maxCellOccupancy,
-                    integrationNanos / NANOS_PER_MILLISECOND,
+                    stateReadNanos / NANOS_PER_MILLISECOND,
+                    partitionNanos / NANOS_PER_MILLISECOND,
+                    movementNanos / NANOS_PER_MILLISECOND,
                     holeInteractionNanos / NANOS_PER_MILLISECOND,
+                    collisionDetectionNanos / NANOS_PER_MILLISECOND,
+                    collisionResolutionNanos / NANOS_PER_MILLISECOND,
+                    mergeApplyNanos / NANOS_PER_MILLISECOND,
+                    integrationNanos / NANOS_PER_MILLISECOND,
                     localGridBuildNanos / NANOS_PER_MILLISECOND,
                     gridMergeNanos / NANOS_PER_MILLISECOND,
                     pairCollectionNanos / NANOS_PER_MILLISECOND,
-                    collisionResolutionNanos / NANOS_PER_MILLISECOND,
                     measuredSyncNanos / NANOS_PER_MILLISECOND,
                     aggregationNanos / NANOS_PER_MILLISECOND,
                     taskSubmissionNanos / NANOS_PER_MILLISECOND,

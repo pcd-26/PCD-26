@@ -116,5 +116,7 @@ class HeadlessSimulationRunnerTest {
         assertTrue(execution.instrumentation().lockAcquisitions() >= 0L);
         assertTrue(execution.instrumentation().submittedTasks() > 0L);
         assertTrue(execution.instrumentation().syncTimeMillis() >= 0.0);
+        assertTrue(execution.instrumentation().stateReadTimeMillis() >= 0.0);
+        assertTrue(execution.instrumentation().collisionResolutionTimeMillis() >= 0.0);
     }
 }
