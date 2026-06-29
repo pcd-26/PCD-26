@@ -95,7 +95,8 @@ def render_new_layout(input_dir: Path, output_dir: Path) -> None:
     headless = read_csv(input_dir / "aggregated-results.csv", required=True)
     speedup = read_csv(input_dir / "speedup-results.csv", required=True)
     scalability = read_csv(input_dir / "aggregated-scalability-results.csv", required=True)
-    gui = read_csv(input_dir / "aggregated-gui-results.csv", required=True)
+    gui_path = input_dir / "aggregated-gui-results.csv"
+    gui = read_csv(gui_path, required=False)
     environment = read_csv(input_dir / "environment.csv", required=False)
     chart_context = build_chart_context(environment)
 
@@ -106,9 +107,12 @@ def render_new_layout(input_dir: Path, output_dir: Path) -> None:
         (scalability, output_dir / "scalability-elapsed-time-vs-workers", "avgElapsedMs", "Elapsed time (ms)", "Scalability elapsed time vs worker threads", None, plot_worker_panels),
         (scalability, output_dir / "scalability-throughput-vs-workers", "avgThroughput", "Throughput (steps/s)", "Scalability throughput vs worker threads", None, plot_worker_panels),
         (scalability, output_dir / "coordination-overhead-vs-workers", "avgCoordinationMs", "Coordination time (ms)", "Coordination overhead vs worker threads", None, plot_worker_panels),
-        (gui, output_dir / "gui-frame-time-vs-balls", "avgFrameMs", "Average frame time (ms)", "GUI frame time vs number of balls", "min", plot_best_by_ball),
-        (gui, output_dir / "gui-fps-vs-balls", "avgFps", "Average frames per second", "GUI FPS vs number of balls", "max", plot_best_by_ball),
     ]
+    if gui_path.exists() and not gui.empty:
+        charts.extend([
+            (gui, output_dir / "gui-frame-time-vs-balls", "avgFrameMs", "Average frame time (ms)", "GUI frame time vs number of balls", "min", plot_best_by_ball),
+            (gui, output_dir / "gui-fps-vs-balls", "avgFps", "Average frames per second", "GUI FPS vs number of balls", "max", plot_best_by_ball),
+        ])
 
     for df, output_stem, value_col, ylabel, title, best_agg, plotter in charts:
         if plt is not None:
