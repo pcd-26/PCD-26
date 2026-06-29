@@ -24,7 +24,7 @@ class BenchmarkConfigTest {
                         && config.threads() == 1));
         assertTrue(matrix.stream().anyMatch(config ->
                 config.implementation() == BenchmarkConfig.ImplementationType.THREADS
-                        && config.balls() == 5_000
+                        && config.balls() == 2_500
                         && config.threads() == Runtime.getRuntime().availableProcessors()));
         assertTrue(matrix.stream().anyMatch(config ->
                 config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR

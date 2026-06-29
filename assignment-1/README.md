@@ -117,7 +117,7 @@ count, number of simulation steps, and random seed:
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
-java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 2500 8 600 42
 ```
 
 The runner reports elapsed time, completed steps, and a final state hash so
@@ -133,7 +133,8 @@ python scripts/run_benchmarks.py
 It builds `assignment-1`, runs the benchmark pipeline, writes CSV
 results under `benchmarks/results/`, and refreshes `benchmarks/charts/`. The
 chart directory is cleared before every run so it keeps only the latest chart
-set. This standard command always runs the full benchmark flow. The exported
+set. This standard command always runs the full benchmark flow, which by
+default covers workloads up to `2500` balls. The exported
 `environment.csv` also captures the benchmark machine context automatically,
 including CPU model, physical cores, logical threads, JVM-visible processors,
 JVM, OS, and total RAM; the same key metadata is printed inside the generated

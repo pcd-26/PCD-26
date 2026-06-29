@@ -86,7 +86,7 @@ public record BenchmarkConfig(
     public static List<BenchmarkConfig> defaultMatrix() {
         var configs = new ArrayList<BenchmarkConfig>();
         for (var implementation : List.of(ImplementationType.SEQUENTIAL, ImplementationType.THREADS, ImplementationType.EXECUTOR)) {
-            for (var balls : List.of(100, 500, 1_000, 2_000, 5_000)) {
+            for (var balls : List.of(100, 500, 1_000, 2_000, 2_500)) {
                 for (var threads : threadMatrix()) {
                     configs.add(new BenchmarkConfig(
                             implementation,

@@ -22,7 +22,7 @@ class HeadlessBenchmarkRunnerTest {
                 BenchmarkConfig.ImplementationType.SEQUENTIAL,
                 BenchmarkConfig.ImplementationType.THREADS,
                 BenchmarkConfig.ImplementationType.EXECUTOR), request.implementations());
-        assertEquals(List.of(100, 500, 1_000, 2_500, 5_000, 10_000), request.balls());
+        assertEquals(List.of(100, 500, 1_000, 2_000, 2_500), request.balls());
         assertEquals(1_000, request.steps());
         assertEquals(42L, request.seed());
         assertTrue(request.warmupRuns() >= 2);

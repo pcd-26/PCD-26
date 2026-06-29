@@ -21,6 +21,10 @@ The script:
 - keeps only the latest chart version by clearing the chart directory before
   generating a new set
 
+In the standard `full` mode, the default benchmark matrix stops at `2500`
+balls so the local run stays manageable. Heavier workloads can still be run by
+calling the Java benchmark runners directly with explicit CLI arguments.
+
 Use `--mode smoke` only for the reduced suite. In that case the wrapper
 produces benchmark results but does not regenerate the chart set.
 
