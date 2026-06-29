@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 import shutil
 import subprocess
 import sys
@@ -76,17 +77,25 @@ def main() -> None:
 
 def run_local_benchmarks(config: BenchmarkRunConfig) -> None:
     if not config.skip_build:
+        print_step(f"build-start goal={config.maven_goal}")
         run_command(build_maven_command(config.maven_goal))
+        print_step("build-complete")
 
+    print_step(f"results-reset path={config.results_root}")
     reset_directory(config.results_root)
     if config.mode == "full":
+        print_step(f"charts-reset path={config.charts_root}")
         reset_directory(config.charts_root)
+        print_step(f"pipeline-start mode={config.mode}")
         run_command(
             build_pipeline_command(config.results_root, config.charts_root),
         )
+        print_step("pipeline-complete")
         return
 
+    print_step(f"suite-start mode={config.mode}")
     run_command(build_suite_command(config.mode, config.results_root))
+    print_step("suite-complete")
 
 
 def build_maven_command(goal: str) -> list[str]:
@@ -156,9 +165,35 @@ def resolve_java_command() -> str:
 
 
 def run_command(command: list[str]) -> None:
-    completed = subprocess.run(command, cwd=REPO_ROOT, check=False)
-    if completed.returncode != 0:
-        raise SystemExit(completed.returncode)
+    print_step(f"command-start cwd={REPO_ROOT} command={format_command(command)}")
+    process = subprocess.Popen(
+        command,
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert process.stdout is not None
+    try:
+        for line in process.stdout:
+            print(line, end="")
+    finally:
+        process.stdout.close()
+    return_code = process.wait()
+    if return_code != 0:
+        print_step(f"command-failed exit_code={return_code}")
+        raise SystemExit(return_code)
+    print_step("command-complete")
+
+
+def print_step(message: str) -> None:
+    print(f"[benchmark-runner] {message}", flush=True)
+
+
+def format_command(command: list[str]) -> str:
+    return " ".join(shlex.quote(part) for part in command)
 
 
 if __name__ == "__main__":

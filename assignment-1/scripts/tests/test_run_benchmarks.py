@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -117,6 +118,13 @@ class RunBenchmarksScriptTest(unittest.TestCase):
             with mock.patch.object(Path, "exists", return_value=False):
                 with self.assertRaisesRegex(RuntimeError, "Maven executable not found"):
                     run_benchmarks.resolve_maven_command()
+
+    def test_print_step_emits_live_progress_prefix(self) -> None:
+        stream = StringIO()
+        with mock.patch("sys.stdout", stream):
+            run_benchmarks.print_step("pipeline-start mode=full")
+
+        self.assertIn("[benchmark-runner] pipeline-start mode=full", stream.getvalue())
 
 
 if __name__ == "__main__":
