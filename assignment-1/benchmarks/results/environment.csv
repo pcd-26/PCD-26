@@ -1,2 +1,2 @@
 availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos
-12,"Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",,12,34056757248,OpenJDK 64-Bit Server VM,21.0.11+10-LTS,Windows 11,10.0,amd64,8514437120,532676608,529151808,true,203125000
+12,"Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",10,12,34056757248,OpenJDK 64-Bit Server VM,21.0.11+10-LTS,Windows 11,10.0,amd64,8514437120,926941184,390479920,true,2024093750000

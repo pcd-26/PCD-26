@@ -79,20 +79,6 @@ class BenchmarkPipelineTest {
             }
 
             @Override
-            public GuiResponsivenessBenchmarkRunner.BenchmarkReport runGui(GuiResponsivenessBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
-                events.add("gui");
-                Files.createDirectories(benchmarkRequest.outputFile().getParent());
-                writeCsv(benchmarkRequest.outputFile(), List.of(
-                        "implementation,balls,workers,steps,seed,runIndex,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,framesAbove16Ms,framesAbove33Ms,jvm,os,availableProcessors",
-                        "sequential,100,1,10,42,1,12.000000,13.000000,14.000000,83.333333,0,0,JVM,OS,8"));
-                var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-gui-results.csv");
-                writeCsv(aggregated, List.of(
-                        "implementation,balls,workers,steps,seed,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,avgFramesAbove16Ms,avgFramesAbove33Ms",
-                        "sequential,100,1,10,42,12.000000,13.000000,14.000000,83.333333,0.000000,0.000000"));
-                return new GuiResponsivenessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of());
-            }
-
-            @Override
             public void generateCharts(Path inputDir, Path outputDir) throws IOException {
                 events.add("charts");
                 Files.createDirectories(outputDir);
@@ -103,17 +89,20 @@ class BenchmarkPipelineTest {
         Path resultsDir = tempDir.resolve("results");
         assertEquals(resultsDir, report.resultsDir());
         assertEquals(tempDir.resolve("charts"), report.chartsDir());
-        assertEquals(List.of("headless", "suite", "scalability", "gui", "charts"), events);
+        assertEquals(List.of("headless", "suite", "scalability", "charts"), events);
         assertTrue(Files.exists(resultsDir.resolve("raw-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("aggregated-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("speedup-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("raw-scalability-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("aggregated-scalability-results.csv")));
-        assertTrue(Files.exists(resultsDir.resolve("raw-gui-results.csv")));
-        assertTrue(Files.exists(resultsDir.resolve("aggregated-gui-results.csv")));
+        assertFalse(Files.exists(resultsDir.resolve("raw-gui-results.csv")));
+        assertFalse(Files.exists(resultsDir.resolve("aggregated-gui-results.csv")));
         assertFalse(Files.exists(resultsDir.resolve(BenchmarkCsvWriter.SUMMARY_FILE_NAME)));
         assertTrue(Files.exists(tempDir.resolve("charts").resolve("chart.txt")));
         assertFalse(Files.exists(resultsDir.resolve("missing.txt")));
+        assertEquals(null, report.guiRawFile());
+        assertEquals(null, report.guiAggregatedFile());
+        assertEquals(null, report.guiCompatibilityFile());
     }
 
     @Test
@@ -141,12 +130,6 @@ class BenchmarkPipelineTest {
             @Override
             public ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest benchmarkRequest) {
                 events.add("scalability");
-                throw new IllegalStateException("should not run");
-            }
-
-            @Override
-            public GuiResponsivenessBenchmarkRunner.BenchmarkReport runGui(GuiResponsivenessBenchmarkRunner.BenchmarkRequest benchmarkRequest) {
-                events.add("gui");
                 throw new IllegalStateException("should not run");
             }
 

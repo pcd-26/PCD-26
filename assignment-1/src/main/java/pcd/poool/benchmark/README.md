@@ -54,6 +54,7 @@ The wrapper:
 - refreshes `benchmarks/charts/`
 - clears `benchmarks/charts/` before every run so only the latest chart set is
   kept
+- skips the GUI benchmark family in the local Python-driven flow
 
 If you only need to regenerate charts from an existing snapshot, run the chart
 generator directly:
