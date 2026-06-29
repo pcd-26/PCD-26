@@ -400,63 +400,45 @@ Do not interact with the GUI during the benchmark run unless the scenario
 explicitly asks for user input. GUI benchmarks are intentionally separate from
 headless throughput measurements.
 
-### 11.4 Run the full benchmark matrix
+### 11.4 Run the full benchmark workflow
 
-Use the benchmark suite to execute the whole matrix in one command:
-
-```bash
-java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkSuite
-```
-
-The suite runs the sequential, threaded, and executor implementations across
-the configured ball counts and thread counts, prints progress, and stores the
-results in a timestamped directory under `benchmarks/results/`.
-
-### 11.5 Generate the analysis tables
-
-After the suite has produced `benchmark-summary.csv`, generate report-ready
-tables with:
+Use the local Python wrapper to execute the benchmark flow in one command:
 
 ```bash
-java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkScalabilityAnalyzer benchmarks/results/<timestamp>
+python scripts/run_benchmarks.py
 ```
 
-This writes:
+The wrapper compiles `assignment-1`, runs the Java benchmark pipeline, writes
+results under `benchmarks/results/`, and refreshes `benchmarks/charts/`. The
+chart directory is cleared before each run so it keeps only the latest chart
+set. By default this command runs the full benchmark flow.
 
-- `speedup-table.csv`
-- `efficiency-table.csv`
-- `scalability-table.csv`
-
-### 11.6 Generate the charts
-
-After the benchmark CSV files are available, generate the charts with:
+If you explicitly need the reduced suite, use:
 
 ```bash
-python -m pip install -r requirements.txt
-java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkScalabilityAnalyzer benchmarks/results/<timestamp>
-python scripts/plot_benchmarks.py --input-dir benchmarks/results/<timestamp> --output-dir benchmarks/charts/report
+python scripts/run_benchmarks.py --mode smoke
 ```
 
-This script reads:
+### 11.5 Generate charts from an existing snapshot
 
-- `benchmark-summary.csv`
-- `benchmark-runs.csv`
-- `speedup-table.csv`
-- `efficiency-table.csv`
-- `gui-responsiveness.csv`
+If you already have a benchmark snapshot and only need the charts, run the
+plotter directly:
 
-It writes the PDF-ready PNG and SVG figures used in the report into
-`benchmarks/charts/report/`.
-If `gui-responsiveness.csv` is not present in the input directory, the plot
-script keeps the other charts and skips the GUI chart with a warning so CI can
-remain headless without producing a misleading partial figure.
+```bash
+python scripts/plot_benchmarks.py --input-dir benchmarks/results --output-dir benchmarks/charts
+```
 
-### 11.7 Output directory structure
+The chart generator supports both the current benchmark layout and older
+legacy snapshots. In both cases it clears the chosen output directory first
+and then writes the latest chart set, so only the newest PNG and SVG files are
+kept.
 
-Each benchmark campaign produces a timestamped result directory similar to:
+### 11.6 Output directory structure
+
+Each benchmark campaign produces benchmark results directly in:
 
 ```text
-benchmarks/results/20260621-131530-000/
+benchmarks/results/
 ```
 
 Typical contents are:
@@ -474,10 +456,10 @@ scalability-table.csv
 The chart generator writes PNG and SVG files to:
 
 ```text
-benchmarks/charts/report/
+benchmarks/charts/
 ```
 
-### 11.8 CSV file meanings
+### 11.7 CSV file meanings
 
 - `benchmark-runs.csv` contains one raw record per warmup or measured run.
 - `benchmark-summary.csv` contains the aggregate statistics for each benchmark
@@ -488,17 +470,10 @@ benchmarks/charts/report/
   headless throughput measurements.
 - `speedup-table.csv`, `efficiency-table.csv`, and `scalability-table.csv`
   are derived analysis tables for the report.
-- The chart set is exported as paired PNG and SVG files for direct inclusion
-  in the final PDF report.
-- The benchmark workflow also packages the chart set into an assignment-specific
-  zip and publishes it to the shared `latest` GitHub Release, alongside the
-  delivery zip. The release reuses fixed asset names, so it always keeps only
-  the most recent `Assignment-01-latest.zip` and
-  `Assignment-01-benchmark-charts-latest.zip` files. This makes it easy to
-  collect the report figures separately from the submission package while
-  keeping the release tidy.
+- The chart set is exported as paired PNG and SVG files for direct inclusion in
+  the final PDF report.
 
-### 11.9 Benchmark environment fields
+### 11.8 Benchmark environment fields
 
 The exported `environment.csv` records:
 
@@ -517,7 +492,7 @@ The exported `environment.csv` records:
 `processCpuTimeNanos` is populated only when the JVM exposes process CPU time
 through the operating system bean.
 
-### 11.10 Known limitations
+### 11.9 Known limitations
 
 - Benchmark results can vary across machines, JVM versions, and operating
   systems.
@@ -530,7 +505,7 @@ through the operating system bean.
 - Some operating systems do not expose process CPU time, so CPU utilization may
   be partially unavailable or estimated from the supported metadata.
 
-### 11.11 Reduce measurement noise
+### 11.10 Reduce measurement noise
 
 - Close heavy background applications before running a benchmark campaign.
 - Use the same machine for all implementations you want to compare.
@@ -540,56 +515,12 @@ through the operating system bean.
 - Keep the JVM, OS, and hardware configuration unchanged while comparing one
   benchmark matrix.
 
-## 12. CI integration
+## 12. CI policy
 
-Continuous integration runs a lightweight smoke benchmark so the project can
-check correctness without paying the cost of the full benchmark matrix on every
-pull request.
+Benchmark runs are no longer part of GitHub Actions. The benchmark data used
+for the report must be generated locally with
+`scripts/run_benchmarks.py` or by invoking the Java benchmark entry points
+directly on a controlled machine.
 
-### 12.1 CI smoke benchmark
-
-The CI smoke benchmark uses a reduced configuration set:
-
-- balls: `100`
-- steps: `1000`
-- thread counts: `1`, `2`
-- warmup runs: `1`
-- measured runs: `1`
-
-It exercises the `sequential`, `threads`, and `executor` implementations and
-fails if the correctness guard detects a mismatch or an invalid final state.
-
-The smoke benchmark writes its outputs under:
-
-```text
-benchmarks/results/ci/
-```
-
-The CI workflow also uploads the generated CSV files as build artifacts so the
-results can be inspected after the run.
-
-### 12.2 Manual full benchmark workflow
-
-The full benchmark matrix is triggered manually through GitHub Actions. It is
-the workflow used for report-grade numbers and should be run on a controlled
-machine when possible.
-
-When the benchmark workflow runs on `main`, the generated CSV files and chart
-images are mirrored back into the repository under
-`benchmarks/results/official/<timestamp>/` and `benchmarks/charts/`, then
-committed with `[skip ci]` so the benchmark history stays versioned without
-retriggering the workflow.
-
-### 12.3 CI benchmark numbers are not official
-
-Benchmark numbers collected in CI are useful for regression detection and
-correctness checks, but they are not the official report numbers.
-
-Reasons:
-
-- the runner hardware is shared and can vary over time
-- background load is not controlled
-- the VM and OS environment may differ from the local benchmark machine
-
-Use local or controlled-machine runs for the official benchmark tables and
-charts in the report.
+The CI workflows still cover the normal Maven build and delivery packaging, but
+they do not run or publish benchmark snapshots anymore.

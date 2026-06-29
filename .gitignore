@@ -1,3 +1,5 @@
 /assignment-1/.idea
 /assignment-1/target
 assignment-1/pcd-ass-01.iml
+__pycache__/
+*.pyc

@@ -117,12 +117,14 @@ class BenchmarkChartGenerationTest {
 
         runScript(inputDir, outputDir);
 
-        assertChartPairExists(outputDir, "01_best_execution_time_vs_balls");
-        assertChartPairExists(outputDir, "02_best_throughput_vs_balls");
-        assertChartPairExists(outputDir, "03_speedup_vs_thread_count");
-        assertChartPairExists(outputDir, "04_efficiency_vs_thread_count");
-        assertChartPairExists(outputDir, "05_coordination_overhead_vs_thread_count");
-        assertChartPairExists(outputDir, "06_cpu_utilization_vs_thread_count");
+        assertChartPairExists(outputDir, "execution-time-vs-balls");
+        assertChartPairExists(outputDir, "speedup-vs-balls");
+        assertChartPairExists(outputDir, "throughput-vs-balls");
+        assertChartPairExists(outputDir, "scalability-elapsed-time-vs-workers");
+        assertChartPairExists(outputDir, "scalability-throughput-vs-workers");
+        assertChartPairExists(outputDir, "coordination-overhead-vs-workers");
+        assertChartPairExists(outputDir, "gui-frame-time-vs-balls");
+        assertChartPairExists(outputDir, "gui-fps-vs-balls");
     }
 
     private static void write(Path file, List<String> lines) throws IOException {
@@ -135,7 +137,7 @@ class BenchmarkChartGenerationTest {
     }
 
     private static void runScript(Path inputDir, Path outputDir) throws Exception {
-        Path script = Path.of("..", "scripts", "plot_benchmarks.py").toAbsolutePath().normalize();
+        Path script = resolvePlotScript();
         ProcessBuilder builder = new ProcessBuilder(
                 "python",
                 script.toString(),
@@ -153,5 +155,13 @@ class BenchmarkChartGenerationTest {
         if (exit != 0) {
             throw new AssertionError("plot script failed: " + buffer.toString(StandardCharsets.UTF_8));
         }
+    }
+
+    private static Path resolvePlotScript() {
+        Path repoRootStyle = Path.of("assignment-1", "scripts", "plot_benchmarks.py");
+        if (Files.exists(repoRootStyle)) {
+            return repoRootStyle.toAbsolutePath().normalize();
+        }
+        return Path.of("scripts", "plot_benchmarks.py").toAbsolutePath().normalize();
     }
 }

@@ -19,13 +19,11 @@ class BenchmarkSuiteTest {
     Path tempDir;
 
     @Test
-    void buildMatrixCreatesTimestampedOutputDirectoryAndExpectedConfigurations() throws Exception {
-        Instant timestamp = Instant.parse("2026-06-21T13:15:30Z");
-
-        var configs = BenchmarkSuite.buildMatrix(tempDir, timestamp);
+    void buildMatrixCreatesOutputDirectoryAndExpectedConfigurations() throws Exception {
+        var configs = BenchmarkSuite.buildMatrix(tempDir);
 
         assertEquals(55, configs.size());
-        Path expectedOutputDir = tempDir.resolve("20260621-131530-000");
+        Path expectedOutputDir = tempDir;
         assertTrue(Files.isDirectory(expectedOutputDir));
         assertTrue(configs.stream().allMatch(config -> config.outputDir().equals(expectedOutputDir)));
         assertEquals(5, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL).count());
@@ -35,13 +33,11 @@ class BenchmarkSuiteTest {
     }
 
     @Test
-    void buildSmokeMatrixCreatesCiDirectoryAndLightweightConfigurations() throws Exception {
-        Instant timestamp = Instant.parse("2026-06-21T13:15:30Z");
-
-        var configs = BenchmarkSuite.buildSmokeMatrix(tempDir.resolve("ci"), timestamp);
+    void buildSmokeMatrixCreatesOutputDirectoryAndLightweightConfigurations() throws Exception {
+        var configs = BenchmarkSuite.buildSmokeMatrix(tempDir.resolve("smoke"));
 
         assertEquals(5, configs.size());
-        Path expectedOutputDir = tempDir.resolve("ci").resolve("20260621-131530-000");
+        Path expectedOutputDir = tempDir.resolve("smoke");
         assertTrue(Files.isDirectory(expectedOutputDir));
         assertTrue(configs.stream().allMatch(config -> config.outputDir().equals(expectedOutputDir)));
         assertTrue(configs.stream().allMatch(config -> config.balls() == 100));
@@ -96,8 +92,7 @@ class BenchmarkSuiteTest {
                     };
                 },
                 new PrintStream(outBuffer, true),
-                new PrintStream(errBuffer, true),
-                Instant.parse("2026-06-21T13:15:30Z"));
+                new PrintStream(errBuffer, true));
 
         assertEquals(2, report.completedConfigs());
         assertEquals(1, report.failedConfigs());

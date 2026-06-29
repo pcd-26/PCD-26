@@ -1,6 +1,7 @@
 package pcd.poool.benchmark;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ public final class ScalabilityBenchmarkRunner {
     private static final long DEFAULT_SEED = 42L;
     private static final int DEFAULT_WARMUP_RUNS = 2;
     private static final int DEFAULT_MEASURED_RUNS = 5;
-    private static final Path DEFAULT_OUTPUT_FILE = Path.of("benchmark", "results", "raw-scalability-results.csv");
+    private static final Path DEFAULT_OUTPUT_FILE = defaultAssignmentPath("benchmarks", "results", "raw-scalability-results.csv");
     private static volatile long blackhole;
 
     private ScalabilityBenchmarkRunner() {
@@ -73,6 +74,7 @@ public final class ScalabilityBenchmarkRunner {
     public static BenchmarkReport run(BenchmarkRequest request) throws IOException {
         var telemetry = RuntimeTelemetry.capture();
         var rows = new ArrayList<BenchmarkRow>();
+        ScalabilityBenchmarkCsvWriter.initialize(request.outputFile());
 
         for (int ballCount : request.balls()) {
             for (BenchmarkConfig.ImplementationType implementation : request.implementations()) {
@@ -95,13 +97,14 @@ public final class ScalabilityBenchmarkRunner {
                         if (result.failed()) {
                             throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
                         }
-                        rows.add(toRow(result, telemetry, config, runIndex));
+                        var row = toRow(result, telemetry, config, runIndex);
+                        rows.add(row);
+                        ScalabilityBenchmarkCsvWriter.append(request.outputFile(), row);
                     }
                 }
             }
         }
 
-        ScalabilityBenchmarkCsvWriter.write(request.outputFile(), rows);
         var derived = ScalabilityBenchmarkResultsPostProcessor.process(request.outputFile());
         return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), List.copyOf(rows));
     }
@@ -274,8 +277,16 @@ public final class ScalabilityBenchmarkRunner {
                   [--seed N] \
                   [--warmup N] \
                   [--measured N] \
-                  [--output benchmark/results/raw-scalability-results.csv]
+                  [--output benchmarks/results/raw-scalability-results.csv]
                 """);
+    }
+
+    private static Path defaultAssignmentPath(String... segments) {
+        Path assignmentRoot = Path.of("assignment-1");
+        if (Files.isDirectory(assignmentRoot)) {
+            return assignmentRoot.resolve(Path.of("", segments));
+        }
+        return Path.of("", segments);
     }
 
     private static final class SimulationSession implements AutoCloseable {

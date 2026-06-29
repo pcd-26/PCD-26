@@ -5,10 +5,6 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -17,10 +13,8 @@ import java.util.Objects;
  */
 public final class BenchmarkPipeline {
 
-    private static final Path DEFAULT_RESULTS_ROOT = Path.of("benchmark", "results");
-    private static final Path DEFAULT_CHARTS_ROOT = Path.of("benchmark", "charts");
-    private static final DateTimeFormatter DIRECTORY_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
+    private static final Path DEFAULT_RESULTS_ROOT = defaultAssignmentPath("benchmarks", "results");
+    private static final Path DEFAULT_CHARTS_ROOT = defaultAssignmentPath("benchmarks", "charts");
 
     private BenchmarkPipeline() {
     }
@@ -63,7 +57,10 @@ public final class BenchmarkPipeline {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(steps, "steps");
 
-        Path resultsDir = request.resultsRoot().resolve(DIRECTORY_FORMATTER.format(request.timestamp()));
+        resetDirectory(request.resultsRoot());
+        resetDirectory(request.chartsRoot());
+
+        Path resultsDir = request.resultsRoot();
         Files.createDirectories(resultsDir);
         Files.createDirectories(request.chartsRoot());
 
@@ -74,7 +71,7 @@ public final class BenchmarkPipeline {
         printStep(request.out(), "headless-benchmark-complete", headlessReport.outputFile());
 
         printStep(request.out(), "suite-start", resultsDir);
-        var suiteReport = steps.runSuite(request.resultsRoot(), request.timestamp());
+        var suiteReport = steps.runSuite(request.resultsRoot());
         printStep(request.out(), "suite-complete", suiteReport.outputDir());
 
         printStep(request.out(), "scalability-benchmark-start", resultsDir);
@@ -147,9 +144,34 @@ public final class BenchmarkPipeline {
     private static void printUsage() {
         System.out.println("""
                 Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline \
-                  [--results-root benchmark/results] \
-                  [--charts-root benchmark/charts]
+                  [--results-root benchmarks/results] \
+                  [--charts-root benchmarks/charts]
                 """);
+    }
+
+    private static Path defaultAssignmentPath(String... segments) {
+        Path assignmentRoot = Path.of("assignment-1");
+        if (Files.isDirectory(assignmentRoot)) {
+            return assignmentRoot.resolve(Path.of("", segments));
+        }
+        return Path.of("", segments);
+    }
+
+    private static void resetDirectory(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+        try (var paths = Files.walk(directory)) {
+            paths.sorted(java.util.Comparator.reverseOrder())
+                    .filter(path -> !path.equals(directory))
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException ex) {
+                            throw new IllegalStateException("failed to clear directory: " + directory, ex);
+                        }
+                    });
+        }
     }
 
     /**
@@ -157,7 +179,7 @@ public final class BenchmarkPipeline {
      *
      * @param resultsRoot root directory for benchmark CSV outputs
      * @param chartsRoot directory where charts will be written
-     * @param timestamp instant used to name the output directory
+     * @param timestamp run timestamp preserved as benchmark metadata
      * @param out progress stream
      */
     public record BenchmarkPipelineRequest(Path resultsRoot, Path chartsRoot, Instant timestamp, PrintStream out) {
@@ -218,7 +240,7 @@ public final class BenchmarkPipeline {
 
         HeadlessBenchmarkRunner.BenchmarkReport runHeadless(HeadlessBenchmarkRunner.BenchmarkRequest request) throws IOException;
 
-        BenchmarkSuite.SuiteReport runSuite(Path resultsRoot, Instant timestamp) throws Exception;
+        BenchmarkSuite.SuiteReport runSuite(Path resultsRoot) throws Exception;
 
         ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest request) throws IOException;
 
@@ -239,8 +261,8 @@ public final class BenchmarkPipeline {
         }
 
         @Override
-        public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot, Instant timestamp) throws Exception {
-            return BenchmarkSuite.run(resultsRoot, timestamp, System.out, System.err, BenchmarkSuite.Mode.FULL);
+        public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot) throws Exception {
+            return BenchmarkSuite.run(resultsRoot, System.out, System.err, BenchmarkSuite.Mode.FULL);
         }
 
         @Override
@@ -262,7 +284,7 @@ public final class BenchmarkPipeline {
 
         @Override
         public void generateCharts(Path inputDir, Path outputDir) throws IOException, InterruptedException {
-            Path script = Path.of("scripts", "plot_benchmarks.py").toAbsolutePath().normalize();
+            Path script = resolvePlotScript();
             var process = new ProcessBuilder("python", script.toString(), "--input-dir", inputDir.toString(), "--output-dir", outputDir.toString())
                     .redirectErrorStream(true)
                     .start();
@@ -273,6 +295,18 @@ public final class BenchmarkPipeline {
             if (exit != 0) {
                 throw new IllegalStateException("chart generation failed with exit code " + exit);
             }
+        }
+
+        private static Path resolvePlotScript() {
+            Path repoRootStyle = Path.of("assignment-1", "scripts", "plot_benchmarks.py");
+            if (Files.exists(repoRootStyle)) {
+                return repoRootStyle.toAbsolutePath().normalize();
+            }
+            Path assignmentLocal = Path.of("scripts", "plot_benchmarks.py");
+            if (Files.exists(assignmentLocal)) {
+                return assignmentLocal.toAbsolutePath().normalize();
+            }
+            throw new IllegalStateException("plot_benchmarks.py not found in assignment-1/scripts or scripts");
         }
     }
 }
