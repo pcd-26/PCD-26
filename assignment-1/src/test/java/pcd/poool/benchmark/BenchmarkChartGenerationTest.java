@@ -117,6 +117,9 @@ class BenchmarkChartGenerationTest {
         write(inputDir.resolve("gui-responsiveness.csv"), List.of(
                 "timestamp,implementation,balls,threads,steps,seed,requestedUpdates,completedUpdates,elapsedMillis,meanUpdateIntervalMillis,meanUpdateLatencyMillis,maxUpdateLatencyMillis,updateRatePerSecond,meanEdtDelayMillis,maxEdtDelayMillis,delayedUpdates",
                 "2026-06-21T13:15:30Z,sequential,100,1,100,1,20,20,30.000000,1.500000,2.000000,3.000000,666.666667,1.200000,2.500000,0"));
+        write(inputDir.resolve("environment.csv"), List.of(
+                "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
+                "8,Test CPU,4,8,17179869184,JVM,21,Windows 11,10.0,amd64,1,1,1,true,123"));
 
         runScript(inputDir, outputDir);
 
