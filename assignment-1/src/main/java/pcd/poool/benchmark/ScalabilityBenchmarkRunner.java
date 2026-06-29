@@ -24,7 +24,7 @@ public final class ScalabilityBenchmarkRunner {
             8,
             Runtime.getRuntime().availableProcessors(),
             Runtime.getRuntime().availableProcessors() + 1);
-    private static final List<Integer> DEFAULT_BALLS = List.of(2_500, 10_000);
+    private static final List<Integer> DEFAULT_BALLS = List.of(2_500);
     private static final List<BenchmarkConfig.ImplementationType> DEFAULT_IMPLEMENTATIONS =
             List.of(BenchmarkConfig.ImplementationType.THREADS, BenchmarkConfig.ImplementationType.EXECUTOR);
     private static final int DEFAULT_STEPS = 1_000;
@@ -275,7 +275,7 @@ public final class ScalabilityBenchmarkRunner {
         System.out.println("""
                 Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.ScalabilityBenchmarkRunner \
                   [--implementation threads|executor|all] \
-                  [--balls 2500,10000] \
+                  [--balls 2500] \
                   [--workers 1,2,4,8,...] \
                   [--steps N] \
                   [--seed N] \

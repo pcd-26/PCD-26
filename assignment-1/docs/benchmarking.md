@@ -221,7 +221,7 @@ The benchmark matrix defines the supported comparison space.
 - `500`
 - `1000`
 - `2000`
-- `5000`
+- `2500`
 
 These values define the workload scale. The benchmark scenarios must be able to
 generate deterministic boards matching these counts.
@@ -269,7 +269,7 @@ Recommended scenario set:
    - high-load scenario
    - used to test worker scaling and synchronization cost
 
-5. `S5 - 5000 balls`
+5. `S5 - 2500 balls`
    - massive scenario
    - used to test the upper end of throughput and CPU utilization
 
@@ -374,7 +374,7 @@ opening the GUI:
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
-java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 2500 8 600 42
 ```
 
 Command arguments are:

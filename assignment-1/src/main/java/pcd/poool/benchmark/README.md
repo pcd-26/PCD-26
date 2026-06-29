@@ -55,6 +55,8 @@ The wrapper:
 - clears `benchmarks/charts/` before every run so only the latest chart set is
   kept
 - skips the GUI benchmark family in the local Python-driven flow
+- uses a standard `full` matrix capped at `2500` balls for manageable local
+  execution time
 
 If you only need to regenerate charts from an existing snapshot, run the chart
 generator directly:

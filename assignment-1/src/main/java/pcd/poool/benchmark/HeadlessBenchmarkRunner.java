@@ -22,7 +22,7 @@ import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
  */
 public final class HeadlessBenchmarkRunner {
 
-    private static final List<Integer> DEFAULT_BALLS = List.of(100, 500, 1_000, 2_500, 5_000, 10_000);
+    private static final List<Integer> DEFAULT_BALLS = List.of(100, 500, 1_000, 2_000, 2_500);
     private static final List<BenchmarkConfig.ImplementationType> DEFAULT_IMPLEMENTATIONS =
             List.of(BenchmarkConfig.ImplementationType.SEQUENTIAL,
                     BenchmarkConfig.ImplementationType.THREADS,
