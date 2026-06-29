@@ -1,6 +1,7 @@
 package pcd.poool.benchmark;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +32,7 @@ public final class HeadlessBenchmarkRunner {
     private static final int DEFAULT_WORKERS = Math.max(1, Runtime.getRuntime().availableProcessors());
     private static final int DEFAULT_WARMUP_RUNS = 2;
     private static final int DEFAULT_MEASURED_RUNS = 5;
-    private static final Path DEFAULT_OUTPUT_FILE = Path.of("benchmark", "results", "raw-results.csv");
+    private static final Path DEFAULT_OUTPUT_FILE = defaultAssignmentPath("benchmarks", "results", "raw-results.csv");
     private static volatile long blackhole;
 
     private HeadlessBenchmarkRunner() {
@@ -86,6 +87,7 @@ public final class HeadlessBenchmarkRunner {
     public static BenchmarkReport run(BenchmarkRequest request) throws IOException {
         var telemetry = RuntimeTelemetry.capture();
         var rows = new ArrayList<BenchmarkRow>();
+        HeadlessBenchmarkCsvWriter.initialize(request.outputFile());
 
         for (int ballCount : request.balls()) {
             for (BenchmarkConfig.ImplementationType implementation : request.implementations()) {
@@ -107,12 +109,13 @@ public final class HeadlessBenchmarkRunner {
                     if (result.failed()) {
                         throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
                     }
-                    rows.add(toRow(result, telemetry, config, runIndex));
+                    var row = toRow(result, telemetry, config, runIndex);
+                    rows.add(row);
+                    HeadlessBenchmarkCsvWriter.append(request.outputFile(), row);
                 }
             }
         }
 
-        HeadlessBenchmarkCsvWriter.write(request.outputFile(), rows);
         var derived = HeadlessBenchmarkResultsPostProcessor.process(request.outputFile());
         return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), derived.speedupFile(), List.copyOf(rows));
     }
@@ -348,8 +351,16 @@ public final class HeadlessBenchmarkRunner {
                   [--workers N] \
                   [--warmup N] \
                   [--measured N] \
-                  [--output benchmark/results/raw-results.csv]
+                  [--output benchmarks/results/raw-results.csv]
                 """);
+    }
+
+    private static Path defaultAssignmentPath(String... segments) {
+        Path assignmentRoot = Path.of("assignment-1");
+        if (Files.isDirectory(assignmentRoot)) {
+            return assignmentRoot.resolve(Path.of("", segments));
+        }
+        return Path.of("", segments);
     }
 
     private static final class SimulationSession implements AutoCloseable {
