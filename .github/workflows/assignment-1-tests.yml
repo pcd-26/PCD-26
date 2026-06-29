@@ -48,11 +48,15 @@ jobs:
         working-directory: assignment-1
         env:
           TEST_SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.test_selector || '' }}
+          NON_GUI_BENCHMARK_TEST_EXCLUDES: >-
+            !pcd.poool.benchmark.GuiResponsivenessBenchmarkRunnerTest,
+            !pcd.poool.benchmark.GuiResponsivenessBenchmarkResultsPostProcessorTest,
+            !pcd.poool.benchmark.GuiResponsivenessBenchmarkCsvWriterTest
         run: |
           if [ -n "$TEST_SELECTOR" ]; then
             mvn -B clean test -Dtest="$TEST_SELECTOR"
           else
-            mvn -B clean verify
+            mvn -B clean verify -Dtest="$NON_GUI_BENCHMARK_TEST_EXCLUDES"
           fi
 
   package:
