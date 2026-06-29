@@ -411,7 +411,8 @@ python scripts/run_benchmarks.py
 The wrapper compiles `assignment-1`, runs the Java benchmark pipeline, writes
 results under `benchmarks/results/`, and refreshes `benchmarks/charts/`. The
 chart directory is cleared before each run so it keeps only the latest chart
-set. By default this command runs the full benchmark flow.
+set. By default this command runs the local headless and scalability benchmark
+flow; GUI benchmark collection is excluded from the Python wrapper.
 
 If you explicitly need the reduced suite, use:
 
@@ -447,7 +448,6 @@ Typical contents are:
 benchmark-runs.csv
 benchmark-summary.csv
 environment.csv
-gui-responsiveness.csv
 speedup-table.csv
 efficiency-table.csv
 scalability-table.csv
@@ -466,8 +466,6 @@ benchmarks/charts/
   scenario.
 - `environment.csv` contains the runtime and machine metadata used to interpret
   the measurements.
-- `gui-responsiveness.csv` contains GUI timing data and must not be mixed with
-  headless throughput measurements.
 - `speedup-table.csv`, `efficiency-table.csv`, and `scalability-table.csv`
   are derived analysis tables for the report.
 - The chart set is exported as paired PNG and SVG files for direct inclusion in

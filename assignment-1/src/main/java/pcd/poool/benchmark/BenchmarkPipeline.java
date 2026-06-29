@@ -80,14 +80,6 @@ public final class BenchmarkPipeline {
         var scalabilityReport = steps.runScalability(scalabilityRequest);
         printStep(request.out(), "scalability-benchmark-complete", scalabilityReport.outputFile());
 
-        printStep(request.out(), "gui-benchmark-start", resultsDir);
-        var guiRequest = GuiResponsivenessBenchmarkRunner.defaults()
-                .withOutputFile(resultsDir.resolve("raw-gui-results.csv"));
-        var guiReport = steps.runGui(guiRequest);
-        Path guiCompatibilityFile = resultsDir.resolve("gui-responsiveness.csv");
-        Files.copy(guiReport.outputFile(), guiCompatibilityFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        printStep(request.out(), "gui-benchmark-complete", guiReport.outputFile());
-
         printStep(request.out(), "chart-generation-start", request.chartsRoot());
         steps.generateCharts(resultsDir, request.chartsRoot());
         printStep(request.out(), "chart-generation-complete", request.chartsRoot());
@@ -101,9 +93,9 @@ public final class BenchmarkPipeline {
                 suiteReport.outputDir(),
                 scalabilityReport.outputFile(),
                 scalabilityReport.aggregatedOutputFile(),
-                guiReport.outputFile(),
-                guiReport.aggregatedOutputFile(),
-                guiCompatibilityFile);
+                null,
+                null,
+                null);
     }
 
     private static void printStep(PrintStream out, String label, Path path) {
@@ -215,9 +207,9 @@ public final class BenchmarkPipeline {
      * @param suiteDir suite output directory
      * @param scalabilityRawFile scalability raw CSV
      * @param scalabilityAggregatedFile scalability aggregated CSV
-     * @param guiRawFile GUI raw CSV
-     * @param guiAggregatedFile GUI aggregated CSV
-     * @param guiCompatibilityFile GUI compatibility CSV used by chart generation
+     * @param guiRawFile GUI raw CSV, if produced
+     * @param guiAggregatedFile GUI aggregated CSV, if produced
+     * @param guiCompatibilityFile GUI compatibility CSV used by chart generation, if produced
      */
     public record BenchmarkPipelineReport(
             Path resultsDir,
@@ -244,8 +236,6 @@ public final class BenchmarkPipeline {
 
         ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest request) throws IOException;
 
-        GuiResponsivenessBenchmarkRunner.BenchmarkReport runGui(GuiResponsivenessBenchmarkRunner.BenchmarkRequest request) throws IOException;
-
         void generateCharts(Path inputDir, Path outputDir) throws IOException, InterruptedException;
 
         static BenchmarkPipelineSteps defaultSteps() {
@@ -268,18 +258,6 @@ public final class BenchmarkPipeline {
         @Override
         public ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest request) throws IOException {
             return ScalabilityBenchmarkRunner.run(request);
-        }
-
-        @Override
-        public GuiResponsivenessBenchmarkRunner.BenchmarkReport runGui(GuiResponsivenessBenchmarkRunner.BenchmarkRequest request) throws IOException {
-            try {
-                return GuiResponsivenessBenchmarkRunner.run(request);
-            } catch (Exception ex) {
-                if (ex instanceof IOException ioException) {
-                    throw ioException;
-                }
-                throw new IllegalStateException("failed to run GUI benchmark", ex);
-            }
         }
 
         @Override

@@ -137,7 +137,8 @@ set. This standard command always runs the full benchmark flow. The exported
 `environment.csv` also captures the benchmark machine context automatically,
 including CPU model, physical cores, logical threads, JVM-visible processors,
 JVM, OS, and total RAM; the same key metadata is printed inside the generated
-chart images.
+chart images. The local Python-driven benchmark flow excludes GUI benchmark
+collection and runs only the headless and scalability families.
 
 If you need the reduced benchmark suite for a specific case, pass:
 
