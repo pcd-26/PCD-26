@@ -1,6 +1,7 @@
 package pcd.poool.benchmark;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -91,6 +92,38 @@ class BenchmarkChartGenerationTest {
         assertChartPairExists(outputDir, "gui-frame-time-vs-balls");
         assertChartPairExists(outputDir, "gui-fps-vs-balls");
         assertTrue(Files.readString(outputDir.resolve("execution-time-vs-balls.svg")).contains("<svg"));
+    }
+
+    @Test
+    void scriptGeneratesHeadlessChartsWhenGuiResultsAreMissing() throws Exception {
+        Path inputDir = tempDir.resolve("results-no-gui");
+        Path outputDir = tempDir.resolve("charts-no-gui");
+        Files.createDirectories(inputDir);
+
+        write(inputDir.resolve("aggregated-results.csv"), List.of(
+                "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
+                "sequential,100,1,100,1,10.000000,0.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
+                "threads,100,2,100,1,6.000000,0.000000,1666.666667,0.000000,1.000000,0.000000,0.100000,0.000000,1.000000"));
+        write(inputDir.resolve("speedup-results.csv"), List.of(
+                "balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup",
+                "100,2,threads,10.000000,6.000000,1.666667"));
+        write(inputDir.resolve("aggregated-scalability-results.csv"), List.of(
+                "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
+                "threads,100,1,100,1,12.000000,0.000000,900.000000,0.000000,0.500000,0.000000,0.041667,0.000000,1.000000"));
+
+        runScript(inputDir, outputDir);
+
+        try (var files = Files.list(outputDir)) {
+            assertEquals(12, files.count());
+        }
+        assertChartPairExists(outputDir, "execution-time-vs-balls");
+        assertChartPairExists(outputDir, "speedup-vs-balls");
+        assertChartPairExists(outputDir, "throughput-vs-balls");
+        assertChartPairExists(outputDir, "scalability-elapsed-time-vs-workers");
+        assertChartPairExists(outputDir, "scalability-throughput-vs-workers");
+        assertChartPairExists(outputDir, "coordination-overhead-vs-workers");
+        assertFalse(Files.exists(outputDir.resolve("gui-frame-time-vs-balls.png")));
+        assertFalse(Files.exists(outputDir.resolve("gui-fps-vs-balls.png")));
     }
 
     @Test
