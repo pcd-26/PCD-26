@@ -19,11 +19,15 @@ class RuntimeTelemetryTest {
         var telemetry = RuntimeTelemetry.capture();
 
         assertEquals(Runtime.getRuntime().availableProcessors(), telemetry.availableProcessors());
+        assertNotNull(telemetry.cpuModel());
         assertNotNull(telemetry.jvmName());
         assertNotNull(telemetry.jvmVersion());
         assertNotNull(telemetry.osName());
         assertNotNull(telemetry.osVersion());
         assertNotNull(telemetry.osArch());
+        assertTrue(telemetry.logicalCpuCount() == null || telemetry.logicalCpuCount() > 0);
+        assertTrue(telemetry.physicalCores() == null || telemetry.physicalCores() > 0);
+        assertTrue(telemetry.totalPhysicalMemoryBytes() == null || telemetry.totalPhysicalMemoryBytes() > 0L);
         assertTrue(telemetry.maxMemoryBytes() > 0L);
         assertTrue(telemetry.totalMemoryBytes() > 0L);
         assertTrue(telemetry.freeMemoryBytes() >= 0L);

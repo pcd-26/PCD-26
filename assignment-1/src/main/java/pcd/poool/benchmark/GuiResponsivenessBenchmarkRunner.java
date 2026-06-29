@@ -1,6 +1,7 @@
 package pcd.poool.benchmark;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ public final class GuiResponsivenessBenchmarkRunner {
     private static final int DEFAULT_WORKERS = Math.max(1, Runtime.getRuntime().availableProcessors());
     private static final int DEFAULT_WARMUP_RUNS = 2;
     private static final int DEFAULT_MEASURED_RUNS = 5;
-    private static final Path DEFAULT_OUTPUT_FILE = Path.of("benchmark", "results", "raw-gui-results.csv");
+    private static final Path DEFAULT_OUTPUT_FILE = defaultAssignmentPath("benchmarks", "results", "raw-gui-results.csv");
     private static final int VIEW_WIDTH = 1_200;
     private static final int VIEW_HEIGHT = 800;
     private static volatile long blackhole;
@@ -78,6 +79,9 @@ public final class GuiResponsivenessBenchmarkRunner {
 
         var telemetry = RuntimeTelemetry.capture();
         var rows = new ArrayList<BenchmarkRow>();
+        Path outputDir = request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent();
+        RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
+        GuiResponsivenessBenchmarkCsvWriter.initialize(request.outputFile());
 
         for (int ballCount : request.balls()) {
             for (BenchmarkConfig.ImplementationType implementation : request.implementations()) {
@@ -91,17 +95,20 @@ public final class GuiResponsivenessBenchmarkRunner {
                         request.measuredRuns(),
                         true,
                         false,
-                        request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent());
+                        outputDir);
 
+                BenchmarkScenarioLogging.printScenarioStart(config);
                 runWarmups(config);
                 for (int runIndex = 1; runIndex <= request.measuredRuns(); runIndex++) {
                     var result = measureRun(config, runIndex);
-                    rows.add(toRow(result, telemetry, config, runIndex));
+                    var row = toRow(result, telemetry, config, runIndex);
+                    rows.add(row);
+                    GuiResponsivenessBenchmarkCsvWriter.append(request.outputFile(), row);
                 }
+                BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
             }
         }
 
-        GuiResponsivenessBenchmarkCsvWriter.write(request.outputFile(), rows);
         var derived = GuiResponsivenessBenchmarkResultsPostProcessor.process(request.outputFile());
         return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), List.copyOf(rows));
     }
@@ -274,8 +281,16 @@ public final class GuiResponsivenessBenchmarkRunner {
                   [--workers N] \
                   [--warmup N] \
                   [--measured N] \
-                  [--output benchmark/results/raw-gui-results.csv]
+                  [--output benchmarks/results/raw-gui-results.csv]
                 """);
+    }
+
+    private static Path defaultAssignmentPath(String... segments) {
+        Path assignmentRoot = Path.of("assignment-1");
+        if (Files.isDirectory(assignmentRoot)) {
+            return assignmentRoot.resolve(Path.of("", segments));
+        }
+        return Path.of("", segments);
     }
 
     private static final class SimulationSession implements AutoCloseable {

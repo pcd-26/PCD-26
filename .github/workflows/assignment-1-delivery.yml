@@ -1,49 +1,30 @@
 name: Assignment 1 Delivery Package
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Assignment 1 Tests CI
+    types:
+      - completed
+    branches:
+      - main
+      - dev
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  test:
-    name: Test assignment-1
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: maven
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install plotting dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
-
-      - name: Build and test assignment-1
-        working-directory: assignment-1
-        run: mvn -B clean verify
-
   package:
     name: Build Assignment-01 zip
     runs-on: ubuntu-latest
-    needs: test
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Prepare delivery metadata
         id: delivery_meta
@@ -110,12 +91,13 @@ jobs:
           path: ${{ steps.delivery_meta.outputs.zip_name }}
 
       - name: Publish delivery release
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
           RELEASE_ZIP: ${{ steps.delivery_meta.outputs.release_zip_name }}
           RELEASE_TAG: ${{ steps.delivery_meta.outputs.release_tag }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
 
@@ -124,9 +106,9 @@ jobs:
             :
           else
             gh release create "$RELEASE_TAG" \
-              --target "$GITHUB_SHA" \
+              --target "$TARGET_SHA" \
               --title "Latest Assignment Packages" \
-              --notes "Shared release for assignment delivery zips and benchmark chart archives. New assets are appended on successful workflow runs."
+              --notes "Shared release for the latest assignment delivery zip. New assets replace the previous delivery package on successful workflow runs."
           fi
 
           for attempt in 1 2 3 4 5; do

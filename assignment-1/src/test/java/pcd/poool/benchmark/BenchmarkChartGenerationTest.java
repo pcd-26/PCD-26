@@ -62,6 +62,9 @@ class BenchmarkChartGenerationTest {
                 "sequential,500,1,100,1,20.000000,21.000000,22.000000,50.000000,0.000000,0.000000",
                 "threads,500,4,100,1,10.000000,11.000000,12.000000,100.000000,0.000000,0.000000",
                 "executor,500,4,100,1,11.000000,12.000000,13.000000,90.909091,0.000000,0.000000"));
+        write(inputDir.resolve("environment.csv"), List.of(
+                "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
+                "8,Test CPU,4,8,17179869184,JVM,21,Windows 11,10.0,amd64,1,1,1,true,123"));
 
         write(inputDir.resolve("raw-results.csv"), List.of(
                 "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors",
@@ -87,6 +90,7 @@ class BenchmarkChartGenerationTest {
         assertChartPairExists(outputDir, "coordination-overhead-vs-workers");
         assertChartPairExists(outputDir, "gui-frame-time-vs-balls");
         assertChartPairExists(outputDir, "gui-fps-vs-balls");
+        assertTrue(Files.readString(outputDir.resolve("execution-time-vs-balls.svg")).contains("<svg"));
     }
 
     @Test
@@ -114,15 +118,21 @@ class BenchmarkChartGenerationTest {
         write(inputDir.resolve("gui-responsiveness.csv"), List.of(
                 "timestamp,implementation,balls,threads,steps,seed,requestedUpdates,completedUpdates,elapsedMillis,meanUpdateIntervalMillis,meanUpdateLatencyMillis,maxUpdateLatencyMillis,updateRatePerSecond,meanEdtDelayMillis,maxEdtDelayMillis,delayedUpdates",
                 "2026-06-21T13:15:30Z,sequential,100,1,100,1,20,20,30.000000,1.500000,2.000000,3.000000,666.666667,1.200000,2.500000,0"));
+        write(inputDir.resolve("environment.csv"), List.of(
+                "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
+                "8,Test CPU,4,8,17179869184,JVM,21,Windows 11,10.0,amd64,1,1,1,true,123"));
 
         runScript(inputDir, outputDir);
 
-        assertChartPairExists(outputDir, "01_best_execution_time_vs_balls");
-        assertChartPairExists(outputDir, "02_best_throughput_vs_balls");
-        assertChartPairExists(outputDir, "03_speedup_vs_thread_count");
-        assertChartPairExists(outputDir, "04_efficiency_vs_thread_count");
-        assertChartPairExists(outputDir, "05_coordination_overhead_vs_thread_count");
-        assertChartPairExists(outputDir, "06_cpu_utilization_vs_thread_count");
+        assertChartPairExists(outputDir, "execution-time-vs-balls");
+        assertChartPairExists(outputDir, "speedup-vs-balls");
+        assertChartPairExists(outputDir, "throughput-vs-balls");
+        assertChartPairExists(outputDir, "scalability-elapsed-time-vs-workers");
+        assertChartPairExists(outputDir, "scalability-throughput-vs-workers");
+        assertChartPairExists(outputDir, "coordination-overhead-vs-workers");
+        assertChartPairExists(outputDir, "gui-frame-time-vs-balls");
+        assertChartPairExists(outputDir, "gui-fps-vs-balls");
+        assertTrue(Files.readString(outputDir.resolve("execution-time-vs-balls.svg")).contains("<svg"));
     }
 
     private static void write(Path file, List<String> lines) throws IOException {
@@ -135,7 +145,7 @@ class BenchmarkChartGenerationTest {
     }
 
     private static void runScript(Path inputDir, Path outputDir) throws Exception {
-        Path script = Path.of("..", "scripts", "plot_benchmarks.py").toAbsolutePath().normalize();
+        Path script = resolvePlotScript();
         ProcessBuilder builder = new ProcessBuilder(
                 "python",
                 script.toString(),
@@ -153,5 +163,13 @@ class BenchmarkChartGenerationTest {
         if (exit != 0) {
             throw new AssertionError("plot script failed: " + buffer.toString(StandardCharsets.UTF_8));
         }
+    }
+
+    private static Path resolvePlotScript() {
+        Path repoRootStyle = Path.of("assignment-1", "scripts", "plot_benchmarks.py");
+        if (Files.exists(repoRootStyle)) {
+            return repoRootStyle.toAbsolutePath().normalize();
+        }
+        return Path.of("scripts", "plot_benchmarks.py").toAbsolutePath().normalize();
     }
 }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -19,6 +20,52 @@ final class HeadlessBenchmarkCsvWriter {
     private HeadlessBenchmarkCsvWriter() {
     }
 
+    static void initialize(Path outputFile) throws IOException {
+        Objects.requireNonNull(outputFile, "outputFile");
+
+        Path parent = outputFile.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+
+        Files.writeString(
+                outputFile,
+                HEADER + System.lineSeparator(),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE);
+    }
+
+    static void append(Path outputFile, HeadlessBenchmarkRunner.BenchmarkRow row) throws IOException {
+        Objects.requireNonNull(outputFile, "outputFile");
+        Objects.requireNonNull(row, "row");
+        ensureInitialized(outputFile);
+        Files.writeString(
+                outputFile,
+                csvRow(
+                        row.implementation(),
+                        Integer.toString(row.balls()),
+                        Integer.toString(row.workers()),
+                        Integer.toString(row.steps()),
+                        Long.toString(row.seed()),
+                        Integer.toString(row.runIndex()),
+                        Boolean.toString(row.warmup()),
+                        formatDouble(row.elapsedMs()),
+                        formatDouble(row.throughput()),
+                        formatDouble(row.coordinationMs()),
+                        formatDouble(row.coordinationRatio()),
+                        Long.toString(row.tasksSubmitted()),
+                        Long.toString(row.stateHash()),
+                        row.jvm(),
+                        row.os(),
+                        Integer.toString(row.availableProcessors()))
+                                + System.lineSeparator(),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.APPEND,
+                StandardOpenOption.WRITE);
+    }
+
     /**
      * Writes the benchmark rows to the requested CSV file.
      *
@@ -29,39 +76,16 @@ final class HeadlessBenchmarkCsvWriter {
     static void write(Path outputFile, List<HeadlessBenchmarkRunner.BenchmarkRow> rows) throws IOException {
         Objects.requireNonNull(outputFile, "outputFile");
         Objects.requireNonNull(rows, "rows");
-
-        Path parent = outputFile.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
-
-        var content = new StringBuilder();
-        content.append(HEADER).append(System.lineSeparator());
+        initialize(outputFile);
         for (var row : rows) {
-            content.append(csvRow(
-                            row.implementation(),
-                            Integer.toString(row.balls()),
-                            Integer.toString(row.workers()),
-                            Integer.toString(row.steps()),
-                            Long.toString(row.seed()),
-                            Integer.toString(row.runIndex()),
-                            Boolean.toString(row.warmup()),
-                            formatDouble(row.elapsedMs()),
-                            formatDouble(row.throughput()),
-                            formatDouble(row.coordinationMs()),
-                            formatDouble(row.coordinationRatio()),
-                            Long.toString(row.tasksSubmitted()),
-                            Long.toString(row.stateHash()),
-                            row.jvm(),
-                            row.os(),
-                            Integer.toString(row.availableProcessors())))
-                    .append(System.lineSeparator());
+            append(outputFile, row);
         }
+    }
 
-        Files.writeString(
-                outputFile,
-                content.toString(),
-                StandardCharsets.UTF_8);
+    private static void ensureInitialized(Path outputFile) throws IOException {
+        if (Files.notExists(outputFile) || Files.size(outputFile) == 0L) {
+            initialize(outputFile);
+        }
     }
 
     private static String csvRow(String... values) {
