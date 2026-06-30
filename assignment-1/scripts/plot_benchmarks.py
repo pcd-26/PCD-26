@@ -101,23 +101,23 @@ def render_new_layout(input_dir: Path, output_dir: Path) -> None:
     chart_context = build_chart_context(environment)
 
     charts = [
-        (headless, output_dir / "execution-time-vs-balls", "avgElapsedMs", "Mean execution time (ms)", "Execution time vs number of balls", "min", plot_best_by_ball),
-        (speedup, output_dir / "speedup-vs-balls", "speedup", "Speedup", "Speedup vs number of balls", "max", plot_best_by_ball),
-        (headless, output_dir / "throughput-vs-balls", "avgThroughput", "Mean throughput (steps/s)", "Throughput vs number of balls", "max", plot_best_by_ball),
-        (scalability, output_dir / "scalability-elapsed-time-vs-workers", "avgElapsedMs", "Elapsed time (ms)", "Scalability elapsed time vs worker threads", None, plot_worker_panels),
-        (scalability, output_dir / "scalability-throughput-vs-workers", "avgThroughput", "Throughput (steps/s)", "Scalability throughput vs worker threads", None, plot_worker_panels),
-        (scalability, output_dir / "coordination-overhead-vs-workers", "avgCoordinationMs", "Coordination time (ms)", "Coordination overhead vs worker threads", None, plot_worker_panels),
+        (headless, output_dir / "execution-time-vs-balls", prefer_column(headless, "medianElapsedMs", "meanElapsedMs"), "Median execution time (ms)", "Execution time vs number of balls", plot_metric_by_ball),
+        (speedup, output_dir / "speedup-vs-balls", "speedup", "Speedup", "Speedup vs number of balls", plot_metric_by_ball),
+        (headless, output_dir / "throughput-vs-balls", prefer_column(headless, "medianThroughput", "meanThroughput"), "Median throughput (steps/s)", "Throughput vs number of balls", plot_metric_by_ball),
+        (scalability, output_dir / "scalability-elapsed-time-vs-workers", prefer_column(scalability, "medianElapsedMs", "meanElapsedMs"), "Elapsed time (ms)", "Scalability elapsed time vs worker threads", plot_worker_panels),
+        (scalability, output_dir / "scalability-throughput-vs-workers", prefer_column(scalability, "medianThroughput", "meanThroughput"), "Throughput (steps/s)", "Scalability throughput vs worker threads", plot_worker_panels),
+        (scalability, output_dir / "coordination-overhead-vs-workers", prefer_column(scalability, "medianCoordinationMs", "meanCoordinationMs"), "Coordination time (ms)", "Coordination overhead vs worker threads", plot_worker_panels),
     ]
     if gui_path.exists() and not gui.empty:
         charts.extend([
-            (gui, output_dir / "gui-frame-time-vs-balls", "avgFrameMs", "Average frame time (ms)", "GUI frame time vs number of balls", "min", plot_best_by_ball),
-            (gui, output_dir / "gui-fps-vs-balls", "avgFps", "Average frames per second", "GUI FPS vs number of balls", "max", plot_best_by_ball),
+            (gui, output_dir / "gui-frame-time-vs-balls", prefer_column(gui, "medianFrameMs", "meanFrameMs", "avgFrameMs"), "Median frame time (ms)", "GUI frame time vs number of balls", plot_metric_by_ball),
+            (gui, output_dir / "gui-fps-vs-balls", prefer_column(gui, "medianFps", "meanFps", "avgFps"), "Median frames per second", "GUI FPS vs number of balls", plot_metric_by_ball),
         ])
 
-    for df, output_stem, value_col, ylabel, title, best_agg, plotter in charts:
+    for df, output_stem, value_col, ylabel, title, plotter in charts:
         if plt is not None:
-            if plotter is plot_best_by_ball:
-                plot_best_by_ball(df, output_stem.with_suffix(".png"), value_col, ylabel, title, best_agg, chart_context)
+            if plotter is plot_metric_by_ball:
+                plot_metric_by_ball(df, output_stem.with_suffix(".png"), value_col, ylabel, title, chart_context)
             else:
                 plot_worker_panels(df, output_stem.with_suffix(".png"), value_col, ylabel, title, chart_context=chart_context)
         else:
@@ -133,37 +133,34 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
     chart_context = build_chart_context(environment)
 
     if plt is not None:
-        plot_best_by_ball(
+        plot_metric_by_ball(
             summary,
             output_dir / "execution-time-vs-balls.png",
-            value_col="meanMillis",
-            ylabel="Mean execution time (ms)",
+            value_col=prefer_column(summary, "medianMillis", "meanMillis"),
+            ylabel="Median execution time (ms)",
             title="Execution time vs number of balls",
-            best_agg="min",
             chart_context=chart_context,
         )
-        plot_best_by_ball(
+        plot_metric_by_ball(
             speedup,
             output_dir / "speedup-vs-balls.png",
             value_col="speedup",
             ylabel="Speedup",
             title="Speedup vs number of balls",
-            best_agg="max",
             chart_context=chart_context,
         )
-        plot_best_by_ball(
+        plot_metric_by_ball(
             summary,
             output_dir / "throughput-vs-balls.png",
-            value_col="meanThroughput",
-            ylabel="Mean throughput (steps/s)",
+            value_col=prefer_column(summary, "medianThroughput", "meanThroughput"),
+            ylabel="Median throughput (steps/s)",
             title="Throughput vs number of balls",
-            best_agg="max",
             chart_context=chart_context,
         )
         plot_worker_panels(
             summary,
             output_dir / "scalability-elapsed-time-vs-workers.png",
-            value_col="meanMillis",
+            value_col=prefer_column(summary, "medianMillis", "meanMillis"),
             ylabel="Elapsed time (ms)",
             title="Scalability elapsed time vs worker threads",
             x_col="threads",
@@ -172,7 +169,7 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
         plot_worker_panels(
             summary,
             output_dir / "scalability-throughput-vs-workers.png",
-            value_col="meanThroughput",
+            value_col=prefer_column(summary, "medianThroughput", "meanThroughput"),
             ylabel="Throughput (steps/s)",
             title="Scalability throughput vs worker threads",
             x_col="threads",
@@ -184,42 +181,37 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
             chart_context=chart_context,
         )
         if not gui.empty and should_plot_gui_latency(gui):
-            plot_best_by_ball(
+            plot_metric_by_ball(
                 gui,
                 output_dir / "gui-frame-time-vs-balls.png",
-                value_col="meanUpdateLatencyMillis",
-                ylabel="Average frame time (ms)",
+                value_col=prefer_column(gui, "medianUpdateLatencyMillis", "meanUpdateLatencyMillis"),
+                ylabel="Median frame time (ms)",
                 title="GUI frame time vs number of balls",
-                best_agg="min",
                 chart_context=chart_context,
             )
-            plot_best_by_ball(
+            plot_metric_by_ball(
                 gui,
                 output_dir / "gui-fps-vs-balls.png",
                 value_col="updateRatePerSecond",
-                ylabel="Average frames per second",
+                ylabel="Frames per second",
                 title="GUI FPS vs number of balls",
-                best_agg="max",
                 chart_context=chart_context,
             )
     else:
-        fallback_plot_best_by_ball(
+        fallback_plot_metric_by_ball(
             summary,
             output_dir / "execution-time-vs-balls.png",
-            value_col="meanMillis",
-            best_agg="min",
+            value_col=prefer_column(summary, "medianMillis", "meanMillis"),
         )
-        fallback_plot_best_by_ball(
+        fallback_plot_metric_by_ball(
             speedup,
             output_dir / "speedup-vs-balls.png",
             value_col="speedup",
-            best_agg="max",
         )
-        fallback_plot_best_by_ball(
+        fallback_plot_metric_by_ball(
             summary,
             output_dir / "throughput-vs-balls.png",
-            value_col="meanThroughput",
-            best_agg="max",
+            value_col=prefer_column(summary, "medianThroughput", "meanThroughput"),
         )
         fallback_plot_thread_metric_panels(
             summary,
@@ -238,17 +230,15 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
             output_dir / "coordination-overhead-vs-workers.png",
         )
         if not gui.empty and should_plot_gui_latency(gui):
-            fallback_plot_best_by_ball(
+            fallback_plot_metric_by_ball(
                 gui,
                 output_dir / "gui-frame-time-vs-balls.png",
-                value_col="meanUpdateLatencyMillis",
-                best_agg="min",
+                value_col=prefer_column(gui, "medianUpdateLatencyMillis", "meanUpdateLatencyMillis"),
             )
-            fallback_plot_best_by_ball(
+            fallback_plot_metric_by_ball(
                 gui,
                 output_dir / "gui-fps-vs-balls.png",
                 value_col="updateRatePerSecond",
-                best_agg="max",
             )
 
 
@@ -260,13 +250,12 @@ def read_csv(path: Path, required: bool = False) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def plot_best_by_ball(
+def plot_metric_by_ball(
     df: pd.DataFrame,
     output_file: Path,
     value_col: str,
     ylabel: str,
     title: str,
-    best_agg: str,
     chart_context: str | None = None,
 ) -> None:
     required = {"balls", "implementation", value_col}
@@ -277,21 +266,17 @@ def plot_best_by_ball(
     fig, ax = plt.subplots(figsize=(14.0, 8.8), constrained_layout=False)
     fig.subplots_adjust(top=0.78, bottom=0.25, left=0.09, right=0.98)
     fig.suptitle(title, fontsize=16, fontweight="bold", y=0.96)
-    ax.set_title("Best measured worker count per implementation", fontsize=10, pad=14)
+    ax.set_title("Central tendency per implementation across measured scenarios", fontsize=10, pad=14)
     add_chart_context(fig, chart_context)
 
     for implementation in IMPL_ORDER:
         subset = df[df["implementation"].astype(str).str.lower() == implementation].copy()
         if subset.empty:
             continue
-        if best_agg == "min":
-            idx = subset.groupby("balls")[value_col].idxmin()
-        else:
-            idx = subset.groupby("balls")[value_col].idxmax()
-        best = subset.loc[idx].sort_values("balls")
+        grouped = subset.groupby("balls", as_index=False)[value_col].median().sort_values("balls")
         ax.plot(
-            best["balls"],
-            best[value_col],
+            grouped["balls"],
+            grouped[value_col],
             marker="o",
             linewidth=2.2,
             color=IMPL_COLORS.get(implementation),
@@ -435,7 +420,7 @@ def plot_coordination_overhead_panels(
         + filtered["taskSubmissionTimeMillis"].fillna(0.0)
         + filtered["joinOrFutureWaitMillis"].fillna(0.0)
     )
-    grouped = filtered.groupby(["balls", "implementation", "threads"], as_index=False)["coordinationMillis"].mean()
+    grouped = filtered.groupby(["balls", "implementation", "threads"], as_index=False)["coordinationMillis"].median()
     plot_thread_metric_panels(
         grouped,
         output_file,
@@ -448,14 +433,13 @@ def plot_coordination_overhead_panels(
     )
 
 
-def fallback_plot_best_by_ball(
+def fallback_plot_metric_by_ball(
     df: pd.DataFrame,
     output_file: Path,
     value_col: str,
-    best_agg: str,
 ) -> None:
     if plt is not None:
-        raise RuntimeError("fallback_plot_best_by_ball should only be used without matplotlib")
+        raise RuntimeError("fallback_plot_metric_by_ball should only be used without matplotlib")
     write_placeholder_pair(output_file.with_suffix(""), output_file.stem)
 
 
@@ -478,7 +462,11 @@ def fallback_plot_coordination_overhead_panels(runs: pd.DataFrame, output_file: 
 
 
 def should_plot_gui_latency(gui: pd.DataFrame) -> bool:
-    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis", "updateRatePerSecond"}
+    latency_col = optional_column(gui, "medianUpdateLatencyMillis", "meanUpdateLatencyMillis")
+    if latency_col is None:
+        return False
+    required = {"balls", "implementation", "maxUpdateLatencyMillis", "updateRatePerSecond"}
+    required.add(latency_col)
     missing = required - set(gui.columns)
     if missing:
         return False
@@ -486,7 +474,8 @@ def should_plot_gui_latency(gui: pd.DataFrame) -> bool:
 
 
 def plot_gui_latency(gui: pd.DataFrame, output_file: Path) -> None:
-    required = {"balls", "implementation", "meanUpdateLatencyMillis", "maxUpdateLatencyMillis"}
+    latency_col = prefer_column(gui, "medianUpdateLatencyMillis", "meanUpdateLatencyMillis")
+    required = {"balls", "implementation", "maxUpdateLatencyMillis", latency_col}
     missing = required - set(gui.columns)
     if missing:
         raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
@@ -498,13 +487,13 @@ def plot_gui_latency(gui: pd.DataFrame, output_file: Path) -> None:
         subset = gui[gui["implementation"].astype(str).str.lower() == implementation].copy()
         if subset.empty:
             continue
-        grouped = subset.groupby("balls", as_index=False)[["meanUpdateLatencyMillis", "maxUpdateLatencyMillis"]].mean()
+        grouped = subset.groupby("balls", as_index=False)[[latency_col, "maxUpdateLatencyMillis"]].median()
         grouped = grouped.sort_values("balls")
-        lower = grouped["meanUpdateLatencyMillis"].to_numpy() * 0.0
-        upper = (grouped["maxUpdateLatencyMillis"] - grouped["meanUpdateLatencyMillis"]).clip(lower=0.0).to_numpy()
+        lower = grouped[latency_col].to_numpy() * 0.0
+        upper = (grouped["maxUpdateLatencyMillis"] - grouped[latency_col]).clip(lower=0.0).to_numpy()
         ax.errorbar(
             grouped["balls"],
-            grouped["meanUpdateLatencyMillis"],
+            grouped[latency_col],
             yerr=[lower, upper],
             marker="o",
             linewidth=2.0,
@@ -607,6 +596,20 @@ def _placeholder_png() -> bytes:
 def _xticks(values: pd.Series) -> list[int]:
     unique = sorted({int(value) for value in values.dropna().tolist()})
     return unique if unique else BALL_ORDER
+
+
+def prefer_column(df: pd.DataFrame, *candidates: str) -> str:
+    for candidate in candidates:
+        if candidate in df.columns:
+            return candidate
+    raise ValueError(f"missing expected columns; tried {candidates}")
+
+
+def optional_column(df: pd.DataFrame, *candidates: str) -> str | None:
+    for candidate in candidates:
+        if candidate in df.columns:
+            return candidate
+    return None
 
 
 def _safe_int(value: object) -> int | None:

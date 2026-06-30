@@ -54,6 +54,8 @@ The wrapper:
 - refreshes `benchmarks/charts/`
 - clears `benchmarks/charts/` before every run so only the latest chart set is
   kept
+- uses medians as the primary latency-oriented summary instead of emphasizing
+  a single best-case run
 - skips the GUI benchmark family in the local Python-driven flow
 - uses a standard `full` matrix capped at `2500` balls for manageable local
   execution time

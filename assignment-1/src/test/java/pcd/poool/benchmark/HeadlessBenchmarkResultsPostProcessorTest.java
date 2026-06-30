@@ -39,11 +39,12 @@ class HeadlessBenchmarkResultsPostProcessorTest {
         var aggregatedLines = Files.readAllLines(result.aggregatedFile());
         var speedupLines = Files.readAllLines(result.speedupFile());
 
-        assertEquals("implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted", aggregatedLines.get(0));
-        assertEquals("balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup", speedupLines.get(0));
-        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("sequential,100,1,10,42,75.000000,25.000000,150.000000,50.000000,0.000000,0.000000,0.000000,0.000000,0.000000")));
-        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("threads,100,2,10,42,32.500000,7.500000,325.000000,75.000000,4.000000,0.500000,0.126250,0.013750,2.000000")));
-        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("executor,100,2,10,42,25.000000,5.000000,416.666667,83.333334,2.500000,0.500000,0.100000,0.000000,4.000000")));
+        assertEquals("implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted", aggregatedLines.get(0));
+        assertEquals("balls,workers,implementation,medianSequentialMs,medianParallelMs,speedup", speedupLines.get(0));
+        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("sequential,100,1,10,42,75.000000,75.000000,25.000000,150.000000,150.000000,50.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000")));
+        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("threads,100,2,10,42,32.500000,32.500000,7.500000,325.000000,325.000000,75.000000,4.000000,4.000000,0.500000,0.126250,0.126250,0.013750,2.000000")));
+        assertTrue(aggregatedLines.stream().anyMatch(line -> line.startsWith("executor,100,2,10,42,25.000000,25.000000,5.000000,416.666667,416.666666,83.333334,2.500000,2.500000,0.500000,0.100000,0.100000,0.000000,4.000000"))
+                || aggregatedLines.stream().anyMatch(line -> line.startsWith("executor,100,2,10,42,25.000000,25.000000,5.000000,416.666667,416.666667,83.333334,2.500000,2.500000,0.500000,0.100000,0.100000,0.000000,4.000000")));
         assertTrue(speedupLines.stream().anyMatch(line -> line.startsWith("100,2,threads,75.000000,32.500000,2.307692")));
         assertTrue(speedupLines.stream().anyMatch(line -> line.startsWith("100,2,executor,75.000000,25.000000,3.000000")));
     }

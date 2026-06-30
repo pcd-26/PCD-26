@@ -22,7 +22,7 @@ public final class BenchmarkCsvWriter {
     private static final String RUNS_HEADER =
             "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks,stateReadTimeMillis,partitionTimeMillis,movementTimeMillis,holeInteractionTimeMillis,collisionDetectionTimeMillis,collisionResolutionTimeMillis,mergeApplyTimeMillis";
     private static final String SUMMARY_HEADER =
-            "implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,meanCpuUtilizationPercent,speedup,efficiency";
+            "implementation,balls,threads,steps,runs,meanMillis,medianMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,speedup,efficiency";
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_INSTANT;
 
     private BenchmarkCsvWriter() {
@@ -142,11 +142,14 @@ public final class BenchmarkCsvWriter {
                         Integer.toString(summary.config().steps()),
                         Integer.toString(summary.measuredRuns()),
                         formatDouble(summary.meanElapsedMillis()),
+                        formatDouble(summary.medianElapsedMillis()),
                         formatDouble(summary.minElapsedMillis()),
                         formatDouble(summary.maxElapsedMillis()),
                         formatDouble(summary.stddevElapsedMillis()),
                         formatDouble(summary.meanThroughputStepsPerSecond()),
+                        formatDouble(summary.medianThroughputStepsPerSecond()),
                         formatDouble(summary.meanCpuUtilizationPercent()),
+                        formatDouble(summary.medianCpuUtilizationPercent()),
                         formatDouble(speedup),
                         formatDouble(efficiency)))
                 .append(System.lineSeparator());

@@ -46,10 +46,15 @@ execution_time_seconds = end_time - start_time
 
 For repeated runs, report at least:
 
-- average execution time
+- median execution time as the primary latency metric
+- average execution time as a complementary aggregate
 - minimum execution time
 - maximum execution time
 - standard deviation
+
+The benchmark report should avoid using the single "best" run or the single
+"best" worker-count configuration as the representative result, because that
+would overfit to noise and hide the typical behavior of the implementation.
 
 ### 3.2 Throughput
 
@@ -284,7 +289,7 @@ Each benchmark case should follow the same protocol:
 2. run `2` warmup executions
 3. run `5` measured executions
 4. record per-run execution time
-5. compute average, min, max, and standard deviation
+5. compute median, average, min, max, and standard deviation
 6. for concurrent runs, record thread count and CPU utilization
 7. for GUI runs, record responsiveness metrics separately from headless data
 
@@ -299,6 +304,7 @@ Benchmark reports should present:
 - scenario name
 - implementation name
 - thread count, when applicable
+- median execution time
 - average execution time
 - throughput
 - speedup relative to sequential
@@ -463,7 +469,8 @@ benchmarks/charts/
 
 - `benchmark-runs.csv` contains one raw record per warmup or measured run.
 - `benchmark-summary.csv` contains the aggregate statistics for each benchmark
-  scenario.
+  scenario, with median values used as the primary central-tendency reference
+  for latency-sensitive metrics.
 - `environment.csv` contains the runtime and machine metadata used to interpret
   the measurements.
 - `speedup-table.csv`, `efficiency-table.csv`, and `scalability-table.csv`

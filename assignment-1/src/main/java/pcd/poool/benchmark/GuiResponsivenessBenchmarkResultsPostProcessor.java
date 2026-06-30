@@ -21,7 +21,7 @@ final class GuiResponsivenessBenchmarkResultsPostProcessor {
     static final String AGGREGATED_FILE_NAME = "aggregated-gui-results.csv";
 
     private static final String AGGREGATED_HEADER =
-            "implementation,balls,workers,steps,seed,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,avgFramesAbove16Ms,avgFramesAbove33Ms";
+            "implementation,balls,workers,steps,seed,meanFrameMs,medianFrameMs,p95FrameMs,maxFrameMs,meanFps,medianFps,meanFramesAbove16Ms,meanFramesAbove33Ms";
 
     private GuiResponsivenessBenchmarkResultsPostProcessor() {
     }
@@ -65,9 +65,11 @@ final class GuiResponsivenessBenchmarkResultsPostProcessor {
                     key.steps(),
                     key.seed(),
                     mean(rows, RawRunRow::avgFrameMs),
+                    median(rows, RawRunRow::avgFrameMs),
                     mean(rows, RawRunRow::p95FrameMs),
                     mean(rows, RawRunRow::maxFrameMs),
                     mean(rows, RawRunRow::avgFps),
+                    median(rows, RawRunRow::avgFps),
                     mean(rows, row -> row.framesAbove16Ms()),
                     mean(rows, row -> row.framesAbove33Ms())));
         }
@@ -198,6 +200,19 @@ final class GuiResponsivenessBenchmarkResultsPostProcessor {
         return sum / rows.size();
     }
 
+    private static double median(List<RawRunRow> rows, ToDoubleFunction<RawRunRow> extractor) {
+        var values = new ArrayList<Double>(rows.size());
+        for (var row : rows) {
+            values.add(extractor.applyAsDouble(row));
+        }
+        values.sort(Double::compareTo);
+        int middle = values.size() / 2;
+        if ((values.size() & 1) == 1) {
+            return values.get(middle);
+        }
+        return (values.get(middle - 1) + values.get(middle)) / 2.0;
+    }
+
     private static String formatDouble(double value) {
         if (Double.isNaN(value)) {
             return "";
@@ -271,12 +286,14 @@ final class GuiResponsivenessBenchmarkResultsPostProcessor {
             int workers,
             int steps,
             long seed,
-            double avgFrameMs,
+            double meanFrameMs,
+            double medianFrameMs,
             double p95FrameMs,
             double maxFrameMs,
-            double avgFps,
-            double avgFramesAbove16Ms,
-            double avgFramesAbove33Ms) implements CsvRow {
+            double meanFps,
+            double medianFps,
+            double meanFramesAbove16Ms,
+            double meanFramesAbove33Ms) implements CsvRow {
 
         @Override
         public String toCsv() {
@@ -286,12 +303,14 @@ final class GuiResponsivenessBenchmarkResultsPostProcessor {
                     Integer.toString(workers),
                     Integer.toString(steps),
                     Long.toString(seed),
-                    formatDouble(avgFrameMs),
+                    formatDouble(meanFrameMs),
+                    formatDouble(medianFrameMs),
                     formatDouble(p95FrameMs),
                     formatDouble(maxFrameMs),
-                    formatDouble(avgFps),
-                    formatDouble(avgFramesAbove16Ms),
-                    formatDouble(avgFramesAbove33Ms));
+                    formatDouble(meanFps),
+                    formatDouble(medianFps),
+                    formatDouble(meanFramesAbove16Ms),
+                    formatDouble(meanFramesAbove33Ms));
         }
     }
 

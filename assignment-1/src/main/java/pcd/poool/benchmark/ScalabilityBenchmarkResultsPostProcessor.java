@@ -21,7 +21,7 @@ final class ScalabilityBenchmarkResultsPostProcessor {
     static final String AGGREGATED_FILE_NAME = "aggregated-scalability-results.csv";
 
     private static final String AGGREGATED_HEADER =
-            "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted";
+            "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted";
 
     private ScalabilityBenchmarkResultsPostProcessor() {
     }
@@ -68,12 +68,16 @@ final class ScalabilityBenchmarkResultsPostProcessor {
                     key.steps(),
                     key.seed(),
                     mean(rows, RawRunRow::elapsedMs),
+                    median(rows, RawRunRow::elapsedMs),
                     stddev(rows, RawRunRow::elapsedMs),
                     mean(rows, RawRunRow::throughput),
+                    median(rows, RawRunRow::throughput),
                     stddev(rows, RawRunRow::throughput),
                     mean(rows, RawRunRow::coordinationMs),
+                    median(rows, RawRunRow::coordinationMs),
                     stddev(rows, RawRunRow::coordinationMs),
                     mean(rows, RawRunRow::coordinationRatio),
+                    median(rows, RawRunRow::coordinationRatio),
                     stddev(rows, RawRunRow::coordinationRatio),
                     mean(rows, row -> row.tasksSubmitted())));
         }
@@ -218,6 +222,19 @@ final class ScalabilityBenchmarkResultsPostProcessor {
         return Math.sqrt(sum / rows.size());
     }
 
+    private static double median(List<RawRunRow> rows, ToDoubleFunction<RawRunRow> extractor) {
+        var values = new ArrayList<Double>(rows.size());
+        for (var row : rows) {
+            values.add(extractor.applyAsDouble(row));
+        }
+        values.sort(Double::compareTo);
+        int middle = values.size() / 2;
+        if ((values.size() & 1) == 1) {
+            return values.get(middle);
+        }
+        return (values.get(middle - 1) + values.get(middle)) / 2.0;
+    }
+
     private static String formatDouble(double value) {
         if (Double.isNaN(value)) {
             return "";
@@ -291,15 +308,19 @@ final class ScalabilityBenchmarkResultsPostProcessor {
             int workers,
             int steps,
             long seed,
-            double avgElapsedMs,
+            double meanElapsedMs,
+            double medianElapsedMs,
             double stdElapsedMs,
-            double avgThroughput,
+            double meanThroughput,
+            double medianThroughput,
             double stdThroughput,
-            double avgCoordinationMs,
+            double meanCoordinationMs,
+            double medianCoordinationMs,
             double stdCoordinationMs,
-            double avgCoordinationRatio,
+            double meanCoordinationRatio,
+            double medianCoordinationRatio,
             double stdCoordinationRatio,
-            double avgTasksSubmitted) implements CsvRow {
+            double meanTasksSubmitted) implements CsvRow {
 
         @Override
         public String toCsv() {
@@ -309,15 +330,19 @@ final class ScalabilityBenchmarkResultsPostProcessor {
                     Integer.toString(workers),
                     Integer.toString(steps),
                     Long.toString(seed),
-                    formatDouble(avgElapsedMs),
+                    formatDouble(meanElapsedMs),
+                    formatDouble(medianElapsedMs),
                     formatDouble(stdElapsedMs),
-                    formatDouble(avgThroughput),
+                    formatDouble(meanThroughput),
+                    formatDouble(medianThroughput),
                     formatDouble(stdThroughput),
-                    formatDouble(avgCoordinationMs),
+                    formatDouble(meanCoordinationMs),
+                    formatDouble(medianCoordinationMs),
                     formatDouble(stdCoordinationMs),
-                    formatDouble(avgCoordinationRatio),
+                    formatDouble(meanCoordinationRatio),
+                    formatDouble(medianCoordinationRatio),
                     formatDouble(stdCoordinationRatio),
-                    formatDouble(avgTasksSubmitted));
+                    formatDouble(meanTasksSubmitted));
         }
     }
 

@@ -37,10 +37,12 @@ class BenchmarkRunnerTest {
         assertEquals(3, summary.successfulMeasuredRuns());
         assertEquals(0, summary.failedMeasuredRuns());
         assertEquals(3.0, summary.meanElapsedMillis(), 1e-9);
+        assertEquals(3.0, summary.medianElapsedMillis(), 1e-9);
         assertEquals(1.0, summary.minElapsedMillis(), 1e-9);
         assertEquals(5.0, summary.maxElapsedMillis(), 1e-9);
         assertEquals(Math.sqrt(8.0 / 3.0), summary.stddevElapsedMillis(), 1e-9);
         assertEquals((10_000.0 + 3_333.3333333333335 + 2_000.0) / 3.0, summary.meanThroughputStepsPerSecond(), 1e-9);
+        assertEquals(3_333.3333333333335, summary.medianThroughputStepsPerSecond(), 1e-9);
         assertEquals(99L, summary.checksum());
         assertTrue(summary.checksumStable());
     }
