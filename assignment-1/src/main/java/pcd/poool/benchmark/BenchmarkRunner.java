@@ -209,11 +209,14 @@ public final class BenchmarkRunner {
         }
 
         double meanElapsedMillis = mean(elapsedSamples);
+        double medianElapsedMillis = median(elapsedSamples);
         double minElapsedMillis = min(elapsedSamples);
         double maxElapsedMillis = max(elapsedSamples);
         double stddevElapsedMillis = stddev(elapsedSamples, meanElapsedMillis);
         double meanThroughput = mean(throughputSamples);
+        double medianThroughput = median(throughputSamples);
         double meanCpuUtilization = mean(cpuUtilizationSamples);
+        double medianCpuUtilization = median(cpuUtilizationSamples);
 
         return new BenchmarkSummary(
                 config,
@@ -225,11 +228,14 @@ public final class BenchmarkRunner {
                 successfulMeasuredRuns,
                 failedMeasuredRuns,
                 meanElapsedMillis,
+                medianElapsedMillis,
                 minElapsedMillis,
                 maxElapsedMillis,
                 stddevElapsedMillis,
                 meanThroughput,
+                medianThroughput,
                 meanCpuUtilization,
+                medianCpuUtilization,
                 checksum == null ? 0L : checksum,
                 checksum != null && checksumStable);
     }
@@ -310,6 +316,19 @@ public final class BenchmarkRunner {
             max = Math.max(max, value);
         }
         return max;
+    }
+
+    private static double median(List<Double> values) {
+        if (values.isEmpty()) {
+            return Double.NaN;
+        }
+        var sorted = new ArrayList<>(values);
+        sorted.sort(Double::compareTo);
+        int middle = sorted.size() / 2;
+        if ((sorted.size() & 1) == 1) {
+            return sorted.get(middle);
+        }
+        return (sorted.get(middle - 1) + sorted.get(middle)) / 2.0;
     }
 
     private static double stddev(List<Double> values, double mean) {

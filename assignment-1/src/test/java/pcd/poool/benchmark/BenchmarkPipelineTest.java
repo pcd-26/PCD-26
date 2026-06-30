@@ -42,10 +42,10 @@ class BenchmarkPipelineTest {
                 var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-results.csv");
                 var speedup = benchmarkRequest.outputFile().getParent().resolve("speedup-results.csv");
                 writeCsv(aggregated, List.of(
-                        "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                        "sequential,100,1,10,42,10.000000,0.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
+                        "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                        "sequential,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
                 writeCsv(speedup, List.of(
-                        "balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup",
+                        "balls,workers,implementation,medianSequentialMs,medianParallelMs,speedup",
                         "100,1,sequential,10.000000,10.000000,1.000000"));
                 return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of());
             }
@@ -73,8 +73,8 @@ class BenchmarkPipelineTest {
                         "threads,100,1,10,42,1,false,10.000000,1000.000000,1.000000,0.100000,1,JVM,OS,8"));
                 var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-scalability-results.csv");
                 writeCsv(aggregated, List.of(
-                        "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                        "threads,100,1,10,42,10.000000,0.000000,1000.000000,0.000000,1.000000,0.000000,0.100000,0.000000,1.000000"));
+                        "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                        "threads,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000"));
                 return new ScalabilityBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of());
             }
 

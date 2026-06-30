@@ -17,11 +17,14 @@ import java.util.Locale;
  * @param successfulMeasuredRuns successful measured runs
  * @param failedMeasuredRuns failed measured runs
  * @param meanElapsedMillis mean elapsed time in milliseconds
+ * @param medianElapsedMillis median elapsed time in milliseconds
  * @param minElapsedMillis minimum elapsed time in milliseconds
  * @param maxElapsedMillis maximum elapsed time in milliseconds
  * @param stddevElapsedMillis elapsed-time standard deviation in milliseconds
  * @param meanThroughputStepsPerSecond mean throughput in completed steps per second
+ * @param medianThroughputStepsPerSecond median throughput in completed steps per second
  * @param meanCpuUtilizationPercent mean CPU utilization percentage across measured successful runs
+ * @param medianCpuUtilizationPercent median CPU utilization percentage across measured successful runs
  * @param checksum representative checksum for the measured runs
  * @param checksumStable whether all successful measured runs produced the same checksum
  */
@@ -35,11 +38,14 @@ public record BenchmarkSummary(
         int successfulMeasuredRuns,
         int failedMeasuredRuns,
         double meanElapsedMillis,
+        double medianElapsedMillis,
         double minElapsedMillis,
         double maxElapsedMillis,
         double stddevElapsedMillis,
         double meanThroughputStepsPerSecond,
+        double medianThroughputStepsPerSecond,
         double meanCpuUtilizationPercent,
+        double medianCpuUtilizationPercent,
         long checksum,
         boolean checksumStable) {
 
@@ -72,7 +78,7 @@ public record BenchmarkSummary(
     @Override
     public String toString() {
         return String.format(Locale.US,
-                "BenchmarkSummary{config=%s, totalRuns=%d, warmupRuns=%d, measuredRuns=%d, successfulRuns=%d, failedRuns=%d, successfulMeasuredRuns=%d, failedMeasuredRuns=%d, meanElapsedMillis=%.6f, minElapsedMillis=%.6f, maxElapsedMillis=%.6f, stddevElapsedMillis=%.6f, meanThroughputStepsPerSecond=%.3f, meanCpuUtilizationPercent=%.3f, checksum=%d, checksumStable=%s}",
+                "BenchmarkSummary{config=%s, totalRuns=%d, warmupRuns=%d, measuredRuns=%d, successfulRuns=%d, failedRuns=%d, successfulMeasuredRuns=%d, failedMeasuredRuns=%d, meanElapsedMillis=%.6f, medianElapsedMillis=%.6f, minElapsedMillis=%.6f, maxElapsedMillis=%.6f, stddevElapsedMillis=%.6f, meanThroughputStepsPerSecond=%.3f, medianThroughputStepsPerSecond=%.3f, meanCpuUtilizationPercent=%.3f, medianCpuUtilizationPercent=%.3f, checksum=%d, checksumStable=%s}",
                 config.toKeyValueString(),
                 totalRuns,
                 warmupRuns,
@@ -82,11 +88,14 @@ public record BenchmarkSummary(
                 successfulMeasuredRuns,
                 failedMeasuredRuns,
                 meanElapsedMillis,
+                medianElapsedMillis,
                 minElapsedMillis,
                 maxElapsedMillis,
                 stddevElapsedMillis,
                 meanThroughputStepsPerSecond,
+                medianThroughputStepsPerSecond,
                 meanCpuUtilizationPercent,
+                medianCpuUtilizationPercent,
                 checksum,
                 checksumStable);
     }

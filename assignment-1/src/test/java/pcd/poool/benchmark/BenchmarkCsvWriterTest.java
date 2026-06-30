@@ -41,12 +41,12 @@ class BenchmarkCsvWriterTest {
         var runsLines = Files.readAllLines(export.runsFile());
         var summaryLines = Files.readAllLines(export.summaryFile());
         assertEquals("timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks,stateReadTimeMillis,partitionTimeMillis,movementTimeMillis,holeInteractionTimeMillis,collisionDetectionTimeMillis,collisionResolutionTimeMillis,mergeApplyTimeMillis", runsLines.get(0));
-        assertEquals("implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,meanCpuUtilizationPercent,speedup,efficiency", summaryLines.get(0));
+        assertEquals("implementation,balls,threads,steps,runs,meanMillis,medianMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,speedup,efficiency", summaryLines.get(0));
         assertTrue(runsLines.get(1).startsWith("20"));
         assertTrue(runsLines.get(1).contains("sequential,100,1,10,42,1,"));
         assertTrue(runsLines.get(2).contains(",1.500000,2.500000,3.500000,4.500000,6,7,8.500000,9.500000,10.500000,11.500000,12.500000,13.500000,14.500000"));
         assertTrue(runsLines.get(3).contains(",FAILED,correctness check failed: mismatch,"));
-        assertTrue(summaryLines.get(1).startsWith("sequential,100,1,10,2,20.000000,20.000000,20.000000,0.000000,500.000000,"));
+        assertTrue(summaryLines.get(1).startsWith("sequential,100,1,10,2,20.000000,20.000000,20.000000,20.000000,0.000000,500.000000,500.000000,"));
         assertTrue(summaryLines.get(1).contains(",1.000000,1.000000"));
     }
 

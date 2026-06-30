@@ -25,44 +25,44 @@ class BenchmarkChartGenerationTest {
         Files.createDirectories(inputDir);
 
         write(inputDir.resolve("aggregated-results.csv"), List.of(
-                "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                "sequential,100,1,100,1,10.000000,0.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
-                "threads,100,2,100,1,6.000000,0.000000,1666.666667,0.000000,1.000000,0.000000,0.100000,0.000000,1.000000",
-                "executor,100,2,100,1,7.000000,0.000000,1428.571429,0.000000,1.100000,0.000000,0.110000,0.000000,1.000000",
-                "sequential,500,1,100,1,20.000000,0.000000,5000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
-                "threads,500,4,100,1,8.000000,0.000000,12500.000000,0.000000,1.500000,0.000000,0.150000,0.000000,1.000000",
-                "executor,500,4,100,1,9.000000,0.000000,11111.111111,0.000000,1.600000,0.000000,0.160000,0.000000,1.000000"));
+                "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                "sequential,100,1,100,1,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
+                "threads,100,2,100,1,6.000000,6.000000,0.000000,1666.666667,1666.666667,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000",
+                "executor,100,2,100,1,7.000000,7.000000,0.000000,1428.571429,1428.571429,0.000000,1.100000,1.100000,0.000000,0.110000,0.110000,0.000000,1.000000",
+                "sequential,500,1,100,1,20.000000,20.000000,0.000000,5000.000000,5000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
+                "threads,500,4,100,1,8.000000,8.000000,0.000000,12500.000000,12500.000000,0.000000,1.500000,1.500000,0.000000,0.150000,0.150000,0.000000,1.000000",
+                "executor,500,4,100,1,9.000000,9.000000,0.000000,11111.111111,11111.111111,0.000000,1.600000,1.600000,0.000000,0.160000,0.160000,0.000000,1.000000"));
 
         write(inputDir.resolve("speedup-results.csv"), List.of(
-                "balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup",
+                "balls,workers,implementation,medianSequentialMs,medianParallelMs,speedup",
                 "100,2,threads,10.000000,6.000000,1.666667",
                 "100,2,executor,10.000000,7.000000,1.428571",
                 "500,4,threads,20.000000,8.000000,2.500000",
                 "500,4,executor,20.000000,9.000000,2.222222"));
 
         write(inputDir.resolve("aggregated-scalability-results.csv"), List.of(
-                "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                "threads,100,1,100,1,12.000000,0.000000,900.000000,0.000000,0.500000,0.000000,0.041667,0.000000,1.000000",
-                "threads,100,2,100,1,6.500000,0.000000,1600.000000,0.000000,0.750000,0.000000,0.115385,0.000000,1.000000",
-                "threads,100,4,100,1,5.000000,0.000000,2000.000000,0.000000,1.200000,0.000000,0.240000,0.000000,1.000000",
-                "executor,100,1,100,1,13.000000,0.000000,850.000000,0.000000,0.400000,0.000000,0.030769,0.000000,1.000000",
-                "executor,100,2,100,1,7.000000,0.000000,1500.000000,0.000000,0.900000,0.000000,0.128571,0.000000,1.000000",
-                "executor,100,4,100,1,5.500000,0.000000,1900.000000,0.000000,1.100000,0.000000,0.200000,0.000000,1.000000",
-                "threads,500,1,100,1,22.000000,0.000000,4000.000000,0.000000,0.600000,0.000000,0.027273,0.000000,1.000000",
-                "threads,500,2,100,1,10.000000,0.000000,10000.000000,0.000000,1.000000,0.000000,0.100000,0.000000,1.000000",
-                "threads,500,4,100,1,8.500000,0.000000,11764.705882,0.000000,1.400000,0.000000,0.164706,0.000000,1.000000",
-                "executor,500,1,100,1,24.000000,0.000000,3800.000000,0.000000,0.500000,0.000000,0.020833,0.000000,1.000000",
-                "executor,500,2,100,1,11.000000,0.000000,9090.909091,0.000000,1.050000,0.000000,0.095455,0.000000,1.000000",
-                "executor,500,4,100,1,9.000000,0.000000,11111.111111,0.000000,1.300000,0.000000,0.144444,0.000000,1.000000"));
+                "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                "threads,100,1,100,1,12.000000,12.000000,0.000000,900.000000,900.000000,0.000000,0.500000,0.500000,0.000000,0.041667,0.041667,0.000000,1.000000",
+                "threads,100,2,100,1,6.500000,6.500000,0.000000,1600.000000,1600.000000,0.000000,0.750000,0.750000,0.000000,0.115385,0.115385,0.000000,1.000000",
+                "threads,100,4,100,1,5.000000,5.000000,0.000000,2000.000000,2000.000000,0.000000,1.200000,1.200000,0.000000,0.240000,0.240000,0.000000,1.000000",
+                "executor,100,1,100,1,13.000000,13.000000,0.000000,850.000000,850.000000,0.000000,0.400000,0.400000,0.000000,0.030769,0.030769,0.000000,1.000000",
+                "executor,100,2,100,1,7.000000,7.000000,0.000000,1500.000000,1500.000000,0.000000,0.900000,0.900000,0.000000,0.128571,0.128571,0.000000,1.000000",
+                "executor,100,4,100,1,5.500000,5.500000,0.000000,1900.000000,1900.000000,0.000000,1.100000,1.100000,0.000000,0.200000,0.200000,0.000000,1.000000",
+                "threads,500,1,100,1,22.000000,22.000000,0.000000,4000.000000,4000.000000,0.000000,0.600000,0.600000,0.000000,0.027273,0.027273,0.000000,1.000000",
+                "threads,500,2,100,1,10.000000,10.000000,0.000000,10000.000000,10000.000000,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000",
+                "threads,500,4,100,1,8.500000,8.500000,0.000000,11764.705882,11764.705882,0.000000,1.400000,1.400000,0.000000,0.164706,0.164706,0.000000,1.000000",
+                "executor,500,1,100,1,24.000000,24.000000,0.000000,3800.000000,3800.000000,0.000000,0.500000,0.500000,0.000000,0.020833,0.020833,0.000000,1.000000",
+                "executor,500,2,100,1,11.000000,11.000000,0.000000,9090.909091,9090.909091,0.000000,1.050000,1.050000,0.000000,0.095455,0.095455,0.000000,1.000000",
+                "executor,500,4,100,1,9.000000,9.000000,0.000000,11111.111111,11111.111111,0.000000,1.300000,1.300000,0.000000,0.144444,0.144444,0.000000,1.000000"));
 
         write(inputDir.resolve("aggregated-gui-results.csv"), List.of(
-                "implementation,balls,workers,steps,seed,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,avgFramesAbove16Ms,avgFramesAbove33Ms",
-                "sequential,100,1,100,1,12.000000,13.000000,14.000000,83.333333,0.000000,0.000000",
-                "threads,100,2,100,1,8.000000,9.000000,10.000000,125.000000,0.000000,0.000000",
-                "executor,100,2,100,1,9.000000,10.000000,11.000000,111.111111,0.000000,0.000000",
-                "sequential,500,1,100,1,20.000000,21.000000,22.000000,50.000000,0.000000,0.000000",
-                "threads,500,4,100,1,10.000000,11.000000,12.000000,100.000000,0.000000,0.000000",
-                "executor,500,4,100,1,11.000000,12.000000,13.000000,90.909091,0.000000,0.000000"));
+                "implementation,balls,workers,steps,seed,meanFrameMs,medianFrameMs,p95FrameMs,maxFrameMs,meanFps,medianFps,meanFramesAbove16Ms,meanFramesAbove33Ms",
+                "sequential,100,1,100,1,12.000000,12.000000,13.000000,14.000000,83.333333,83.333333,0.000000,0.000000",
+                "threads,100,2,100,1,8.000000,8.000000,9.000000,10.000000,125.000000,125.000000,0.000000,0.000000",
+                "executor,100,2,100,1,9.000000,9.000000,10.000000,11.000000,111.111111,111.111111,0.000000,0.000000",
+                "sequential,500,1,100,1,20.000000,20.000000,21.000000,22.000000,50.000000,50.000000,0.000000,0.000000",
+                "threads,500,4,100,1,10.000000,10.000000,11.000000,12.000000,100.000000,100.000000,0.000000,0.000000",
+                "executor,500,4,100,1,11.000000,11.000000,12.000000,13.000000,90.909091,90.909091,0.000000,0.000000"));
         write(inputDir.resolve("environment.csv"), List.of(
                 "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
                 "8,Test CPU,4,8,17179869184,JVM,21,Windows 11,10.0,amd64,1,1,1,true,123"));
@@ -101,15 +101,15 @@ class BenchmarkChartGenerationTest {
         Files.createDirectories(inputDir);
 
         write(inputDir.resolve("aggregated-results.csv"), List.of(
-                "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                "sequential,100,1,100,1,10.000000,0.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
-                "threads,100,2,100,1,6.000000,0.000000,1666.666667,0.000000,1.000000,0.000000,0.100000,0.000000,1.000000"));
+                "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                "sequential,100,1,100,1,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
+                "threads,100,2,100,1,6.000000,6.000000,0.000000,1666.666667,1666.666667,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000"));
         write(inputDir.resolve("speedup-results.csv"), List.of(
-                "balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup",
+                "balls,workers,implementation,medianSequentialMs,medianParallelMs,speedup",
                 "100,2,threads,10.000000,6.000000,1.666667"));
         write(inputDir.resolve("aggregated-scalability-results.csv"), List.of(
-                "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                "threads,100,1,100,1,12.000000,0.000000,900.000000,0.000000,0.500000,0.000000,0.041667,0.000000,1.000000"));
+                "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                "threads,100,1,100,1,12.000000,12.000000,0.000000,900.000000,900.000000,0.000000,0.500000,0.500000,0.000000,0.041667,0.041667,0.000000,1.000000"));
 
         runScript(inputDir, outputDir);
 
@@ -133,14 +133,14 @@ class BenchmarkChartGenerationTest {
         Files.createDirectories(inputDir);
 
         write(inputDir.resolve("benchmark-summary.csv"), List.of(
-                "implementation,balls,threads,steps,runs,meanMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,meanCpuUtilizationPercent,speedup,efficiency",
-                "sequential,100,1,100,1,10.000000,10.000000,10.000000,0.000000,1000.000000,55.000000,1.000000,1.000000",
-                "threads,100,2,100,1,6.000000,6.000000,6.000000,0.000000,1666.666667,72.000000,1.666667,0.833333",
-                "executor,100,2,100,1,7.000000,7.000000,7.000000,0.000000,1428.571429,68.000000,1.428571,0.714286"));
+                "implementation,balls,threads,steps,runs,meanMillis,medianMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,speedup,efficiency",
+                "sequential,100,1,100,1,10.000000,10.000000,10.000000,10.000000,0.000000,1000.000000,1000.000000,55.000000,55.000000,1.000000,1.000000",
+                "threads,100,2,100,1,6.000000,6.000000,6.000000,6.000000,0.000000,1666.666667,1666.666667,72.000000,72.000000,1.666667,0.833333",
+                "executor,100,2,100,1,7.000000,7.000000,7.000000,7.000000,0.000000,1428.571429,1428.571429,68.000000,68.000000,1.428571,0.714286"));
         write(inputDir.resolve("speedup-table.csv"), List.of(
-                "balls,steps,implementation,threads,meanMillis,meanThroughput,meanCpuUtilizationPercent,sequentialMeanMillis,speedup,speedupBelowOne",
-                "100,100,threads,2,6.000000,1666.666667,72.000000,10.000000,1.666667,false",
-                "100,100,executor,2,7.000000,1428.571429,68.000000,10.000000,1.428571,false"));
+                "balls,steps,implementation,threads,meanMillis,medianMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,sequentialMedianMillis,speedup,speedupBelowOne",
+                "100,100,threads,2,6.000000,6.000000,1666.666667,1666.666667,72.000000,72.000000,10.000000,1.666667,false",
+                "100,100,executor,2,7.000000,7.000000,1428.571429,1428.571429,68.000000,68.000000,10.000000,1.428571,false"));
         write(inputDir.resolve("efficiency-table.csv"), List.of(
                 "balls,steps,implementation,threads,meanMillis,meanThroughput,meanCpuUtilizationPercent,sequentialMeanMillis,speedup,efficiency,efficiencyDegradation",
                 "100,100,threads,2,6.000000,1666.666667,72.000000,10.000000,1.666667,0.833333,false",

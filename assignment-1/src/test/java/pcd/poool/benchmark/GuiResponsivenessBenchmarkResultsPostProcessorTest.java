@@ -34,9 +34,9 @@ class GuiResponsivenessBenchmarkResultsPostProcessorTest {
         assertEquals(3, result.aggregatedRows().size());
 
         var lines = Files.readAllLines(result.aggregatedFile());
-        assertEquals("implementation,balls,workers,steps,seed,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,avgFramesAbove16Ms,avgFramesAbove33Ms", lines.get(0));
-        assertTrue(lines.stream().anyMatch(line -> line.startsWith("sequential,100,1,240,42,15.000000,17.000000,19.000000,75.000000,0.500000,0.000000")));
-        assertTrue(lines.stream().anyMatch(line -> line.startsWith("threads,100,2,240,42,10.000000,12.000000,13.000000,100.000000,0.500000,0.000000")));
-        assertTrue(lines.stream().anyMatch(line -> line.startsWith("executor,100,2,240,42,8.000000,9.000000,10.000000,115.000000,0.000000,0.500000")));
+        assertEquals("implementation,balls,workers,steps,seed,meanFrameMs,medianFrameMs,p95FrameMs,maxFrameMs,meanFps,medianFps,meanFramesAbove16Ms,meanFramesAbove33Ms", lines.get(0));
+        assertTrue(lines.stream().anyMatch(line -> line.startsWith("sequential,100,1,240,42,15.000000,15.000000,17.000000,19.000000,75.000000,75.000000,0.500000,0.000000")));
+        assertTrue(lines.stream().anyMatch(line -> line.startsWith("threads,100,2,240,42,10.000000,10.000000,12.000000,13.000000,100.000000,100.000000,0.500000,0.000000")));
+        assertTrue(lines.stream().anyMatch(line -> line.startsWith("executor,100,2,240,42,8.000000,8.000000,9.000000,10.000000,115.000000,115.000000,0.000000,0.500000")));
     }
 }
