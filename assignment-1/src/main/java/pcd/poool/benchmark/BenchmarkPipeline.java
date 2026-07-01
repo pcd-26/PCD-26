@@ -30,7 +30,10 @@ public final class BenchmarkPipeline {
             if (request == null) {
                 return;
             }
-            var report = run(request);
+            Instant timestamp = request.timestamp();
+            Path resultsRoot = BenchmarkRunDirectories.resolveRunDirectory(request.resultsRoot(), timestamp);
+            Path chartsRoot = BenchmarkRunDirectories.resolveRunDirectory(request.chartsRoot(), timestamp);
+            var report = run(BenchmarkPipelineRequest.defaults(resultsRoot, chartsRoot, timestamp, request.out()));
             System.out.printf(Locale.US,
                     "benchmark_pipeline_completed results_dir=%s charts_dir=%s%n",
                     report.resultsDir(),

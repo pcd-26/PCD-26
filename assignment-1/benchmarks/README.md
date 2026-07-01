@@ -128,12 +128,18 @@ legacy suite layout.
 
 Current pipeline outputs:
 
-- `benchmarks/results/raw-results.csv`
-- `benchmarks/results/aggregated-results.csv`
-- `benchmarks/results/speedup-results.csv`
-- `benchmarks/results/raw-scalability-results.csv`
-- `benchmarks/results/aggregated-scalability-results.csv`
-- `benchmarks/results/environment.csv`
+- `benchmarks/results/run-<timestamp>/raw-results.csv`
+- `benchmarks/results/run-<timestamp>/aggregated-results.csv`
+- `benchmarks/results/run-<timestamp>/speedup-results.csv`
+- `benchmarks/results/run-<timestamp>/raw-scalability-results.csv`
+- `benchmarks/results/run-<timestamp>/aggregated-scalability-results.csv`
+- `benchmarks/results/run-<timestamp>/environment.csv`
+- `benchmarks/results/run-<timestamp>/benchmark-runtime-metadata.csv`
+- `benchmarks/results/run-<timestamp>/avg-tick-time-by-engine.csv`
+- `benchmarks/results/run-<timestamp>/throughput-by-engine.csv`
+- `benchmarks/results/run-<timestamp>/speedup-by-worker-count.csv`
+- `benchmarks/results/run-<timestamp>/efficiency-by-worker-count.csv`
+- `benchmarks/results/run-<timestamp>/crossover-workloads.csv`
 
 Legacy suite outputs still supported by the code:
 
@@ -188,6 +194,9 @@ different entry points and therefore do not all share the same defaults. In
 particular, the legacy `benchmark-*.csv` files and the newer `raw-*.csv` files
 are not directly comparable without checking the seed, steps, and execution
 family first.
+CLI benchmark runs now write into timestamped `run-<timestamp>/` subdirectories
+so repeated executions do not overwrite earlier snapshots unless a caller
+explicitly points a benchmark command at the same output directory.
 
 ## Known benchmark gaps
 
