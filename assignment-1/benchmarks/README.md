@@ -198,6 +198,141 @@ CLI benchmark runs now write into timestamped `run-<timestamp>/` subdirectories
 so repeated executions do not overwrite earlier snapshots unless a caller
 explicitly points a benchmark command at the same output directory.
 
+## Benchmark methodology
+
+### Goals
+
+The benchmark suite exists to compare the physics engines under controlled,
+repeatable workloads. It is intended to answer:
+
+- how much time each engine spends per tick
+- how much throughput each engine sustains
+- how worker count changes speedup and efficiency
+- which workloads are the first ones where a parallel engine becomes faster
+  than the sequential baseline
+
+The suite is not meant to support performance claims without benchmark data.
+Any statement about one engine being faster, more efficient, or more scalable
+must be backed by the exported benchmark results.
+
+### Workloads
+
+Benchmark workloads are deterministic and are defined by:
+
+- board size
+- number of balls
+- number of ticks
+- seed
+- collision profile
+
+Workload sizes currently used for comparisons:
+
+- `small`
+- `medium`
+- `large`
+
+Collision scenarios currently used for comparisons:
+
+- `low-collision`
+- `high-collision`
+
+Each workload definition is shared across engines so that all engines start
+from the same initial state for the same scenario.
+
+### Worker-count matrix
+
+Parallel engines are benchmarked with a fixed worker-count matrix:
+
+- `1`
+- `2`
+- `4`
+- `8`
+- `available processors`
+- `available processors + 1`
+
+Duplicate counts are removed after resolving the runtime processor count, and
+invalid counts are skipped. The sequential engine is always kept as the
+baseline for the same workload.
+
+### Warmup and measurement
+
+The suite separates warmup from measured iterations.
+
+- warmup runs are executed first and are not included in summary statistics
+- measured runs are executed after warmup and each measured tick contributes
+  one timing sample
+- setup work such as workload creation, engine creation, and result export is
+  outside the timed section
+
+### Seeds and initial state
+
+Deterministic seeds are used for all workloads. Re-running the same workload
+definition with the same seed produces the same initial board state.
+
+For any benchmark result to be comparable, the engines must start from
+equivalent initial states. The benchmark infrastructure uses the same seeded
+workload definition for sequential, threaded, and task-based engines.
+
+### Collected metrics
+
+The benchmark export captures the following metrics for each run or summary:
+
+- engine name
+- board size
+- number of balls
+- number of ticks
+- worker count
+- average tick time
+- min tick time
+- max tick time
+- standard deviation
+- throughput
+- speedup vs sequential
+- efficiency
+- final-state checksum
+
+When available, the export also includes `p95` latency summaries.
+
+### Formulas
+
+The benchmark uses these definitions:
+
+- average tick time = mean measured tick duration
+- throughput = measured ticks per second
+- speedup = sequential average tick time / engine average tick time
+- efficiency = speedup / worker count
+- crossover = smallest workload where a parallel engine has speedup > `1`
+
+Speedup is always computed against the matching sequential baseline for the
+same workload size, collision profile, board size, ball count, tick count, and
+seed.
+
+### Runtime metadata
+
+Each exported run snapshot includes runtime metadata:
+
+- timestamp
+- operating system
+- Java version
+- JVM name
+- available processors
+- max memory
+- benchmark configuration
+- git commit hash when available
+
+### Validation tests
+
+The benchmark infrastructure is covered by deterministic tests that verify:
+
+- deterministic workload generation
+- equivalent initial states across engines
+- warmup samples are excluded from summary statistics
+- worker-count matrix generation
+- metric calculations on synthetic data
+- CSV export validity
+- summary table generation
+- expensive benchmark paths remain separated from normal unit tests
+
 ## Known benchmark gaps
 
 - Setup and initialization time are not measured, so the results only capture
@@ -218,6 +353,8 @@ explicitly points a benchmark command at the same output directory.
   exact command line before comparing snapshots.
 - The current data model still estimates coordination cost rather than
   separating every synchronization phase into a first-class benchmark metric.
+- Performance claims still depend on the exact workload, seed, warmup policy,
+  and engine family used in the run.
 
 As a result, current results are only comparable when the implementation,
 scenario size, steps, seed, warmup policy, and benchmark family are all the
