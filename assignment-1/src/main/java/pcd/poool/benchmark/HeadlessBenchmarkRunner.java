@@ -7,10 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import pcd.poool.model.physics.common.Board;
-import pcd.poool.model.physics.common.PhysicsDefaults;
-import pcd.poool.model.physics.sequential.PhysicsEngine;
-import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
-import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 
 /**
  * Reproducible headless benchmark runner for the three simulation
@@ -151,41 +147,16 @@ public final class HeadlessBenchmarkRunner {
     }
 
     private static BenchmarkRunResult measureRun(BenchmarkConfig config, int runIndex) {
-        try (SimulationSession session = openSession(config)) {
-            var result = BenchmarkRunner.time(runIndex, false, config.steps(), session::run);
+        BenchmarkEngineAdapter adapter = BenchmarkEngineAdapters.forImplementation(config.implementation(), config.effectiveThreads());
+        try (BenchmarkEngineAdapter.BenchmarkEngineSession session = adapter.open()) {
+            var board = new Board(session.stepper());
+            board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
+            var result = BenchmarkRunner.time(runIndex, false, config.steps(), () -> session.execute(board, config.steps()));
             blackhole = result.checksum();
             return result;
         } catch (Exception ex) {
             throw new IllegalStateException("failed to measure benchmark run", ex);
         }
-    }
-
-    private static SimulationSession openSession(BenchmarkConfig config) {
-        return switch (config.implementation()) {
-            case SEQUENTIAL -> openSequentialSession(config);
-            case THREADS -> openThreadedSession(config);
-            case EXECUTOR -> openTaskBasedSession(config);
-        };
-    }
-
-    private static SimulationSession openSequentialSession(BenchmarkConfig config) {
-        var board = new Board(new PhysicsEngine());
-        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
-        return new SimulationSession(config.implementation(), board, null, null, config.steps());
-    }
-
-    private static SimulationSession openThreadedSession(BenchmarkConfig config) {
-        var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
-        var board = new Board(engine);
-        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
-        return new SimulationSession(config.implementation(), board, engine, null, config.steps());
-    }
-
-    private static SimulationSession openTaskBasedSession(BenchmarkConfig config) {
-        var engine = new TaskBasedPhysicsEngine(config.effectiveThreads());
-        var board = new Board(engine);
-        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
-        return new SimulationSession(config.implementation(), board, null, engine, config.steps());
     }
 
     private static BenchmarkRow toRow(
@@ -195,10 +166,11 @@ public final class HeadlessBenchmarkRunner {
             int runIndex) {
         String jvm = telemetry.jvmName() + " " + telemetry.jvmVersion();
         String os = telemetry.osName() + " " + telemetry.osVersion() + " " + telemetry.osArch();
+        BenchmarkEngineAdapter adapter = BenchmarkEngineAdapters.forImplementation(config.implementation(), config.effectiveThreads());
         return new BenchmarkRow(
-                config.implementation().name().toLowerCase(Locale.ROOT),
+                adapter.engineName(),
                 config.balls(),
-                config.effectiveThreads(),
+                adapter.workerCount().orElse(1),
                 config.steps(),
                 config.seed(),
                 runIndex,
@@ -367,52 +339,6 @@ public final class HeadlessBenchmarkRunner {
         return Path.of("", segments);
     }
 
-    private static final class SimulationSession implements AutoCloseable {
-
-        private final BenchmarkConfig.ImplementationType implementation;
-        private final Board board;
-        private final ThreadedPhysicsEngine threadedEngine;
-        private final TaskBasedPhysicsEngine taskBasedEngine;
-        private final int steps;
-
-        private SimulationSession(
-                BenchmarkConfig.ImplementationType implementation,
-                Board board,
-                ThreadedPhysicsEngine threadedEngine,
-                TaskBasedPhysicsEngine taskBasedEngine,
-                int steps) {
-            this.implementation = implementation;
-            this.board = board;
-            this.threadedEngine = threadedEngine;
-            this.taskBasedEngine = taskBasedEngine;
-            this.steps = steps;
-        }
-
-        private BenchmarkRunner.BenchmarkExecution run() {
-            BenchmarkInstrumentation instrumentation = BenchmarkInstrumentation.zero();
-            for (int i = 0; i < steps; i++) {
-                if (implementation == BenchmarkConfig.ImplementationType.THREADS) {
-                    instrumentation = instrumentation.plus(toInstrumentation(threadedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
-                } else if (implementation == BenchmarkConfig.ImplementationType.EXECUTOR) {
-                    instrumentation = instrumentation.plus(toInstrumentation(taskBasedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
-                } else {
-                    board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
-                }
-            }
-            return new BenchmarkRunner.BenchmarkExecution(checksum(board), instrumentation);
-        }
-
-        @Override
-        public void close() throws Exception {
-            if (threadedEngine != null) {
-                threadedEngine.close();
-            }
-            if (taskBasedEngine != null) {
-                taskBasedEngine.close();
-            }
-        }
-    }
-
     /**
      * Benchmark request parameters.
      *
@@ -545,45 +471,5 @@ public final class HeadlessBenchmarkRunner {
             String jvm,
             String os,
             int availableProcessors) {
-    }
-
-    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngine.StepProfile profile) {
-        if (profile == null) {
-            return BenchmarkInstrumentation.zero();
-        }
-        return new BenchmarkInstrumentation(
-                profile.syncTimeMillis(),
-                profile.aggregationTimeMillis(),
-                profile.taskSubmissionTimeMillis(),
-                profile.joinOrFutureWaitMillis(),
-                profile.lockAcquisitions(),
-                profile.submittedTasks(),
-                profile.stateReadMillis(),
-                profile.partitionMillis(),
-                profile.movementMillis(),
-                profile.holeInteractionMillis(),
-                profile.collisionDetectionMillis(),
-                profile.collisionResolutionMillis(),
-                profile.mergeApplyMillis());
-    }
-
-    private static BenchmarkInstrumentation toInstrumentation(TaskBasedPhysicsEngine.StepProfile profile) {
-        if (profile == null) {
-            return BenchmarkInstrumentation.zero();
-        }
-        return new BenchmarkInstrumentation(
-                profile.syncTimeMillis(),
-                profile.aggregationTimeMillis(),
-                profile.taskSubmissionTimeMillis(),
-                profile.joinOrFutureWaitMillis(),
-                profile.lockAcquisitions(),
-                profile.submittedTasks(),
-                profile.stateReadMillis(),
-                profile.partitionMillis(),
-                profile.movementMillis(),
-                profile.holeInteractionMillis(),
-                profile.collisionDetectionMillis(),
-                profile.collisionResolutionMillis(),
-                profile.mergeApplyMillis());
     }
 }
