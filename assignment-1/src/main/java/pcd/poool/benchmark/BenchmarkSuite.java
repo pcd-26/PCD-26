@@ -16,7 +16,7 @@ import java.util.Objects;
 public final class BenchmarkSuite {
 
     private static final List<Integer> BALL_COUNTS = List.of(100, 500, 1_000, 2_000, 2_500);
-    private static final List<Integer> THREAD_COUNTS = List.of(1, 2, 4, 8, Math.max(1, Runtime.getRuntime().availableProcessors()));
+    private static final List<Integer> THREAD_COUNTS = BenchmarkConfig.workerMatrix();
     private static final List<Integer> CI_SMOKE_THREAD_COUNTS = List.of(1, 2);
     private static final int CI_SMOKE_BALLS = 100;
     private static final int CI_SMOKE_STEPS = 1_000;

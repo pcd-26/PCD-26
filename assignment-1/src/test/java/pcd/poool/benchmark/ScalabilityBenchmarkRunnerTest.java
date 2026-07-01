@@ -24,7 +24,7 @@ class ScalabilityBenchmarkRunnerTest {
                 BenchmarkConfig.ImplementationType.THREADS,
                 BenchmarkConfig.ImplementationType.EXECUTOR), request.implementations());
         assertEquals(List.of(2_500), request.balls());
-        assertEquals(List.of(1, 2, 4, 8, Runtime.getRuntime().availableProcessors(), Runtime.getRuntime().availableProcessors() + 1), request.workerCounts());
+        assertEquals(BenchmarkConfig.workerMatrix(), request.workerCounts());
         assertEquals(1_000, request.steps());
         assertEquals(42L, request.seed());
         assertTrue(request.warmupRuns() >= 2);
