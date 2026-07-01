@@ -45,6 +45,8 @@ class ScalabilityBenchmarkRunnerTest {
 
         assertEquals(tempDir.resolve("raw-scalability-results.csv"), report.outputFile());
         assertEquals(tempDir.resolve("aggregated-scalability-results.csv"), report.aggregatedOutputFile());
+        assertEquals(12, report.rawResults().size());
+        assertEquals(4, report.rawResults().stream().filter(BenchmarkRunResult::warmup).count());
         assertEquals(8, report.rows().size());
         assertTrue(report.rows().stream().noneMatch(row -> row.implementation().equals("sequential")));
         assertEquals(Set.of("threads", "executor"), report.rows().stream().map(ScalabilityBenchmarkRunner.BenchmarkRow::implementation).collect(Collectors.toSet()));

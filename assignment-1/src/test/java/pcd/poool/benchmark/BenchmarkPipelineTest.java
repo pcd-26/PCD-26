@@ -47,7 +47,7 @@ class BenchmarkPipelineTest {
                 writeCsv(speedup, List.of(
                         "balls,workers,implementation,medianSequentialMs,medianParallelMs,speedup",
                         "100,1,sequential,10.000000,10.000000,1.000000"));
-                return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of());
+                return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of(), List.of());
             }
 
             @Override
@@ -75,7 +75,7 @@ class BenchmarkPipelineTest {
                 writeCsv(aggregated, List.of(
                         "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
                         "threads,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000"));
-                return new ScalabilityBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of());
+                return new ScalabilityBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of(), List.of());
             }
 
             @Override
