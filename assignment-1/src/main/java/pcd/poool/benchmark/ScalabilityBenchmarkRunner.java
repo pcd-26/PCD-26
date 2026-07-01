@@ -14,13 +14,7 @@ import pcd.poool.model.physics.common.Board;
  */
 public final class ScalabilityBenchmarkRunner {
 
-    private static final List<Integer> DEFAULT_WORKERS = List.of(
-            1,
-            2,
-            4,
-            8,
-            Runtime.getRuntime().availableProcessors(),
-            Runtime.getRuntime().availableProcessors() + 1);
+    private static final List<Integer> DEFAULT_WORKERS = BenchmarkConfig.workerMatrix();
     private static final List<Integer> DEFAULT_BALLS = List.of(2_500);
     private static final List<BenchmarkConfig.ImplementationType> DEFAULT_IMPLEMENTATIONS =
             List.of(BenchmarkConfig.ImplementationType.THREADS, BenchmarkConfig.ImplementationType.EXECUTOR);
