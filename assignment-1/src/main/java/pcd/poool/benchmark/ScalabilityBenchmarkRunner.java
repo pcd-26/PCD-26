@@ -7,9 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import pcd.poool.model.physics.common.Board;
-import pcd.poool.model.physics.common.PhysicsDefaults;
-import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
-import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 
 /**
  * Dedicated benchmark for comparing worker-count scalability of the
@@ -17,13 +14,7 @@ import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
  */
 public final class ScalabilityBenchmarkRunner {
 
-    private static final List<Integer> DEFAULT_WORKERS = List.of(
-            1,
-            2,
-            4,
-            8,
-            Runtime.getRuntime().availableProcessors(),
-            Runtime.getRuntime().availableProcessors() + 1);
+    private static final List<Integer> DEFAULT_WORKERS = BenchmarkConfig.workerMatrix();
     private static final List<Integer> DEFAULT_BALLS = List.of(2_500);
     private static final List<BenchmarkConfig.ImplementationType> DEFAULT_IMPLEMENTATIONS =
             List.of(BenchmarkConfig.ImplementationType.THREADS, BenchmarkConfig.ImplementationType.EXECUTOR);
@@ -73,6 +64,7 @@ public final class ScalabilityBenchmarkRunner {
      */
     public static BenchmarkReport run(BenchmarkRequest request) throws IOException {
         var telemetry = RuntimeTelemetry.capture();
+        var rawResults = new ArrayList<BenchmarkRunResult>();
         var rows = new ArrayList<BenchmarkRow>();
         Path outputDir = request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent();
         RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
@@ -94,9 +86,13 @@ public final class ScalabilityBenchmarkRunner {
                             outputDir);
 
                     BenchmarkScenarioLogging.printScenarioStart(config);
-                    runWarmups(config);
-                    for (int runIndex = 1; runIndex <= request.measuredRuns(); runIndex++) {
-                        var result = measureRun(config, runIndex);
+                    var scenarioResults = runScenario(config);
+                    rawResults.addAll(scenarioResults);
+                    var measuredResults = scenarioResults.stream()
+                            .filter(result -> !result.warmup())
+                            .toList();
+                    for (int runIndex = 1; runIndex <= measuredResults.size(); runIndex++) {
+                        var result = measuredResults.get(runIndex - 1);
                         if (result.failed()) {
                             throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
                         }
@@ -110,7 +106,7 @@ public final class ScalabilityBenchmarkRunner {
         }
 
         var derived = ScalabilityBenchmarkResultsPostProcessor.process(request.outputFile());
-        return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), List.copyOf(rows));
+        return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), List.copyOf(rawResults), List.copyOf(rows));
     }
 
     /**
@@ -130,45 +126,36 @@ public final class ScalabilityBenchmarkRunner {
                 DEFAULT_OUTPUT_FILE);
     }
 
-    private static void runWarmups(BenchmarkConfig config) {
+    private static List<BenchmarkRunResult> runScenario(BenchmarkConfig config) {
+        var results = new ArrayList<BenchmarkRunResult>(config.warmupRuns() + config.measuredRuns());
         for (int i = 0; i < config.warmupRuns(); i++) {
-            var result = measureRun(config, i + 1);
+            var result = measureRun(config, i + 1, true);
+            results.add(result);
             if (result.failed()) {
                 throw new IllegalStateException("warmup run failed: " + result.failureMessage());
             }
         }
+        for (int i = 0; i < config.measuredRuns(); i++) {
+            var result = measureRun(config, i + 1, false);
+            results.add(result);
+            if (result.failed()) {
+                throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
+            }
+        }
+        return List.copyOf(results);
     }
 
-    private static BenchmarkRunResult measureRun(BenchmarkConfig config, int runIndex) {
-        try (SimulationSession session = openSession(config)) {
-            var result = BenchmarkRunner.time(runIndex, false, config.steps(), session::run);
+    private static BenchmarkRunResult measureRun(BenchmarkConfig config, int runIndex, boolean warmup) {
+        BenchmarkEngineAdapter adapter = BenchmarkEngineAdapters.forImplementation(config.implementation(), config.effectiveThreads());
+        try (BenchmarkEngineAdapter.BenchmarkEngineSession session = adapter.open()) {
+            var board = new Board(session.stepper());
+            board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
+            var result = BenchmarkRunner.time(runIndex, warmup, config.steps(), () -> session.execute(board, config.steps()));
             blackhole = result.checksum();
             return result;
         } catch (Exception ex) {
             throw new IllegalStateException("failed to measure benchmark run", ex);
         }
-    }
-
-    private static SimulationSession openSession(BenchmarkConfig config) {
-        return switch (config.implementation()) {
-            case THREADS -> openThreadedSession(config);
-            case EXECUTOR -> openTaskBasedSession(config);
-            case SEQUENTIAL -> throw new IllegalArgumentException("sequential implementation is not part of the scalability benchmark");
-        };
-    }
-
-    private static SimulationSession openThreadedSession(BenchmarkConfig config) {
-        var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
-        var board = new Board(engine);
-        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
-        return new SimulationSession(board, engine, null, config.steps());
-    }
-
-    private static SimulationSession openTaskBasedSession(BenchmarkConfig config) {
-        var engine = new TaskBasedPhysicsEngine(config.effectiveThreads());
-        var board = new Board(engine);
-        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
-        return new SimulationSession(board, null, engine, config.steps());
     }
 
     private static BenchmarkRow toRow(
@@ -178,10 +165,11 @@ public final class ScalabilityBenchmarkRunner {
             int runIndex) {
         String jvm = telemetry.jvmName() + " " + telemetry.jvmVersion();
         String os = telemetry.osName() + " " + telemetry.osVersion() + " " + telemetry.osArch();
+        BenchmarkEngineAdapter adapter = BenchmarkEngineAdapters.forImplementation(config.implementation(), config.effectiveThreads());
         return new BenchmarkRow(
-                config.implementation().name().toLowerCase(Locale.ROOT),
+                adapter.engineName(),
                 config.balls(),
-                config.effectiveThreads(),
+                adapter.workerCount().orElse(1),
                 config.steps(),
                 config.seed(),
                 runIndex,
@@ -293,49 +281,6 @@ public final class ScalabilityBenchmarkRunner {
         return Path.of("", segments);
     }
 
-    private static final class SimulationSession implements AutoCloseable {
-
-        private final Board board;
-        private final ThreadedPhysicsEngine threadedEngine;
-        private final TaskBasedPhysicsEngine taskBasedEngine;
-        private final int steps;
-
-        private SimulationSession(
-                Board board,
-                ThreadedPhysicsEngine threadedEngine,
-                TaskBasedPhysicsEngine taskBasedEngine,
-                int steps) {
-            this.board = board;
-            this.threadedEngine = threadedEngine;
-            this.taskBasedEngine = taskBasedEngine;
-            this.steps = steps;
-        }
-
-        private BenchmarkRunner.BenchmarkExecution run() {
-            BenchmarkInstrumentation instrumentation = BenchmarkInstrumentation.zero();
-            for (int i = 0; i < steps; i++) {
-                if (threadedEngine != null) {
-                    instrumentation = instrumentation.plus(toInstrumentation(threadedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
-                } else if (taskBasedEngine != null) {
-                    instrumentation = instrumentation.plus(toInstrumentation(taskBasedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
-                } else {
-                    board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
-                }
-            }
-            return new BenchmarkRunner.BenchmarkExecution(checksum(board), instrumentation);
-        }
-
-        @Override
-        public void close() throws Exception {
-            if (threadedEngine != null) {
-                threadedEngine.close();
-            }
-            if (taskBasedEngine != null) {
-                taskBasedEngine.close();
-            }
-        }
-    }
-
     /**
      * Benchmark request parameters.
      *
@@ -435,7 +380,7 @@ public final class ScalabilityBenchmarkRunner {
      * @param aggregatedOutputFile aggregated CSV output path
      * @param rows measured benchmark rows
      */
-    public record BenchmarkReport(Path outputFile, Path aggregatedOutputFile, List<BenchmarkRow> rows) {
+    public record BenchmarkReport(Path outputFile, Path aggregatedOutputFile, List<BenchmarkRunResult> rawResults, List<BenchmarkRow> rows) {
     }
 
     /**
@@ -485,93 +430,5 @@ public final class ScalabilityBenchmarkRunner {
 
     private static long tasksSubmitted(BenchmarkRunResult result) {
         return result.instrumentation().submittedTasks();
-    }
-
-    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngine.StepProfile profile) {
-        if (profile == null) {
-            return BenchmarkInstrumentation.zero();
-        }
-        return new BenchmarkInstrumentation(
-                profile.syncTimeMillis(),
-                profile.aggregationTimeMillis(),
-                profile.taskSubmissionTimeMillis(),
-                profile.joinOrFutureWaitMillis(),
-                profile.lockAcquisitions(),
-                profile.submittedTasks(),
-                profile.stateReadMillis(),
-                profile.partitionMillis(),
-                profile.movementMillis(),
-                profile.holeInteractionMillis(),
-                profile.collisionDetectionMillis(),
-                profile.collisionResolutionMillis(),
-                profile.mergeApplyMillis());
-    }
-
-    private static BenchmarkInstrumentation toInstrumentation(TaskBasedPhysicsEngine.StepProfile profile) {
-        if (profile == null) {
-            return BenchmarkInstrumentation.zero();
-        }
-        return new BenchmarkInstrumentation(
-                profile.syncTimeMillis(),
-                profile.aggregationTimeMillis(),
-                profile.taskSubmissionTimeMillis(),
-                profile.joinOrFutureWaitMillis(),
-                profile.lockAcquisitions(),
-                profile.submittedTasks(),
-                profile.stateReadMillis(),
-                profile.partitionMillis(),
-                profile.movementMillis(),
-                profile.holeInteractionMillis(),
-                profile.collisionDetectionMillis(),
-                profile.collisionResolutionMillis(),
-                profile.mergeApplyMillis());
-    }
-
-    private static long checksum(Board board) {
-        synchronized (board) {
-            long hash = 0x9E3779B97F4A7C15L;
-            hash = mix(hash, board.getPocketedSmallBalls());
-            hash = mix(hash, board.isPlayerBallPocketed() ? 1L : 0L);
-            hash = mix(hash, board.isBotBallPocketed() ? 1L : 0L);
-
-            var playerBall = board.getPlayerBallEntity();
-            if (playerBall != null) {
-                hash = hashBall(hash, playerBall);
-            }
-
-            var botBall = board.getBotBallEntity();
-            if (botBall != null) {
-                hash = hashBall(hash, botBall);
-            }
-
-            for (var ball : board.getSmallBallEntities()) {
-                hash = hashBall(hash, ball);
-            }
-            return avalanche(hash);
-        }
-    }
-
-    private static long hashBall(long hash, pcd.poool.model.physics.common.Ball ball) {
-        hash = mix(hash, Double.doubleToLongBits(ball.getPos().x()));
-        hash = mix(hash, Double.doubleToLongBits(ball.getPos().y()));
-        hash = mix(hash, Double.doubleToLongBits(ball.getVel().x()));
-        hash = mix(hash, Double.doubleToLongBits(ball.getVel().y()));
-        hash = mix(hash, Double.doubleToLongBits(ball.getRadius()));
-        hash = mix(hash, Double.doubleToLongBits(ball.getMass()));
-        return hash;
-    }
-
-    private static long mix(long hash, long value) {
-        long z = hash ^ value;
-        z ^= z >>> 33;
-        z *= 0xff51afd7ed558ccdL;
-        z ^= z >>> 33;
-        z *= 0xc4ceb9fe1a85ec53L;
-        z ^= z >>> 33;
-        return z;
-    }
-
-    private static long avalanche(long value) {
-        return mix(value, value << 1);
     }
 }

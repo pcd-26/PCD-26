@@ -3,6 +3,7 @@ package pcd.poool.benchmark;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,7 +17,7 @@ import java.util.Objects;
 public final class BenchmarkSuite {
 
     private static final List<Integer> BALL_COUNTS = List.of(100, 500, 1_000, 2_000, 2_500);
-    private static final List<Integer> THREAD_COUNTS = List.of(1, 2, 4, 8, Math.max(1, Runtime.getRuntime().availableProcessors()));
+    private static final List<Integer> THREAD_COUNTS = BenchmarkConfig.workerMatrix();
     private static final List<Integer> CI_SMOKE_THREAD_COUNTS = List.of(1, 2);
     private static final int CI_SMOKE_BALLS = 100;
     private static final int CI_SMOKE_STEPS = 1_000;
@@ -44,8 +45,8 @@ public final class BenchmarkSuite {
                 ? Path.of(args[argIndex])
                 : mode == Mode.SMOKE ? CI_RESULTS_ROOT : DEFAULT_RESULTS_ROOT;
         try {
-            resetDirectory(resultsRoot);
-            var report = run(resultsRoot, System.out, System.err, mode);
+            Path runRoot = BenchmarkRunDirectories.resolveRunDirectory(resultsRoot, Instant.now());
+            var report = run(runRoot, System.out, System.err, mode);
             System.out.printf(Locale.US,
                     "suite_completed output_dir=%s configs=%d failed_configs=%d%n",
                     report.outputDir(),
@@ -118,9 +119,11 @@ public final class BenchmarkSuite {
 
         Path outputDir = configs.get(0).outputDir();
         Files.createDirectories(outputDir);
-        RuntimeTelemetryCsvWriter.export(outputDir, RuntimeTelemetry.capture());
+        RuntimeTelemetry telemetry = RuntimeTelemetry.capture();
+        RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
 
         Map<ScenarioKey, BenchmarkSummary> sequentialBaselines = new LinkedHashMap<>();
+        var summaries = new ArrayList<BenchmarkSummary>();
         int completedScenarios = 0;
         int failedScenarios = 0;
         int scenarioCount = configs.size();
@@ -147,6 +150,7 @@ public final class BenchmarkSuite {
 
             var rawResults = runScenario(config, workload, out);
             var summary = BenchmarkRunner.summarize(config, rawResults);
+            summaries.add(summary);
             if (summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
                 sequentialBaselines.put(new ScenarioKey(config.balls(), config.steps(), config.seed()), summary);
             }
@@ -195,6 +199,13 @@ public final class BenchmarkSuite {
             completedScenarios++;
             printScenarioCompleted(out, completedScenarios, scenarioCount, config, summary);
         }
+
+        BenchmarkResultsExporter.export(
+                outputDir,
+                Instant.now(),
+                telemetry,
+                BenchmarkResultsExporter.resolveGitCommitHash(),
+                summaries);
 
         return new SuiteReport(outputDir, completedScenarios, failedScenarios);
     }

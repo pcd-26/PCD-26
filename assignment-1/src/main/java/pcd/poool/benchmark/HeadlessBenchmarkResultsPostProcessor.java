@@ -25,7 +25,7 @@ final class HeadlessBenchmarkResultsPostProcessor {
     private static final String AGGREGATED_HEADER =
             "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted";
     private static final String SPEEDUP_HEADER =
-            "balls,workers,implementation,medianSequentialMs,medianParallelMs,speedup";
+            "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup";
 
     private HeadlessBenchmarkResultsPostProcessor() {
     }
@@ -128,19 +128,21 @@ final class HeadlessBenchmarkResultsPostProcessor {
                         row.steps(),
                         row.seed()));
             }
-            double speedup = baseline.medianElapsedMs() <= 0.0 ? Double.NaN : baseline.medianElapsedMs() / row.medianElapsedMs();
+            double speedup = baseline.meanElapsedMs() <= 0.0 ? Double.NaN : baseline.meanElapsedMs() / row.meanElapsedMs();
             speedupRows.add(new SpeedupRow(
                     row.balls(),
                     row.workers(),
+                    row.seed(),
                     row.implementation(),
-                    baseline.medianElapsedMs(),
-                    row.medianElapsedMs(),
+                    baseline.meanElapsedMs(),
+                    row.meanElapsedMs(),
                     speedup));
         }
 
         speedupRows.sort(Comparator
                 .comparingInt(SpeedupRow::balls)
                 .thenComparingInt(SpeedupRow::workers)
+                .thenComparingLong(SpeedupRow::seed)
                 .thenComparing(row -> row.implementation().ordinal()));
         return List.copyOf(speedupRows);
     }
@@ -408,9 +410,10 @@ final class HeadlessBenchmarkResultsPostProcessor {
     private record SpeedupRow(
             int balls,
             int workers,
+            long seed,
             BenchmarkConfig.ImplementationType implementation,
-            double medianSequentialMs,
-            double medianParallelMs,
+            double meanSequentialMs,
+            double meanParallelMs,
             double speedup) implements CsvRow {
 
         @Override
@@ -418,9 +421,10 @@ final class HeadlessBenchmarkResultsPostProcessor {
             return csvRow(
                     Integer.toString(balls),
                     Integer.toString(workers),
+                    Long.toString(seed),
                     implementation.name().toLowerCase(Locale.ROOT),
-                    formatDouble(medianSequentialMs),
-                    formatDouble(medianParallelMs),
+                    formatDouble(meanSequentialMs),
+                    formatDouble(meanParallelMs),
                     formatDouble(speedup));
         }
     }

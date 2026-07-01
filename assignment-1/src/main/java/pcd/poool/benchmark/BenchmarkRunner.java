@@ -210,6 +210,7 @@ public final class BenchmarkRunner {
 
         double meanElapsedMillis = mean(elapsedSamples);
         double medianElapsedMillis = median(elapsedSamples);
+        double p95ElapsedMillis = percentile(elapsedSamples, 0.95);
         double minElapsedMillis = min(elapsedSamples);
         double maxElapsedMillis = max(elapsedSamples);
         double stddevElapsedMillis = stddev(elapsedSamples, meanElapsedMillis);
@@ -229,6 +230,7 @@ public final class BenchmarkRunner {
                 failedMeasuredRuns,
                 meanElapsedMillis,
                 medianElapsedMillis,
+                p95ElapsedMillis,
                 minElapsedMillis,
                 maxElapsedMillis,
                 stddevElapsedMillis,
@@ -329,6 +331,23 @@ public final class BenchmarkRunner {
             return sorted.get(middle);
         }
         return (sorted.get(middle - 1) + sorted.get(middle)) / 2.0;
+    }
+
+    private static double percentile(List<Double> values, double percentile) {
+        if (values.isEmpty()) {
+            return Double.NaN;
+        }
+        var sorted = new ArrayList<>(values);
+        sorted.sort(Double::compareTo);
+        if (percentile <= 0.0) {
+            return sorted.get(0);
+        }
+        if (percentile >= 1.0) {
+            return sorted.get(sorted.size() - 1);
+        }
+        int index = (int) Math.ceil(percentile * sorted.size()) - 1;
+        index = Math.max(0, Math.min(index, sorted.size() - 1));
+        return sorted.get(index);
     }
 
     private static double stddev(List<Double> values, double mean) {
