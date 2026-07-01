@@ -10,14 +10,11 @@ import org.junit.jupiter.api.Test;
 class BenchmarkConfigTest {
 
     @Test
-    void defaultMatrixCoversAllRequestedImplementationsAndBallCounts() {
+    void defaultMatrixCoversAllRequestedImplementationsBallCountsAndWorkerCounts() {
         var matrix = BenchmarkConfig.defaultMatrix();
-        int uniqueThreadCount = (int) java.util.List.of(1, 2, 4, 8, Math.max(1, Runtime.getRuntime().availableProcessors()))
-                .stream()
-                .distinct()
-                .count();
+        var workerMatrix = BenchmarkConfig.workerMatrix();
 
-        assertEquals(3 * 5 * uniqueThreadCount, matrix.size());
+        assertEquals(5 + 2 * 5 * workerMatrix.size(), matrix.size());
         assertTrue(matrix.stream().anyMatch(config ->
                 config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL
                         && config.balls() == 100
@@ -30,6 +27,21 @@ class BenchmarkConfigTest {
                 config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR
                         && config.balls() == 2_000
                         && config.threads() == 8));
+        assertEquals(workerMatrix, workerMatrix.stream().distinct().toList());
+        assertTrue(workerMatrix.contains(1));
+        assertTrue(workerMatrix.contains(2));
+        assertTrue(workerMatrix.contains(4));
+        assertTrue(workerMatrix.contains(8));
+        assertTrue(workerMatrix.contains(Runtime.getRuntime().availableProcessors()));
+        assertTrue(workerMatrix.contains(Runtime.getRuntime().availableProcessors() + 1));
+    }
+
+    @Test
+    void workerMatrixRemovesDuplicatesAndSkipsInvalidCounts() {
+        var workerMatrix = BenchmarkConfig.workerMatrix();
+
+        assertEquals(workerMatrix.size(), workerMatrix.stream().distinct().count());
+        assertTrue(workerMatrix.stream().allMatch(value -> value > 0));
     }
 
     @Test

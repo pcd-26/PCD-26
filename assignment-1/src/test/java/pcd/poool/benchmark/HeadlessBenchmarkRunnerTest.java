@@ -44,6 +44,8 @@ class HeadlessBenchmarkRunnerTest {
         assertEquals(tempDir.resolve("raw-results.csv"), report.outputFile());
         assertEquals(tempDir.resolve("aggregated-results.csv"), report.aggregatedOutputFile());
         assertEquals(tempDir.resolve("speedup-results.csv"), report.speedupOutputFile());
+        assertEquals(18, report.rawResults().size());
+        assertEquals(6, report.rawResults().stream().filter(BenchmarkRunResult::warmup).count());
         assertEquals(12, report.rows().size());
 
         var lines = Files.readAllLines(report.outputFile());

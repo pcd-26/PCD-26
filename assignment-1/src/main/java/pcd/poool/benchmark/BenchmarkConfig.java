@@ -44,6 +44,8 @@ public record BenchmarkConfig(
     public static final boolean DEFAULT_INSTRUMENTATION_ENABLED = false;
     public static final Path DEFAULT_OUTPUT_DIR = Path.of("target", "benchmark-results");
 
+    private static final int[] WORKER_MATRIX_CANDIDATES = {1, 2, 4, 8};
+
     private static final int PHYSICS_BALLS = 4_500;
     private static final int SEQUENTIAL_GAME_STEPS = 600;
     private static final int PHYSICS_PROFILING_STEPS = 120;
@@ -85,9 +87,20 @@ public record BenchmarkConfig(
      */
     public static List<BenchmarkConfig> defaultMatrix() {
         var configs = new ArrayList<BenchmarkConfig>();
-        for (var implementation : List.of(ImplementationType.SEQUENTIAL, ImplementationType.THREADS, ImplementationType.EXECUTOR)) {
-            for (var balls : List.of(100, 500, 1_000, 2_000, 2_500)) {
-                for (var threads : threadMatrix()) {
+        for (var balls : List.of(100, 500, 1_000, 2_000, 2_500)) {
+            configs.add(new BenchmarkConfig(
+                    ImplementationType.SEQUENTIAL,
+                    balls,
+                    1,
+                    DEFAULT_STEPS,
+                    DEFAULT_SEED,
+                    DEFAULT_WARMUP_RUNS,
+                    DEFAULT_MEASURED_RUNS,
+                    false,
+                    false,
+                    DEFAULT_OUTPUT_DIR));
+            for (var implementation : List.of(ImplementationType.THREADS, ImplementationType.EXECUTOR)) {
+                for (var threads : workerMatrix()) {
                     configs.add(new BenchmarkConfig(
                             implementation,
                             balls,
@@ -378,15 +391,30 @@ public record BenchmarkConfig(
         return new BenchmarkConfig(implementation, balls, threads, steps, seed, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, value);
     }
 
-    private static List<Integer> threadMatrix() {
+    /**
+     * Returns the resolved worker-count matrix used for parallel benchmark runs.
+     *
+     * <p>The matrix includes the common small counts plus the machine-specific
+     * counts resolved at runtime, with duplicates removed and invalid counts
+     * filtered out.
+     *
+     * @return resolved worker-count matrix
+     */
+    public static List<Integer> workerMatrix() {
         int available = Runtime.getRuntime().availableProcessors();
         var threads = new java.util.LinkedHashSet<Integer>();
-        threads.add(1);
-        threads.add(2);
-        threads.add(4);
-        threads.add(8);
-        threads.add(Math.max(1, available));
+        for (int candidate : WORKER_MATRIX_CANDIDATES) {
+            addWorkerCount(threads, candidate);
+        }
+        addWorkerCount(threads, available);
+        addWorkerCount(threads, available + 1);
         return List.copyOf(threads);
+    }
+
+    private static void addWorkerCount(java.util.LinkedHashSet<Integer> threads, int candidate) {
+        if (candidate > 0) {
+            threads.add(candidate);
+        }
     }
 
     /**

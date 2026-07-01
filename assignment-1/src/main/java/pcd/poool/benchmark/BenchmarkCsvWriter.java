@@ -22,7 +22,7 @@ public final class BenchmarkCsvWriter {
     private static final String RUNS_HEADER =
             "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks,stateReadTimeMillis,partitionTimeMillis,movementTimeMillis,holeInteractionTimeMillis,collisionDetectionTimeMillis,collisionResolutionTimeMillis,mergeApplyTimeMillis";
     private static final String SUMMARY_HEADER =
-            "implementation,balls,threads,steps,runs,meanMillis,medianMillis,minMillis,maxMillis,stdDevMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,speedup,efficiency";
+            "implementation,balls,threads,steps,seed,runs,meanMillis,medianMillis,p95Millis,minMillis,maxMillis,stdDevMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,speedup,efficiency,checksum";
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_INSTANT;
 
     private BenchmarkCsvWriter() {
@@ -140,9 +140,11 @@ public final class BenchmarkCsvWriter {
                         Integer.toString(summary.config().balls()),
                         Integer.toString(summary.config().threads()),
                         Integer.toString(summary.config().steps()),
+                        Long.toString(summary.config().seed()),
                         Integer.toString(summary.measuredRuns()),
                         formatDouble(summary.meanElapsedMillis()),
                         formatDouble(summary.medianElapsedMillis()),
+                        formatDouble(summary.p95ElapsedMillis()),
                         formatDouble(summary.minElapsedMillis()),
                         formatDouble(summary.maxElapsedMillis()),
                         formatDouble(summary.stddevElapsedMillis()),
@@ -151,7 +153,8 @@ public final class BenchmarkCsvWriter {
                         formatDouble(summary.meanCpuUtilizationPercent()),
                         formatDouble(summary.medianCpuUtilizationPercent()),
                         formatDouble(speedup),
-                        formatDouble(efficiency)))
+                        formatDouble(efficiency),
+                        Long.toString(summary.checksum())))
                 .append(System.lineSeparator());
         write(summaryFile, line);
     }

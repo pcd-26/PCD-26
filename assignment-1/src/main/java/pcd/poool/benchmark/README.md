@@ -19,7 +19,8 @@ by the assignment.
   Writes raw runs and aggregate summaries to the configured result directory.
 - `BenchmarkSuite.java`
   Executes the full or smoke benchmark matrix locally and stores the output in
-  `assignment-1/benchmarks/results/`.
+  `assignment-1/benchmarks/results/run-<timestamp>/` when launched through the
+  CLI entry point.
 - `BenchmarkPipeline.java`
   Orchestrates the full local benchmark flow. The Python wrapper in
   `assignment-1/scripts/run_benchmarks.py`
@@ -35,6 +36,8 @@ by the assignment.
   Derives report tables from benchmark summaries when needed.
 - `RuntimeTelemetryCsvWriter.java`
   Exports runtime and environment metadata alongside the measurements.
+- `BenchmarkResultsExporter.java`
+  Writes derived summary tables and runtime metadata for the benchmark suite.
 
 ## Local workflow
 
