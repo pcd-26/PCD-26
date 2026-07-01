@@ -70,6 +70,7 @@ public final class ScalabilityBenchmarkRunner {
      */
     public static BenchmarkReport run(BenchmarkRequest request) throws IOException {
         var telemetry = RuntimeTelemetry.capture();
+        var rawResults = new ArrayList<BenchmarkRunResult>();
         var rows = new ArrayList<BenchmarkRow>();
         Path outputDir = request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent();
         RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
@@ -91,9 +92,13 @@ public final class ScalabilityBenchmarkRunner {
                             outputDir);
 
                     BenchmarkScenarioLogging.printScenarioStart(config);
-                    runWarmups(config);
-                    for (int runIndex = 1; runIndex <= request.measuredRuns(); runIndex++) {
-                        var result = measureRun(config, runIndex);
+                    var scenarioResults = runScenario(config);
+                    rawResults.addAll(scenarioResults);
+                    var measuredResults = scenarioResults.stream()
+                            .filter(result -> !result.warmup())
+                            .toList();
+                    for (int runIndex = 1; runIndex <= measuredResults.size(); runIndex++) {
+                        var result = measuredResults.get(runIndex - 1);
                         if (result.failed()) {
                             throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
                         }
@@ -107,7 +112,7 @@ public final class ScalabilityBenchmarkRunner {
         }
 
         var derived = ScalabilityBenchmarkResultsPostProcessor.process(request.outputFile());
-        return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), List.copyOf(rows));
+        return new BenchmarkReport(request.outputFile(), derived.aggregatedFile(), List.copyOf(rawResults), List.copyOf(rows));
     }
 
     /**
@@ -127,21 +132,31 @@ public final class ScalabilityBenchmarkRunner {
                 DEFAULT_OUTPUT_FILE);
     }
 
-    private static void runWarmups(BenchmarkConfig config) {
+    private static List<BenchmarkRunResult> runScenario(BenchmarkConfig config) {
+        var results = new ArrayList<BenchmarkRunResult>(config.warmupRuns() + config.measuredRuns());
         for (int i = 0; i < config.warmupRuns(); i++) {
-            var result = measureRun(config, i + 1);
+            var result = measureRun(config, i + 1, true);
+            results.add(result);
             if (result.failed()) {
                 throw new IllegalStateException("warmup run failed: " + result.failureMessage());
             }
         }
+        for (int i = 0; i < config.measuredRuns(); i++) {
+            var result = measureRun(config, i + 1, false);
+            results.add(result);
+            if (result.failed()) {
+                throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
+            }
+        }
+        return List.copyOf(results);
     }
 
-    private static BenchmarkRunResult measureRun(BenchmarkConfig config, int runIndex) {
+    private static BenchmarkRunResult measureRun(BenchmarkConfig config, int runIndex, boolean warmup) {
         BenchmarkEngineAdapter adapter = BenchmarkEngineAdapters.forImplementation(config.implementation(), config.effectiveThreads());
         try (BenchmarkEngineAdapter.BenchmarkEngineSession session = adapter.open()) {
             var board = new Board(session.stepper());
             board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
-            var result = BenchmarkRunner.time(runIndex, false, config.steps(), () -> session.execute(board, config.steps()));
+            var result = BenchmarkRunner.time(runIndex, warmup, config.steps(), () -> session.execute(board, config.steps()));
             blackhole = result.checksum();
             return result;
         } catch (Exception ex) {
@@ -371,7 +386,7 @@ public final class ScalabilityBenchmarkRunner {
      * @param aggregatedOutputFile aggregated CSV output path
      * @param rows measured benchmark rows
      */
-    public record BenchmarkReport(Path outputFile, Path aggregatedOutputFile, List<BenchmarkRow> rows) {
+    public record BenchmarkReport(Path outputFile, Path aggregatedOutputFile, List<BenchmarkRunResult> rawResults, List<BenchmarkRow> rows) {
     }
 
     /**
