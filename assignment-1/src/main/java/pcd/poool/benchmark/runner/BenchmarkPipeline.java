@@ -32,7 +32,8 @@ public final class BenchmarkPipeline {
             }
             var report = run(request);
             System.out.printf(Locale.US,
-                    "benchmark_pipeline_completed results_dir=%s charts_dir=%s%n",
+                    "benchmark_pipeline_completed mode=%s results_dir=%s charts_dir=%s%n",
+                    request.mode(),
                     report.resultsDir(),
                     report.chartsDir());
         } catch (Exception ex) {
@@ -64,11 +65,32 @@ public final class BenchmarkPipeline {
         Files.createDirectories(resultsDir);
         Files.createDirectories(request.chartsRoot());
 
+        var headlessRequest = request.mode() == Mode.SPEEDUP
+                ? HeadlessBenchmarkRunner.speedupGateDefaults()
+                : HeadlessBenchmarkRunner.defaults();
+        headlessRequest = headlessRequest.withOutputFile(resultsDir.resolve("raw-results.csv"));
+
         printStep(request.out(), "headless-benchmark-start", resultsDir);
-        var headlessRequest = HeadlessBenchmarkRunner.defaults()
-                .withOutputFile(resultsDir.resolve("raw-results.csv"));
         var headlessReport = steps.runHeadless(headlessRequest);
         printStep(request.out(), "headless-benchmark-complete", headlessReport.outputFile());
+
+        if (request.mode() == Mode.SPEEDUP) {
+            printStep(request.out(), "chart-generation-start", request.chartsRoot());
+            steps.generateCharts(resultsDir, request.chartsRoot());
+            printStep(request.out(), "chart-generation-complete", request.chartsRoot());
+            return new BenchmarkPipelineReport(
+                    resultsDir,
+                    request.chartsRoot(),
+                    headlessReport.outputFile(),
+                    headlessReport.aggregatedOutputFile(),
+                    headlessReport.speedupOutputFile(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
 
         printStep(request.out(), "suite-start", resultsDir);
         var suiteReport = steps.runSuite(request.resultsRoot());
@@ -105,6 +127,7 @@ public final class BenchmarkPipeline {
     private static BenchmarkPipelineRequest parseArgs(String[] args) {
         Path resultsRoot = DEFAULT_RESULTS_ROOT;
         Path chartsRoot = DEFAULT_CHARTS_ROOT;
+        Mode mode = Mode.FULL;
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
             if ("--help".equals(arg) || "-h".equals(arg)) {
@@ -125,17 +148,19 @@ public final class BenchmarkPipeline {
                 value = args[++i];
             }
             switch (key) {
+                case "--mode" -> mode = Mode.parse(value);
                 case "--results-root" -> resultsRoot = Path.of(value);
                 case "--charts-root" -> chartsRoot = Path.of(value);
                 default -> throw new IllegalArgumentException("unknown option: " + key);
             }
         }
-        return BenchmarkPipelineRequest.defaults(resultsRoot, chartsRoot, Instant.now(), System.out);
+        return BenchmarkPipelineRequest.defaults(resultsRoot, chartsRoot, mode, Instant.now(), System.out);
     }
 
     private static void printUsage() {
         System.out.println("""
                 Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline \
+                  [--mode full|speedup] \
                   [--results-root benchmarks/results] \
                   [--charts-root benchmarks/charts]
                 """);
@@ -171,10 +196,15 @@ public final class BenchmarkPipeline {
      *
      * @param resultsRoot root directory for benchmark CSV outputs
      * @param chartsRoot directory where charts will be written
+     * @param mode pipeline execution mode
      * @param timestamp run timestamp preserved as benchmark metadata
      * @param out progress stream
      */
-    public record BenchmarkPipelineRequest(Path resultsRoot, Path chartsRoot, Instant timestamp, PrintStream out) {
+    public record BenchmarkPipelineRequest(Path resultsRoot, Path chartsRoot, Mode mode, Instant timestamp, PrintStream out) {
+
+        public BenchmarkPipelineRequest(Path resultsRoot, Path chartsRoot, Instant timestamp, PrintStream out) {
+            this(resultsRoot, chartsRoot, Mode.FULL, timestamp, out);
+        }
 
         public BenchmarkPipelineRequest {
             if (resultsRoot == null) {
@@ -182,6 +212,9 @@ public final class BenchmarkPipeline {
             }
             if (chartsRoot == null) {
                 throw new IllegalArgumentException("chartsRoot must not be null");
+            }
+            if (mode == null) {
+                throw new IllegalArgumentException("mode must not be null");
             }
             if (timestamp == null) {
                 throw new IllegalArgumentException("timestamp must not be null");
@@ -191,8 +224,24 @@ public final class BenchmarkPipeline {
             }
         }
 
-        public static BenchmarkPipelineRequest defaults(Path resultsRoot, Path chartsRoot, Instant timestamp, PrintStream out) {
-            return new BenchmarkPipelineRequest(resultsRoot, chartsRoot, timestamp, out);
+        public static BenchmarkPipelineRequest defaults(Path resultsRoot, Path chartsRoot, Mode mode, Instant timestamp, PrintStream out) {
+            return new BenchmarkPipelineRequest(resultsRoot, chartsRoot, mode, timestamp, out);
+        }
+    }
+
+    /**
+     * Pipeline execution mode.
+     */
+    public enum Mode {
+        FULL,
+        SPEEDUP;
+
+        static Mode parse(String value) {
+            return switch (value.trim().toLowerCase(Locale.ROOT)) {
+                case "full" -> FULL;
+                case "speedup", "minimal", "perf", "gate" -> SPEEDUP;
+                default -> throw new IllegalArgumentException("unknown pipeline mode: " + value);
+            };
         }
     }
 

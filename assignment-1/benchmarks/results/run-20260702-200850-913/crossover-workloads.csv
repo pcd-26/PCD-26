@@ -1,1 +1,0 @@
-engine_name,worker_count,seed,crossover_balls,steps,avg_tick_time_ns,throughput_steps_per_sec,speedup_vs_sequential,efficiency

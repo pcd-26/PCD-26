@@ -70,7 +70,10 @@ def main() -> None:
     reset_chart_output(output_dir)
 
     if (input_dir / "aggregated-results.csv").exists():
-        render_new_layout(input_dir, output_dir)
+        if (input_dir / "aggregated-scalability-results.csv").exists():
+            render_new_layout(input_dir, output_dir)
+        else:
+            render_speedup_layout(input_dir, output_dir)
     elif (input_dir / "benchmark-summary.csv").exists():
         render_legacy_layout(input_dir, output_dir)
     else:
@@ -122,6 +125,24 @@ def render_new_layout(input_dir: Path, output_dir: Path) -> None:
                 plot_worker_panels(df, output_stem.with_suffix(".png"), value_col, ylabel, title, chart_context=chart_context)
         else:
             write_placeholder_pair(output_stem, title)
+
+
+def render_speedup_layout(input_dir: Path, output_dir: Path) -> None:
+    speedup = read_csv(input_dir / "speedup-results.csv", required=True)
+    environment = read_csv(input_dir / "environment.csv", required=False)
+    chart_context = build_chart_context(environment)
+
+    if plt is not None:
+        plot_metric_by_ball(
+            speedup,
+            output_dir / "speedup-vs-balls.png",
+            value_col="speedup",
+            ylabel="Speedup",
+            title="Speedup vs number of balls",
+            chart_context=chart_context,
+        )
+    else:
+        write_placeholder_pair(output_dir / "speedup-vs-balls", "Speedup vs number of balls")
 
 
 def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:

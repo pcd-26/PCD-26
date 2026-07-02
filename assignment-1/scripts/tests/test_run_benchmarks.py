@@ -32,7 +32,7 @@ class RunBenchmarksScriptTest(unittest.TestCase):
         charts_root = Path("assignment-1/benchmarks/charts")
 
         with mock.patch("scripts.run_benchmarks.resolve_java_command", return_value="java.exe"):
-            command = run_benchmarks.build_pipeline_command(results_root, charts_root)
+            command = run_benchmarks.build_pipeline_command("full", results_root, charts_root)
 
         self.assertEqual(
             command,
@@ -41,6 +41,31 @@ class RunBenchmarksScriptTest(unittest.TestCase):
                 "-cp",
                 str(run_benchmarks.ASSIGNMENT_ROOT / "target" / "classes"),
                 run_benchmarks.JAVA_MAIN_CLASS,
+                "--mode",
+                "full",
+                "--results-root",
+                str(results_root),
+                "--charts-root",
+                str(charts_root),
+            ],
+        )
+
+    def test_build_speedup_pipeline_command_uses_minimal_mode(self) -> None:
+        results_root = Path("assignment-1/benchmarks/results")
+        charts_root = Path("assignment-1/benchmarks/charts")
+
+        with mock.patch("scripts.run_benchmarks.resolve_java_command", return_value="java.exe"):
+            command = run_benchmarks.build_pipeline_command("speedup", results_root, charts_root)
+
+        self.assertEqual(
+            command,
+            [
+                "java.exe",
+                "-cp",
+                str(run_benchmarks.ASSIGNMENT_ROOT / "target" / "classes"),
+                run_benchmarks.JAVA_MAIN_CLASS,
+                "--mode",
+                "speedup",
                 "--results-root",
                 str(results_root),
                 "--charts-root",

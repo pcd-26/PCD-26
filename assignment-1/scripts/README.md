@@ -28,10 +28,15 @@ calling the Java benchmark runners directly with explicit CLI arguments.
 Use `--mode smoke` only for the reduced suite. In that case the wrapper
 produces benchmark results but does not regenerate the chart set.
 
+Use `--mode speedup` as the fast performance gate before and after engine
+changes. That mode runs only the headless speedup benchmark with the five
+canonical workload sizes, clears `results/` and `charts/`, and then writes
+just the `speedup-vs-balls` chart instead of the full suite of charts.
+
 Use these options when needed:
 
 ```text
---mode full|smoke
+--mode full|smoke|speedup
 --results-root benchmarks/results
 --charts-root benchmarks/charts
 --skip-build
