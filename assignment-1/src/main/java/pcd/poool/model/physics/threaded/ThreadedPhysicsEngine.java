@@ -4,15 +4,14 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
+import pcd.poool.model.physics.common.SpatialCollisionDetector;
 import pcd.poool.model.physics.common.SpatialGridSupport;
 
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import pcd.poool.model.common.math.V2d;
 
 /**
@@ -40,6 +39,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private static final int MIN_WORKER_COUNT = 1;
     private static final int MIN_CELLS_PER_WORKER_FOR_PARALLEL_PAIR_COLLECTION = 8;
     private static final long MIN_PAIR_COMBINATIONS_FOR_PARALLEL_COLLECTION = 4_096L;
+    private static final int MIN_PAIRS_FOR_PARALLEL_COLLISION_RESOLUTION = 512;
+    private static final int MIN_BALLS_FOR_PARALLEL_DELTA_APPLY = 128;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
     private final long maxStepMillis;
@@ -174,11 +175,11 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.stateReadNanos += System.nanoTime() - stateReadContinueStart;
             profile.collisionBalls += collisionBalls.size();
         }
-        var detection = detectCollisionPairs(collisionBalls, profile);
+        var detection = detectCollisionPairsPacked(collisionBalls, profile);
         long resolutionStart = profile == null ? 0 : System.nanoTime();
-        resolveCollisionsWithAccumulatedImpulses(board, collisionBalls, detection.pairs(), profile);
+        resolveCollisionsWithAccumulatedImpulses(board, collisionBalls, detection.encodedPairs(), profile);
         if (profile != null) {
-            profile.candidatePairs += detection.pairs().size();
+            profile.candidatePairs += detection.size();
             profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
         }
     }
@@ -186,18 +187,22 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private void resolveCollisionsWithAccumulatedImpulses(
             Board board,
             List<Ball> balls,
-            List<CollisionPair> pairs,
+            long[] packedPairs,
             StepProfileAccumulator profile) {
-        if (pairs.isEmpty()) {
+        if (packedPairs.length == 0) {
+            return;
+        }
+        if (packedPairs.length < MIN_PAIRS_FOR_PARALLEL_COLLISION_RESOLUTION) {
+            resolveCollisionsSequentially(board, balls, packedPairs, profile);
             return;
         }
 
         long collisionResolutionStart = profile == null ? 0 : System.nanoTime();
-        var localDeltas = new CollisionDeltaAccumulator[Math.min(workers.length, pairs.size())];
-        runRanges(pairs.size(), (from, to, workerIndex) -> {
+        var localDeltas = new CollisionDeltaAccumulator[Math.min(workers.length, packedPairs.length)];
+        runRanges(packedPairs.length, (from, to, workerIndex) -> {
             var accumulator = new CollisionDeltaAccumulator(balls.size());
             for (int i = from; i < to; i++) {
-                accumulator.add(computeCollisionContribution(balls, pairs.get(i)));
+                accumulator.add(computeCollisionContribution(balls, packedPairs[i]));
             }
             localDeltas[workerIndex] = accumulator;
         }, profile);
@@ -217,6 +222,50 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             board.recordCollision(balls.get(pair.firstIndex()), balls.get(pair.secondIndex()));
         }
 
+        applyMergedDeltas(balls, merged, profile);
+        if (profile != null) {
+            long mergeApplyNanos = System.nanoTime() - mergeApplyStart;
+            profile.mergeApplyNanos += mergeApplyNanos;
+            profile.aggregationNanos += mergeApplyNanos;
+        }
+    }
+
+    private void resolveCollisionsSequentially(
+            Board board,
+            List<Ball> balls,
+            long[] packedPairs,
+            StepProfileAccumulator profile) {
+        long collisionResolutionStart = profile == null ? 0 : System.nanoTime();
+        var merged = new CollisionDeltaAccumulator(balls.size());
+        for (long packedPair : packedPairs) {
+            merged.add(computeCollisionContribution(balls, packedPair));
+        }
+        if (profile != null) {
+            profile.collisionResolutionNanos += System.nanoTime() - collisionResolutionStart;
+        }
+
+        long mergeApplyStart = profile == null ? 0 : System.nanoTime();
+        for (var pair : merged.contactPairs) {
+            board.recordCollision(balls.get(pair.firstIndex()), balls.get(pair.secondIndex()));
+        }
+        applyMergedDeltas(balls, merged, profile);
+        if (profile != null) {
+            long mergeApplyNanos = System.nanoTime() - mergeApplyStart;
+            profile.mergeApplyNanos += mergeApplyNanos;
+            profile.aggregationNanos += mergeApplyNanos;
+        }
+    }
+
+    private void applyMergedDeltas(List<Ball> balls, CollisionDeltaAccumulator merged, StepProfileAccumulator profile) {
+        if (balls.size() < MIN_BALLS_FOR_PARALLEL_DELTA_APPLY) {
+            for (int i = 0; i < balls.size(); i++) {
+                var positionDelta = new V2d(merged.positionDeltaX[i], merged.positionDeltaY[i]);
+                var velocityDelta = new V2d(merged.velocityDeltaX[i], merged.velocityDeltaY[i]);
+                balls.get(i).translate(positionDelta);
+                balls.get(i).addVelocity(velocityDelta);
+            }
+            return;
+        }
         runRanges(balls.size(), (from, to, workerIndex) -> {
             for (int i = from; i < to; i++) {
                 var positionDelta = new V2d(merged.positionDeltaX[i], merged.positionDeltaY[i]);
@@ -225,16 +274,13 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 balls.get(i).addVelocity(velocityDelta);
             }
         }, profile);
-        if (profile != null) {
-            long mergeApplyNanos = System.nanoTime() - mergeApplyStart;
-            profile.mergeApplyNanos += mergeApplyNanos;
-            profile.aggregationNanos += mergeApplyNanos;
-        }
     }
 
-    private CollisionContribution computeCollisionContribution(List<Ball> balls, CollisionPair pair) {
-        var a = balls.get(pair.firstIndex());
-        var b = balls.get(pair.secondIndex());
+    private CollisionContribution computeCollisionContribution(List<Ball> balls, long packedPair) {
+        int firstIndex = firstIndex(packedPair);
+        int secondIndex = secondIndex(packedPair);
+        var a = balls.get(firstIndex);
+        var b = balls.get(secondIndex);
 
         double dx = b.getPos().x() - a.getPos().x();
         double dy = b.getPos().y() - a.getPos().y();
@@ -274,7 +320,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         return new CollisionContribution(
-                pair,
+                new CollisionPair(firstIndex, secondIndex),
                 -nx * firstPositionCorrection,
                 -ny * firstPositionCorrection,
                 firstVelocityDeltaX,
@@ -297,9 +343,13 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return activeBalls;
     }
 
-    private DetectionResult detectCollisionPairs(List<Ball> balls, StepProfileAccumulator profile) {
+    List<SpatialCollisionDetector.Pair> detectCollisionPairs(List<Ball> balls) {
+        return detectCollisionPairsPacked(balls, null).toPairList();
+    }
+
+    private DetectionResult detectCollisionPairsPacked(List<Ball> balls, StepProfileAccumulator profile) {
         if (balls.size() < 2) {
-            return new DetectionResult(List.of(), 0, 0);
+            return DetectionResult.empty();
         }
 
         long collisionDetectionStart = profile == null ? 0 : System.nanoTime();
@@ -349,12 +399,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             maxCellOccupancy = Math.max(maxCellOccupancy, indexes.size());
             estimatedPairCombinations += estimatePairCombinations(indexes.size());
         }
-        var pairs = collectPairs(mergedIndexes, estimatedPairCombinations);
-
-        var orderedPairs = new ArrayList<>(pairs);
-        orderedPairs.sort(Comparator
-                .comparingInt(CollisionPair::firstIndex)
-                .thenComparingInt(CollisionPair::secondIndex));
+        long[] packedPairs = collectPairs(mergedIndexes, estimatedPairCombinations);
         if (profile != null) {
             profile.pairCollectionNanos += System.nanoTime() - pairStart;
             profile.collisionDetectionNanos += System.nanoTime() - collisionDetectionStart;
@@ -362,43 +407,42 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
             profile.aggregationNanos += System.nanoTime() - aggregationStart;
         }
-        return new DetectionResult(orderedPairs, mergedGrid.size(), maxCellOccupancy);
+        return new DetectionResult(packedPairs, mergedGrid.size(), maxCellOccupancy);
     }
 
-    private Set<CollisionPair> collectPairs(List<List<Integer>> cellIndexes, long estimatedPairCombinations) {
+    private long[] collectPairs(List<List<Integer>> cellIndexes, long estimatedPairCombinations) {
         if (cellIndexes.isEmpty()) {
-            return Set.of();
+            return new long[0];
         }
         if (!shouldParallelizePairCollection(cellIndexes.size(), estimatedPairCombinations)) {
             return collectPairsSequentially(cellIndexes);
         }
 
         int workerCount = Math.min(workers.length, cellIndexes.size());
-        @SuppressWarnings("unchecked")
-        Set<CollisionPair>[] localPairs = new Set[workerCount];
+        LongPairSet[] localPairs = new LongPairSet[workerCount];
         runRanges(cellIndexes.size(), (from, to, workerIndex) -> {
-            var pairs = new HashSet<CollisionPair>();
+            var pairs = new LongPairSet();
             for (int i = from; i < to; i++) {
                 collectPairs(cellIndexes.get(i), pairs);
             }
             localPairs[workerIndex] = pairs;
         }, null);
 
-        var mergedPairs = new HashSet<CollisionPair>();
+        var mergedPairs = new LongPairSet();
         for (int i = 0; i < workerCount; i++) {
             if (localPairs[i] != null) {
                 mergedPairs.addAll(localPairs[i]);
             }
         }
-        return mergedPairs;
+        return mergedPairs.toSortedArray();
     }
 
-    private Set<CollisionPair> collectPairsSequentially(List<List<Integer>> cellIndexes) {
-        var pairs = new HashSet<CollisionPair>();
+    private long[] collectPairsSequentially(List<List<Integer>> cellIndexes) {
+        var pairs = new LongPairSet();
         for (var indexes : cellIndexes) {
             collectPairs(indexes, pairs);
         }
-        return pairs;
+        return pairs.toSortedArray();
     }
 
     private boolean shouldParallelizePairCollection(int cellCount, long estimatedPairCombinations) {
@@ -418,12 +462,10 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return (long) occupancy * (occupancy - 1) / 2L;
     }
 
-    private void collectPairs(List<Integer> indexes, Set<CollisionPair> pairs) {
+    private void collectPairs(List<Integer> indexes, LongPairSet pairs) {
         for (int i = 0; i < indexes.size() - 1; i++) {
             for (int j = i + 1; j < indexes.size(); j++) {
-                pairs.add(new CollisionPair(
-                        Math.min(indexes.get(i), indexes.get(j)),
-                        Math.max(indexes.get(i), indexes.get(j))));
+                pairs.add(encodePair(indexes.get(i), indexes.get(j)));
             }
         }
     }
@@ -491,7 +533,27 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             double secondVelocityDeltaX,
             double secondVelocityDeltaY) {}
 
-    private record DetectionResult(List<CollisionPair> pairs, int mergedCells, int maxCellOccupancy) {}
+    private record DetectionResult(long[] encodedPairs, int mergedCells, int maxCellOccupancy) {
+
+        private static DetectionResult empty() {
+            return new DetectionResult(new long[0], 0, 0);
+        }
+
+        private int size() {
+            return encodedPairs.length;
+        }
+
+        private List<SpatialCollisionDetector.Pair> toPairList() {
+            if (encodedPairs.length == 0) {
+                return List.of();
+            }
+            var pairs = new ArrayList<SpatialCollisionDetector.Pair>(encodedPairs.length);
+            for (long packedPair : encodedPairs) {
+                pairs.add(new SpatialCollisionDetector.Pair(firstIndex(packedPair), secondIndex(packedPair)));
+            }
+            return List.copyOf(pairs);
+        }
+    }
 
     private static final class CollisionDeltaAccumulator {
 
@@ -533,6 +595,103 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 velocityDeltaY[i] += other.velocityDeltaY[i];
             }
             contactPairs.addAll(other.contactPairs);
+        }
+    }
+
+    private static final class LongPairSet {
+
+        private static final double MAX_LOAD_FACTOR = 0.5;
+
+        private long[] table;
+        private long[] values;
+        private int size;
+        private int usedSlots;
+
+        private LongPairSet() {
+            table = new long[32];
+            values = new long[32];
+        }
+
+        private void add(long packedPair) {
+            if (packedPair == 0) {
+                throw new IllegalArgumentException("packedPair must be non-zero");
+            }
+            if ((usedSlots + 1.0) / table.length > MAX_LOAD_FACTOR) {
+                resize();
+            }
+            insert(packedPair);
+        }
+
+        private void addAll(LongPairSet other) {
+            for (int i = 0; i < other.size; i++) {
+                add(other.values[i]);
+            }
+        }
+
+        private long[] toSortedArray() {
+            long[] packedPairs = Arrays.copyOf(values, size);
+            Arrays.sort(packedPairs);
+            return packedPairs;
+        }
+
+        private void insert(long packedPair) {
+            int mask = table.length - 1;
+            int slot = mix(packedPair) & mask;
+            while (true) {
+                long current = table[slot];
+                if (current == 0) {
+                    table[slot] = packedPair;
+                    usedSlots++;
+                    ensureValueCapacity(size + 1);
+                    values[size++] = packedPair;
+                    return;
+                }
+                if (current == packedPair) {
+                    return;
+                }
+                slot = (slot + 1) & mask;
+            }
+        }
+
+        private void resize() {
+            long[] previousTable = table;
+            table = new long[previousTable.length * 2];
+            usedSlots = 0;
+            for (long packedPair : previousTable) {
+                if (packedPair != 0) {
+                    reinsert(packedPair);
+                }
+            }
+        }
+
+        private void reinsert(long packedPair) {
+            int mask = table.length - 1;
+            int slot = mix(packedPair) & mask;
+            while (table[slot] != 0) {
+                slot = (slot + 1) & mask;
+            }
+            table[slot] = packedPair;
+            usedSlots++;
+        }
+
+        private void ensureValueCapacity(int requiredCapacity) {
+            if (requiredCapacity <= values.length) {
+                return;
+            }
+            int newCapacity = values.length * 2;
+            while (newCapacity < requiredCapacity) {
+                newCapacity *= 2;
+            }
+            values = Arrays.copyOf(values, newCapacity);
+        }
+
+        private int mix(long value) {
+            long mixed = value ^ (value >>> 33);
+            mixed *= 0xff51afd7ed558ccdL;
+            mixed ^= mixed >>> 33;
+            mixed *= 0xc4ceb9fe1a85ec53L;
+            mixed ^= mixed >>> 33;
+            return (int) mixed;
         }
     }
 
@@ -671,5 +830,19 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
             return List.copyOf(values);
         }
+    }
+
+    private static long encodePair(int firstIndex, int secondIndex) {
+        int first = Math.min(firstIndex, secondIndex);
+        int second = Math.max(firstIndex, secondIndex);
+        return (((long) first) << 32) | (second & 0xffffffffL);
+    }
+
+    private static int firstIndex(long packedPair) {
+        return (int) (packedPair >>> 32);
+    }
+
+    private static int secondIndex(long packedPair) {
+        return (int) packedPair;
     }
 }
