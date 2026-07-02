@@ -4,7 +4,6 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
-import pcd.poool.model.physics.common.SpatialCollisionDetector;
 import pcd.poool.model.physics.common.SpatialGridSupport;
 
 import java.util.ArrayList;
@@ -39,6 +38,8 @@ import pcd.poool.model.common.math.V2d;
 public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_WORKER_COUNT = 1;
+    private static final int MIN_CELLS_PER_WORKER_FOR_PARALLEL_PAIR_COLLECTION = 8;
+    private static final long MIN_PAIR_COMBINATIONS_FOR_PARALLEL_COLLECTION = 4_096L;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
     private final long maxStepMillis;
@@ -342,11 +343,13 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         long pairStart = profile == null ? 0 : System.nanoTime();
         int maxCellOccupancy = 0;
         var mergedIndexes = new ArrayList<List<Integer>>(mergedGrid.size());
+        long estimatedPairCombinations = 0L;
         for (var indexes : mergedGrid.values()) {
             mergedIndexes.add(indexes);
             maxCellOccupancy = Math.max(maxCellOccupancy, indexes.size());
+            estimatedPairCombinations += estimatePairCombinations(indexes.size());
         }
-        var pairs = collectPairsInParallel(mergedIndexes);
+        var pairs = collectPairs(mergedIndexes, estimatedPairCombinations);
 
         var orderedPairs = new ArrayList<>(pairs);
         orderedPairs.sort(Comparator
@@ -362,14 +365,12 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return new DetectionResult(orderedPairs, mergedGrid.size(), maxCellOccupancy);
     }
 
-    private Set<CollisionPair> collectPairsInParallel(List<List<Integer>> cellIndexes) {
+    private Set<CollisionPair> collectPairs(List<List<Integer>> cellIndexes, long estimatedPairCombinations) {
         if (cellIndexes.isEmpty()) {
             return Set.of();
         }
-        if (cellIndexes.size() == 1) {
-            var pairs = new HashSet<CollisionPair>();
-            collectPairs(cellIndexes.get(0), pairs);
-            return pairs;
+        if (!shouldParallelizePairCollection(cellIndexes.size(), estimatedPairCombinations)) {
+            return collectPairsSequentially(cellIndexes);
         }
 
         int workerCount = Math.min(workers.length, cellIndexes.size());
@@ -390,6 +391,31 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }
         return mergedPairs;
+    }
+
+    private Set<CollisionPair> collectPairsSequentially(List<List<Integer>> cellIndexes) {
+        var pairs = new HashSet<CollisionPair>();
+        for (var indexes : cellIndexes) {
+            collectPairs(indexes, pairs);
+        }
+        return pairs;
+    }
+
+    private boolean shouldParallelizePairCollection(int cellCount, long estimatedPairCombinations) {
+        if (workers.length == 1 || cellCount <= 1) {
+            return false;
+        }
+        if (estimatedPairCombinations < MIN_PAIR_COMBINATIONS_FOR_PARALLEL_COLLECTION) {
+            return false;
+        }
+        return cellCount >= workers.length * MIN_CELLS_PER_WORKER_FOR_PARALLEL_PAIR_COLLECTION;
+    }
+
+    private long estimatePairCombinations(int occupancy) {
+        if (occupancy < 2) {
+            return 0L;
+        }
+        return (long) occupancy * (occupancy - 1) / 2L;
     }
 
     private void collectPairs(List<Integer> indexes, Set<CollisionPair> pairs) {
