@@ -18,6 +18,7 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.common.SpatialCollisionDetector.Pair;
 import pcd.poool.model.physics.config.LargeBoardConf;
 import pcd.poool.model.physics.sequential.PhysicsEngine;
 import pcd.poool.model.physics.config.MinimalBoardConf;
@@ -193,6 +194,39 @@ class ThreadedPhysicsEngineTest {
                     profile.integrationWorkerItems().stream().mapToInt(Integer::intValue).sum());
             assertTrue(profile.integrationWorkerItems().stream().allMatch(item -> item > 0));
             assertTrue(profile.localGridWorkerItems().stream().allMatch(item -> item > 0));
+        }
+    }
+
+    @Test
+    void broadPhaseDeduplicatesCandidatePairsAcrossMergedCells() {
+        try (var engine = new ThreadedPhysicsEngine(2)) {
+            var balls = List.of(
+                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.06, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
+
+            var pairs = engine.detectCollisionPairs(balls);
+
+            assertEquals(1, pairs.size());
+            assertEquals(List.of(new Pair(0, 1)), pairs);
+        }
+    }
+
+    @Test
+    void broadPhaseReturnsDeterministicallyOrderedCandidatePairs() {
+        try (var engine = new ThreadedPhysicsEngine(4)) {
+            var balls = List.of(
+                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.06, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.07, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
+
+            var firstRun = engine.detectCollisionPairs(balls);
+            var secondRun = engine.detectCollisionPairs(balls);
+
+            assertEquals(List.of(
+                    new Pair(0, 1),
+                    new Pair(0, 2),
+                    new Pair(1, 2)), firstRun);
+            assertEquals(firstRun, secondRun);
         }
     }
 
