@@ -6,7 +6,7 @@ import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.sequential.PhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
-import pcd.poool.model.physics.threaded.ThreadedPhysicsEngineV2;
+import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 
 /**
  * Runs a deterministic simulation headlessly for benchmark comparisons.
@@ -121,7 +121,7 @@ public final class HeadlessSimulationRunner {
     }
 
     private static BenchmarkRunner.BenchmarkExecution simulateThreaded(BenchmarkConfig config) {
-        var engine = new ThreadedPhysicsEngineV2(config.effectiveThreads());
+        var engine = new ThreadedPhysicsEngine(config.effectiveThreads());
         return simulateWithEngine(config, engine, null);
     }
 
@@ -132,7 +132,7 @@ public final class HeadlessSimulationRunner {
 
     private static BenchmarkRunner.BenchmarkExecution simulateWithEngine(
             BenchmarkConfig config,
-            ThreadedPhysicsEngineV2 threadedEngine,
+            ThreadedPhysicsEngine threadedEngine,
             TaskBasedPhysicsEngine taskBasedEngine) {
         AutoCloseable closeable = threadedEngine != null ? threadedEngine : taskBasedEngine;
         try {
@@ -152,7 +152,7 @@ public final class HeadlessSimulationRunner {
     private static BenchmarkInstrumentation runSimulationLoop(
             Board board,
             BenchmarkConfig config,
-            ThreadedPhysicsEngineV2 threadedEngine,
+            ThreadedPhysicsEngine threadedEngine,
             TaskBasedPhysicsEngine taskBasedEngine) {
         var instrumentation = BenchmarkInstrumentation.zero();
         for (int i = 0; i < config.steps(); i++) {
@@ -167,7 +167,7 @@ public final class HeadlessSimulationRunner {
         return instrumentation;
     }
 
-    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngineV2.StepProfile profile) {
+    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngine.StepProfile profile) {
         if (profile == null) {
             return BenchmarkInstrumentation.zero();
         }

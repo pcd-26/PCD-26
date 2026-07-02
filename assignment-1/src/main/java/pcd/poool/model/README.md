@@ -66,11 +66,10 @@ These types are shared by physics, view, and tests.
   deltas deterministically once per ball. Candidate pairs are split across
   worker threads, each worker fills private per-ball delta arrays, and the
   controller merges those arrays before the final per-ball apply phase.
-- `ThreadedPhysicsEngineV2.java`
-  Experimental benchmark-focused variant of the platform-threaded engine. It
-  uses worker-owned spatial cells, forward-neighbor collision scans, and sparse
-  per-ball delta accumulation to reduce the global coordination cost of the
-  collision phase on large workloads.
+- `ThreadedPhysicsEngine.java`
+  Platform-threaded engine based on worker-owned spatial cells, forward-neighbor
+  collision scans, and sparse per-ball delta accumulation to reduce the global
+  coordination cost of the collision phase on large workloads.
 - `PhysicsWorker.java`
   Long-lived worker thread used internally by `ThreadedPhysicsEngine`.
 - `WorkerCompletionMonitor.java`
