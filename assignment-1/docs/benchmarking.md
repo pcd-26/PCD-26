@@ -149,25 +149,9 @@ small workloads.
 
 ### 3.7 GUI responsiveness
 
-GUI responsiveness measures how quickly the interface reflects a user-visible
-event.
-
-For a scripted benchmark, define:
-
-```text
-gui_responsiveness_latency = visible_update_time - input_event_time
-```
-
-Report this as:
-
-- average latency
-- median latency
-- 95th percentile latency
-- worst-case latency
-
-For GUI benchmarks, responsiveness is more important than raw throughput.
-Throughput can still be reported, but it must not be mixed with headless values
-unless the renderer and interaction path are the same.
+The repository no longer ships a dedicated GUI responsiveness benchmark
+family. The delivered benchmark workflow focuses on headless throughput and
+worker-count scalability, which are the automated measurement paths.
 
 ## 4. Benchmark families
 
@@ -185,28 +169,6 @@ Headless benchmarks run without Swing rendering. They measure:
 
 These runs are the primary source for comparing `sequential`, `threads`, and
 `executor`.
-
-### 4.2 GUI benchmarks
-
-GUI benchmarks include rendering and event handling. They measure:
-
-- frame latency
-- GUI responsiveness
-- end-to-end interaction time
-- optional frame rate
-
-GUI benchmarks must be treated as a separate family because rendering costs can
-dominate the physics cost and make throughput numbers hard to interpret.
-
-GUI benchmark exports should be written to a separate file, such as
-`gui-responsiveness.csv`, and should report at least:
-
-- average update interval
-- average update latency
-- maximum update delay
-- update rate or FPS
-- EDT delay measured with `SwingUtilities.invokeLater`
-- delayed update count when a threshold is configured
 
 ## 5. Benchmark matrix
 
@@ -356,7 +318,6 @@ This benchmark model supports the assignment requirements by:
 - defining benchmark metrics clearly
 - making `sequential`, `threads`, and `executor` comparable
 - documenting speedup, efficiency, and throughput formulas
-- separating headless and GUI benchmarks
 - listing explicit reproducible benchmark scenarios
 
 ## 11. Benchmark execution guide
@@ -393,20 +354,7 @@ The headless runner reports elapsed time, completed steps, and a final
 checksum or state hash so that the same scenario can be replayed and checked
 for correctness.
 
-### 11.3 Run the GUI benchmark
-
-Use the GUI benchmark when you want responsiveness measurements that include
-rendering and event handling:
-
-```bash
-java -cp assignment-1/target/classes pcd.poool.benchmark.GuiResponsivenessBenchmark
-```
-
-Do not interact with the GUI during the benchmark run unless the scenario
-explicitly asks for user input. GUI benchmarks are intentionally separate from
-headless throughput measurements.
-
-### 11.4 Run the full benchmark workflow
+### 11.3 Run the full benchmark workflow
 
 Use the local Python wrapper to execute the benchmark flow in one command:
 
@@ -418,7 +366,7 @@ The wrapper compiles `assignment-1`, runs the Java benchmark pipeline, writes
 results under `benchmarks/results/`, and refreshes `benchmarks/charts/`. The
 chart directory is cleared before each run so it keeps only the latest chart
 set. By default this command runs the local headless and scalability benchmark
-flow; GUI benchmark collection is excluded from the Python wrapper.
+flow.
 
 If you explicitly need the reduced suite, use:
 
@@ -523,7 +471,6 @@ report excerpts keep the benchmark context visible.
 - Close heavy background applications before running a benchmark campaign.
 - Use the same machine for all implementations you want to compare.
 - Keep the laptop connected to power during measurements.
-- Avoid interacting with the GUI during GUI benchmark runs.
 - Repeat the benchmark campaign if the output shows clear outliers.
 - Keep the JVM, OS, and hardware configuration unchanged while comparing one
   benchmark matrix.
