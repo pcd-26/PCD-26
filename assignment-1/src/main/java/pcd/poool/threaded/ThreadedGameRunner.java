@@ -84,7 +84,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @return receipt completed when the controller executes the command
      */
     public CommandReceipt<Boolean> shootHuman(V2d velocity) {
-        return submit(game -> game.shootHuman(velocity));
+        return submitShotCommand(game -> game.shootHuman(velocity));
     }
 
     /**
@@ -93,7 +93,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @return receipt completed when the controller executes the command
      */
     public CommandReceipt<Boolean> shootBot() {
-        return submit(GameModel::shootBot);
+        return submitShotCommand(GameModel::shootBot);
     }
 
     /**
@@ -146,7 +146,7 @@ public class ThreadedGameRunner implements AutoCloseable {
         }
     }
 
-    private CommandReceipt<Boolean> submit(ShotOperation operation) {
+    private CommandReceipt<Boolean> submitShotCommand(ShotOperation operation) {
         var receipt = new CommandReceipt<Boolean>();
         boolean accepted = commands.put(new GameCommand() {
             @Override
@@ -172,7 +172,7 @@ public class ThreadedGameRunner implements AutoCloseable {
     private void runController() {
         try {
             while (running) {
-                drainCommands();
+                drainPendingCommands();
                 if (!game.snapshot().isFinished()) {
                     game.step(config.tickMillis());
                 }
@@ -186,7 +186,7 @@ public class ThreadedGameRunner implements AutoCloseable {
         }
     }
 
-    private void drainCommands() {
+    private void drainPendingCommands() {
         GameCommand command = commands.poll();
         while (command != null) {
             command.execute(game);

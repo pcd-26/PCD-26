@@ -58,53 +58,63 @@ public final class BenchmarkPipeline {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(steps, "steps");
 
-        resetDirectory(request.resultsRoot());
-        resetDirectory(request.chartsRoot());
-
+        prepareOutputRoots(request.resultsRoot(), request.chartsRoot());
         Path resultsDir = request.resultsRoot();
-        Files.createDirectories(resultsDir);
-        Files.createDirectories(request.chartsRoot());
 
-        var headlessRequest = request.mode() == Mode.SPEEDUP
-                ? HeadlessBenchmarkRunner.speedupGateDefaults()
-                : HeadlessBenchmarkRunner.defaults();
-        headlessRequest = headlessRequest.withOutputFile(resultsDir.resolve("raw-results.csv"));
+        var headlessRequest = buildHeadlessRequest(request.mode(), resultsDir);
 
-        printStep(request.out(), "headless-benchmark-start", resultsDir);
+        logStep(request.out(), "headless-benchmark-start", resultsDir);
         var headlessReport = steps.runHeadless(headlessRequest);
-        printStep(request.out(), "headless-benchmark-complete", headlessReport.outputFile());
+        logStep(request.out(), "headless-benchmark-complete", headlessReport.outputFile());
 
         if (request.mode() == Mode.SPEEDUP) {
-            printStep(request.out(), "chart-generation-start", request.chartsRoot());
-            steps.generateCharts(resultsDir, request.chartsRoot());
-            printStep(request.out(), "chart-generation-complete", request.chartsRoot());
-            return new BenchmarkPipelineReport(
-                    resultsDir,
-                    request.chartsRoot(),
-                    headlessReport.outputFile(),
-                    headlessReport.aggregatedOutputFile(),
-                    headlessReport.speedupOutputFile(),
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null);
+            return runSpeedupPipeline(request, steps, resultsDir, headlessReport);
         }
 
-        printStep(request.out(), "suite-start", resultsDir);
-        var suiteReport = steps.runSuite(request.resultsRoot());
-        printStep(request.out(), "suite-complete", suiteReport.outputDir());
+        return runFullPipeline(request, steps, resultsDir, headlessReport);
+    }
 
-        printStep(request.out(), "scalability-benchmark-start", resultsDir);
-        var scalabilityRequest = ScalabilityBenchmarkRunner.defaults()
-                .withOutputFile(resultsDir.resolve("raw-scalability-results.csv"));
-        var scalabilityReport = steps.runScalability(scalabilityRequest);
-        printStep(request.out(), "scalability-benchmark-complete", scalabilityReport.outputFile());
+    private static BenchmarkPipelineReport runSpeedupPipeline(
+            BenchmarkPipelineRequest request,
+            BenchmarkPipelineSteps steps,
+            Path resultsDir,
+            HeadlessBenchmarkRunner.BenchmarkReport headlessReport) throws Exception {
 
-        printStep(request.out(), "chart-generation-start", request.chartsRoot());
+        logStep(request.out(), "chart-generation-start", request.chartsRoot());
         steps.generateCharts(resultsDir, request.chartsRoot());
-        printStep(request.out(), "chart-generation-complete", request.chartsRoot());
+        logStep(request.out(), "chart-generation-complete", request.chartsRoot());
+        return new BenchmarkPipelineReport(
+                resultsDir,
+                request.chartsRoot(),
+                headlessReport.outputFile(),
+                headlessReport.aggregatedOutputFile(),
+                headlessReport.speedupOutputFile(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    private static BenchmarkPipelineReport runFullPipeline(
+            BenchmarkPipelineRequest request,
+            BenchmarkPipelineSteps steps,
+            Path resultsDir,
+            HeadlessBenchmarkRunner.BenchmarkReport headlessReport) throws Exception {
+
+        logStep(request.out(), "suite-start", resultsDir);
+        var suiteReport = steps.runSuite(request.resultsRoot());
+        logStep(request.out(), "suite-complete", suiteReport.outputDir());
+
+        logStep(request.out(), "scalability-benchmark-start", resultsDir);
+        var scalabilityRequest = buildScalabilityRequest(resultsDir);
+        var scalabilityReport = steps.runScalability(scalabilityRequest);
+        logStep(request.out(), "scalability-benchmark-complete", scalabilityReport.outputFile());
+
+        logStep(request.out(), "chart-generation-start", request.chartsRoot());
+        steps.generateCharts(resultsDir, request.chartsRoot());
+        logStep(request.out(), "chart-generation-complete", request.chartsRoot());
 
         return new BenchmarkPipelineReport(
                 resultsDir,
@@ -120,8 +130,27 @@ public final class BenchmarkPipeline {
                 null);
     }
 
-    private static void printStep(PrintStream out, String label, Path path) {
+    private static void logStep(PrintStream out, String label, Path path) {
         out.printf(Locale.US, "%s path=%s%n", label, path);
+    }
+
+    private static HeadlessBenchmarkRunner.BenchmarkRequest buildHeadlessRequest(Mode mode, Path resultsDir) {
+        var headlessRequest = mode == Mode.SPEEDUP
+                ? HeadlessBenchmarkRunner.speedupGateDefaults()
+                : HeadlessBenchmarkRunner.defaults();
+        return headlessRequest.withOutputFile(resultsDir.resolve("raw-results.csv"));
+    }
+
+    private static ScalabilityBenchmarkRunner.BenchmarkRequest buildScalabilityRequest(Path resultsDir) {
+        return ScalabilityBenchmarkRunner.defaults()
+                .withOutputFile(resultsDir.resolve("raw-scalability-results.csv"));
+    }
+
+    private static void prepareOutputRoots(Path resultsRoot, Path chartsRoot) throws IOException {
+        resetDirectory(resultsRoot);
+        resetDirectory(chartsRoot);
+        Files.createDirectories(resultsRoot);
+        Files.createDirectories(chartsRoot);
     }
 
     private static BenchmarkPipelineRequest parseArgs(String[] args) {
