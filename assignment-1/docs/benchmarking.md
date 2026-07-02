@@ -487,5 +487,12 @@ directly on a controlled machine. Each pipeline run clears and repopulates the
 configured `results` and `charts` directories instead of creating timestamped
 subdirectories.
 
+For engine performance work, the canonical fast comparison is
+`python scripts/run_benchmarks.py --mode speedup`. Use that run before and
+after a change, and compare `aggregated-results.csv` plus
+`speedup-results.csv` with the same machine/JVM setup. That mode also
+regenerates the `speedup-vs-balls` chart so the visual comparison stays in
+sync with the CSV data.
+
 The CI workflows still cover the normal Maven build and delivery packaging, but
 they do not run or publish benchmark snapshots anymore.

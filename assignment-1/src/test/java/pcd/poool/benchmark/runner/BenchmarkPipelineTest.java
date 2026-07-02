@@ -106,6 +106,74 @@ class BenchmarkPipelineTest {
     }
 
     @Test
+    void speedupModeRunsOnlyTheHeadlessBenchmarkAndClearsCharts() throws Exception {
+        var events = new ArrayList<String>();
+        var out = new PrintStream(new ByteArrayOutputStream(), true);
+        var request = new BenchmarkPipeline.BenchmarkPipelineRequest(
+                tempDir.resolve("results"),
+                tempDir.resolve("charts"),
+                BenchmarkPipeline.Mode.SPEEDUP,
+                Instant.parse("2026-06-21T13:15:30Z"),
+                out);
+
+        var report = BenchmarkPipeline.run(request, new BenchmarkPipeline.BenchmarkPipelineSteps() {
+            @Override
+            public HeadlessBenchmarkRunner.BenchmarkReport runHeadless(HeadlessBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
+                events.add("headless");
+                Files.createDirectories(benchmarkRequest.outputFile().getParent());
+                writeCsv(benchmarkRequest.outputFile(), List.of(
+                        "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors",
+                        "sequential,100,1,10,42,1,false,10.000000,1000.000000,0.000000,0.000000,0,JVM,OS,8"));
+                var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-results.csv");
+                var speedup = benchmarkRequest.outputFile().getParent().resolve("speedup-results.csv");
+                writeCsv(aggregated, List.of(
+                        "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                        "sequential,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
+                writeCsv(speedup, List.of(
+                        "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                        "100,1,42,sequential,10.000000,10.000000,1.000000"));
+                return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of(), List.of());
+            }
+
+            @Override
+            public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot) {
+                events.add("suite");
+                throw new IllegalStateException("should not run");
+            }
+
+            @Override
+            public ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest benchmarkRequest) {
+                events.add("scalability");
+                throw new IllegalStateException("should not run");
+            }
+
+            @Override
+            public void generateCharts(Path inputDir, Path outputDir) throws IOException {
+                events.add("charts");
+                Files.createDirectories(outputDir);
+                writeCsv(outputDir.resolve("speedup-vs-balls.csv"), List.of(
+                        "marker",
+                        inputDir.getFileName().toString()));
+            }
+        });
+
+        Path resultsDir = tempDir.resolve("results");
+        assertEquals(resultsDir, report.resultsDir());
+        assertEquals(tempDir.resolve("charts"), report.chartsDir());
+        assertEquals(List.of("headless", "charts"), events);
+        assertTrue(Files.exists(resultsDir.resolve("raw-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("aggregated-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("speedup-results.csv")));
+        assertFalse(Files.exists(resultsDir.resolve(BenchmarkCsvWriter.SUMMARY_FILE_NAME)));
+        assertTrue(Files.isDirectory(tempDir.resolve("charts")));
+        assertTrue(Files.exists(tempDir.resolve("charts").resolve("speedup-vs-balls.csv")));
+        assertTrue(Files.isDirectory(resultsDir));
+        assertEquals(null, report.suiteDir());
+        assertEquals(null, report.scalabilityRawFile());
+        assertEquals(null, report.scalabilityAggregatedFile());
+    }
+
+    @Test
     void failsFastWhenAnEarlierStepThrows() {
         var events = new ArrayList<String>();
         var request = new BenchmarkPipeline.BenchmarkPipelineRequest(

@@ -126,6 +126,21 @@ Current pipeline outputs:
 - `benchmarks/results/efficiency-by-worker-count.csv`
 - `benchmarks/results/crossover-workloads.csv`
 
+### Speedup gate
+
+The preferred quick comparison for engine changes is the dedicated speedup
+mode:
+
+```bash
+python scripts/run_benchmarks.py --mode speedup
+```
+
+That mode runs only the headless benchmark, uses the five canonical workload
+sizes, and keeps the suite fast enough to run before and after a change.
+It also regenerates the `speedup-vs-balls` chart. Compare the resulting
+`aggregated-results.csv` and `speedup-results.csv` against the previous run or
+baseline commit to decide whether the change is an actual improvement.
+
 Legacy suite outputs still supported by the code:
 
 - `benchmarks/results/benchmark-runs.csv`
