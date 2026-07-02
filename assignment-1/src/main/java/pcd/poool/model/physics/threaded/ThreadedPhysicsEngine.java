@@ -39,12 +39,11 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private static final int MIN_WORKER_COUNT = 1;
     private static final int MIN_CELLS_PER_WORKER_FOR_PARALLEL_PAIR_COLLECTION = 8;
     private static final long MIN_PAIR_COMBINATIONS_FOR_PARALLEL_COLLECTION = 4_096L;
-    private static final int MIN_PAIRS_FOR_PARALLEL_COLLISION_RESOLUTION = 512;
-    private static final int MIN_BALLS_FOR_PARALLEL_DELTA_APPLY = 128;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
     private final long maxStepMillis;
     private final PhysicsWorker[] workers;
+    private final Tuning tuning;
     private boolean closed;
 
     /**
@@ -61,7 +60,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
      * @param workerCount number of long-lived worker platform threads
      */
     public ThreadedPhysicsEngine(int workerCount) {
-        this(workerCount, PhysicsDefaults.FIXED_STEP_MILLIS);
+        this(workerCount, PhysicsDefaults.FIXED_STEP_MILLIS, Tuning.defaultTuning());
     }
 
     /**
@@ -71,13 +70,21 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
      * @param maxStepMillis maximum duration of one internal physics sub-step
      */
     public ThreadedPhysicsEngine(int workerCount, long maxStepMillis) {
+        this(workerCount, maxStepMillis, Tuning.defaultTuning());
+    }
+
+    ThreadedPhysicsEngine(int workerCount, long maxStepMillis, Tuning tuning) {
         if (workerCount < MIN_WORKER_COUNT) {
             throw new IllegalArgumentException("workerCount must be >= 1");
         }
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
         }
+        if (tuning == null) {
+            throw new IllegalArgumentException("tuning must not be null");
+        }
         this.maxStepMillis = maxStepMillis;
+        this.tuning = tuning;
         workers = new PhysicsWorker[workerCount];
         for (int i = 0; i < workers.length; i++) {
             workers[i] = new PhysicsWorker("poool-physics-worker-" + i);
@@ -192,8 +199,12 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (packedPairs.length == 0) {
             return;
         }
-        if (packedPairs.length < MIN_PAIRS_FOR_PARALLEL_COLLISION_RESOLUTION) {
+        if (packedPairs.length < tuning.minPairsForParallelRounds()) {
             resolveCollisionsSequentially(board, balls, packedPairs, profile);
+            return;
+        }
+        if (packedPairs.length < tuning.minPairsForAccumulatedSolver()) {
+            resolveCollisionsInParallelRounds(board, balls, packedPairs, profile);
             return;
         }
 
@@ -230,6 +241,31 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    private void resolveCollisionsInParallelRounds(
+            Board board,
+            List<Ball> balls,
+            long[] packedPairs,
+            StepProfileAccumulator profile) {
+        long collisionResolutionStart = profile == null ? 0 : System.nanoTime();
+        for (long packedPair : packedPairs) {
+            board.recordCollision(balls.get(firstIndex(packedPair)), balls.get(secondIndex(packedPair)));
+        }
+
+        for (var round : buildCollisionRounds(packedPairs, balls.size())) {
+            runRanges(round.size(), (from, to, workerIndex) -> {
+                for (int i = from; i < to; i++) {
+                    long packedPair = round.encodedPairs()[i];
+                    Ball.resolveCollision(
+                            balls.get(firstIndex(packedPair)),
+                            balls.get(secondIndex(packedPair)));
+                }
+            }, profile);
+        }
+        if (profile != null) {
+            profile.collisionResolutionNanos += System.nanoTime() - collisionResolutionStart;
+        }
+    }
+
     private void resolveCollisionsSequentially(
             Board board,
             List<Ball> balls,
@@ -257,7 +293,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private void applyMergedDeltas(List<Ball> balls, CollisionDeltaAccumulator merged, StepProfileAccumulator profile) {
-        if (balls.size() < MIN_BALLS_FOR_PARALLEL_DELTA_APPLY) {
+        if (balls.size() < tuning.minBallsForParallelDeltaApply()) {
             for (int i = 0; i < balls.size(); i++) {
                 var positionDelta = new V2d(merged.positionDeltaX[i], merged.positionDeltaY[i]);
                 var velocityDelta = new V2d(merged.velocityDeltaX[i], merged.velocityDeltaY[i]);
@@ -445,6 +481,41 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return pairs.toSortedArray();
     }
 
+    private List<CollisionRound> buildCollisionRounds(long[] packedPairs, int ballCount) {
+        if (packedPairs.length == 0) {
+            return List.of();
+        }
+
+        long[] remainingPairs = Arrays.copyOf(packedPairs, packedPairs.length);
+        int remainingCount = remainingPairs.length;
+        var rounds = new ArrayList<CollisionRound>();
+        while (remainingCount > 0) {
+            boolean[] usedBalls = new boolean[ballCount];
+            long[] roundPairs = new long[remainingCount];
+            long[] nextRemainingPairs = new long[remainingCount];
+            int roundCount = 0;
+            int nextRemainingCount = 0;
+
+            for (int i = 0; i < remainingCount; i++) {
+                long packedPair = remainingPairs[i];
+                int first = firstIndex(packedPair);
+                int second = secondIndex(packedPair);
+                if (!usedBalls[first] && !usedBalls[second]) {
+                    roundPairs[roundCount++] = packedPair;
+                    usedBalls[first] = true;
+                    usedBalls[second] = true;
+                } else {
+                    nextRemainingPairs[nextRemainingCount++] = packedPair;
+                }
+            }
+
+            rounds.add(new CollisionRound(Arrays.copyOf(roundPairs, roundCount)));
+            remainingPairs = Arrays.copyOf(nextRemainingPairs, nextRemainingCount);
+            remainingCount = nextRemainingCount;
+        }
+        return List.copyOf(rounds);
+    }
+
     private boolean shouldParallelizePairCollection(int cellCount, long estimatedPairCombinations) {
         if (workers.length == 1 || cellCount <= 1) {
             return false;
@@ -552,6 +623,13 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 pairs.add(new SpatialCollisionDetector.Pair(firstIndex(packedPair), secondIndex(packedPair)));
             }
             return List.copyOf(pairs);
+        }
+    }
+
+    private record CollisionRound(long[] encodedPairs) {
+
+        private int size() {
+            return encodedPairs.length;
         }
     }
 
@@ -844,5 +922,28 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static int secondIndex(long packedPair) {
         return (int) packedPair;
+    }
+
+    public record Tuning(
+            int minPairsForParallelRounds,
+            int minPairsForAccumulatedSolver,
+            int minBallsForParallelDeltaApply) {
+
+        public Tuning {
+            if (minPairsForParallelRounds < 1) {
+                throw new IllegalArgumentException("minPairsForParallelRounds must be >= 1");
+            }
+            if (minPairsForAccumulatedSolver < minPairsForParallelRounds) {
+                throw new IllegalArgumentException(
+                        "minPairsForAccumulatedSolver must be >= minPairsForParallelRounds");
+            }
+            if (minBallsForParallelDeltaApply < 1) {
+                throw new IllegalArgumentException("minBallsForParallelDeltaApply must be >= 1");
+            }
+        }
+
+        public static Tuning defaultTuning() {
+            return new Tuning(32, 512, 128);
+        }
     }
 }
