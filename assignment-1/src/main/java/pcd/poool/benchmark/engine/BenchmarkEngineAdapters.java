@@ -151,18 +151,28 @@ public final class BenchmarkEngineAdapters {
         }
 
         @Override
-        public BenchmarkRunner.BenchmarkExecution execute(Board board, int steps) {
+        public BenchmarkRunner.BenchmarkExecution execute(Board board, int steps, boolean instrumentationEnabled) {
             BenchmarkInstrumentation instrumentation = BenchmarkInstrumentation.zero();
             for (int i = 0; i < steps; i++) {
-                if (threadedEngine != null) {
+                if (instrumentationEnabled && threadedEngine != null) {
                     instrumentation = instrumentation.plus(toInstrumentation(threadedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
-                } else if (taskBasedEngine != null) {
+                } else if (instrumentationEnabled && taskBasedEngine != null) {
                     instrumentation = instrumentation.plus(toInstrumentation(taskBasedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
                 } else {
-                    board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                    step(board);
                 }
             }
             return new BenchmarkRunner.BenchmarkExecution(BenchmarkStateHasher.checksum(board), instrumentation);
+        }
+
+        private void step(Board board) {
+            if (threadedEngine != null) {
+                threadedEngine.step(board, PhysicsDefaults.FIXED_STEP_MILLIS);
+            } else if (taskBasedEngine != null) {
+                taskBasedEngine.step(board, PhysicsDefaults.FIXED_STEP_MILLIS);
+            } else {
+                board.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
         }
 
         @Override

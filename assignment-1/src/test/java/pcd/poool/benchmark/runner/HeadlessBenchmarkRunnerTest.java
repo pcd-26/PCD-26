@@ -55,8 +55,7 @@ class HeadlessBenchmarkRunnerTest {
         assertTrue(lines.stream().skip(1).allMatch(line -> line.contains(",false,")));
         assertTrue(report.rows().stream().allMatch(row -> row.elapsedMs() > 0.0));
         assertTrue(report.rows().stream().allMatch(row -> row.availableProcessors() > 0));
-        assertTrue(report.rows().stream().filter(row -> row.implementation().equals("sequential")).allMatch(row -> row.coordinationMs() == 0.0 && row.coordinationRatio() == 0.0 && row.tasksSubmitted() == 0L));
-        assertTrue(report.rows().stream().filter(row -> !row.implementation().equals("sequential")).anyMatch(row -> row.coordinationMs() >= 0.0));
+        assertTrue(report.rows().stream().allMatch(row -> row.coordinationMs() == 0.0 && row.coordinationRatio() == 0.0 && row.tasksSubmitted() == 0L));
         assertTrue(Files.exists(report.aggregatedOutputFile()));
         assertTrue(Files.exists(report.speedupOutputFile()));
     }

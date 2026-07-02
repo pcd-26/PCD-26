@@ -58,6 +58,6 @@ class ScalabilityBenchmarkRunnerTest {
         assertEquals("implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted", aggregatedLines.get(0));
         assertEquals(5, aggregatedLines.size());
         assertTrue(Files.exists(tempDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME)));
-        assertTrue(report.rows().stream().filter(row -> row.implementation().equals("threads") || row.implementation().equals("executor")).allMatch(row -> row.coordinationMs() >= 0.0 && row.coordinationRatio() >= 0.0 && row.tasksSubmitted() >= 0L));
+        assertTrue(report.rows().stream().allMatch(row -> row.coordinationMs() == 0.0 && row.coordinationRatio() == 0.0 && row.tasksSubmitted() == 0L));
     }
 }
