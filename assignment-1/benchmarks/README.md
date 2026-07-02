@@ -14,7 +14,6 @@ The benchmark code currently exposes these command-line entry points:
 - `pcd.poool.benchmark.BenchmarkSuite`
 - `pcd.poool.benchmark.HeadlessBenchmarkRunner`
 - `pcd.poool.benchmark.ScalabilityBenchmarkRunner`
-- `pcd.poool.benchmark.GuiResponsivenessBenchmarkRunner`
 - `pcd.poool.benchmark.BenchmarkScalabilityAnalyzer`
 - `assignment-1/scripts/plot_benchmarks.py` for chart generation from an existing results snapshot
 
@@ -38,7 +37,6 @@ Current coverage by benchmark family:
 - `HeadlessBenchmarkRunner` benchmarks all three engines.
 - `BenchmarkSuite` benchmarks all three engines.
 - `ScalabilityBenchmarkRunner` benchmarks only `threads` and `executor`.
-- `GuiResponsivenessBenchmarkRunner` benchmarks all three engines.
 
 ### Metrics currently collected
 
@@ -94,27 +92,6 @@ Scalability aggregated output currently reports:
 - mean, median, and standard deviation for coordination ratio
 - mean tasks submitted
 
-GUI raw runs currently collect:
-
-- average frame time
-- 95th percentile frame time
-- maximum frame time
-- average frames per second
-- frames above 16 ms
-- frames above 33 ms
-- `jvm`
-- `os`
-- `availableProcessors`
-
-GUI aggregated output currently reports:
-
-- mean and median frame time
-- 95th percentile frame time
-- maximum frame time
-- mean and median FPS
-- mean frames above 16 ms
-- mean frames above 33 ms
-
 Derived analysis tables are also produced from `benchmark-summary.csv`:
 
 - `speedup-table.csv`
@@ -146,11 +123,6 @@ Legacy suite outputs still supported by the code:
 - `benchmarks/results/benchmark-runs.csv`
 - `benchmarks/results/benchmark-summary.csv`
 
-Optional GUI outputs, if the dedicated GUI runner is executed directly:
-
-- `benchmarks/results/raw-gui-results.csv`
-- `benchmarks/results/aggregated-gui-results.csv`
-
 Chart outputs are written as paired image files:
 
 - `benchmarks/charts/*.png`
@@ -173,10 +145,11 @@ Warmup exists in the current suite.
 - Default headless, scalability, and GUI runners use 2 warmup runs and 5 measured runs.
 - `BenchmarkSuite` uses the same 2 warmup / 5 measured pattern in full mode.
 - Smoke mode in `BenchmarkSuite` reduces the matrix to 1 warmup and 1 measured run.
+- Default headless and scalability runners use 2 warmup runs and 5 measured runs.
 
 Deterministic seeds are used, but not uniformly across every entry point.
 
-- The direct headless, scalability, and GUI runners default to seed `42`.
+- The direct headless and scalability runners default to seed `42`.
 - The legacy `BenchmarkSuite` matrix uses the default configuration seed `0`.
 - Every runner also accepts an explicit `--seed` override.
 
@@ -337,8 +310,6 @@ The benchmark infrastructure is covered by deterministic tests that verify:
 
 - Setup and initialization time are not measured, so the results only capture
   the runtime loop, not the full end-to-end cost of starting a scenario.
-- The default pipeline does not execute the GUI benchmark family, so GUI
-  responsiveness is not part of the standard local report.
 - Scalability outputs do not currently carry `cpuUtilizationPercent`, so CPU
   usage is less complete there than in the headless benchmark family.
 - The headless summary CSV drops some raw-run detail, including the final state
