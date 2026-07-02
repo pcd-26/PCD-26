@@ -7,7 +7,7 @@ import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.sequential.PhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
-import pcd.poool.model.physics.threaded.ThreadedPhysicsEngineV2;
+import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 
 /**
  * Factory methods for benchmark engine adapters.
@@ -102,7 +102,7 @@ public final class BenchmarkEngineAdapters {
 
         @Override
         public BenchmarkEngineSession open() {
-            return new Session(new ThreadedPhysicsEngineV2(workerCount));
+            return new Session(new ThreadedPhysicsEngine(workerCount));
         }
     }
 
@@ -136,12 +136,12 @@ public final class BenchmarkEngineAdapters {
     private static final class Session implements BenchmarkEngineAdapter.BenchmarkEngineSession {
 
         private final PhysicsStepper stepper;
-        private final ThreadedPhysicsEngineV2 threadedEngine;
+        private final ThreadedPhysicsEngine threadedEngine;
         private final TaskBasedPhysicsEngine taskBasedEngine;
 
         private Session(PhysicsStepper stepper) {
             this.stepper = stepper;
-            this.threadedEngine = stepper instanceof ThreadedPhysicsEngineV2 engine ? engine : null;
+            this.threadedEngine = stepper instanceof ThreadedPhysicsEngine engine ? engine : null;
             this.taskBasedEngine = stepper instanceof TaskBasedPhysicsEngine engine ? engine : null;
         }
 
@@ -186,7 +186,7 @@ public final class BenchmarkEngineAdapters {
         }
     }
 
-    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngineV2.StepProfile profile) {
+    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngine.StepProfile profile) {
         if (profile == null) {
             return BenchmarkInstrumentation.zero();
         }
