@@ -45,8 +45,7 @@ public final class BenchmarkSuite {
                 ? Path.of(args[argIndex])
                 : mode == Mode.SMOKE ? CI_RESULTS_ROOT : DEFAULT_RESULTS_ROOT;
         try {
-            Path runRoot = BenchmarkRunDirectories.resolveRunDirectory(resultsRoot, Instant.now());
-            var report = run(runRoot, System.out, System.err, mode);
+            var report = run(resultsRoot, System.out, System.err, mode);
             System.out.printf(Locale.US,
                     "suite_completed output_dir=%s configs=%d failed_configs=%d%n",
                     report.outputDir(),
@@ -296,7 +295,7 @@ public final class BenchmarkSuite {
                 .withWarmupRuns(BenchmarkConfig.DEFAULT_WARMUP_RUNS)
                 .withMeasuredRuns(BenchmarkConfig.DEFAULT_MEASURED_RUNS)
                 .withGuiEnabled(false)
-                .withInstrumentationEnabled(true);
+                .withInstrumentationEnabled(false);
     }
 
     private static boolean isModeToken(String value) {

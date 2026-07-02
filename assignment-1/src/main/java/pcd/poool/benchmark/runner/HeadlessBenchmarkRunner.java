@@ -86,7 +86,6 @@ public final class HeadlessBenchmarkRunner {
         var rows = new ArrayList<BenchmarkRow>();
         Path outputDir = request.outputFile().getParent() == null ? Path.of(".") : request.outputFile().getParent();
         RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
-        HeadlessBenchmarkCsvWriter.initialize(request.outputFile());
 
         for (int ballCount : request.balls()) {
             for (BenchmarkConfig.ImplementationType implementation : request.implementations()) {
@@ -115,12 +114,12 @@ public final class HeadlessBenchmarkRunner {
                     }
                     var row = toRow(result, telemetry, config, runIndex);
                     rows.add(row);
-                    HeadlessBenchmarkCsvWriter.append(request.outputFile(), row);
                 }
                 BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
             }
         }
 
+        HeadlessBenchmarkCsvWriter.write(request.outputFile(), rows);
         var derived = HeadlessBenchmarkResultsPostProcessor.process(request.outputFile());
         return new BenchmarkReport(
                 request.outputFile(),
@@ -171,7 +170,8 @@ public final class HeadlessBenchmarkRunner {
         try (BenchmarkEngineAdapter.BenchmarkEngineSession session = adapter.open()) {
             var board = new Board(session.stepper());
             board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
-            var result = BenchmarkRunner.time(runIndex, warmup, config.steps(), () -> session.execute(board, config.steps()));
+            var result = BenchmarkRunner.time(runIndex, warmup, config.steps(), () ->
+                    session.execute(board, config.steps(), config.instrumentationEnabled()));
             blackhole = result.checksum();
             return result;
         } catch (Exception ex) {
@@ -186,11 +186,10 @@ public final class HeadlessBenchmarkRunner {
             int runIndex) {
         String jvm = telemetry.jvmName() + " " + telemetry.jvmVersion();
         String os = telemetry.osName() + " " + telemetry.osVersion() + " " + telemetry.osArch();
-        BenchmarkEngineAdapter adapter = BenchmarkEngineAdapters.forImplementation(config.implementation(), config.effectiveThreads());
         return new BenchmarkRow(
-                adapter.engineName(),
+                config.implementation().name().toLowerCase(Locale.ROOT),
                 config.balls(),
-                adapter.workerCount().orElse(1),
+                config.effectiveThreads(),
                 config.steps(),
                 config.seed(),
                 runIndex,

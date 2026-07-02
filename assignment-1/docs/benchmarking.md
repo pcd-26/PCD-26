@@ -165,7 +165,10 @@ Headless benchmarks run without Swing rendering. They measure:
 - speedup
 - efficiency
 - CPU utilization
-- synchronization overhead
+
+The primary speedup benchmark runs are strict and keep per-step profiling
+disabled, so synchronization overhead is not part of the measured path. Any
+coordination fields exported for compatibility are diagnostic only.
 
 These runs are the primary source for comparing `sequential`, `threads`, and
 `executor`.
@@ -480,7 +483,9 @@ report excerpts keep the benchmark context visible.
 Benchmark runs are no longer part of GitHub Actions. The benchmark data used
 for the report must be generated locally with
 `scripts/run_benchmarks.py` or by invoking the Java benchmark entry points
-directly on a controlled machine.
+directly on a controlled machine. Each pipeline run clears and repopulates the
+configured `results` and `charts` directories instead of creating timestamped
+subdirectories.
 
 The CI workflows still cover the normal Maven build and delivery packaging, but
 they do not run or publish benchmark snapshots anymore.

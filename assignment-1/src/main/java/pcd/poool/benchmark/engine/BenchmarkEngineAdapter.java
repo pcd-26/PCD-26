@@ -53,7 +53,19 @@ public interface BenchmarkEngineAdapter {
          * @param steps number of simulation ticks to run
          * @return benchmark execution result
          */
-        BenchmarkRunner.BenchmarkExecution execute(Board board, int steps);
+        default BenchmarkRunner.BenchmarkExecution execute(Board board, int steps) {
+            return execute(board, steps, false);
+        }
+
+        /**
+         * Executes the benchmark workload on the provided board.
+         *
+         * @param board board to advance
+         * @param steps number of simulation ticks to run
+         * @param instrumentationEnabled whether to collect per-step profiling data
+         * @return benchmark execution result
+         */
+        BenchmarkRunner.BenchmarkExecution execute(Board board, int steps, boolean instrumentationEnabled);
 
         @Override
         void close() throws Exception;

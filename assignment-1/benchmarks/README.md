@@ -38,6 +38,10 @@ Current coverage by benchmark family:
 - `BenchmarkSuite` benchmarks all three engines.
 - `ScalabilityBenchmarkRunner` benchmarks only `threads` and `executor`.
 
+The primary speedup runs are now strict: they time only the simulation loop and
+keep per-step profiling disabled so the benchmark does not add coordination
+overhead to the measured path.
+
 ### Metrics currently collected
 
 Headless raw runs currently collect:
@@ -84,6 +88,10 @@ Scalability raw runs currently collect:
 - `os`
 - `availableProcessors`
 
+In strict speedup mode, the coordination fields are retained for CSV
+compatibility but remain zero because profiling is disabled during the measured
+run.
+
 Scalability aggregated output currently reports:
 
 - mean, median, and standard deviation for elapsed time
@@ -105,18 +113,18 @@ legacy suite layout.
 
 Current pipeline outputs:
 
-- `benchmarks/results/run-<timestamp>/raw-results.csv`
-- `benchmarks/results/run-<timestamp>/aggregated-results.csv`
-- `benchmarks/results/run-<timestamp>/speedup-results.csv`
-- `benchmarks/results/run-<timestamp>/raw-scalability-results.csv`
-- `benchmarks/results/run-<timestamp>/aggregated-scalability-results.csv`
-- `benchmarks/results/run-<timestamp>/environment.csv`
-- `benchmarks/results/run-<timestamp>/benchmark-runtime-metadata.csv`
-- `benchmarks/results/run-<timestamp>/avg-tick-time-by-engine.csv`
-- `benchmarks/results/run-<timestamp>/throughput-by-engine.csv`
-- `benchmarks/results/run-<timestamp>/speedup-by-worker-count.csv`
-- `benchmarks/results/run-<timestamp>/efficiency-by-worker-count.csv`
-- `benchmarks/results/run-<timestamp>/crossover-workloads.csv`
+- `benchmarks/results/raw-results.csv`
+- `benchmarks/results/aggregated-results.csv`
+- `benchmarks/results/speedup-results.csv`
+- `benchmarks/results/raw-scalability-results.csv`
+- `benchmarks/results/aggregated-scalability-results.csv`
+- `benchmarks/results/environment.csv`
+- `benchmarks/results/benchmark-runtime-metadata.csv`
+- `benchmarks/results/avg-tick-time-by-engine.csv`
+- `benchmarks/results/throughput-by-engine.csv`
+- `benchmarks/results/speedup-by-worker-count.csv`
+- `benchmarks/results/efficiency-by-worker-count.csv`
+- `benchmarks/results/crossover-workloads.csv`
 
 Legacy suite outputs still supported by the code:
 
@@ -139,6 +147,9 @@ on the actual simulation or GUI loop. The measured window therefore excludes:
 - `board.init(...)`
 - CSV initialization
 - runtime telemetry capture
+
+The benchmark runners also buffer raw rows in memory and write CSV files after
+the measured runs, so filesystem I/O stays outside the benchmarked loop.
 
 Warmup exists in the current suite.
 
@@ -167,9 +178,9 @@ different entry points and therefore do not all share the same defaults. In
 particular, the legacy `benchmark-*.csv` files and the newer `raw-*.csv` files
 are not directly comparable without checking the seed, steps, and execution
 family first.
-CLI benchmark runs now write into timestamped `run-<timestamp>/` subdirectories
-so repeated executions do not overwrite earlier snapshots unless a caller
-explicitly points a benchmark command at the same output directory.
+CLI benchmark runs now clear and repopulate the configured `results` and
+`charts` directories on each execution, so repeated runs replace the previous
+snapshot in place.
 
 ## Benchmark methodology
 
