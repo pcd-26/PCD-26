@@ -340,12 +340,13 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long pairStart = profile == null ? 0 : System.nanoTime();
-        Set<CollisionPair> pairs = new HashSet<>();
         int maxCellOccupancy = 0;
+        var mergedIndexes = new ArrayList<List<Integer>>(mergedGrid.size());
         for (var indexes : mergedGrid.values()) {
+            mergedIndexes.add(indexes);
             maxCellOccupancy = Math.max(maxCellOccupancy, indexes.size());
-            collectPairs(indexes, pairs);
         }
+        var pairs = collectPairsInParallel(mergedIndexes);
 
         var orderedPairs = new ArrayList<>(pairs);
         orderedPairs.sort(Comparator
@@ -359,6 +360,36 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.aggregationNanos += System.nanoTime() - aggregationStart;
         }
         return new DetectionResult(orderedPairs, mergedGrid.size(), maxCellOccupancy);
+    }
+
+    private Set<CollisionPair> collectPairsInParallel(List<List<Integer>> cellIndexes) {
+        if (cellIndexes.isEmpty()) {
+            return Set.of();
+        }
+        if (cellIndexes.size() == 1) {
+            var pairs = new HashSet<CollisionPair>();
+            collectPairs(cellIndexes.get(0), pairs);
+            return pairs;
+        }
+
+        int workerCount = Math.min(workers.length, cellIndexes.size());
+        @SuppressWarnings("unchecked")
+        Set<CollisionPair>[] localPairs = new Set[workerCount];
+        runRanges(cellIndexes.size(), (from, to, workerIndex) -> {
+            var pairs = new HashSet<CollisionPair>();
+            for (int i = from; i < to; i++) {
+                collectPairs(cellIndexes.get(i), pairs);
+            }
+            localPairs[workerIndex] = pairs;
+        }, null);
+
+        var mergedPairs = new HashSet<CollisionPair>();
+        for (int i = 0; i < workerCount; i++) {
+            if (localPairs[i] != null) {
+                mergedPairs.addAll(localPairs[i]);
+            }
+        }
+        return mergedPairs;
     }
 
     private void collectPairs(List<Integer> indexes, Set<CollisionPair> pairs) {
