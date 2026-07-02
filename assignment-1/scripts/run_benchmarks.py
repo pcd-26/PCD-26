@@ -30,6 +30,7 @@ class BenchmarkRunConfig:
     maven_goal: str
 
 
+# Run with flag `--mode speedup` to make benchmarks faster
 def parse_args() -> BenchmarkRunConfig:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
