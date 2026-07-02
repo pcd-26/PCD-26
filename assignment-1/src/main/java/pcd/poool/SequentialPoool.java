@@ -51,7 +51,7 @@ public class SequentialPoool {
 
         long startTime = System.currentTimeMillis();
         long lastUpdateTime = startTime;
-        long waitingForBotSince = 0;
+        long botAimStartedAt = 0;
         int renderedFrames = 0;
 
         while (true) {
@@ -61,34 +61,32 @@ public class SequentialPoool {
                 viewModel.clearShotPreview();
                 startTime = now;
                 lastUpdateTime = now;
-                waitingForBotSince = 0;
+                botAimStartedAt = 0;
                 renderedFrames = 0;
             }
 
             var game = gameRef.get();
-            long elapsed = Math.max(PhysicsDefaults.FIXED_STEP_MILLIS, now - lastUpdateTime);
+            long elapsedMillis = Math.max(PhysicsDefaults.FIXED_STEP_MILLIS, now - lastUpdateTime);
             lastUpdateTime = now;
 
-            if (!game.snapshot().isFinished()) {
-                game.step(elapsed);
-            }
+            advanceGame(game, elapsedMillis);
             if (game.canBotShoot()) {
-                if (waitingForBotSince == 0) {
-                    waitingForBotSince = now;
-                } else if (now - waitingForBotSince >= BOT_THINK_TIME_MILLIS) {
+                if (botAimStartedAt == 0) {
+                    botAimStartedAt = now;
+                } else if (now - botAimStartedAt >= BOT_THINK_TIME_MILLIS) {
                     game.shootBot();
                     viewModel.clearShotPreview(Player.BOT);
-                    waitingForBotSince = 0;
+                    botAimStartedAt = 0;
                 }
             } else {
                 viewModel.clearShotPreview(Player.BOT);
-                waitingForBotSince = 0;
+                botAimStartedAt = 0;
             }
 
             renderedFrames++;
-            int framePerSec = framePerSec(renderedFrames, startTime, now);
-            viewModel.update(game.board(), game.snapshot(), framePerSec);
-            updateBotShotPreview(game, viewModel, waitingForBotSince > 0);
+            int currentFramesPerSecond = framesPerSecond(renderedFrames, startTime, now);
+            viewModel.update(game.board(), game.snapshot(), currentFramesPerSecond);
+            updateBotShotPreview(game, viewModel, botAimStartedAt > 0);
             view.render();
             sleepFrame();
         }
@@ -98,7 +96,13 @@ public class SequentialPoool {
         return new GameModel(new StandardGameBoardConf());
     }
 
-    private static int framePerSec(int renderedFrames, long startTime, long now) {
+    private static void advanceGame(GameModel game, long elapsedMillis) {
+        if (!game.snapshot().isFinished()) {
+            game.step(elapsedMillis);
+        }
+    }
+
+    private static int framesPerSecond(int renderedFrames, long startTime, long now) {
         long elapsed = now - startTime;
         if (elapsed <= 0) {
             return 0;

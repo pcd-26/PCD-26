@@ -1,63 +1,16 @@
 package pcd.poool.threaded;
 
-import java.time.Duration;
-
 /**
  * Monitor-based completion receipt for commands submitted to the threaded
  * game runner.
  *
  * @param <T> command result type
  */
-public class CommandReceipt<T> {
-
-    private boolean completed;
-    private T result;
-    private RuntimeException failure;
+public class CommandReceipt<T> extends pcd.poool.runtime.CommandReceiptSupport<T> {
 
     /**
      * Creates an incomplete command receipt.
      */
     CommandReceipt() {
-    }
-
-    synchronized void complete(T result) {
-        if (completed) {
-            return;
-        }
-        this.result = result;
-        completed = true;
-        notifyAll();
-    }
-
-    synchronized void fail(RuntimeException failure) {
-        if (completed) {
-            return;
-        }
-        this.failure = failure;
-        completed = true;
-        notifyAll();
-    }
-
-    /**
-     * Waits until the command has been executed by the controller thread.
-     *
-     * @param timeout maximum wait duration
-     * @return command result
-     * @throws InterruptedException if the caller is interrupted while waiting
-     * @throws IllegalStateException if the timeout expires before completion
-     */
-    public synchronized T await(Duration timeout) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-        while (!completed) {
-            long remaining = deadline - System.currentTimeMillis();
-            if (remaining <= 0) {
-                throw new IllegalStateException("command did not complete before timeout");
-            }
-            wait(remaining);
-        }
-        if (failure != null) {
-            throw failure;
-        }
-        return result;
     }
 }
