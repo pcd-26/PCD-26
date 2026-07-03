@@ -192,6 +192,8 @@ public class TaskBasedGameRunner implements AutoCloseable {
             return;
         }
         try {
+            // One controller thread drains commands, advances physics, and
+            // publishes the next immutable snapshot.
             drainPendingCommands();
             if (!game.snapshot().isFinished()) {
                 game.step(config.tickMillis());

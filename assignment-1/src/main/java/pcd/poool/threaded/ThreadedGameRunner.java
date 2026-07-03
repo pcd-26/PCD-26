@@ -172,6 +172,8 @@ public class ThreadedGameRunner implements AutoCloseable {
     private void runController() {
         try {
             while (running) {
+                // The controller serializes command execution and rule updates;
+                // worker threads are confined to the physics engine internals.
                 drainPendingCommands();
                 if (!game.snapshot().isFinished()) {
                     game.step(config.tickMillis());
@@ -196,6 +198,7 @@ public class ThreadedGameRunner implements AutoCloseable {
 
     private void sleepTick() {
         try {
+            // The controller thread stays independent from Swing repainting.
             Thread.sleep(config.tickMillis());
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
