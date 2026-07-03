@@ -102,6 +102,7 @@ def build_maven_command(goal: str) -> list[str]:
 
 
 def build_pipeline_command(mode: str, results_root: Path, charts_root: Path) -> list[str]:
+    profile = "speedup" if mode == "speedup" else "full"
     return [
         resolve_java_command(),
         "-cp",
@@ -113,6 +114,8 @@ def build_pipeline_command(mode: str, results_root: Path, charts_root: Path) -> 
         str(results_root),
         "--charts-root",
         str(charts_root),
+        "--profile",
+        profile,
     ]
 
 

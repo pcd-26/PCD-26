@@ -17,7 +17,10 @@ public final class ScalabilityBenchmarkRunner {
     private static final List<Integer> DEFAULT_WORKERS = BenchmarkConfig.workerMatrix();
     private static final List<Integer> DEFAULT_BALLS = List.of(2_500);
     private static final List<BenchmarkConfig.ImplementationType> DEFAULT_IMPLEMENTATIONS =
-            List.of(BenchmarkConfig.ImplementationType.THREADS, BenchmarkConfig.ImplementationType.EXECUTOR);
+            List.of(
+                    BenchmarkConfig.ImplementationType.SEQUENTIAL,
+                    BenchmarkConfig.ImplementationType.THREADS,
+                    BenchmarkConfig.ImplementationType.EXECUTOR);
     private static final int DEFAULT_STEPS = 1_000;
     private static final long DEFAULT_SEED = 42L;
     private static final int DEFAULT_WARMUP_RUNS = 2;
@@ -71,6 +74,37 @@ public final class ScalabilityBenchmarkRunner {
 
         for (int ballCount : request.balls()) {
             for (BenchmarkConfig.ImplementationType implementation : request.implementations()) {
+                if (implementation == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
+                    var config = new BenchmarkConfig(
+                            implementation,
+                            ballCount,
+                            1,
+                            request.steps(),
+                            request.seed(),
+                            request.warmupRuns(),
+                            request.measuredRuns(),
+                            false,
+                            false,
+                            outputDir);
+
+                    BenchmarkScenarioLogging.printScenarioStart(config);
+                    var scenarioResults = runScenario(config);
+                    rawResults.addAll(scenarioResults);
+                    var measuredResults = scenarioResults.stream()
+                            .filter(result -> !result.warmup())
+                            .toList();
+                    for (int runIndex = 1; runIndex <= measuredResults.size(); runIndex++) {
+                        var result = measuredResults.get(runIndex - 1);
+                        if (result.failed()) {
+                            throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
+                        }
+                        var row = toRow(result, telemetry, config, runIndex);
+                        rows.add(row);
+                    }
+                    BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
+                    continue;
+                }
+
                 for (int workers : request.workerCounts()) {
                     var config = new BenchmarkConfig(
                             implementation,
