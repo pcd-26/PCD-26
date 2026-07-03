@@ -46,10 +46,15 @@ execution_time_seconds = end_time - start_time
 
 For repeated runs, report at least:
 
-- average execution time
+- median execution time as the primary latency metric
+- average execution time as a complementary aggregate
 - minimum execution time
 - maximum execution time
 - standard deviation
+
+The benchmark report should avoid using the single "best" run or the single
+"best" worker-count configuration as the representative result, because that
+would overfit to noise and hide the typical behavior of the implementation.
 
 ### 3.2 Throughput
 
@@ -87,19 +92,9 @@ number of simulation steps.
 
 ### 3.4 Efficiency
 
-Efficiency measures how effectively the available worker threads are used.
-
-```text
-efficiency = speedup / thread_count
-```
-
-Interpretation:
-
-- `1.0` is ideal linear scaling
-- values below `1.0` indicate parallel overhead or resource contention
-
-When `thread_count = 1`, efficiency should be treated as a baseline reference
-rather than as a meaningful parallel-scaling result.
+The current benchmark reporting flow does not export a separate efficiency
+metric or chart. Worker-count comparisons are expressed through speedup
+relative to the sequential baseline.
 
 ### 3.5 CPU utilization
 
@@ -144,25 +139,9 @@ small workloads.
 
 ### 3.7 GUI responsiveness
 
-GUI responsiveness measures how quickly the interface reflects a user-visible
-event.
-
-For a scripted benchmark, define:
-
-```text
-gui_responsiveness_latency = visible_update_time - input_event_time
-```
-
-Report this as:
-
-- average latency
-- median latency
-- 95th percentile latency
-- worst-case latency
-
-For GUI benchmarks, responsiveness is more important than raw throughput.
-Throughput can still be reported, but it must not be mixed with headless values
-unless the renderer and interaction path are the same.
+The repository no longer ships a dedicated GUI responsiveness benchmark
+family. The delivered benchmark workflow focuses on headless throughput and
+worker-count scalability, which are the automated measurement paths.
 
 ## 4. Benchmark families
 
@@ -174,34 +153,28 @@ Headless benchmarks run without Swing rendering. They measure:
 - total simulation time
 - throughput
 - speedup
-- efficiency
 - CPU utilization
-- synchronization overhead
+
+The primary speedup benchmark runs are strict and keep per-step profiling
+disabled, so synchronization overhead is not part of the measured path. Any
+coordination fields exported for compatibility are diagnostic only.
 
 These runs are the primary source for comparing `sequential`, `threads`, and
 `executor`.
 
-### 4.2 GUI benchmarks
+The scalability benchmark family also emits a sequential baseline alongside
+the threaded and executor rows so the report can compute worker-count speedup
+directly from the exported tables. The speedup benchmark mode now includes
+that scalability data too, so the fast gate still covers the sequential
+speedup charts while keeping the chart set compact.
 
-GUI benchmarks include rendering and event handling. They measure:
+In the `speedup` profile, the worker-count charts still show both `threads`
+and `executor` against the sequential baseline; what stays out is the
+additional task-based-vs-thread-pool comparison chart.
 
-- frame latency
-- GUI responsiveness
-- end-to-end interaction time
-- optional frame rate
-
-GUI benchmarks must be treated as a separate family because rendering costs can
-dominate the physics cost and make throughput numbers hard to interpret.
-
-GUI benchmark exports should be written to a separate file, such as
-`gui-responsiveness.csv`, and should report at least:
-
-- average update interval
-- average update latency
-- maximum update delay
-- update rate or FPS
-- EDT delay measured with `SwingUtilities.invokeLater`
-- delayed update count when a threshold is configured
+The full reporting flow can still derive extra scalability views from the same
+worker-count data when needed, but the speedup mode intentionally keeps only
+the sequential-comparison charts.
 
 ## 5. Benchmark matrix
 
@@ -221,7 +194,7 @@ The benchmark matrix defines the supported comparison space.
 - `500`
 - `1000`
 - `2000`
-- `5000`
+- `2500`
 
 These values define the workload scale. The benchmark scenarios must be able to
 generate deterministic boards matching these counts.
@@ -269,7 +242,7 @@ Recommended scenario set:
    - high-load scenario
    - used to test worker scaling and synchronization cost
 
-5. `S5 - 5000 balls`
+5. `S5 - 2500 balls`
    - massive scenario
    - used to test the upper end of throughput and CPU utilization
 
@@ -284,7 +257,7 @@ Each benchmark case should follow the same protocol:
 2. run `2` warmup executions
 3. run `5` measured executions
 4. record per-run execution time
-5. compute average, min, max, and standard deviation
+5. compute median, average, min, max, and standard deviation
 6. for concurrent runs, record thread count and CPU utilization
 7. for GUI runs, record responsiveness metrics separately from headless data
 
@@ -299,10 +272,10 @@ Benchmark reports should present:
 - scenario name
 - implementation name
 - thread count, when applicable
+- median execution time
 - average execution time
 - throughput
 - speedup relative to sequential
-- efficiency
 - CPU utilization
 - synchronization overhead
 - GUI responsiveness, for GUI runs
@@ -321,13 +294,12 @@ For post-processing, the benchmark results can be analyzed from
 `benchmark-summary.csv` to produce:
 
 - `speedup-table.csv`
-- `efficiency-table.csv`
 - `scalability-table.csv`
 
 These tables are intended for direct inclusion in the report.
 
 The chart-generation script can then turn the benchmark CSV files into PNG
-figures for execution time, throughput, speedup, efficiency, CPU utilization,
+figures for execution time, throughput, speedup, CPU utilization,
 synchronization overhead, and GUI latency.
 
 ## 9. Interpretation guidance
@@ -349,8 +321,7 @@ This benchmark model supports the assignment requirements by:
 
 - defining benchmark metrics clearly
 - making `sequential`, `threads`, and `executor` comparable
-- documenting speedup, efficiency, and throughput formulas
-- separating headless and GUI benchmarks
+- documenting speedup and throughput formulas
 - listing explicit reproducible benchmark scenarios
 
 ## 11. Benchmark execution guide
@@ -374,7 +345,7 @@ opening the GUI:
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
-java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 2500 8 600 42
 ```
 
 Command arguments are:
@@ -387,20 +358,7 @@ The headless runner reports elapsed time, completed steps, and a final
 checksum or state hash so that the same scenario can be replayed and checked
 for correctness.
 
-### 11.3 Run the GUI benchmark
-
-Use the GUI benchmark when you want responsiveness measurements that include
-rendering and event handling:
-
-```bash
-java -cp assignment-1/target/classes pcd.poool.benchmark.GuiResponsivenessBenchmark
-```
-
-Do not interact with the GUI during the benchmark run unless the scenario
-explicitly asks for user input. GUI benchmarks are intentionally separate from
-headless throughput measurements.
-
-### 11.4 Run the full benchmark workflow
+### 11.3 Run the full benchmark workflow
 
 Use the local Python wrapper to execute the benchmark flow in one command:
 
@@ -411,7 +369,8 @@ python scripts/run_benchmarks.py
 The wrapper compiles `assignment-1`, runs the Java benchmark pipeline, writes
 results under `benchmarks/results/`, and refreshes `benchmarks/charts/`. The
 chart directory is cleared before each run so it keeps only the latest chart
-set. By default this command runs the full benchmark flow.
+set. By default this command runs the local headless and scalability benchmark
+flow.
 
 If you explicitly need the reduced suite, use:
 
@@ -447,9 +406,7 @@ Typical contents are:
 benchmark-runs.csv
 benchmark-summary.csv
 environment.csv
-gui-responsiveness.csv
 speedup-table.csv
-efficiency-table.csv
 scalability-table.csv
 ```
 
@@ -463,12 +420,11 @@ benchmarks/charts/
 
 - `benchmark-runs.csv` contains one raw record per warmup or measured run.
 - `benchmark-summary.csv` contains the aggregate statistics for each benchmark
-  scenario.
+  scenario, with median values used as the primary central-tendency reference
+  for latency-sensitive metrics.
 - `environment.csv` contains the runtime and machine metadata used to interpret
   the measurements.
-- `gui-responsiveness.csv` contains GUI timing data and must not be mixed with
-  headless throughput measurements.
-- `speedup-table.csv`, `efficiency-table.csv`, and `scalability-table.csv`
+- `speedup-table.csv` and `scalability-table.csv`
   are derived analysis tables for the report.
 - The chart set is exported as paired PNG and SVG files for direct inclusion in
   the final PDF report.
@@ -518,7 +474,6 @@ report excerpts keep the benchmark context visible.
 - Close heavy background applications before running a benchmark campaign.
 - Use the same machine for all implementations you want to compare.
 - Keep the laptop connected to power during measurements.
-- Avoid interacting with the GUI during GUI benchmark runs.
 - Repeat the benchmark campaign if the output shows clear outliers.
 - Keep the JVM, OS, and hardware configuration unchanged while comparing one
   benchmark matrix.
@@ -528,7 +483,16 @@ report excerpts keep the benchmark context visible.
 Benchmark runs are no longer part of GitHub Actions. The benchmark data used
 for the report must be generated locally with
 `scripts/run_benchmarks.py` or by invoking the Java benchmark entry points
-directly on a controlled machine.
+directly on a controlled machine. Each pipeline run clears and repopulates the
+configured `results` and `charts` directories instead of creating timestamped
+subdirectories.
+
+For engine performance work, the canonical fast comparison is
+`python scripts/run_benchmarks.py --mode speedup`. Use that run before and
+after a change, and compare `aggregated-results.csv` plus
+`speedup-results.csv` with the same machine/JVM setup. That mode also
+regenerates the `speedup-vs-balls` chart so the visual comparison stays in
+sync with the CSV data.
 
 The CI workflows still cover the normal Maven build and delivery packaging, but
 they do not run or publish benchmark snapshots anymore.

@@ -1,35 +1,40 @@
 # Thread-Based Implementation
 
 ## 1. Objective
-The thread-based version is the only multithreaded implementation of Poool.
-It is not a second game model and it is not a fork of the sequential rules.
-Instead, it preserves the sequential implementation as the semantic baseline
-and changes the execution strategy around it.
+The thread-based version is the platform-thread execution strategy of Poool.
+It does not introduce a separate game model and it does not redefine the game
+rules. Instead, it preserves the sequential implementation as the semantic
+baseline and changes how each tick is executed.
 
-The implementation targets the following goals:
+The current implementation is designed to achieve the following goals:
 
-- asynchronous player input;
-- asynchronous bot behaviour;
-- responsive Swing rendering;
-- stable model ownership without data races;
-- effective use of multiple CPU cores on large boards;
-- deterministic and explainable physics results.
+- asynchronous command submission from GUI and bot logic;
+- responsive rendering through immutable snapshots;
+- clear ownership of the mutable game state;
+- deterministic behavior despite internal parallelism;
+- effective use of multiple CPU cores, especially on large boards;
+- lower collision-management overhead than the previous threaded pipeline.
 
 ## 2. Main Runtime Components
 The playable entry point is `pcd.poool.ThreadedPoool`.
 
-The active components are:
+The active runtime components are:
 
-- `ThreadedPoool`: GUI/render loop. It reads immutable snapshots and updates
-  `ViewModel`.
-- `ThreadedGameRunner`: lifecycle coordinator for the multithreaded runtime.
-- `poool-threaded-controller`: platform thread that owns command execution,
-  game stepping, game-rule progression, and snapshot publication.
-- `poool-threaded-bot`: optional platform thread that observes snapshots and
-  submits bot-shot commands asynchronously.
-- `poool-physics-worker-*`: long-lived platform threads owned by
-  `ThreadedPhysicsEngine`.
-- Swing EDT: receives local keyboard/mouse events and produces commands.
+- `ThreadedPoool`
+  Swing-facing launcher and render loop.
+- `ThreadedGameRunner`
+  runtime coordinator for the thread-based version.
+- `poool-threaded-controller`
+  platform thread that owns command execution, game stepping, rule progression,
+  and snapshot publication.
+- `poool-threaded-bot`
+  optional platform thread that observes snapshots and submits bot-shot
+  commands asynchronously.
+- `poool-physics-worker-*`
+  long-lived platform threads owned by `ThreadedPhysicsEngine`.
+- Swing EDT
+  event-dispatch thread that receives keyboard and mouse events and turns them
+  into commands.
 
 The resulting communication structure is:
 
@@ -59,36 +64,40 @@ Swing EDT / BotThread
 The central correctness rule is single-writer ownership of the authoritative
 game state.
 
-- `GameModel` remains the owner of game rules: score, cue-ball
-  availability, status, and termination.
-- `Board` remains the owner of physical entities and low-level physics events.
+- `GameModel` remains the owner of game rules: score, cue-ball availability,
+  lifecycle state, and termination.
+- `Board` remains the owner of the mutable physical entities and low-level
+  physics events.
 - Only the controller thread invokes mutating operations on `GameModel`.
 - GUI and bot threads never mutate `Board` or `GameModel` directly.
-- Physics workers only execute assigned physics computations during a
-  controller-owned step.
+- Physics workers run only as internal helpers of one controller-owned physics
+  step.
 
-This structure avoids per-ball locks and prevents deadlocks caused by multiple
-threads trying to acquire locks on neighbouring balls or board regions.
+This design avoids per-ball locking, nested lock ordering issues, and race
+conditions caused by letting multiple external threads mutate adjacent balls or
+board regions independently.
 
 ## 4. Command-Based Coordination
 Player input and bot actions are represented as asynchronous commands.
 
-`CommandQueueMonitor` is a custom monitor used by producer threads. It accepts
-commands from the Swing EDT and bot thread, while the controller drains and
-executes them in FIFO order.
+`CommandQueueMonitor` is the monitor used by producer threads. It accepts
+commands from the Swing EDT and the bot thread, while the controller thread
+drains and executes them in FIFO order.
 
 Each submitted shot returns a `CommandReceipt<Boolean>`. The receipt is useful
 for tests and for any caller that needs to wait until the controller has either
-accepted or rejected a command.
+accepted or rejected the command.
 
 On shutdown, the command monitor rejects all queued but unexecuted commands.
-This prevents callers from waiting forever on a command receipt.
+This ensures that no caller remains blocked forever waiting for a result that
+can no longer be produced.
 
 ## 5. Snapshot-Based Rendering
-Rendering uses immutable snapshots.
+Rendering is based on immutable snapshots rather than direct access to mutable
+physics objects.
 
 `SnapshotStore` stores the latest `ThreadedGameSnapshot`. The GUI reads this
-snapshot and copies it into `ViewModel`. The snapshot contains:
+snapshot and copies its contents into `ViewModel`. The snapshot contains:
 
 - logical game state;
 - small-ball render snapshots;
@@ -97,146 +106,239 @@ snapshot and copies it into `ViewModel`. The snapshot contains:
 - hole layout;
 - bot shot preview vector.
 
-The GUI does not read mutable `Ball` instances. This keeps Swing rendering
-independent from physics mutation and avoids UI/model races.
+The GUI never reads mutable `Ball` instances directly. This keeps Swing
+rendering independent from concurrent physics mutation and avoids UI/model
+races.
 
-## 6. Worker-Based Physics Pipeline
-The heavy part of the thread-based implementation is `ThreadedPhysicsEngine`.
-It implements the same `PhysicsStepper` strategy interface as the sequential
-`PhysicsEngine`, so `GameModel` can be reused unchanged at the game-rule
-level.
+## 6. Structure of the Current Threaded Physics Engine
+The computationally expensive part of the thread-based implementation is
+`ThreadedPhysicsEngine`. It implements the same `PhysicsStepper` interface as
+the sequential `PhysicsEngine`, so `GameModel` can be reused unchanged at the
+game-rule level.
 
-For each physics tick, the controller calls:
+For each physics tick, the controller eventually calls:
 
 ```text
 board.updateState(dt)
 ```
 
-The board delegates to the injected `ThreadedPhysicsEngine`. The engine then
-executes bounded sub-steps. Each sub-step follows this pipeline:
+The board delegates the step to the injected `ThreadedPhysicsEngine`. The
+engine synchronizes on the board, splits large elapsed times into bounded
+sub-steps, and executes each sub-step through a staged worker-based pipeline.
+
+The current sub-step pipeline is:
 
 ```text
 1. collect active balls
-2. integrate ball chunks in parallel
+2. integrate movement in parallel
 3. apply hole interactions serially
 4. collect collision balls
-5. build local spatial grids in parallel
+5. build local center-cell grids in parallel
 6. merge local grids serially
-7. deduplicate and sort candidate pairs
-8. compute collision contributions in parallel
-9. merge and apply accumulated position/velocity deltas
-10. return control to game-rule logic
+7. sort populated cells deterministically
+8. resolve owned cell and neighbor collisions in parallel
+9. merge sparse collision accumulators
+10. record collisions and apply final deltas
 ```
 
-### 6.1 Parallel Integration
-The active balls are divided into contiguous chunks. Each `PhysicsWorker`
-updates one chunk:
+The most important difference from the previous threaded approach is that the
+current engine no longer builds one large global list of deduplicated
+candidate pairs. Instead, it assigns collision work by spatial cell ownership
+and performs contact detection and contact-resolution contribution generation
+locally inside each worker.
+
+### 6.1 Parallel Ball Integration
+At the beginning of a sub-step, the engine builds the list of active balls:
+
+- human cue ball, if present;
+- bot cue ball, if present;
+- all remaining small balls.
+
+This list is divided into contiguous chunks by index. Each `PhysicsWorker`
+receives one chunk and updates every assigned ball independently by applying:
 
 - friction;
 - position integration;
-- boundary bounce handling.
+- boundary constraint handling.
 
-This phase scales well because each ball can be integrated independently.
+This phase scales well because each ball can be updated without reading or
+writing any other ball.
 
-### 6.2 Parallel Broad Phase
-Collision detection uses a uniform spatial grid. Each worker builds a local
-map from grid cells to ball indexes for its assigned range.
+### 6.2 Serial Hole Interaction Phase
+After integration, the controller invokes `board.applyHoleInteractions()`.
 
-The controller then merges the local maps into a global grid. Candidate pairs
-are generated from balls that share at least one cell. Each candidate is stored
-as an ordered pair `(minIndex, maxIndex)`, deduplicated in a set, and finally
-sorted by stable indexes.
+This phase remains serial because it directly mutates the authoritative board
+state:
 
-This avoids the quadratic all-against-all collision check and is the key to
-handling thousands of balls.
+- cue-ball pocketed flags;
+- small-ball removal from the board;
+- low-level scoring-related events tied to pocketing.
 
-### 6.3 Accumulated Collision Resolution
-Collision resolution uses an accumulated-impulse solver in the threaded engine.
+Keeping this step serial is consistent with the single-writer ownership rule
+and avoids exposing partial pocketing decisions to worker threads.
 
-The input of this phase is the sorted list of candidate pairs produced by the
-spatial grid. A candidate pair is not necessarily a real collision: two balls
-may share a grid cell without overlapping. Each worker therefore checks the
-exact distance before producing any contribution.
+### 6.3 Spatial Broad Phase Based on Center Cells
+After movement and hole handling, the engine collects the balls that are still
+eligible for collision checks through `board.getCollisionBalls()`.
 
-The phase is organized as follows:
+The broad phase uses a uniform grid, but the current engine stores each ball
+only in the grid cell containing its center. This is deliberately lighter than
+the older approach that registered a ball in every cell overlapped by its
+radius.
+
+The process is:
+
+1. the engine computes a cell size based on the maximum radius currently
+   present among the collision balls;
+2. each worker builds a local map `GridCell -> ball indexes` for the ball range
+   assigned to it;
+3. the controller merges the local maps into one global grid;
+4. the populated cells are sorted deterministically.
+
+Using only the center cell reduces:
+
+- duplication of ball indexes across many cells;
+- memory pressure in dense boards;
+- the amount of pair bookkeeping that the old broad phase had to merge.
+
+### 6.4 Cell Ownership and Forward Neighbor Scanning
+Once the global grid has been built, the populated cells are partitioned across
+workers. Each worker becomes responsible for a subset of cells.
+
+For each owned cell, the worker checks:
+
+- collisions among the balls inside the same cell;
+- collisions against balls contained in a small set of forward neighbors:
+  - right;
+  - up;
+  - up-right diagonal;
+  - down-right diagonal.
+
+This pattern is important because it guarantees that each cross-cell pair is
+considered exactly once. There is therefore no need to build a giant global
+candidate-pair set and no need for an expensive final deduplication pass.
+
+Conceptually, the collision phase is now:
 
 ```text
-candidate pairs
-  |
-  |-- split into contiguous pair ranges
-  v
-PhysicsWorker[]
-  |
-  |-- for each real contact:
-  |       compute collision normal
-  |       compute overlap correction
-  |       compute elastic impulse from the tick-start velocities
-  |       store deltas in a worker-local accumulator
-  v
-controller thread
-  |
-  |-- merge accumulators in worker-index order
-  |-- record real collision events on Board
-  |-- split balls into ranges
-  v
-PhysicsWorker[]
-  |
-  |-- apply final accumulated delta to each assigned ball
+owned cell
+  -> internal pairs
+  -> pairs with selected forward neighbors
+  -> exact collision test
+  -> local contribution accumulation
 ```
 
-Each worker-local accumulator contains four arrays indexed by stable ball
-index:
+The old threaded engine paid a large overhead in:
+
+- creating candidate pairs globally;
+- deduplicating those pairs;
+- sorting them before resolution;
+- merging large dense per-ball delta structures.
+
+The current engine attacks exactly that bottleneck by fusing broad-phase
+locality and collision-work ownership.
+
+### 6.5 Parallel Collision Contribution Computation
+When a worker finds a potentially relevant pair, it performs the exact overlap
+test using the actual ball positions and radii. If the two balls do not
+overlap, nothing is produced.
+
+If the pair is a real contact, the worker computes:
+
+- the contact normal;
+- the overlap correction to separate the balls;
+- the elastic impulse along the collision normal;
+- the position and velocity deltas for both balls.
+
+Crucially, workers do not modify the `Ball` objects immediately. They only
+produce `CollisionContribution` records and accumulate them locally.
+
+This means that the expensive numerical part of collision resolution is
+parallel, while the authoritative board state remains untouched until the
+aggregation phase.
+
+### 6.6 Sparse Per-Worker Delta Accumulators
+Each worker stores collision results in a sparse local accumulator.
+
+Unlike the previous approach, which relied on large dense arrays covering all
+balls, the current accumulator explicitly tracks only the ball indexes that were
+actually touched by at least one real collision.
+
+For each touched ball, the accumulator stores:
+
+- accumulated position delta on `x`;
+- accumulated position delta on `y`;
+- accumulated velocity delta on `x`;
+- accumulated velocity delta on `y`.
+
+This sparse strategy reduces overhead when:
+
+- only a subset of the board is colliding;
+- collisions are spatially clustered;
+- the total number of balls is large but the number of contacts per tick is
+  much smaller.
+
+### 6.7 Merge and Final Apply Phase
+Once all workers complete their assigned cells, the controller:
+
+1. merges the sparse local accumulators;
+2. merges the lists of real collision pairs;
+3. sorts the collision-pair list deterministically;
+4. invokes `board.recordCollision(...)` for each real contact;
+5. applies the final accumulated deltas to the touched balls.
+
+The final apply phase is adaptive:
+
+- if the number of touched balls is small, the apply is done sequentially;
+- if the number of touched balls is large enough, the apply is itself
+  parallelized by ball range.
+
+This preserves correctness while avoiding unnecessary coordination on tiny
+workloads.
+
+### 6.8 Why This Parallelization Is Safe
+The current design avoids concurrent writes to shared `Ball` objects during the
+expensive collision-computation stage.
+
+Workers only:
+
+- read the tick-start state of balls for the pair they are processing;
+- write to worker-private accumulators.
+
+The authoritative mutations happen later, in controlled phases:
+
+- the controller records low-level collision events on the board;
+- the final accumulated deltas are applied once the worker phase has ended;
+- if that apply is parallelized, each touched ball index is assigned to exactly
+  one worker.
+
+As a consequence, the engine does not need per-ball locks. Synchronization is
+coarse but explicit:
+
+- one barrier after each worker phase;
+- one deterministic merge by the controller;
+- one controlled final apply.
+
+### 6.9 Relation to the Sequential Baseline
+The benchmark speedup values are always computed with respect to the sequential
+engine:
 
 ```text
-positionDeltaX[]
-positionDeltaY[]
-velocityDeltaX[]
-velocityDeltaY[]
+speedup = sequential_time / threaded_time
 ```
 
-For a contact `(A, B)`, the worker adds equal-and-opposite impulse
-contributions to the array entries for `A` and `B`. If a ball is touched by
-multiple contacts in the same tick, all those contributions are summed in its
-array slot. The ball object itself is not mutated during this calculation.
+The current threaded engine is therefore not judged against its previous
+versions but directly against the sequential baseline, which remains the
+reference implementation for semantics and performance comparison.
 
-The controller then merges worker-local accumulators in worker-index order and
-applies the final accumulated position and velocity deltas once per ball. This
-keeps the board under single-writer ownership while allowing the expensive
-contact calculations to run in parallel.
-
-### 6.4 Why This Parallelization Is Safe
-The solver avoids concurrent writes to `Ball` during contribution computation.
-Workers only read the tick-start position, velocity, radius, and mass of balls,
-then write to private arrays that no other worker can access.
-
-The only shared mutable `Ball` updates happen in the final apply phase. That
-phase is also parallel, but it partitions balls by index: each ball is assigned
-to exactly one worker, so no two workers write to the same `Ball`.
-
-This means the threaded engine does not need per-ball locks. Synchronization is
-coarse and explicit:
-
-- a barrier after pair-range contribution computation;
-- a deterministic controller merge;
-- a barrier after per-ball delta application.
-
-Game events such as direct cue-ball touches are recorded by the controller from
-the real-contact list after contribution computation. False positives from the
-spatial grid are ignored because they produce no collision contribution.
-
-### 6.5 Semantic Difference From Sequential Physics
-The sequential `PhysicsEngine` resolves each collision immediately. If the pair
-order is `(A, B)` followed by `(B, C)`, the second collision observes the
-velocity of `B` after the first collision has already changed it.
-
-The threaded accumulated solver instead models a tick as simultaneous contacts:
-all impulses are computed from the same tick-start state, accumulated per ball,
-and then applied together. This removes hidden order dependence from the
-threaded collision phase and exposes more parallel work.
+From a semantic point of view, the current threaded engine still aims to
+preserve the same overall gameplay behavior as the sequential version, even if
+its internal collision pipeline is structured differently to expose more useful
+parallel work.
 
 ## 7. Worker Lifecycle
 `ThreadedPhysicsEngine` creates long-lived platform threads once. Workers are
-not created for every tick.
+not created at every tick.
 
 The controller assigns range tasks to workers and waits on
 `WorkerCompletionMonitor`. The monitor tracks how many workers still need to
@@ -256,8 +358,27 @@ ThreadedGameRunner.close()
   -> closes ThreadedPhysicsEngine workers
 ```
 
-Workers are closed after the controller thread has stopped, so they are not
-interrupted while the controller is waiting for an active physics phase.
+Workers are closed only after the controller thread has stopped, so they are
+not interrupted while the controller is waiting for an active physics phase.
+
+## 8. Summary
+The current thread-based version is organized around a simple idea: the game
+logic remains centralized in one controller thread, while the heavy numerical
+work of physics is delegated to long-lived worker threads.
+
+The most important aspect of the current implementation is the collision
+pipeline. Instead of relying on a large global set of candidate pairs, the
+engine:
+
+- partitions work through spatial cells;
+- scans only local and forward-neighbor regions;
+- computes collision contributions in parallel;
+- accumulates only the touched-ball deltas;
+- performs a deterministic final merge and apply.
+
+This architecture keeps the model understandable and safe, while making the
+thread-based version significantly more competitive on large workloads than the
+earlier threaded design.
 
 ## 8. Scalability Rationale
 The threaded implementation is designed for configurations with hundreds or

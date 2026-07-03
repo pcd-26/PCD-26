@@ -30,11 +30,12 @@ class BenchmarkRunConfig:
     maven_goal: str
 
 
+# Run with flag `--mode speedup` to make benchmarks faster
 def parse_args() -> BenchmarkRunConfig:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("full", "smoke"),
+        choices=("full", "smoke", "speedup"),
         default=DEFAULT_MODE,
         help="Benchmark mode to execute. Defaults to full.",
     )
@@ -83,13 +84,11 @@ def run_local_benchmarks(config: BenchmarkRunConfig) -> None:
 
     print_step(f"results-reset path={config.results_root}")
     reset_directory(config.results_root)
-    if config.mode == "full":
+    if config.mode in {"full", "speedup"}:
         print_step(f"charts-reset path={config.charts_root}")
         reset_directory(config.charts_root)
         print_step(f"pipeline-start mode={config.mode}")
-        run_command(
-            build_pipeline_command(config.results_root, config.charts_root),
-        )
+        run_command(build_pipeline_command(config.mode, config.results_root, config.charts_root))
         print_step("pipeline-complete")
         return
 
@@ -102,16 +101,21 @@ def build_maven_command(goal: str) -> list[str]:
     return [resolve_maven_command(), "-f", str(ASSIGNMENT_ROOT / "pom.xml"), "clean", goal]
 
 
-def build_pipeline_command(results_root: Path, charts_root: Path) -> list[str]:
+def build_pipeline_command(mode: str, results_root: Path, charts_root: Path) -> list[str]:
+    profile = "speedup" if mode == "speedup" else "full"
     return [
         resolve_java_command(),
         "-cp",
         str(ASSIGNMENT_ROOT / "target" / "classes"),
         JAVA_MAIN_CLASS,
+        "--mode",
+        mode,
         "--results-root",
         str(results_root),
         "--charts-root",
         str(charts_root),
+        "--profile",
+        profile,
     ]
 
 

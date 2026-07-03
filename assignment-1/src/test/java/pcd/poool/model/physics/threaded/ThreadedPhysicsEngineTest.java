@@ -18,6 +18,7 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.config.LargeBoardConf;
 import pcd.poool.model.physics.sequential.PhysicsEngine;
 import pcd.poool.model.physics.config.MinimalBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
@@ -114,6 +115,43 @@ class ThreadedPhysicsEngineTest {
     }
 
     @Test
+    @Timeout(5)
+    void threadedPhysicsMatchesSequentialBaselineOnDenseCollisionScenario() {
+        var conf = new LargeBoardConf();
+
+        var sequentialBoard = new Board(new PhysicsEngine());
+        sequentialBoard.init(conf);
+        sequentialBoard.kick(Player.HUMAN, new V2d(0.95, 0.15));
+        sequentialBoard.kick(Player.BOT, new V2d(-0.9, -0.1));
+
+        try (var engine = new ThreadedPhysicsEngine(4)) {
+            var threadedBoard = new Board(engine);
+            threadedBoard.init(conf);
+            threadedBoard.kick(Player.HUMAN, new V2d(0.95, 0.15));
+            threadedBoard.kick(Player.BOT, new V2d(-0.9, -0.1));
+
+            for (int i = 0; i < 25; i++) {
+                sequentialBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                threadedBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertAll(
+                    () -> assertEquals(sequentialBoard.getBalls(), threadedBoard.getBalls()),
+                    () -> assertEquals(sequentialBoard.getPlayerBall(), threadedBoard.getPlayerBall()),
+                    () -> assertEquals(sequentialBoard.getBotBall(), threadedBoard.getBotBall()),
+                    () -> assertEquals(
+                            sequentialBoard.getPocketedSmallBalls(),
+                            threadedBoard.getPocketedSmallBalls()),
+                    () -> assertEquals(
+                            sequentialBoard.isPlayerBallPocketed(),
+                            threadedBoard.isPlayerBallPocketed()),
+                    () -> assertEquals(
+                            sequentialBoard.isBotBallPocketed(),
+                            threadedBoard.isBotBallPocketed()));
+        }
+    }
+
+    @Test
     @Timeout(3)
     void workerThreadsCanBeClosedAfterUse() {
         var engine = new ThreadedPhysicsEngine(2);
@@ -142,7 +180,7 @@ class ThreadedPhysicsEngineTest {
 
     @Test
     @Timeout(3)
-    void workerTasksAreSpreadAcrossAllWorkersOnLargeBoard() {
+    void profileStepReportsParallelWorkOnLargeBoard() {
         try (var engine = new ThreadedPhysicsEngine(4)) {
             var board = new Board(engine);
             board.init(new ThousandBallsBoardConf());
@@ -150,11 +188,12 @@ class ThreadedPhysicsEngineTest {
             var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
 
             assertEquals(4, engine.workerCount());
-            assertEquals(
-                    profile.activeBalls(),
-                    profile.integrationWorkerItems().stream().mapToInt(Integer::intValue).sum());
-            assertTrue(profile.integrationWorkerItems().stream().allMatch(item -> item > 0));
-            assertTrue(profile.localGridWorkerItems().stream().allMatch(item -> item > 0));
+            assertTrue(profile.submittedTasks() >= 4);
+            assertTrue(profile.taskSubmissionTimeMillis() >= 0.0);
+            assertTrue(profile.joinOrFutureWaitMillis() >= 0.0);
+            assertTrue(profile.movementMillis() >= 0.0);
+            assertTrue(profile.collisionDetectionMillis() >= 0.0);
+            assertTrue(profile.collisionResolutionMillis() >= 0.0);
         }
     }
 
