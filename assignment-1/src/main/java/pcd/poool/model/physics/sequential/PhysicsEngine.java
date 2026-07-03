@@ -53,6 +53,7 @@ public class PhysicsEngine implements PhysicsStepper {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
+        // The board stays single-writer for the whole step.
         synchronized (board) {
             long remaining = elapsedMillis;
             while (remaining > 0) {
@@ -65,6 +66,8 @@ public class PhysicsEngine implements PhysicsStepper {
 
     private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
+        // Movement first, then pocketing, then pairwise contacts: the order
+        // keeps the sequential baseline easy to explain and reproduce.
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }

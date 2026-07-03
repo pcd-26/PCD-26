@@ -117,6 +117,29 @@ private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
 The `thousand` profile creates 1000 small balls and is the recommended first
 manual stress test for the multithreaded version.
 
+### Task-based
+
+The executor-based implementation is available through
+`pcd.poool.TaskBasedPoool`. It uses the same snapshot-driven UI structure as
+the threaded launcher, but the physics phases are scheduled through a fixed
+executor pool managed by `TaskBasedGameRunner`.
+
+The playable task-based launcher can be started with:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool
+```
+
+If you want to override the worker count, pass it as the first argument:
+
+```bash
+java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool 8
+```
+
+For a deeper explanation of the engine split, the tick pipeline, and the
+shared-state rules, see
+[`docs/physics-engines-and-concurrency.md`](docs/physics-engines-and-concurrency.md).
+
 For headless comparisons that must stay free of GUI rendering, use the seeded
 simulation runner. It accepts the implementation type, ball count, thread
 count, number of simulation steps, and random seed:
@@ -177,6 +200,9 @@ The final thread-based implementation is described in
 An implementation-oriented architecture map, covering package responsibilities,
 state ownership, and component interactions, is available in
 [`docs/runtime-architecture.md`](docs/runtime-architecture.md).
+The cross-engine documentation that focuses on the physics tick pipeline,
+shared mutable state, immutable snapshots, and concurrency tradeoffs is
+available in [`docs/physics-engines-and-concurrency.md`](docs/physics-engines-and-concurrency.md).
 
 The GitHub Actions workflow `Assignment 1 Delivery Package` runs on every
 push and can also be started manually. It builds the report PDF and uploads a

@@ -28,6 +28,10 @@ import pcd.poool.model.physics.common.SpatialGridSupport;
  *   <li>workers emit sparse collision deltas that are merged only on the
  *       touched ball indexes.</li>
  * </ol>
+ *
+ * <p>The board still has a single writer per tick: workers only process
+ * private chunks or private accumulators, while the controller thread keeps
+ * the serialized merge and apply phases.
  */
 public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
@@ -101,6 +105,9 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return workers.length;
     }
 
+    /**
+     * Closes the owned workers and rejects future physics steps.
+     */
     @Override
     public void close() {
         closed = true;
@@ -115,6 +122,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         ensureOpen();
         StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(workers.length) : null;
+        // One writer at a time: the board lock spans the full tick, while
+        // workers only operate on private ranges inside that tick.
         synchronized (board) {
             long remaining = elapsedMillis;
             while (remaining > 0) {
@@ -175,6 +184,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         @SuppressWarnings("unchecked")
         Map<SpatialGridSupport.GridCell, IntBag>[] localGrids = new Map[workers.length];
         long localGridStart = profile == null ? 0 : System.nanoTime();
+        // Each worker builds a private grid so no shared bucket map is written
+        // concurrently during the broad phase.
         runRanges(balls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
@@ -194,6 +205,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long aggregationStart = profile == null ? 0 : System.nanoTime();
+        // The coordinator merges first, then sorts cells to keep pair ownership
+        // and collision recording deterministic.
         var mergedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
         for (var localGrid : localGrids) {
             if (localGrid == null) {
@@ -220,6 +233,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         long resolutionStart = profile == null ? 0 : System.nanoTime();
         var localDeltas = new SparseCollisionDeltaAccumulator[Math.min(workers.length, orderedCells.size())];
         var localPairs = new LongBag[Math.min(workers.length, orderedCells.size())];
+        // Workers compute collision contributions from the same tick-start
+        // state, but the authoritative board is still untouched here.
         runRanges(orderedCells.size(), (from, to, workerIndex) -> {
             var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
             var pairAccumulator = new LongBag();
@@ -334,9 +349,12 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return;
         }
         if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
+            // Small touch sets are cheaper to commit serially than to split
+            // again into another worker barrier.
             applyMergedDeltasSequentially(balls, merged);
             return;
         }
+        // Each touched ball index is assigned to exactly one worker here.
         runRanges(merged.touchedCount(), (from, to, workerIndex) -> {
             for (int i = from; i < to; i++) {
                 int ballIndex = merged.touchedIndex(i);
@@ -461,6 +479,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.lockAcquisitions += workerCount + 1L;
         }
         long waitStart = profile == null ? 0 : System.nanoTime();
+        // This is the phase barrier: the coordinator cannot merge or apply
+        // anything until every assigned worker has completed or failed.
         completion.await();
         if (profile != null) {
             profile.joinOrFutureWaitNanos += System.nanoTime() - waitStart;

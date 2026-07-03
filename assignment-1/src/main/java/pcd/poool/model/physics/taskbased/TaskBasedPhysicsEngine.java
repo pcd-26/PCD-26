@@ -116,6 +116,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         ensureOpen();
         StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(poolSize) : null;
+        // The board monitor spans the full tick; tasks only run inside that
+        // critical section on disjoint ranges or private accumulators.
         synchronized (board) {
             ensureOpen();
             long remaining = elapsedMillis;
@@ -224,6 +226,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long holeDetectionStart = profile == null ? 0 : System.nanoTime();
+        // The tasks only report local pocketing facts; the coordinator merges
+        // the booleans and pocketed-ball list in a deterministic order.
         var results = runRanges(activeBalls.size(), (from, to, workerIndex) -> {
             boolean playerBallPocketed = false;
             boolean botBallPocketed = false;
@@ -277,6 +281,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 new java.util.Map[poolSize];
 
         long localGridStart = profile == null ? 0 : System.nanoTime();
+        // Each task writes only to a private local grid, then the coordinator
+        // merges the buckets before any deterministic ordering happens.
         runRanges(balls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             var localGrid = new java.util.HashMap<SpatialGridSupport.GridCell, List<Integer>>();
@@ -313,6 +319,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         long pairStart = profile == null ? 0 : System.nanoTime();
         var pairs = new LongPairSet();
         int maxCellOccupancy = 0;
+        // Sorting the packed pairs keeps collision resolution deterministic,
+        // even though the candidate generation ran in parallel.
         for (var indexes : mergedGrid.values()) {
             maxCellOccupancy = Math.max(maxCellOccupancy, indexes.size());
             collectPairs(indexes, pairs);
@@ -349,6 +357,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             board.recordCollision(first, second);
         }
 
+        // Rounds keep the write set disjoint: a ball appears in at most one
+        // pair per round, so worker tasks can resolve them in parallel safely.
         for (var round : buildCollisionRounds(pairs, balls.size())) {
             runRanges(round.size(), (from, to, workerIndex) -> {
                 for (int i = from; i < to; i++) {
@@ -390,6 +400,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }
 
+        // The final board writes are serialized by ball index, but each index
+        // is touched once only, so the apply phase stays race-free.
         for (int i = 0; i < merged.contactPairCount; i++) {
             long pair = merged.contactPairs[i];
             board.recordCollision(balls.get(firstIndex(pair)), balls.get(secondIndex(pair)));
@@ -487,6 +499,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return result;
         }
         try {
+            // Futures are the phase barrier: the coordinator can only merge or
+            // apply shared state after every range has completed.
             long submissionStart = profile == null ? 0 : System.nanoTime();
             var futures = new ArrayList<Future<T>>(ranges.size());
             for (var range : ranges) {
@@ -537,6 +551,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private List<RangeChunk> buildRangeChunks(int itemCount) {
         int taskCountByWorkSize = Math.max(1, itemCount / MIN_ITEMS_PER_PARALLEL_TASK);
         int workerCount = Math.min(Math.min(poolSize, itemCount), taskCountByWorkSize);
+        // Cap task count so the scheduler does not pay more overhead than the
+        // work it is asked to parallelize.
         int baseChunk = itemCount / workerCount;
         int remainder = itemCount % workerCount;
         var chunks = new ArrayList<RangeChunk>(workerCount);

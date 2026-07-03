@@ -102,6 +102,8 @@ public class Board {
      * @param dt elapsed time in milliseconds
      */
     public synchronized void updateState(long dt) {
+        // The actual stepping policy is injected, so the board only owns the
+        // mutable state and the monitor around it.
         physicsEngine.step(this, dt);
     }
     
@@ -111,14 +113,15 @@ public class Board {
      * @return immutable snapshots of all small balls currently on the board
      */
     public synchronized List<BallSnapshot> getBalls(){
-    	if (balls == null) {
-    		return Collections.emptyList();
-    	}
-    	var snapshots = new ArrayList<BallSnapshot>();
-    	for (var ball: balls) {
-    		snapshots.add(new BallSnapshot(ball.getPos(), ball.getRadius()));
-    	}
-    	return Collections.unmodifiableList(snapshots);
+        if (balls == null) {
+            return Collections.emptyList();
+        }
+        // Rendering gets copies, not live Ball references.
+        var snapshots = new ArrayList<BallSnapshot>();
+        for (var ball: balls) {
+            snapshots.add(new BallSnapshot(ball.getPos(), ball.getRadius()));
+        }
+        return Collections.unmodifiableList(snapshots);
     }
     
     /**
@@ -325,6 +328,8 @@ public class Board {
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (isInsideHole(ball)) {
+                // Hole removal is serialized here so score bookkeeping stays
+                // consistent with the board's mutable list.
                 iterator.remove();
                 pocketedSmallBalls++;
                 var scorer = lastDirectCueTouch.remove(ball);
@@ -364,6 +369,8 @@ public class Board {
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (pocketed.contains(ball)) {
+                // The coordinator already decided the pocketed set, so this is
+                // just the commit phase.
                 iterator.remove();
                 pocketedSmallBalls++;
                 var scorer = lastDirectCueTouch.remove(ball);
