@@ -21,6 +21,7 @@ class ScalabilityBenchmarkRunnerTest {
         var request = ScalabilityBenchmarkRunner.defaults();
 
         assertEquals(List.of(
+                BenchmarkConfig.ImplementationType.SEQUENTIAL,
                 BenchmarkConfig.ImplementationType.THREADS,
                 BenchmarkConfig.ImplementationType.EXECUTOR), request.implementations());
         assertEquals(List.of(2_500), request.balls());
@@ -45,18 +46,18 @@ class ScalabilityBenchmarkRunnerTest {
 
         assertEquals(tempDir.resolve("raw-scalability-results.csv"), report.outputFile());
         assertEquals(tempDir.resolve("aggregated-scalability-results.csv"), report.aggregatedOutputFile());
-        assertEquals(12, report.rawResults().size());
-        assertEquals(4, report.rawResults().stream().filter(BenchmarkRunResult::warmup).count());
-        assertEquals(8, report.rows().size());
-        assertTrue(report.rows().stream().noneMatch(row -> row.implementation().equals("sequential")));
-        assertEquals(Set.of("threads", "executor"), report.rows().stream().map(ScalabilityBenchmarkRunner.BenchmarkRow::implementation).collect(Collectors.toSet()));
+        assertEquals(15, report.rawResults().size());
+        assertEquals(5, report.rawResults().stream().filter(BenchmarkRunResult::warmup).count());
+        assertEquals(10, report.rows().size());
+        assertTrue(report.rows().stream().anyMatch(row -> row.implementation().equals("sequential")));
+        assertEquals(Set.of("sequential", "threads", "executor"), report.rows().stream().map(ScalabilityBenchmarkRunner.BenchmarkRow::implementation).collect(Collectors.toSet()));
         assertEquals(Set.of(1, 2), report.rows().stream().map(ScalabilityBenchmarkRunner.BenchmarkRow::workers).collect(Collectors.toSet()));
 
         var rawLines = Files.readAllLines(report.outputFile());
         var aggregatedLines = Files.readAllLines(report.aggregatedOutputFile());
         assertEquals("implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,jvm,os,availableProcessors", rawLines.get(0));
         assertEquals("implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted", aggregatedLines.get(0));
-        assertEquals(5, aggregatedLines.size());
+        assertEquals(6, aggregatedLines.size());
         assertTrue(Files.exists(tempDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME)));
         assertTrue(report.rows().stream().allMatch(row -> row.coordinationMs() == 0.0 && row.coordinationRatio() == 0.0 && row.tasksSubmitted() == 0L));
     }

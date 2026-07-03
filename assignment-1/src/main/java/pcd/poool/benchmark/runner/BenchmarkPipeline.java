@@ -80,8 +80,13 @@ public final class BenchmarkPipeline {
             Path resultsDir,
             HeadlessBenchmarkRunner.BenchmarkReport headlessReport) throws Exception {
 
+        logStep(request.out(), "scalability-benchmark-start", resultsDir);
+        var scalabilityRequest = buildScalabilityRequest(resultsDir);
+        var scalabilityReport = steps.runScalability(scalabilityRequest);
+        logStep(request.out(), "scalability-benchmark-complete", scalabilityReport.outputFile());
+
         logStep(request.out(), "chart-generation-start", request.chartsRoot());
-        steps.generateCharts(resultsDir, request.chartsRoot());
+        steps.generateCharts(resultsDir, request.chartsRoot(), request.profile());
         logStep(request.out(), "chart-generation-complete", request.chartsRoot());
         return new BenchmarkPipelineReport(
                 resultsDir,
@@ -90,8 +95,8 @@ public final class BenchmarkPipeline {
                 headlessReport.aggregatedOutputFile(),
                 headlessReport.speedupOutputFile(),
                 null,
-                null,
-                null,
+                scalabilityReport.outputFile(),
+                scalabilityReport.aggregatedOutputFile(),
                 null,
                 null,
                 null);
@@ -113,7 +118,7 @@ public final class BenchmarkPipeline {
         logStep(request.out(), "scalability-benchmark-complete", scalabilityReport.outputFile());
 
         logStep(request.out(), "chart-generation-start", request.chartsRoot());
-        steps.generateCharts(resultsDir, request.chartsRoot());
+        steps.generateCharts(resultsDir, request.chartsRoot(), request.profile());
         logStep(request.out(), "chart-generation-complete", request.chartsRoot());
 
         return new BenchmarkPipelineReport(
@@ -157,6 +162,7 @@ public final class BenchmarkPipeline {
         Path resultsRoot = DEFAULT_RESULTS_ROOT;
         Path chartsRoot = DEFAULT_CHARTS_ROOT;
         Mode mode = Mode.FULL;
+        String profile = "full";
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
             if ("--help".equals(arg) || "-h".equals(arg)) {
@@ -180,16 +186,18 @@ public final class BenchmarkPipeline {
                 case "--mode" -> mode = Mode.parse(value);
                 case "--results-root" -> resultsRoot = Path.of(value);
                 case "--charts-root" -> chartsRoot = Path.of(value);
+                case "--profile" -> profile = value;
                 default -> throw new IllegalArgumentException("unknown option: " + key);
             }
         }
-        return BenchmarkPipelineRequest.defaults(resultsRoot, chartsRoot, mode, Instant.now(), System.out);
+        return BenchmarkPipelineRequest.defaults(resultsRoot, chartsRoot, mode, profile, Instant.now(), System.out);
     }
 
     private static void printUsage() {
         System.out.println("""
                 Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline \
                   [--mode full|speedup] \
+                  [--profile full|speedup] \
                   [--results-root benchmarks/results] \
                   [--charts-root benchmarks/charts]
                 """);
@@ -229,10 +237,10 @@ public final class BenchmarkPipeline {
      * @param timestamp run timestamp preserved as benchmark metadata
      * @param out progress stream
      */
-    public record BenchmarkPipelineRequest(Path resultsRoot, Path chartsRoot, Mode mode, Instant timestamp, PrintStream out) {
+    public record BenchmarkPipelineRequest(Path resultsRoot, Path chartsRoot, Mode mode, String profile, Instant timestamp, PrintStream out) {
 
         public BenchmarkPipelineRequest(Path resultsRoot, Path chartsRoot, Instant timestamp, PrintStream out) {
-            this(resultsRoot, chartsRoot, Mode.FULL, timestamp, out);
+            this(resultsRoot, chartsRoot, Mode.FULL, "full", timestamp, out);
         }
 
         public BenchmarkPipelineRequest {
@@ -245,6 +253,9 @@ public final class BenchmarkPipeline {
             if (mode == null) {
                 throw new IllegalArgumentException("mode must not be null");
             }
+            if (profile == null) {
+                throw new IllegalArgumentException("profile must not be null");
+            }
             if (timestamp == null) {
                 throw new IllegalArgumentException("timestamp must not be null");
             }
@@ -253,8 +264,8 @@ public final class BenchmarkPipeline {
             }
         }
 
-        public static BenchmarkPipelineRequest defaults(Path resultsRoot, Path chartsRoot, Mode mode, Instant timestamp, PrintStream out) {
-            return new BenchmarkPipelineRequest(resultsRoot, chartsRoot, mode, timestamp, out);
+        public static BenchmarkPipelineRequest defaults(Path resultsRoot, Path chartsRoot, Mode mode, String profile, Instant timestamp, PrintStream out) {
+            return new BenchmarkPipelineRequest(resultsRoot, chartsRoot, mode, profile, timestamp, out);
         }
     }
 
@@ -314,7 +325,7 @@ public final class BenchmarkPipeline {
 
         ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest request) throws IOException;
 
-        void generateCharts(Path inputDir, Path outputDir) throws IOException, InterruptedException;
+        void generateCharts(Path inputDir, Path outputDir, String profile) throws IOException, InterruptedException;
 
         static BenchmarkPipelineSteps defaultSteps() {
             return new DefaultBenchmarkPipelineSteps();
@@ -339,9 +350,9 @@ public final class BenchmarkPipeline {
         }
 
         @Override
-        public void generateCharts(Path inputDir, Path outputDir) throws IOException, InterruptedException {
+        public void generateCharts(Path inputDir, Path outputDir, String profile) throws IOException, InterruptedException {
             Path script = resolvePlotScript();
-            var process = new ProcessBuilder("python", script.toString(), "--input-dir", inputDir.toString(), "--output-dir", outputDir.toString())
+            var process = new ProcessBuilder("python", script.toString(), "--input-dir", inputDir.toString(), "--output-dir", outputDir.toString(), "--profile", profile)
                     .redirectErrorStream(true)
                     .start();
             try (var in = process.getInputStream()) {

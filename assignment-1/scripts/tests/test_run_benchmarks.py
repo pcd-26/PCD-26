@@ -47,6 +47,8 @@ class RunBenchmarksScriptTest(unittest.TestCase):
                 str(results_root),
                 "--charts-root",
                 str(charts_root),
+                "--profile",
+                "full",
             ],
         )
 
@@ -70,6 +72,8 @@ class RunBenchmarksScriptTest(unittest.TestCase):
                 str(results_root),
                 "--charts-root",
                 str(charts_root),
+                "--profile",
+                "speedup",
             ],
         )
 

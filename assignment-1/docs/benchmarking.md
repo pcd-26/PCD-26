@@ -92,19 +92,9 @@ number of simulation steps.
 
 ### 3.4 Efficiency
 
-Efficiency measures how effectively the available worker threads are used.
-
-```text
-efficiency = speedup / thread_count
-```
-
-Interpretation:
-
-- `1.0` is ideal linear scaling
-- values below `1.0` indicate parallel overhead or resource contention
-
-When `thread_count = 1`, efficiency should be treated as a baseline reference
-rather than as a meaningful parallel-scaling result.
+The current benchmark reporting flow does not export a separate efficiency
+metric or chart. Worker-count comparisons are expressed through speedup
+relative to the sequential baseline.
 
 ### 3.5 CPU utilization
 
@@ -163,7 +153,6 @@ Headless benchmarks run without Swing rendering. They measure:
 - total simulation time
 - throughput
 - speedup
-- efficiency
 - CPU utilization
 
 The primary speedup benchmark runs are strict and keep per-step profiling
@@ -172,6 +161,20 @@ coordination fields exported for compatibility are diagnostic only.
 
 These runs are the primary source for comparing `sequential`, `threads`, and
 `executor`.
+
+The scalability benchmark family also emits a sequential baseline alongside
+the threaded and executor rows so the report can compute worker-count speedup
+directly from the exported tables. The speedup benchmark mode now includes
+that scalability data too, so the fast gate still covers the sequential
+speedup charts while keeping the chart set compact.
+
+In the `speedup` profile, the worker-count charts still show both `threads`
+and `executor` against the sequential baseline; what stays out is the
+additional task-based-vs-thread-pool comparison chart.
+
+The full reporting flow can still derive extra scalability views from the same
+worker-count data when needed, but the speedup mode intentionally keeps only
+the sequential-comparison charts.
 
 ## 5. Benchmark matrix
 
@@ -273,7 +276,6 @@ Benchmark reports should present:
 - average execution time
 - throughput
 - speedup relative to sequential
-- efficiency
 - CPU utilization
 - synchronization overhead
 - GUI responsiveness, for GUI runs
@@ -292,13 +294,12 @@ For post-processing, the benchmark results can be analyzed from
 `benchmark-summary.csv` to produce:
 
 - `speedup-table.csv`
-- `efficiency-table.csv`
 - `scalability-table.csv`
 
 These tables are intended for direct inclusion in the report.
 
 The chart-generation script can then turn the benchmark CSV files into PNG
-figures for execution time, throughput, speedup, efficiency, CPU utilization,
+figures for execution time, throughput, speedup, CPU utilization,
 synchronization overhead, and GUI latency.
 
 ## 9. Interpretation guidance
@@ -320,7 +321,7 @@ This benchmark model supports the assignment requirements by:
 
 - defining benchmark metrics clearly
 - making `sequential`, `threads`, and `executor` comparable
-- documenting speedup, efficiency, and throughput formulas
+- documenting speedup and throughput formulas
 - listing explicit reproducible benchmark scenarios
 
 ## 11. Benchmark execution guide
@@ -406,7 +407,6 @@ benchmark-runs.csv
 benchmark-summary.csv
 environment.csv
 speedup-table.csv
-efficiency-table.csv
 scalability-table.csv
 ```
 
@@ -424,7 +424,7 @@ benchmarks/charts/
   for latency-sensitive metrics.
 - `environment.csv` contains the runtime and machine metadata used to interpret
   the measurements.
-- `speedup-table.csv`, `efficiency-table.csv`, and `scalability-table.csv`
+- `speedup-table.csv` and `scalability-table.csv`
   are derived analysis tables for the report.
 - The chart set is exported as paired PNG and SVG files for direct inclusion in
   the final PDF report.

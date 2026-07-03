@@ -42,6 +42,61 @@ class PlotBenchmarksTest(unittest.TestCase):
             self.assertFalse((output_dir / "throughput-vs-balls.png").exists())
             self.assertFalse((output_dir / "scalability-elapsed-time-vs-workers.png").exists())
 
+    def test_speedup_profile_keeps_only_sequential_comparisons(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = Path(tmp) / "results"
+            output_dir = Path(tmp) / "charts"
+            input_dir.mkdir(parents=True)
+
+            _write_csv(
+                input_dir / "aggregated-results.csv",
+                [
+                    "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                    "sequential,100,1,600,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
+                ],
+            )
+            _write_csv(
+                input_dir / "speedup-results.csv",
+                [
+                    "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                    "100,1,42,sequential,10.000000,10.000000,1.000000",
+                ],
+            )
+            _write_csv(
+                input_dir / "aggregated-scalability-results.csv",
+                [
+                    "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                    "sequential,100,1,600,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
+                    "threads,100,2,600,42,6.000000,6.000000,0.000000,1666.666667,1666.666667,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000",
+                    "executor,100,2,600,42,7.000000,7.000000,0.000000,1428.571429,1428.571429,0.000000,1.100000,1.100000,0.000000,0.110000,0.110000,0.000000,1.000000",
+                ],
+            )
+            _write_csv(
+                input_dir / "speedup-by-worker-count.csv",
+                [
+                    "engine_name,board_width,board_height,balls,threads,steps,seed,worker_count,speedup_vs_sequential",
+                    "threads,3.000000,2.000000,100,1,600,42,1,1.000000",
+                    "threads,3.000000,2.000000,100,2,600,42,2,1.666667",
+                    "executor,3.000000,2.000000,100,1,600,42,1,1.000000",
+                    "executor,3.000000,2.000000,100,2,600,42,2,1.428571",
+                ],
+            )
+
+            with mock.patch.object(
+                sys,
+                "argv",
+                ["plot_benchmarks.py", "--input-dir", str(input_dir), "--output-dir", str(output_dir), "--profile", "speedup"],
+            ):
+                plot_benchmarks.main()
+
+            self.assertTrue((output_dir / "speedup-vs-balls.png").exists())
+            self.assertTrue((output_dir / "speedup-vs-workers.png").exists())
+            self.assertFalse((output_dir / "execution-time-vs-balls.png").exists())
+            self.assertFalse((output_dir / "throughput-vs-balls.png").exists())
+            self.assertFalse((output_dir / "scalability-elapsed-time-vs-workers.png").exists())
+            self.assertFalse((output_dir / "efficiency-vs-workers.png").exists())
+            self.assertFalse((output_dir / "speedup-vs-thread-pool.png").exists())
+
 
 def _write_csv(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

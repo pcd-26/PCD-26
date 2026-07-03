@@ -81,18 +81,16 @@ class BenchmarkResultsExporterTest {
         var metadataLines = Files.readAllLines(exported.metadataFile());
         var avgTickLines = Files.readAllLines(exported.avgTickTimeFile());
         var speedupLines = Files.readAllLines(exported.speedupFile());
-        var efficiencyLines = Files.readAllLines(exported.efficiencyFile());
         var crossoverLines = Files.readAllLines(exported.crossoverFile());
 
-        assertEquals("timestamp_utc,git_commit_hash,available_processors,os_name,os_version,os_arch,java_version,jvm_name,max_memory_bytes,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config", metadataLines.get(0));
+        assertEquals("timestamp_utc,git_commit_hash,available_processors,os_name,os_version,os_arch,java_version,jvm_name,max_memory_bytes,board_width,board_height,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config", metadataLines.get(0));
         assertTrue(metadataLines.get(1).contains("deadbeefcafebabe"));
         assertTrue(metadataLines.get(1).contains("implementation=sequential balls=100 threads=1 steps=10 seed=42"));
-        assertEquals("engine_name,balls,threads,steps,seed,avg_tick_time_ns", avgTickLines.get(0));
-        assertTrue(avgTickLines.stream().anyMatch(line -> line.startsWith("sequential,100,1,10,42,10000000.000000")));
-        assertTrue(speedupLines.stream().anyMatch(line -> line.startsWith("threads,500,2,10,42,2,2.500000")));
-        assertTrue(efficiencyLines.stream().anyMatch(line -> line.startsWith("threads,500,2,10,42,2,1.250000")));
+        assertEquals("engine_name,board_width,board_height,balls,threads,steps,seed,avg_tick_time_ns,min_tick_time_ns,max_tick_time_ns,std_tick_time_ns,throughput_steps_per_sec", avgTickLines.get(0));
+        assertTrue(avgTickLines.stream().anyMatch(line -> line.startsWith("sequential,3.000000,2.000000,100,1,10,42,10000000.000000,10000000.000000,10000000.000000,0.000000,1000.000000")));
+        assertTrue(speedupLines.stream().anyMatch(line -> line.startsWith("threads,3.000000,2.000000,500,2,10,42,2,2.500000")));
         assertEquals(2, crossoverLines.size());
-        assertTrue(crossoverLines.get(1).startsWith("threads,2,42,500,10,4000000.000000,2500.000000,2.500000,1.250000"));
+        assertTrue(crossoverLines.get(1).startsWith("threads,3.000000,2.000000,2,42,500,10,4000000.000000,2500.000000,2.500000"));
     }
 
     private static BenchmarkSummary summary(

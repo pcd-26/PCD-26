@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import pcd.poool.model.physics.common.Boundary;
 
 /**
  * Exports derived benchmark tables and run metadata.
@@ -25,7 +26,6 @@ final class BenchmarkResultsExporter {
     static final String AVG_TICK_TIME_FILE_NAME = "avg-tick-time-by-engine.csv";
     static final String THROUGHPUT_FILE_NAME = "throughput-by-engine.csv";
     static final String SPEEDUP_FILE_NAME = "speedup-by-worker-count.csv";
-    static final String EFFICIENCY_FILE_NAME = "efficiency-by-worker-count.csv";
     static final String CROSSOVER_FILE_NAME = "crossover-workloads.csv";
 
     private static final double SPEEDUP_THRESHOLD = 1.0;
@@ -33,17 +33,17 @@ final class BenchmarkResultsExporter {
             DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSX").withZone(ZoneOffset.UTC);
 
     private static final String METADATA_HEADER =
-            "timestamp_utc,git_commit_hash,available_processors,os_name,os_version,os_arch,java_version,jvm_name,max_memory_bytes,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config";
+            "timestamp_utc,git_commit_hash,available_processors,os_name,os_version,os_arch,java_version,jvm_name,max_memory_bytes,board_width,board_height,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config";
     private static final String AVG_TICK_TIME_HEADER =
-            "engine_name,balls,threads,steps,seed,avg_tick_time_ns";
+            "engine_name,board_width,board_height,balls,threads,steps,seed,avg_tick_time_ns,min_tick_time_ns,max_tick_time_ns,std_tick_time_ns,throughput_steps_per_sec";
     private static final String THROUGHPUT_HEADER =
-            "engine_name,balls,threads,steps,seed,throughput_steps_per_sec";
+            "engine_name,board_width,board_height,balls,threads,steps,seed,throughput_steps_per_sec";
     private static final String SPEEDUP_HEADER =
-            "engine_name,balls,threads,steps,seed,worker_count,speedup_vs_sequential";
-    private static final String EFFICIENCY_HEADER =
-            "engine_name,balls,threads,steps,seed,worker_count,efficiency";
+            "engine_name,board_width,board_height,balls,threads,steps,seed,worker_count,speedup_vs_sequential";
     private static final String CROSSOVER_HEADER =
-            "engine_name,worker_count,seed,crossover_balls,steps,avg_tick_time_ns,throughput_steps_per_sec,speedup_vs_sequential,efficiency";
+            "engine_name,board_width,board_height,worker_count,seed,crossover_balls,steps,avg_tick_time_ns,throughput_steps_per_sec,speedup_vs_sequential";
+
+    private static final Boundary BENCHMARK_BOARD_BOUNDARY = BenchmarkWorkloads.DEFAULT_BOARD_BOUNDARY;
 
     private BenchmarkResultsExporter() {
     }
@@ -68,24 +68,21 @@ final class BenchmarkResultsExporter {
         List<AvgTickTimeRow> avgTickRows = buildAvgTickRows(derivedRows);
         List<ThroughputRow> throughputRows = buildThroughputRows(derivedRows);
         List<SpeedupRow> speedupRows = buildSpeedupRows(derivedRows);
-        List<EfficiencyRow> efficiencyRows = buildEfficiencyRows(derivedRows);
         List<CrossoverRow> crossoverRows = buildCrossoverRows(derivedRows);
 
         Path metadataFile = outputDir.resolve(METADATA_FILE_NAME);
         Path avgTickFile = outputDir.resolve(AVG_TICK_TIME_FILE_NAME);
         Path throughputFile = outputDir.resolve(THROUGHPUT_FILE_NAME);
         Path speedupFile = outputDir.resolve(SPEEDUP_FILE_NAME);
-        Path efficiencyFile = outputDir.resolve(EFFICIENCY_FILE_NAME);
         Path crossoverFile = outputDir.resolve(CROSSOVER_FILE_NAME);
 
         writeCsv(metadataFile, METADATA_HEADER, metadataRows);
         writeCsv(avgTickFile, AVG_TICK_TIME_HEADER, avgTickRows);
         writeCsv(throughputFile, THROUGHPUT_HEADER, throughputRows);
         writeCsv(speedupFile, SPEEDUP_HEADER, speedupRows);
-        writeCsv(efficiencyFile, EFFICIENCY_HEADER, efficiencyRows);
         writeCsv(crossoverFile, CROSSOVER_HEADER, crossoverRows);
 
-        return new ExportedResults(metadataFile, avgTickFile, throughputFile, speedupFile, efficiencyFile, crossoverFile);
+        return new ExportedResults(metadataFile, avgTickFile, throughputFile, speedupFile, crossoverFile);
     }
 
     static String resolveGitCommitHash() {
@@ -124,8 +121,7 @@ final class BenchmarkResultsExporter {
             double speedup = baseline == null || summary.meanElapsedMillis() <= 0.0
                     ? Double.NaN
                     : baseline.meanElapsedMillis() / summary.meanElapsedMillis();
-            double efficiency = Double.isNaN(speedup) ? Double.NaN : speedup / Math.max(1, config.effectiveThreads());
-            rows.add(new DerivedRow(summary, speedup, efficiency));
+            rows.add(new DerivedRow(summary, speedup));
         }
         rows.sort(Comparator
                 .comparing((DerivedRow row) -> row.summary().config().implementation().ordinal())
@@ -156,6 +152,8 @@ final class BenchmarkResultsExporter {
                     telemetry.jvmVersion(),
                     telemetry.jvmName(),
                     telemetry.maxMemoryBytes(),
+                    boardWidth(),
+                    boardHeight(),
                     config.implementation().name().toLowerCase(Locale.ROOT),
                     config.balls(),
                     config.threads(),
@@ -174,11 +172,17 @@ final class BenchmarkResultsExporter {
             BenchmarkConfig config = row.summary().config();
             output.add(new AvgTickTimeRow(
                     config.implementation().name().toLowerCase(Locale.ROOT),
+                    boardWidth(),
+                    boardHeight(),
                     config.balls(),
                     config.threads(),
                     config.steps(),
                     config.seed(),
-                    row.summary().meanElapsedMillis() * 1_000_000.0));
+                    row.summary().meanElapsedMillis() * 1_000_000.0,
+                    row.summary().minElapsedMillis() * 1_000_000.0,
+                    row.summary().maxElapsedMillis() * 1_000_000.0,
+                    row.summary().stddevElapsedMillis() * 1_000_000.0,
+                    row.summary().meanThroughputStepsPerSecond()));
         }
         return List.copyOf(output);
     }
@@ -189,6 +193,8 @@ final class BenchmarkResultsExporter {
             BenchmarkConfig config = row.summary().config();
             output.add(new ThroughputRow(
                     config.implementation().name().toLowerCase(Locale.ROOT),
+                    boardWidth(),
+                    boardHeight(),
                     config.balls(),
                     config.threads(),
                     config.steps(),
@@ -204,28 +210,14 @@ final class BenchmarkResultsExporter {
             BenchmarkConfig config = row.summary().config();
             output.add(new SpeedupRow(
                     config.implementation().name().toLowerCase(Locale.ROOT),
+                    boardWidth(),
+                    boardHeight(),
                     config.balls(),
                     config.threads(),
                     config.steps(),
                     config.seed(),
                     config.effectiveThreads(),
                     row.speedup()));
-        }
-        return List.copyOf(output);
-    }
-
-    private static List<EfficiencyRow> buildEfficiencyRows(List<DerivedRow> rows) {
-        var output = new ArrayList<EfficiencyRow>(rows.size());
-        for (var row : rows) {
-            BenchmarkConfig config = row.summary().config();
-            output.add(new EfficiencyRow(
-                    config.implementation().name().toLowerCase(Locale.ROOT),
-                    config.balls(),
-                    config.threads(),
-                    config.steps(),
-                    config.seed(),
-                    config.effectiveThreads(),
-                    row.efficiency()));
         }
         return List.copyOf(output);
     }
@@ -257,14 +249,15 @@ final class BenchmarkResultsExporter {
             BenchmarkConfig config = crossover.summary().config();
             output.add(new CrossoverRow(
                     config.implementation().name().toLowerCase(Locale.ROOT),
+                    boardWidth(),
+                    boardHeight(),
                     config.effectiveThreads(),
                     config.seed(),
                     config.balls(),
                     config.steps(),
                     crossover.summary().meanElapsedMillis() * 1_000_000.0,
                     crossover.summary().meanThroughputStepsPerSecond(),
-                    crossover.speedup(),
-                    crossover.efficiency()));
+                    crossover.speedup()));
         }
         output.sort(Comparator
                 .comparing((CrossoverRow row) -> row.engineName)
@@ -289,6 +282,14 @@ final class BenchmarkResultsExporter {
             return "";
         }
         return String.format(Locale.US, "%.6f", value);
+    }
+
+    private static double boardWidth() {
+        return BENCHMARK_BOARD_BOUNDARY.x1() - BENCHMARK_BOARD_BOUNDARY.x0();
+    }
+
+    private static double boardHeight() {
+        return BENCHMARK_BOARD_BOUNDARY.y1() - BENCHMARK_BOARD_BOUNDARY.y0();
     }
 
     private static String csvRow(String... values) {
@@ -323,7 +324,7 @@ final class BenchmarkResultsExporter {
     private record CrossoverKey(BenchmarkConfig.ImplementationType implementation, int workerCount, long seed) {
     }
 
-    private record DerivedRow(BenchmarkSummary summary, double speedup, double efficiency) {
+    private record DerivedRow(BenchmarkSummary summary, double speedup) {
     }
 
     private record MetadataRow(
@@ -336,6 +337,8 @@ final class BenchmarkResultsExporter {
             String javaVersion,
             String jvmName,
             long maxMemoryBytes,
+            double boardWidth,
+            double boardHeight,
             String engineName,
             int balls,
             int threads,
@@ -357,6 +360,8 @@ final class BenchmarkResultsExporter {
                     javaVersion,
                     jvmName,
                     Long.toString(maxMemoryBytes),
+                    formatDouble(boardWidth),
+                    formatDouble(boardHeight),
                     engineName,
                     Integer.toString(balls),
                     Integer.toString(threads),
@@ -370,26 +375,40 @@ final class BenchmarkResultsExporter {
 
     private record AvgTickTimeRow(
             String engineName,
+            double boardWidth,
+            double boardHeight,
             int balls,
             int threads,
             int steps,
             long seed,
-            double avgTickTimeNs) implements CsvRow {
+            double avgTickTimeNs,
+            double minTickTimeNs,
+            double maxTickTimeNs,
+            double stdTickTimeNs,
+            double throughputStepsPerSec) implements CsvRow {
 
         @Override
         public String toCsv() {
             return csvRow(
                     engineName,
+                    formatDouble(boardWidth),
+                    formatDouble(boardHeight),
                     Integer.toString(balls),
                     Integer.toString(threads),
                     Integer.toString(steps),
                     Long.toString(seed),
-                    formatDouble(avgTickTimeNs));
+                    formatDouble(avgTickTimeNs),
+                    formatDouble(minTickTimeNs),
+                    formatDouble(maxTickTimeNs),
+                    formatDouble(stdTickTimeNs),
+                    formatDouble(throughputStepsPerSec));
         }
     }
 
     private record ThroughputRow(
             String engineName,
+            double boardWidth,
+            double boardHeight,
             int balls,
             int threads,
             int steps,
@@ -400,6 +419,8 @@ final class BenchmarkResultsExporter {
         public String toCsv() {
             return csvRow(
                     engineName,
+                    formatDouble(boardWidth),
+                    formatDouble(boardHeight),
                     Integer.toString(balls),
                     Integer.toString(threads),
                     Integer.toString(steps),
@@ -410,6 +431,8 @@ final class BenchmarkResultsExporter {
 
     private record SpeedupRow(
             String engineName,
+            double boardWidth,
+            double boardHeight,
             int balls,
             int threads,
             int steps,
@@ -421,6 +444,8 @@ final class BenchmarkResultsExporter {
         public String toCsv() {
             return csvRow(
                     engineName,
+                    formatDouble(boardWidth),
+                    formatDouble(boardHeight),
                     Integer.toString(balls),
                     Integer.toString(threads),
                     Integer.toString(steps),
@@ -430,51 +455,31 @@ final class BenchmarkResultsExporter {
         }
     }
 
-    private record EfficiencyRow(
-            String engineName,
-            int balls,
-            int threads,
-            int steps,
-            long seed,
-            int workerCount,
-            double efficiency) implements CsvRow {
-
-        @Override
-        public String toCsv() {
-            return csvRow(
-                    engineName,
-                    Integer.toString(balls),
-                    Integer.toString(threads),
-                    Integer.toString(steps),
-                    Long.toString(seed),
-                    Integer.toString(workerCount),
-                    formatDouble(efficiency));
-        }
-    }
-
     private record CrossoverRow(
             String engineName,
+            double boardWidth,
+            double boardHeight,
             int workerCount,
             long seed,
             int crossoverBalls,
             int steps,
             double avgTickTimeNs,
             double throughputStepsPerSec,
-            double speedupVsSequential,
-            double efficiency) implements CsvRow {
+            double speedupVsSequential) implements CsvRow {
 
         @Override
         public String toCsv() {
             return csvRow(
                     engineName,
+                    formatDouble(boardWidth),
+                    formatDouble(boardHeight),
                     Integer.toString(workerCount),
                     Long.toString(seed),
                     Integer.toString(crossoverBalls),
                     Integer.toString(steps),
                     formatDouble(avgTickTimeNs),
                     formatDouble(throughputStepsPerSec),
-                    formatDouble(speedupVsSequential),
-                    formatDouble(efficiency));
+                    formatDouble(speedupVsSequential));
         }
     }
 
@@ -485,7 +490,6 @@ final class BenchmarkResultsExporter {
      * @param avgTickTimeFile average tick time CSV path
      * @param throughputFile throughput CSV path
      * @param speedupFile speedup CSV path
-     * @param efficiencyFile efficiency CSV path
      * @param crossoverFile crossover CSV path
      */
     public record ExportedResults(
@@ -493,7 +497,6 @@ final class BenchmarkResultsExporter {
             Path avgTickTimeFile,
             Path throughputFile,
             Path speedupFile,
-            Path efficiencyFile,
             Path crossoverFile) {
     }
 }
