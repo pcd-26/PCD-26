@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -42,12 +42,12 @@ class BenchmarkPipelineTest {
                 var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-results.csv");
                 var speedup = benchmarkRequest.outputFile().getParent().resolve("speedup-results.csv");
                 writeCsv(aggregated, List.of(
-                        "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                        "sequential,100,1,10,42,10.000000,0.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
+                        "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                        "sequential,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
                 writeCsv(speedup, List.of(
-                        "balls,workers,implementation,avgSequentialMs,avgParallelMs,speedup",
-                        "100,1,sequential,10.000000,10.000000,1.000000"));
-                return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of());
+                        "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                        "100,1,42,sequential,10.000000,10.000000,1.000000"));
+                return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of(), List.of());
             }
 
             @Override
@@ -56,8 +56,8 @@ class BenchmarkPipelineTest {
                 Path outputDir = resultsRoot;
                 Files.createDirectories(outputDir);
                 writeCsv(outputDir.resolve(BenchmarkCsvWriter.RUNS_FILE_NAME), List.of(
-                        "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks",
-                        "2026-06-21T13:15:30Z,sequential,100,1,10,42,1,10.000000,1000.000000,50.000000,11,SUCCESS,,0.000000,0.000000,0.000000,0.000000,0,0"));
+                        "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks,stateReadTimeMillis,partitionTimeMillis,movementTimeMillis,holeInteractionTimeMillis,collisionDetectionTimeMillis,collisionResolutionTimeMillis,mergeApplyTimeMillis",
+                        "2026-06-21T13:15:30Z,sequential,100,1,10,42,1,10.000000,1000.000000,50.000000,11,SUCCESS,,0.000000,0.000000,0.000000,0.000000,0,0,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
                 writeCsv(outputDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME), List.of(
                         "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
                         "8,Test CPU,4,8,17179869184,JVM,17,OS,1,amd64,1,1,1,true,123"));
@@ -73,28 +73,14 @@ class BenchmarkPipelineTest {
                         "threads,100,1,10,42,1,false,10.000000,1000.000000,1.000000,0.100000,1,JVM,OS,8"));
                 var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-scalability-results.csv");
                 writeCsv(aggregated, List.of(
-                        "implementation,balls,workers,steps,seed,avgElapsedMs,stdElapsedMs,avgThroughput,stdThroughput,avgCoordinationMs,stdCoordinationMs,avgCoordinationRatio,stdCoordinationRatio,avgTasksSubmitted",
-                        "threads,100,1,10,42,10.000000,0.000000,1000.000000,0.000000,1.000000,0.000000,0.100000,0.000000,1.000000"));
-                return new ScalabilityBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of());
+                        "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                        "threads,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000"));
+                return new ScalabilityBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of(), List.of());
             }
 
             @Override
-            public GuiResponsivenessBenchmarkRunner.BenchmarkReport runGui(GuiResponsivenessBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
-                events.add("gui");
-                Files.createDirectories(benchmarkRequest.outputFile().getParent());
-                writeCsv(benchmarkRequest.outputFile(), List.of(
-                        "implementation,balls,workers,steps,seed,runIndex,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,framesAbove16Ms,framesAbove33Ms,jvm,os,availableProcessors",
-                        "sequential,100,1,10,42,1,12.000000,13.000000,14.000000,83.333333,0,0,JVM,OS,8"));
-                var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-gui-results.csv");
-                writeCsv(aggregated, List.of(
-                        "implementation,balls,workers,steps,seed,avgFrameMs,p95FrameMs,maxFrameMs,avgFps,avgFramesAbove16Ms,avgFramesAbove33Ms",
-                        "sequential,100,1,10,42,12.000000,13.000000,14.000000,83.333333,0.000000,0.000000"));
-                return new GuiResponsivenessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of());
-            }
-
-            @Override
-            public void generateCharts(Path inputDir, Path outputDir) throws IOException {
-                events.add("charts");
+            public void generateCharts(Path inputDir, Path outputDir, String profile) throws IOException {
+                events.add("charts:" + profile);
                 Files.createDirectories(outputDir);
                 Files.writeString(outputDir.resolve("chart.txt"), inputDir.toString());
             }
@@ -103,17 +89,99 @@ class BenchmarkPipelineTest {
         Path resultsDir = tempDir.resolve("results");
         assertEquals(resultsDir, report.resultsDir());
         assertEquals(tempDir.resolve("charts"), report.chartsDir());
-        assertEquals(List.of("headless", "suite", "scalability", "gui", "charts"), events);
+        assertEquals(List.of("headless", "suite", "scalability", "charts:full"), events);
         assertTrue(Files.exists(resultsDir.resolve("raw-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("aggregated-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("speedup-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("raw-scalability-results.csv")));
         assertTrue(Files.exists(resultsDir.resolve("aggregated-scalability-results.csv")));
-        assertTrue(Files.exists(resultsDir.resolve("raw-gui-results.csv")));
-        assertTrue(Files.exists(resultsDir.resolve("aggregated-gui-results.csv")));
+        assertFalse(Files.exists(resultsDir.resolve("raw-gui-results.csv")));
+        assertFalse(Files.exists(resultsDir.resolve("aggregated-gui-results.csv")));
         assertFalse(Files.exists(resultsDir.resolve(BenchmarkCsvWriter.SUMMARY_FILE_NAME)));
         assertTrue(Files.exists(tempDir.resolve("charts").resolve("chart.txt")));
         assertFalse(Files.exists(resultsDir.resolve("missing.txt")));
+        assertEquals(null, report.guiRawFile());
+        assertEquals(null, report.guiAggregatedFile());
+        assertEquals(null, report.guiCompatibilityFile());
+    }
+
+    @Test
+    void speedupModeRunsTheHeadlessAndScalabilityBenchmarksAndClearsCharts() throws Exception {
+        var events = new ArrayList<String>();
+        var out = new PrintStream(new ByteArrayOutputStream(), true);
+        var request = new BenchmarkPipeline.BenchmarkPipelineRequest(
+                tempDir.resolve("results"),
+                tempDir.resolve("charts"),
+                BenchmarkPipeline.Mode.SPEEDUP,
+                "speedup",
+                Instant.parse("2026-06-21T13:15:30Z"),
+                out);
+
+        var report = BenchmarkPipeline.run(request, new BenchmarkPipeline.BenchmarkPipelineSteps() {
+            @Override
+            public HeadlessBenchmarkRunner.BenchmarkReport runHeadless(HeadlessBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
+                events.add("headless");
+                Files.createDirectories(benchmarkRequest.outputFile().getParent());
+                writeCsv(benchmarkRequest.outputFile(), List.of(
+                        "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors",
+                        "sequential,100,1,10,42,1,false,10.000000,1000.000000,0.000000,0.000000,0,JVM,OS,8"));
+                var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-results.csv");
+                var speedup = benchmarkRequest.outputFile().getParent().resolve("speedup-results.csv");
+                writeCsv(aggregated, List.of(
+                        "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                        "sequential,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
+                writeCsv(speedup, List.of(
+                        "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                        "100,1,42,sequential,10.000000,10.000000,1.000000"));
+                return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of(), List.of());
+            }
+
+            @Override
+            public BenchmarkSuite.SuiteReport runSuite(Path resultsRoot) {
+                events.add("suite");
+                throw new IllegalStateException("should not run");
+            }
+
+            @Override
+            public ScalabilityBenchmarkRunner.BenchmarkReport runScalability(ScalabilityBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
+                events.add("scalability");
+                Files.createDirectories(benchmarkRequest.outputFile().getParent());
+                writeCsv(benchmarkRequest.outputFile(), List.of(
+                        "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,jvm,os,availableProcessors",
+                        "threads,100,1,10,42,1,false,10.000000,1000.000000,1.000000,0.100000,1,JVM,OS,8"));
+                var aggregated = benchmarkRequest.outputFile().getParent().resolve("aggregated-scalability-results.csv");
+                writeCsv(aggregated, List.of(
+                        "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
+                        "threads,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000"));
+                return new ScalabilityBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, List.of(), List.of());
+            }
+
+            @Override
+            public void generateCharts(Path inputDir, Path outputDir, String profile) throws IOException {
+                events.add("charts:" + profile);
+                Files.createDirectories(outputDir);
+                writeCsv(outputDir.resolve("speedup-vs-balls.csv"), List.of(
+                        "marker",
+                        inputDir.getFileName().toString()));
+            }
+        });
+
+        Path resultsDir = tempDir.resolve("results");
+        assertEquals(resultsDir, report.resultsDir());
+        assertEquals(tempDir.resolve("charts"), report.chartsDir());
+        assertEquals(List.of("headless", "scalability", "charts:speedup"), events);
+        assertTrue(Files.exists(resultsDir.resolve("raw-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("aggregated-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("speedup-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("raw-scalability-results.csv")));
+        assertTrue(Files.exists(resultsDir.resolve("aggregated-scalability-results.csv")));
+        assertFalse(Files.exists(resultsDir.resolve(BenchmarkCsvWriter.SUMMARY_FILE_NAME)));
+        assertTrue(Files.isDirectory(tempDir.resolve("charts")));
+        assertTrue(Files.exists(tempDir.resolve("charts").resolve("speedup-vs-balls.csv")));
+        assertTrue(Files.isDirectory(resultsDir));
+        assertEquals(null, report.suiteDir());
+        assertEquals(resultsDir.resolve("raw-scalability-results.csv"), report.scalabilityRawFile());
+        assertEquals(resultsDir.resolve("aggregated-scalability-results.csv"), report.scalabilityAggregatedFile());
     }
 
     @Test
@@ -122,6 +190,8 @@ class BenchmarkPipelineTest {
         var request = new BenchmarkPipeline.BenchmarkPipelineRequest(
                 tempDir.resolve("results"),
                 tempDir.resolve("charts"),
+                BenchmarkPipeline.Mode.FULL,
+                "full",
                 Instant.parse("2026-06-21T13:15:30Z"),
                 new PrintStream(new ByteArrayOutputStream(), true));
 
@@ -145,14 +215,8 @@ class BenchmarkPipelineTest {
             }
 
             @Override
-            public GuiResponsivenessBenchmarkRunner.BenchmarkReport runGui(GuiResponsivenessBenchmarkRunner.BenchmarkRequest benchmarkRequest) {
-                events.add("gui");
-                throw new IllegalStateException("should not run");
-            }
-
-            @Override
-            public void generateCharts(Path inputDir, Path outputDir) {
-                events.add("charts");
+            public void generateCharts(Path inputDir, Path outputDir, String profile) {
+                events.add("charts:" + profile);
                 throw new IllegalStateException("should not run");
             }
         }));

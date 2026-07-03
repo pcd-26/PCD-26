@@ -11,30 +11,20 @@ by the assignment.
 
 ## Main components
 
-- `BenchmarkConfig.java`
-  Shared benchmark configuration model used by all benchmark runners.
-- `BenchmarkRunner.java`
-  Shared timing and aggregation infrastructure for the benchmark workloads.
-- `BenchmarkCsvWriter.java`
-  Writes raw runs and aggregate summaries to the configured result directory.
-- `BenchmarkSuite.java`
-  Executes the full or smoke benchmark matrix locally and stores the output in
-  `assignment-1/benchmarks/results/`.
-- `BenchmarkPipeline.java`
-  Orchestrates the full local benchmark flow. The Python wrapper in
-  `assignment-1/scripts/run_benchmarks.py`
-  calls this entry point.
-- `HeadlessBenchmarkRunner.java`
-  Runs the reproducible comparison benchmark for sequential, threaded, and
-  executor-based simulations.
-- `ScalabilityBenchmarkRunner.java`
-  Measures worker-count scaling for the concurrent implementations.
-- `GuiResponsivenessBenchmarkRunner.java`
-  Measures GUI responsiveness separately from the headless benchmark family.
-- `BenchmarkScalabilityAnalyzer.java`
-  Derives report tables from benchmark summaries when needed.
-- `RuntimeTelemetryCsvWriter.java`
-  Exports runtime and environment metadata alongside the measurements.
+- `config/`
+  Shared configuration types.
+- `core/`
+  Timing, result, workload, telemetry, and state-fingerprint primitives.
+- `engine/`
+  Engine adapters and correctness checks.
+- `io/`
+  CSV writers for raw runs and telemetry.
+- `postprocess/`
+  Summary exporters and derived-table generators.
+- `runner/`
+  Command-line benchmark entry points and orchestration.
+- `util/`
+  Small support helpers such as directory and logging utilities.
 
 ## Local workflow
 
@@ -54,6 +44,11 @@ The wrapper:
 - refreshes `benchmarks/charts/`
 - clears `benchmarks/charts/` before every run so only the latest chart set is
   kept
+- uses medians as the primary latency-oriented summary instead of emphasizing
+  a single best-case run
+- runs only the headless and scalability benchmark families in the local Python-driven flow
+- uses a standard `full` matrix capped at `2500` balls for manageable local
+  execution time
 
 If you only need to regenerate charts from an existing snapshot, run the chart
 generator directly:

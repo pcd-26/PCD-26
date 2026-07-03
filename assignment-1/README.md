@@ -10,19 +10,19 @@ The assignment is about designing and developing a game called `Poool`.
 
 The game consists in a bidimensional board with a number of small balls and two bigger balls, representing a human player ball and a bot (i.e. computer controlled) ball.  
 
-<img src="board.png">
+<img src="board.png" alt="poool-game">
 
-The number of small balls can be high (thousands). All balls can move and bounce,  against the border or each other. We consider elastic collisions and friction force, so that a moving ball stops after a while.  At the top of the board, in the corners, there are two circles representing holes. The objective of the game for the players (human and bot) is to kick the small balls in the holes, by throwing their own balls in a sequence of throws. 
+The number of small balls can be high (thousands). All balls can move and bounce,  against the border or each other. We consider elastic collisions and friction force, so that a moving ball stops after a while.  At the top of the board, in the corners, there are two circles representing holes. The goal of the game for the players (human and bot) is to kick the small balls in the holes, by throwing their own balls in a sequence of throws. 
 
 Details:
-- When a player puts a small ball in a hole, his/her score is incremented by one
-- If a small ball kicks another small balls in a hole, scores are not changed
-- The game ends when there are no more balls in the board and the winner is the player with the biggest score 
-- The game ends also if/when the ball of a player goes in a hole. In that case, the winner is the other player, in spite of the score.
-- To kick her/his ball, the human player can press keys - UP, DOWN, LEFT, RIGHT - to instantaneously update the velocity (simulating an impulse)
+- When a player puts a small ball in a hole, their score is incremented by one
+- If a small ball kicks other small balls in a hole, scores are left unchanged
+- The game ends when there are no more balls in the board, and the winner is the player with the biggest score 
+- The game ends also if/when the ball of a player goes in a hole. In that case, the winner is the other player, regardless of the score.
+- To kick their ball, the human player can press keys - UP, DOWN, LEFT, RIGHT - to instantaneously update the velocity (simulating an impulse)
   - for instance, by pressing UP the velocity vector can be updated by adding the vector (0,1)
 - Players (human and bot) play asynchronously
-- The score of the human and bot player is displayed somewhere: in the picture: in blue, on the left (human) and on the right (bot)
+- The scores of human and bot players are displayed somewhere. In the picture, in blue, human is on the left, with bot to the right
 
 ### The Assignment
 
@@ -31,15 +31,15 @@ Design and develop a concurrent version of `Poool`, in two different versions:
 2)  A variant applying **Task-based** approach, using Java **Executor Framework**, where useful.
 
 
-The concurrent programs should be designed according the principles studied during the course, promoting modularity, encapsulation as well as performance, reactivity. Further remarks:
-- For enabling/managing interaction among active components/threads, high-level constructs such as monitors should be preferably used (vs. low-level mechanisms) when possible, providing your own implementation.
-- The behaviour of the bot is not meant to be smart, could be any.
-- For every other aspect not specified, students are free to choose the best approach for them.
+The concurrent programs should be designed according to the principles studied throughout the course, promoting modularity, encapsulation, as well as performance and reactivity. Further remarks:
+- To enable/manage interactions among active components/threads, high-level constructs such as monitors should be preferably used (vs. low-level mechanisms) whenever possible, providing your own implementation.
+- The behavior of the bot is not meant to be smart, could be any.
+- For every other unspecified aspects, students are free to choose the best approach for them.
 
-Beside the source code, the assignment should contain a brief report, including:
-- A brief analsysis of the problem, focusing in particular those aspects that are relevant from a concurrent point of view
-- A brief description of the adopted design, the architecture (structure) and the behaviour
-  - for the behaviour, one or multiple Petri Nets can be used, choosing the proper level of abstraction
+Besides the source code, the assignment should contain a brief report, including:
+- A brief analysis of the problem, focusing particularly on those aspects that are relevant from a concurrent POV (point of view)
+- A brief description of the adopted design, the architecture (structure) and the behavior
+  - for the behavior, one or multiple Petri Nets can be used, choosing the proper level of abstraction
 - Performance tests to check and discuss: 
   - how much the concurrent version is better than a sequential one
   - how much the program is effective in exploiting available cores
@@ -49,24 +49,29 @@ The `assignment-01`folder in the repo includes two sketches that could be used a
 - [`sketch01`](./sketch-01.md) is an example of main loop using a sequential approach to implement the dynamics of the bouncing balls, as requested in the game
 - [`sketch02`](./sketch-02.md) is an example of a GUI program with asynchronous input from the keyboard, architected using MVC
 
-### Build and Tests
+---
 
+### Build
 Assignment 1 uses Maven with Java 17. Run the full build locally with:
 
 ```bash
 mvn -f assignment-1/pom.xml clean verify
 ```
 
+
+### Tests
 Specific JUnit 5 tests can be added under `assignment-1/src/test/java` and run with:
 
 ```bash
 mvn -f assignment-1/pom.xml -Dtest=ClassName test
 ```
 
+
+### Run
 The playable sequential baseline uses the physics engine as its computational
-core. It runs in one thread but models the two players independently: the human
-and the bot can each kick their own cue ball whenever that specific ball is
-stopped, without enforced turn alternation. It can be launched with:
+core. It runs in a single thread but models the two players independently: human
+and bot can each kick their own cue ball whenever that specific ball is
+stopped, with no enforced turn alternation. It can be launched with:
 
 ```bash
 mvn -f assignment-1/pom.xml test
@@ -85,6 +90,8 @@ remaining small balls, frame rate, score, player readiness, and average physics 
 time. When the game ends, a full-screen overlay shows the winner and final
 score; press R to start a new game.
 
+
+### Threads
 The first platform-thread implementation is available through the reusable
 `pcd.poool.threaded.ThreadedGameRunner`. It keeps the sequential game model as
 the reference semantics, owns it from a controller platform thread, accepts
@@ -117,13 +124,15 @@ count, number of simulation steps, and random seed:
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner threads 1000 8 600 42
-java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 5000 8 600 42
+java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner executor 2500 8 600 42
 ```
 
 The runner reports elapsed time, completed steps, and a final state hash so
 the same scenario can be compared across implementations without opening the
 GUI.
 
+
+### Benchmarks
 For the benchmark workflow, use the local Python wrapper:
 
 ```bash
@@ -133,16 +142,26 @@ python scripts/run_benchmarks.py
 It builds `assignment-1`, runs the benchmark pipeline, writes CSV
 results under `benchmarks/results/`, and refreshes `benchmarks/charts/`. The
 chart directory is cleared before every run so it keeps only the latest chart
-set. This standard command always runs the full benchmark flow. The exported
+set. This standard command always runs the full benchmark flow, which by
+default covers workloads up to `2500` balls. The exported
 `environment.csv` also captures the benchmark machine context automatically,
 including CPU model, physical cores, logical threads, JVM-visible processors,
 JVM, OS, and total RAM; the same key metadata is printed inside the generated
-chart images.
+chart images. The benchmark summaries and charts now prefer median latency-style
+metrics over "best run" reporting, so the exported results stay closer to the
+typical observed behavior. The local Python-driven benchmark flow excludes GUI
+benchmark collection and runs only the headless and scalability families.
 
 If you need the reduced benchmark suite for a specific case, pass:
 
 ```bash
 python scripts/run_benchmarks.py --mode smoke
+```
+
+If you need to speed up benchmarks, pass:
+
+```bash
+python scripts/run_benchmarks.py --mode speedup
 ```
 
 The GitHub Actions workflow `Assignment 1 Tests CI` runs the Maven build on
@@ -174,11 +193,11 @@ and build outputs.
 
 
 
-### The deliverable
+### Delivery
 
-The deliverable must be a zipped folder `Assignment-01`, to be submitted on the course web site, including:  
+The deliverable must be a zipped folder `Assignment-01`, to be submitted on the course website, including:  
 - `src` directory with sources
-- `doc` directory with the report in PDF (`report.pdf`). 
+- `doc` directory with the PDF report (`report.pdf`).
 
 
 

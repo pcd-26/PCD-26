@@ -111,7 +111,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      */
     public CommandReceipt<Boolean> shootHuman(V2d velocity) {
         ensureHealthy();
-        return submit(game -> game.shootHuman(velocity));
+        return submitShotCommand(game -> game.shootHuman(velocity));
     }
 
     /**
@@ -121,7 +121,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      */
     public CommandReceipt<Boolean> shootBot() {
         ensureHealthy();
-        return submit(GameModel::shootBot);
+        return submitShotCommand(GameModel::shootBot);
     }
 
     /**
@@ -192,7 +192,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
             return;
         }
         try {
-            drainCommands();
+            drainPendingCommands();
             if (!game.snapshot().isFinished()) {
                 game.step(config.tickMillis());
             }
@@ -210,7 +210,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
         }
     }
 
-    private void drainCommands() {
+    private void drainPendingCommands() {
         GameCommand command = commands.poll();
         while (command != null) {
             command.execute(game);
@@ -225,7 +225,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
         }
     }
 
-    private CommandReceipt<Boolean> submit(ShotOperation operation) {
+    private CommandReceipt<Boolean> submitShotCommand(ShotOperation operation) {
         var receipt = new CommandReceipt<Boolean>();
         boolean accepted = commands.put(new GameCommand() {
             @Override

@@ -65,6 +65,21 @@ assignment-1/reference
 Do not move sketch/demo code into the final package unless it is intentionally
 adapted, tested, and documented as part of the delivery scope.
 
+## Performance Gate
+
+When working on `assignment-1` performance changes, use the compact speedup
+benchmark as the default before/after comparison:
+
+```bash
+python scripts/run_benchmarks.py --mode speedup
+```
+
+Treat the generated `benchmarks/results/aggregated-results.csv` and
+`benchmarks/results/speedup-results.csv` as the canonical comparison point for
+engine changes. Prefer the five canonical workload sizes in that mode, compare
+the same machine/JVM pair, and judge a change by the median elapsed time and
+speedup for each scenario.
+
 ## Design Preferences
 
 - Keep the domain model and physics engine independent from execution strategy.
