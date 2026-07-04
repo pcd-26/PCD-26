@@ -28,7 +28,7 @@ class GameModelTest {
         assertEquals(0, snapshot.botScore());
         assertTrue(snapshot.humanCanShoot());
         assertTrue(snapshot.botCanShoot());
-        assertEquals(GameStatus.RUNNING, snapshot.status());
+        assertEquals(GameStatus.RUNNING_STILL, snapshot.status());
     }
 
     @Test

@@ -91,14 +91,26 @@ public class Ball {
     	this.vel = vel;
     }
 
+    /**
+     * Moves (translates) the ball
+     * @param delta difference in velocity
+     */
     public void translate(V2d delta) {
         pos = new P2d(pos.x() + delta.x(), pos.y() + delta.y());
     }
 
+    /**
+     * Changes the velocity of a ball (speed and angular direction). Useful when launching a ball and when collisions happen.
+     * @param delta variation in velocity
+     */
     public void addVelocity(V2d delta) {
         vel = vel.sum(delta);
     }
 
+    /**
+     * Enforces hard constraints about position in grid and velocity (so the ball doesn't hit light speed).
+     * @param bounds boundaries
+     */
     private void applyBoundaryConstraints(Boundary bounds){
         if (pos.x() + radius > bounds.x1()){
             pos = new P2d(bounds.x1() - radius, pos.y());
@@ -144,6 +156,10 @@ public class Ball {
         }
     }
 
+    /**
+     * Applies friction to gradually slow down balls and cues, respecting non-ideal physics.
+     * @param dtScaled
+     */
     private void applyFriction(double dtScaled) {
         double speed = vel.abs();
         if (speed > PhysicsDefaults.REST_SPEED_THRESHOLD) {
@@ -234,6 +250,11 @@ public class Ball {
         return vel.abs() > PhysicsDefaults.REST_SPEED_THRESHOLD;
     }
 
+    /**
+     * Calculates the area of a disk, be it a cue or a ball
+     * @param radius
+     * @return area
+     */
     private static double diskArea(double radius) {
         return Math.PI * radius * radius;
     }

@@ -39,7 +39,7 @@ class ViewModelTest {
     @Test
     void updateCopiesImmutableThreadedSnapshotsForRendering() {
         var model = new ViewModel();
-        var game = new GameSnapshot(1, 2, GameStatus.RUNNING, null, null, true, false, 16, 1, 0.2);
+        var game = new GameSnapshot(1, 2, GameStatus.RUNNING_STILL, null, null, true, false, 16, 1, 0.2);
 
         model.update(
                 List.of(new Board.BallSnapshot(new P2d(0.25, 0.5), 0.03)),
