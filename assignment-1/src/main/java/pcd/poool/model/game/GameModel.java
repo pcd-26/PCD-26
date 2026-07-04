@@ -11,7 +11,7 @@ import pcd.poool.model.physics.common.PhysicsStepper;
  * <p>The class owns the game rules above the passive physics engine: score
  * accounting, cue-ball availability, end-game conditions, and timing metrics.
  * Human and bot readiness are independent, while callers still serialize
- * mutation through the chosen runtime strategy.
+ * mutation through the chosen runtime strategy.</p>
  */
 public class GameModel {
 
@@ -49,7 +49,7 @@ public class GameModel {
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper) {
         board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
-        status = GameStatus.RUNNING;
+        status = GameStatus.RUNNING_STILL;
     }
 
     /**
@@ -201,7 +201,7 @@ public class GameModel {
     }
 
     private void updateRunningStatus() {
-        status = board.areBallsMoving() ? GameStatus.BALLS_MOVING : GameStatus.RUNNING;
+        status = board.areBallsMoving() ? GameStatus.BALLS_MOVING : GameStatus.RUNNING_STILL;
     }
 
     private V2d chooseBotShot() {
