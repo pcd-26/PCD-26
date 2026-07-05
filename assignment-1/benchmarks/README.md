@@ -135,7 +135,7 @@ mode:
 python scripts/run_benchmarks.py --mode speedup
 ```
 
-That mode runs only the headless benchmark, uses the five canonical workload
+That mode runs only the headless benchmark, uses the six canonical workload
 sizes, and keeps the suite fast enough to run before and after a change.
 It also regenerates the `speedup-vs-balls` chart. Compare the resulting
 `aggregated-results.csv` and `speedup-results.csv` against the previous run or
