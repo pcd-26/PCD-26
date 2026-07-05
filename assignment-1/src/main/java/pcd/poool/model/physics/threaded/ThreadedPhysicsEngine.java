@@ -282,6 +282,19 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    /**
+     * Resolves collisions for all balls inside a specific cell and against its neighboring cells.
+     *
+     * <p>To prevent duplicate checks and double-applying impulses, this cell only processes pairs
+     * where the current cell is considered the "canonical owner" of the pair. This is achieved by
+     * only checking the cell itself and 4 of its 8 neighbors (East, South-East, South, South-West).
+     *
+     * @param bucket the bucket representing the grid cell and its contained ball indexes
+     * @param mergedGrid the complete grid map containing all occupied cells and their balls
+     * @param balls the master list of balls on the board
+     * @param deltas the sparse accumulator to record calculated position and velocity changes
+     * @param contactPairs the long bag to record unique contact pairs detected
+     */
     private void resolveOwnedCell(
             CellBucket bucket,
             Map<SpatialGridSupport.GridCell, IntBag> mergedGrid,
@@ -300,6 +313,14 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 balls, deltas, contactPairs);
     }
 
+    /**
+     * Collects and resolves candidate collisions for pairs of balls located in the same grid cell.
+     *
+     * @param indexes the list of ball indexes in the cell
+     * @param balls the master list of balls on the board
+     * @param deltas the sparse accumulator to record calculated position and velocity changes
+     * @param contactPairs the long bag to record unique contact pairs detected
+     */
     private void collectPairsWithinBag(
             IntBag indexes,
             List<Ball> balls,
@@ -313,6 +334,15 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    /**
+     * Collects and resolves candidate collisions between balls in a cell and balls in a neighboring cell.
+     *
+     * @param firstBag the list of ball indexes in the current cell
+     * @param secondBag the list of ball indexes in the neighboring cell
+     * @param balls the master list of balls on the board
+     * @param deltas the sparse accumulator to record calculated position and velocity changes
+     * @param contactPairs the long bag to record unique contact pairs detected
+     */
     private void collectCrossPairs(
             IntBag firstBag,
             IntBag secondBag,
@@ -330,6 +360,15 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    /**
+     * Tests two balls for overlap and accumulates collision changes if they collide.
+     *
+     * @param balls the master list of balls on the board
+     * @param first index of the first ball
+     * @param second index of the second ball
+     * @param deltas the sparse accumulator to record changes
+     * @param contactPairs the long bag to record unique contact pairs detected
+     */
     private void addContributionIfColliding(
             List<Ball> balls,
             int first,
@@ -344,6 +383,16 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         contactPairs.add(encodePair(first, second));
     }
 
+    /**
+     * Applies the accumulated position and velocity deltas to the master list of balls.
+     *
+     * <p>If the number of affected/touched balls is low, it executes sequentially to avoid worker thread
+     * scheduling overhead. If the touched count is high, work is partitioned across parallel workers.
+     *
+     * @param balls the master list of balls to mutate
+     * @param merged the merged sparse collision accumulator containing all deltas
+     * @param profile profiling metrics accumulator
+     */
     private void applyMergedDeltas(List<Ball> balls, SparseCollisionDeltaAccumulator merged, StepProfileAccumulator profile) {
         if (merged.touchedCount() == 0) {
             return;
@@ -364,6 +413,12 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }, profile);
     }
 
+    /**
+     * Sequentially applies the accumulated position and velocity deltas to the master list of balls.
+     *
+     * @param balls the master list of balls to mutate
+     * @param merged the sparse collision accumulator
+     */
     private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
         for (int i = 0; i < merged.touchedCount(); i++) {
             int ballIndex = merged.touchedIndex(i);
@@ -372,6 +427,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    /**
+     * Calculates the position and velocity deltas resulting from an elastic collision between two balls.
+     *
+     * <p>Applies separation vector (position correction to remove overlap) and elastic collision impulse
+     * along the collision normal using Newtonian mechanics.
+     *
+     * @param balls the master list of balls
+     * @param firstIndex index of the first ball
+     * @param secondIndex index of the second ball
+     * @return the collision contribution details, or null if no collision occurs
+     */
     private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
         var a = balls.get(firstIndex);
         var b = balls.get(secondIndex);
@@ -425,6 +491,12 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 secondVelocityDeltaY);
     }
 
+    /**
+     * Extracts a list of all active (non-pocketed) balls from the board.
+     *
+     * @param board the board containing all entities
+     * @return the list of active balls
+     */
     private List<Ball> activeBalls(Board board) {
         var activeBalls = new ArrayList<Ball>();
         if (board.getPlayerBallEntity() != null) {
@@ -437,12 +509,25 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return activeBalls;
     }
 
+    /**
+     * Maps a ball's coordinate to its grid center cell.
+     *
+     * @param ball the ball entity
+     * @param cellSize the size of each grid cell
+     * @return the center GridCell containing the ball
+     */
     private CenterCell computeCenterCell(Ball ball, double cellSize) {
         return new CenterCell(new SpatialGridSupport.GridCell(
                 SpatialGridSupport.toCellCoordinate(ball.getPos().x(), cellSize),
                 SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize)));
     }
 
+    /**
+     * Computes grid cell size based on the largest ball radius to optimize neighbor lookup.
+     *
+     * @param balls list of all balls to consider
+     * @return the computed cell size
+     */
     private double computeOwnershipCellSize(List<Ball> balls) {
         double maxRadius = balls.stream()
                 .mapToDouble(Ball::getRadius)
@@ -451,6 +536,16 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
+    /**
+     * Partitions a dataset of item count across worker threads and waits for completion.
+     *
+     * <p>Divides the items into equal ranges, assigns each range task to a {@link PhysicsWorker},
+     * and blocks on the barrier until all workers complete execution or throw an exception.
+     *
+     * @param itemCount the total number of items to process
+     * @param rangeTask the task execution logic for a range
+     * @param profile profiling metrics accumulator
+     */
     private void runRanges(int itemCount, RangeTask rangeTask, StepProfileAccumulator profile) {
         if (itemCount == 0) {
             return;
