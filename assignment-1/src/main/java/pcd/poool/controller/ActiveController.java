@@ -2,6 +2,8 @@ package pcd.poool.controller;
 
 import pcd.poool.model.concurrent.BoundedBuffer;
 import pcd.poool.model.concurrent.BoundedBufferImpl;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Generic active controller based on a producer/consumer queue.
@@ -19,6 +21,8 @@ import pcd.poool.model.concurrent.BoundedBufferImpl;
  * @param <T> target state/service type updated by commands
  */
 public class ActiveController<T> extends Thread {
+
+    private static final Logger LOGGER = Logger.getLogger(ActiveController.class.getName());
 
     private final BoundedBuffer<Cmd<T>> cmdBuffer;
     private final T target;
@@ -50,7 +54,7 @@ public class ActiveController<T> extends Thread {
                 Thread.currentThread().interrupt();
                 running = false;
             } catch (Exception ex) {
-                ex.printStackTrace();
+                LOGGER.log(Level.SEVERE, "Exception during command execution", ex);
             }
         }
         log("stopped");
@@ -79,6 +83,6 @@ public class ActiveController<T> extends Thread {
     }
 
     private void log(String msg) {
-        System.out.println("[" + System.currentTimeMillis() + "][ActiveController] " + msg);
+        LOGGER.info(msg);
     }
 }

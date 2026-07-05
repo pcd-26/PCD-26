@@ -10,6 +10,10 @@ import org.junit.jupiter.api.Test;
 
 class BoundedBufferImplTest {
 
+    /**
+     * Verifies that calling poll() on an empty bounded buffer immediately returns null
+     * instead of blocking the calling thread.
+     */
     @Test
     void pollReturnsNullWhenBufferIsEmpty() {
         var buffer = new BoundedBufferImpl<String>(1);
@@ -17,6 +21,10 @@ class BoundedBufferImplTest {
         assertNull(buffer.poll());
     }
 
+    /**
+     * Verifies that the bounded buffer maintains First-In, First-Out (FIFO) ordering
+     * of elements when putting and getting items.
+     */
     @Test
     void preservesFifoOrdering() throws InterruptedException {
         var buffer = new BoundedBufferImpl<String>(2);
@@ -28,6 +36,10 @@ class BoundedBufferImplTest {
         assertEquals("second", buffer.get());
     }
 
+    /**
+     * Verifies that the get() method blocks correctly when the buffer is empty,
+     * and resumes successfully once a producer thread inserts an item.
+     */
     @Test
     void getBlocksUntilProducerPutsAnItem() {
         assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {

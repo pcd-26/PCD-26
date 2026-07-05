@@ -10,6 +10,11 @@ import org.junit.jupiter.api.Timeout;
 
 class WorkerCompletionMonitorTest {
 
+    /**
+     * Verifies that if a thread is blocked waiting on the monitor and gets interrupted,
+     * it continues to wait until all workers complete their tasks (to preserve consistency),
+     * but remembers its interrupt status and re-interrupts itself upon exit.
+     */
     @Test
     @Timeout(3)
     void awaitPreservesInterruptAndStillWaitsForWorkersToFinish() throws InterruptedException {
