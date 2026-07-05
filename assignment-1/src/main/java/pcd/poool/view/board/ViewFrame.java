@@ -42,6 +42,9 @@ public class ViewFrame extends JFrame {
     private static final int PLAYER_BALL_STROKE_WIDTH = 3;
     private static final int BOT_BALL_STROKE_WIDTH = 3;
     private static final int SHOT_PREVIEW_STROKE_WIDTH = 3;
+    private static final float MIN_ARROW_WIDTH = 2.0f;
+    private static final float MAX_ARROW_WIDTH = 5.0f;
+    private static final float SHOT_PROJECTION_STROKE_WIDTH = 2.0f;
     private static final float[] SHOT_PROJECTION_DASH = {8.0f, 8.0f};
     private static final int HUD_X = 20;
     private static final int HUD_BALL_COUNT_Y = 40;
@@ -373,6 +376,18 @@ public class ViewFrame extends JFrame {
     }
 
     /**
+     * Calculates the shot preview stroke width based on the launch force intensity.
+     * The width spans from MIN_ARROW_WIDTH (2.0f) to MAX_ARROW_WIDTH (5.0f) when going from 0% to 100% force.
+     *
+     * @param intensity the current launch force intensity
+     * @return the scaled stroke width
+     */
+    static float calculateShotPreviewWidth(double intensity) {
+        double ratio = Math.max(0.0, Math.min(1.0, intensity / MAX_MOUSE_SHOT_IMPULSE));
+        return (float) (MIN_ARROW_WIDTH + (MAX_ARROW_WIDTH - MIN_ARROW_WIDTH) * ratio);
+    }
+
+    /**
      * Requests a repaint and waits until the corresponding frame is rendered.
      */
     public void render(){
@@ -531,10 +546,44 @@ public class ViewFrame extends JFrame {
             var start = toScreenPoint(preview.from());
             var end = toScreenPoint(preview.to());
             g2.setColor(preview.player() == Player.BOT ? Color.RED : new Color(30, 90, 210));
-            g2.setStroke(new BasicStroke(SHOT_PREVIEW_STROKE_WIDTH));
-            g2.draw(new Line2D.Double(start.x(), start.y(), end.x(), end.y()));
-            drawShotProjection(g2, start, end);
+            float scaledWidth = calculateShotPreviewWidth(preview.intensity());
+            
+            // Draw the arrow vector (solid segment and arrowhead) with scaled width
+            g2.setStroke(new BasicStroke(scaledWidth));
+            
+            double dx = end.x() - start.x();
+            double dy = end.y() - start.y();
+            double distance = Math.hypot(dx, dy);
+            ScreenPoint arrowStart = start;
+            if (distance > 0) {
+                double radius = 0;
+                if (preview.player() == Player.HUMAN) {
+                    var pb = model.getPlayerBall();
+                    if (pb != null) {
+                        radius = pb.radius();
+                    }
+                } else if (preview.player() == Player.BOT) {
+                    var bot = model.getBotBall();
+                    if (bot != null) {
+                        radius = bot.radius();
+                    }
+                }
+                int screenRadius = (int) (radius * delta);
+                if (distance > screenRadius) {
+                    int offsetX = (int) Math.round((dx / distance) * screenRadius);
+                    int offsetY = (int) Math.round((dy / distance) * screenRadius);
+                    arrowStart = new ScreenPoint(start.x() + offsetX, start.y() + offsetY);
+                } else {
+                    arrowStart = end;
+                }
+            }
+            
+            g2.draw(new Line2D.Double(arrowStart.x(), arrowStart.y(), end.x(), end.y()));
             drawArrowHead(g2, start, end);
+            
+            // Draw the projection with the baseline width (dashed)
+            drawShotProjection(g2, start, end);
+            
             g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
             g2.drawString(String.format("Power: %.0f%%",
                     100 * preview.intensity() / MAX_MOUSE_SHOT_IMPULSE),
@@ -547,14 +596,14 @@ public class ViewFrame extends JFrame {
                 return;
             }
             g2.setStroke(new BasicStroke(
-                    SHOT_PREVIEW_STROKE_WIDTH,
+                    SHOT_PROJECTION_STROKE_WIDTH,
                     BasicStroke.CAP_BUTT,
                     BasicStroke.JOIN_BEVEL,
                     0,
                     SHOT_PROJECTION_DASH,
                     0));
             g2.draw(new Line2D.Double(end.x(), end.y(), projectionEnd.x(), projectionEnd.y()));
-            g2.setStroke(new BasicStroke(SHOT_PREVIEW_STROKE_WIDTH));
+            g2.setStroke(new BasicStroke(SHOT_PROJECTION_STROKE_WIDTH));
         }
 
         private ScreenPoint projectedToPanelEdge(ScreenPoint start, ScreenPoint end) {
@@ -586,16 +635,19 @@ public class ViewFrame extends JFrame {
             int arrowLength = 14;
             double leftAngle = angle + Math.PI * 0.8;
             double rightAngle = angle - Math.PI * 0.8;
-            g2.draw(new Line2D.Double(
-                    end.x(),
-                    end.y(),
-                    end.x() + Math.cos(leftAngle) * arrowLength,
-                    end.y() + Math.sin(leftAngle) * arrowLength));
-            g2.draw(new Line2D.Double(
-                    end.x(),
-                    end.y(),
-                    end.x() + Math.cos(rightAngle) * arrowLength,
-                    end.y() + Math.sin(rightAngle) * arrowLength));
+            
+            int[] xPoints = {
+                end.x(),
+                (int) Math.round(end.x() + Math.cos(leftAngle) * arrowLength),
+                (int) Math.round(end.x() + Math.cos(rightAngle) * arrowLength)
+            };
+            int[] yPoints = {
+                end.y(),
+                (int) Math.round(end.y() + Math.sin(leftAngle) * arrowLength),
+                (int) Math.round(end.y() + Math.sin(rightAngle) * arrowLength)
+            };
+            
+            g2.fillPolygon(xPoints, yPoints, 3);
         }
 
         private void drawGameHud(Graphics2D g2) {
