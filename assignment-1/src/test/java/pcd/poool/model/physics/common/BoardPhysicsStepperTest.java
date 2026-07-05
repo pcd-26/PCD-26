@@ -11,6 +11,10 @@ import pcd.poool.model.common.math.V2d;
 
 class BoardPhysicsStepperTest {
 
+    /**
+     * Verifies that Board's updateState() method correctly delegates the step simulation
+     * execution to the injected PhysicsStepper strategy implementation.
+     */
     @Test
     void boardDelegatesUpdatesToInjectedPhysicsStepper() {
         var elapsed = new AtomicLong();
@@ -22,6 +26,10 @@ class BoardPhysicsStepperTest {
         assertEquals(42, elapsed.get());
     }
 
+    /**
+     * Verifies that the Board constructor throws an IllegalArgumentException if a null
+     * PhysicsStepper strategy is supplied.
+     */
     @Test
     void boardRejectsNullPhysicsStepper() {
         assertThrows(IllegalArgumentException.class, () -> new Board(null));
