@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -292,6 +293,48 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
+    @Timeout(3)
+    void taskBasedPhysicsMatchesSequentialOutcomeWhenBallsArePocketed() {
+        var conf = new PocketingBoardConf();
+
+        var sequentialBoard = new Board(new PhysicsEngine());
+        sequentialBoard.init(conf);
+
+        try (var taskEngine = new TaskBasedPhysicsEngine(4)) {
+            var taskBoard = new Board(taskEngine);
+            taskBoard.init(conf);
+
+            for (int i = 0; i < 20; i++) {
+                sequentialBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                taskBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertBoardSnapshotsClose(sequentialBoard.getBalls(), taskBoard.getBalls());
+            assertBallSnapshotClose(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
+            assertBallSnapshotClose(sequentialBoard.getBotBall(), taskBoard.getBotBall());
+            assertEquals(sequentialBoard.getPocketedSmallBalls(), taskBoard.getPocketedSmallBalls());
+            assertEquals(sequentialBoard.isPlayerBallPocketed(), taskBoard.isPlayerBallPocketed());
+            assertEquals(sequentialBoard.isBotBallPocketed(), taskBoard.isBotBallPocketed());
+        }
+    }
+
+    @Test
+    @Timeout(3)
+    void profileStepKeepsSmallCollisionCommitSequential() {
+        var conf = new SimpleCollisionBoardConf();
+
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var board = new Board(engine);
+            board.init(conf);
+
+            var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
+
+            assertTrue(profile.collisionResolutionMillis() >= 0.0);
+            assertFalse(profile.applyWorkerItems().stream().anyMatch(itemCount -> itemCount > 0));
+        }
+    }
+
+    @Test
     @Timeout(8)
     void highBallCountConfigurationCanBeSteppedRepeatedly() {
         try (var engine = new TaskBasedPhysicsEngine(4)) {
@@ -488,6 +531,40 @@ class TaskBasedPhysicsEngineTest {
         @Override
         public List<Hole> getHoles() {
             return List.of();
+        }
+    }
+
+    private static class PocketingBoardConf implements BoardConf {
+
+        @Override
+        public Boundary getBoardBoundary() {
+            return new Boundary(-1, -1, 1, 1);
+        }
+
+        @Override
+        public Ball getPlayerBall() {
+            return new Ball(new P2d(-0.85, 0.0), 0.05, 1.0, new V2d(0.25, 0.0));
+        }
+
+        @Override
+        public Ball getBotBall() {
+            return new Ball(new P2d(0.85, 0.0), 0.05, 1.0, new V2d(-0.25, 0.0));
+        }
+
+        @Override
+        public List<Ball> getSmallBalls() {
+            return List.of(
+                    new Ball(new P2d(0.0, 0.85), 0.04, 1.0, new V2d(0.0, -0.25)),
+                    new Ball(new P2d(0.0, -0.85), 0.04, 1.0, new V2d(0.0, 0.25)));
+        }
+
+        @Override
+        public List<Hole> getHoles() {
+            return List.of(
+                    new Hole(new P2d(0.9, 0.0), 0.12),
+                    new Hole(new P2d(-0.9, 0.0), 0.12),
+                    new Hole(new P2d(0.0, 0.9), 0.12),
+                    new Hole(new P2d(0.0, -0.9), 0.12));
         }
     }
 }

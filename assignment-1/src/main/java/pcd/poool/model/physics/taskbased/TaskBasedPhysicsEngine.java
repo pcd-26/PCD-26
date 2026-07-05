@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,6 +49,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
     private static final int MIN_ITEMS_PER_PARALLEL_TASK = 64;
+    private static final int MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY = 256;
     private static final int MIN_PAIRS_FOR_ACCUMULATED_SOLVER = 512;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
@@ -167,7 +167,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         runRanges(activeBalls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
-                activeBalls.get(i).ball().updateState(dt, bounds);
+                activeBalls.get(i).updateState(dt, bounds);
             }
             if (profile != null) {
                 profile.integrationWorkerItems[workerIndex] += to - from;
@@ -182,8 +182,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long holeStart = profile == null ? 0 : System.nanoTime();
-        var holeInteractions = detectHoleInteractions(board.getHoles(), activeBalls, profile);
-        board.applyHoleInteractions(holeInteractions);
+        board.applyHoleInteractions();
         if (profile != null) {
             profile.holeInteractionNanos += System.nanoTime() - holeStart;
         }
@@ -200,66 +199,18 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         detectAndResolveCollisions(board, collisionBalls, profile);
     }
 
-    private List<ActiveBall> activeBalls(Board board) {
-        var activeBalls = new ArrayList<ActiveBall>();
+    private List<Ball> activeBalls(Board board) {
+        var activeBalls = new ArrayList<Ball>();
         var playerBall = board.getPlayerBallEntity();
         if (playerBall != null) {
-            activeBalls.add(new ActiveBall(playerBall, BallRole.PLAYER));
+            activeBalls.add(playerBall);
         }
         var botBall = board.getBotBallEntity();
         if (botBall != null) {
-            activeBalls.add(new ActiveBall(botBall, BallRole.BOT));
+            activeBalls.add(botBall);
         }
-        for (var ball : board.getSmallBallEntities()) {
-            activeBalls.add(new ActiveBall(ball, BallRole.SMALL));
-        }
+        activeBalls.addAll(board.getSmallBallEntities());
         return activeBalls;
-    }
-
-    private Board.HoleInteractions detectHoleInteractions(
-            List<Hole> holes,
-            List<ActiveBall> activeBalls,
-            StepProfileAccumulator profile) {
-        if (holes.isEmpty() || activeBalls.isEmpty()) {
-            return new Board.HoleInteractions(false, false, List.of());
-        }
-
-        long holeDetectionStart = profile == null ? 0 : System.nanoTime();
-        // The tasks only report local pocketing facts; the coordinator merges
-        // the booleans and pocketed-ball list in a deterministic order.
-        var results = runRanges(activeBalls.size(), (from, to, workerIndex) -> {
-            boolean playerBallPocketed = false;
-            boolean botBallPocketed = false;
-            var pocketedSmallBalls = new ArrayList<Ball>();
-            for (int i = from; i < to; i++) {
-                var activeBall = activeBalls.get(i);
-                if (isInsideAnyHole(activeBall.ball(), holes)) {
-                    if (activeBall.role() == BallRole.PLAYER) {
-                        playerBallPocketed = true;
-                    } else if (activeBall.role() == BallRole.BOT) {
-                        botBallPocketed = true;
-                    } else {
-                        pocketedSmallBalls.add(activeBall.ball());
-                    }
-                }
-            }
-            return new HoleTaskResult(playerBallPocketed, botBallPocketed, pocketedSmallBalls);
-        }, profile);
-
-        long aggregationStart = profile == null ? 0 : System.nanoTime();
-        boolean playerBallPocketed = false;
-        boolean botBallPocketed = false;
-        var pocketedSmallBalls = new ArrayList<Ball>();
-        for (var result : results) {
-            playerBallPocketed |= result.playerBallPocketed();
-            botBallPocketed |= result.botBallPocketed();
-            pocketedSmallBalls.addAll(result.pocketedSmallBalls());
-        }
-        if (profile != null) {
-            profile.holeInteractionNanos += System.nanoTime() - holeDetectionStart;
-            profile.aggregationNanos += System.nanoTime() - aggregationStart;
-        }
-        return new Board.HoleInteractions(playerBallPocketed, botBallPocketed, List.copyOf(pocketedSmallBalls));
     }
 
     List<SpatialCollisionDetector.Pair> detectCollisionPairs(List<Ball> balls) {
@@ -506,6 +457,10 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (merged.touchedCount() == 0) {
             return;
         }
+        if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
+            applyMergedDeltasSequentially(balls, merged);
+            return;
+        }
         runRanges(merged.touchedCount(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
@@ -519,6 +474,14 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
             return null;
         }, profile);
+    }
+
+    private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
+        for (int i = 0; i < merged.touchedCount(); i++) {
+            int ballIndex = merged.touchedIndex(i);
+            balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
+            balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
+        }
     }
 
     private void resolveCollisionsInParallelRounds(
@@ -712,15 +675,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private boolean isInsideAnyHole(Ball ball, List<Hole> holes) {
-        for (var hole : holes) {
-            if (hole.contains(ball.getPos())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void collectPairs(List<Integer> indexes, LongPairSet pairs) {
         if (indexes == null) {
             return;
@@ -845,11 +799,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private record RangeChunk(int fromInclusive, int toExclusive, int workerIndex) {}
-
-    private record HoleTaskResult(
-            boolean playerBallPocketed,
-            boolean botBallPocketed,
-            List<Ball> pocketedSmallBalls) {}
 
     private record CenterCell(SpatialGridSupport.GridCell cell) {}
 
@@ -1147,14 +1096,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
             touchedIndexes[touchedCount++] = index;
         }
-    }
-
-    private record ActiveBall(Ball ball, BallRole role) {}
-
-    private enum BallRole {
-        PLAYER,
-        BOT,
-        SMALL
     }
 
     /**

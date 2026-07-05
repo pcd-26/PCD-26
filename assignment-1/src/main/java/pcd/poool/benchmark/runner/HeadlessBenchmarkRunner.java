@@ -18,7 +18,7 @@ import pcd.poool.model.physics.common.Board;
  */
 public final class HeadlessBenchmarkRunner {
 
-    private static final List<Integer> DEFAULT_BALLS = List.of(100, 500, 1_000, 2_000, 2_500);
+    private static final List<Integer> DEFAULT_BALLS = List.of(100, 500, 1_000, 1_500, 2_000, 2_500);
     private static final List<Integer> SPEEDUP_GATE_BALLS = DEFAULT_BALLS;
     private static final List<BenchmarkConfig.ImplementationType> DEFAULT_IMPLEMENTATIONS =
             List.of(BenchmarkConfig.ImplementationType.SEQUENTIAL,
@@ -156,7 +156,7 @@ public final class HeadlessBenchmarkRunner {
      * Creates the compact benchmark request used as the performance gate.
      *
      * <p>The compact matrix is intentionally small so it can be executed often
-     * while still covering the five canonical workload sizes used to compare
+     * while still covering the six canonical workload sizes used to compare
      * engine speedup before and after a change.
      *
      * @return compact speedup-gate request
