@@ -146,6 +146,17 @@ public class ThreadedGameRunner implements AutoCloseable {
         }
     }
 
+    /**
+     * Submits a shot operation asynchronously to the queue.
+     *
+     * <p>Wraps the operation into a {@link GameCommand} object, enqueues it,
+     * and returns an incomplete {@link CommandReceipt}. When the controller thread
+     * consumes the command from the queue, it executes the operation, completing
+     * the receipt with the result or any failure that occurred.
+     *
+     * @param operation the shot operation to execute on the game model
+     * @return the command receipt representing completion of the request
+     */
     private CommandReceipt<Boolean> submitShotCommand(ShotOperation operation) {
         var receipt = new CommandReceipt<Boolean>();
         boolean accepted = commands.put(new GameCommand() {
@@ -169,6 +180,17 @@ public class ThreadedGameRunner implements AutoCloseable {
         return receipt;
     }
 
+    /**
+     * The main execution loop of the platform-thread controller.
+     *
+     * <p>As long as the runner is active, this thread:
+     * <ol>
+     *   <li>Drains and executes all pending shot commands from external threads (e.g. Swing Event Dispatch Thread, Bot Thread).</li>
+     *   <li>Advances the game step and physics simulation by a fixed tick duration.</li>
+     *   <li>Publishes the new immutable snapshot to the SnapshotStore.</li>
+     *   <li>Sleeps for the fixed tick interval to maintain frame rate.</li>
+     * </ol>
+     */
     private void runController() {
         try {
             while (running) {
@@ -188,6 +210,12 @@ public class ThreadedGameRunner implements AutoCloseable {
         }
     }
 
+    /**
+     * Non-blockingly polls and executes all pending commands in the queue.
+     *
+     * <p>This executes commands sequentially on the controller thread, guaranteeing
+     * thread-confinement of the game model state.
+     */
     private void drainPendingCommands() {
         GameCommand command = commands.poll();
         while (command != null) {
@@ -196,6 +224,11 @@ public class ThreadedGameRunner implements AutoCloseable {
         }
     }
 
+    /**
+     * Puts the controller thread to sleep for the tick duration.
+     *
+     * <p>If interrupted, the interrupt flag is restored and the controller terminates.
+     */
     private void sleepTick() {
         try {
             // The controller thread stays independent from Swing repainting.
@@ -206,12 +239,24 @@ public class ThreadedGameRunner implements AutoCloseable {
         }
     }
 
+    /**
+     * Joins the given thread up to a maximum duration.
+     *
+     * @param thread the thread to join
+     * @param timeout the maximum duration to wait
+     * @throws InterruptedException if interrupted while joining
+     */
     private void join(Thread thread, Duration timeout) throws InterruptedException {
         if (thread != null) {
             thread.join(timeout.toMillis());
         }
     }
 
+    /**
+     * Interrupts the given thread if it is not null.
+     *
+     * @param thread the thread to interrupt
+     */
     private void interrupt(Thread thread) {
         if (thread != null) {
             thread.interrupt();

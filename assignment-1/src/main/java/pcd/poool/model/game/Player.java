@@ -14,7 +14,7 @@ public enum Player {
      *
      * @return the other player
      */
-    public Player opponent() {
+    public Player getOpponent() {
         return this == HUMAN ? BOT : HUMAN;
     }
 }
