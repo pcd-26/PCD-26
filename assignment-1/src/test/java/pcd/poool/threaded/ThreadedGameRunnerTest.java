@@ -28,6 +28,10 @@ class ThreadedGameRunnerTest {
     private static final ThreadedGameRunner.Config FAST_WITHOUT_BOT =
             new ThreadedGameRunner.Config(5, false, 0);
 
+    /**
+     * Verifies that the controller platform thread automatically runs and advances
+     * the simulation steps in the shared GameModel over time.
+     */
     @Test
     @Timeout(3)
     void controllerThreadAdvancesTheSharedGameModel() throws InterruptedException {
@@ -42,6 +46,11 @@ class ThreadedGameRunnerTest {
         }
     }
 
+    /**
+     * Verifies that a human shot command submitted from an external thread (like the Swing EDT)
+     * is enqueued and executed asynchronously on the controller thread, causing the game status
+     * to transition to BALLS_MOVING.
+     */
     @Test
     @Timeout(3)
     void humanShotIsExecutedAsAnAsynchronousCommand() throws InterruptedException {
@@ -58,6 +67,10 @@ class ThreadedGameRunnerTest {
         }
     }
 
+    /**
+     * Verifies that multiple concurrent threads submitting shot commands simultaneously
+     * do not cause race conditions or lose command receipts.
+     */
     @Test
     @Timeout(5)
     void concurrentHumanShotSubmissionsCompleteWithoutLostReceipts() throws InterruptedException {
@@ -104,6 +117,10 @@ class ThreadedGameRunnerTest {
         }
     }
 
+    /**
+     * Verifies that the bot agent runs in its own thread as a separate active component
+     * and automatically triggers a shot when it is eligible to shoot.
+     */
     @Test
     @Timeout(3)
     void botAgentSubmitsShotsFromASeparateActiveComponent() throws InterruptedException {
@@ -119,6 +136,10 @@ class ThreadedGameRunnerTest {
         }
     }
 
+    /**
+     * Verifies that the game snapshot contains a non-zero shot preview vector for the bot
+     * whenever the bot is ready to execute a shot.
+     */
     @Test
     @Timeout(3)
     void snapshotExposesBotPreviewWhenBotCanShoot() throws InterruptedException {
@@ -133,6 +154,10 @@ class ThreadedGameRunnerTest {
         }
     }
 
+    /**
+     * Verifies that any pending commands that have not been executed yet are correctly
+     * completed as rejected (i.e. returning false) when the runner is closed/shut down.
+     */
     @Test
     @Timeout(3)
     void rejectedCommandsCompleteAfterShutdown() throws InterruptedException {
