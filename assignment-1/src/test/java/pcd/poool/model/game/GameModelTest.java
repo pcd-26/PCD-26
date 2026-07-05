@@ -107,6 +107,33 @@ class GameModelTest {
         assertEquals(0, game.snapshot().humanScore());
     }
 
+    /**
+     * Verifies that when the countdown is explicitly enabled, players cannot shoot
+     * until the countdown expires.
+     */
+    @Test
+    void countdownBlocksShootingUntilExpiredOrDisabled() {
+        GameModel.setCountdownEnabled(true);
+        try {
+            var game = new GameModel(new DirectScoringConf());
+            
+            // Should not be able to shoot
+            assertFalse(game.canHumanShoot());
+            assertFalse(game.canBotShoot());
+            assertFalse(game.shootHuman(new V2d(1.6, 0)));
+            assertFalse(game.shootBot());
+            
+            // Bypass countdown by disabling it
+            GameModel.setCountdownEnabled(false);
+            assertTrue(game.canHumanShoot());
+            assertTrue(game.canBotShoot());
+            assertTrue(game.shootHuman(new V2d(1.6, 0)));
+        } finally {
+            // Restore default (disabled in test env)
+            GameModel.setCountdownEnabled(false);
+        }
+    }
+
     private void runUntilNotMoving(GameModel game, int maxSteps) {
         for (int i = 0; i < maxSteps && game.snapshot().status() == GameStatus.BALLS_MOVING; i++) {
             game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
