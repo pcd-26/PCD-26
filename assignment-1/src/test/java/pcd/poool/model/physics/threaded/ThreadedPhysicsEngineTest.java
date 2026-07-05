@@ -27,6 +27,10 @@ class ThreadedPhysicsEngineTest {
 
     private static final double EPSILON = 1e-9;
 
+    /**
+     * Verifies that the threaded parallel physics engine produces completely deterministic,
+     * identical outcomes when run twice on the same board configuration.
+     */
     @Test
     @Timeout(3)
     void threadedPhysicsProducesDeterministicOutcomeOnDeterministicConfiguration() {
@@ -54,6 +58,10 @@ class ThreadedPhysicsEngineTest {
         }
     }
 
+    /**
+     * Verifies that the parallel engine matches the sequential baseline engine exactly
+     * in simple configurations when no collisions occur.
+     */
     @Test
     @Timeout(3)
     void threadedPhysicsMatchesSequentialBaselineWhenNoCollisionsOccur() {
@@ -91,6 +99,10 @@ class ThreadedPhysicsEngineTest {
         }
     }
 
+    /**
+     * Verifies that simultaneous contact impulses resolved by multiple workers encur
+     * correct cumulative physical effects.
+     */
     @Test
     @Timeout(3)
     void accumulatedImpulseSolverCombinesDependentSimultaneousContacts() {
@@ -114,6 +126,10 @@ class ThreadedPhysicsEngineTest {
         }
     }
 
+    /**
+     * Verifies that the parallel engine matches the sequential baseline engine exactly
+     * even in complex dense collision scenarios.
+     */
     @Test
     @Timeout(5)
     void threadedPhysicsMatchesSequentialBaselineOnDenseCollisionScenario() {
@@ -151,6 +167,10 @@ class ThreadedPhysicsEngineTest {
         }
     }
 
+    /**
+     * Verifies that closure of the threaded physics engine shuts down worker threads cleanly
+     * and clears state.
+     */
     @Test
     @Timeout(3)
     void workerThreadsCanBeClosedAfterUse() {
@@ -164,6 +184,10 @@ class ThreadedPhysicsEngineTest {
         assertFalse(Thread.currentThread().isInterrupted());
     }
 
+    /**
+     * Verifies that the threaded engine can process a large scenario (1000 balls)
+     * correctly with multiple parallel workers.
+     */
     @Test
     @Timeout(5)
     void thousandBallConfigurationCanBeSteppedByThreadedEngine() {
@@ -178,6 +202,9 @@ class ThreadedPhysicsEngineTest {
         }
     }
 
+    /**
+     * Verifies that step profiling captures timing and execution metrics across workers.
+     */
     @Test
     @Timeout(3)
     void profileStepReportsParallelWorkOnLargeBoard() {
@@ -197,6 +224,9 @@ class ThreadedPhysicsEngineTest {
         }
     }
 
+    /**
+     * Verifies that a zero or negative worker count is rejected on engine startup.
+     */
     @Test
     void rejectsInvalidWorkerCount() {
         assertThrows(IllegalArgumentException.class, () -> new ThreadedPhysicsEngine(0));

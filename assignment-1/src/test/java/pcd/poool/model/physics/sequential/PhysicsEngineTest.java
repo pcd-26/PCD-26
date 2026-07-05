@@ -20,6 +20,10 @@ class PhysicsEngineTest {
 
     private static final double EPSILON = 1e-6;
 
+    /**
+     * Verifies that two balls of equal mass correctly exchange velocities along the collision axis
+     * when they collide elastically.
+     */
     @Test
     void elasticCollisionExchangesVelocitiesForEqualMassBalls() {
         var left = new Ball(new P2d(-0.04, 0), 0.05, 1, new V2d(1, 0));
@@ -31,6 +35,10 @@ class PhysicsEngineTest {
         assertEquals(1.0, right.getVel().x(), EPSILON);
     }
 
+    /**
+     * Verifies that friction decays a ball's velocity over time, but keeps it moving
+     * above zero until it falls below the minimum speed threshold.
+     */
     @Test
     void frictionDecaysVelocityDuringMovement() {
         var ball = new Ball(new P2d(0, 0), 0.05, 1, new V2d(1, 0));
@@ -41,6 +49,10 @@ class PhysicsEngineTest {
         assertTrue(ball.getVel().abs() > 0.0);
     }
 
+    /**
+     * Verifies that a ball hitting a board boundary (wall bounce) gets its position adjusted
+     * to remain inside bounds, and has its velocity component flipped elastically.
+     */
     @Test
     void wallBounceKeepsBallInsideBoundsAndFlipsVelocity() {
         var ball = new Ball(new P2d(0.98, 0), 0.05, 1, new V2d(1, 0));
@@ -51,6 +63,10 @@ class PhysicsEngineTest {
         assertTrue(ball.getVel().x() < 0);
     }
 
+    /**
+     * Verifies that holes on the board correctly pocket small balls, remove them from active simulation,
+     * and flag when the player cue ball itself gets pocketed.
+     */
     @Test
     void holesRemoveSmallBallsAndMarkPlayerAsPocketed() {
         var board = new Board();
@@ -66,6 +82,10 @@ class PhysicsEngineTest {
         assertTrue(board.getBalls().isEmpty());
     }
 
+    /**
+     * Verifies that stepping two identical board setups results in identical, deterministic states
+     * over multiple simulation frames.
+     */
     @Test
     void simulationProducesDeterministicSnapshots() {
         var first = boardWithLineOfBalls();
@@ -81,6 +101,10 @@ class PhysicsEngineTest {
         assertEquals(first.getPocketedSmallBalls(), second.getPocketedSmallBalls());
     }
 
+    /**
+     * Verifies that the sequential physics stepper can successfully process large scenarios
+     * with thousands of balls without errors.
+     */
     @Test
     void largeScenarioCanBeStepped() {
         var balls = new ArrayList<Ball>();
