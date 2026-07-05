@@ -16,10 +16,6 @@ import pcd.poool.model.physics.common.PhysicsDefaults;
 
 class GameModelTest {
 
-    /**
-     * Verifies that the human player scores when their cue ball directly knocks a small ball
-     * into a hole, and the game remains active.
-     */
     @Test
     void humanScoresWhenOwnCueBallDirectlyPocketsSmallBall() {
         var game = new GameModel(new DirectScoringConf());
@@ -32,13 +28,9 @@ class GameModelTest {
         assertEquals(0, snapshot.botScore());
         assertTrue(snapshot.humanCanShoot());
         assertTrue(snapshot.botCanShoot());
-        assertEquals(GameStatus.RUNNING_STILL, snapshot.status());
+        assertEquals(GameStatus.RUNNING, snapshot.status());
     }
 
-    /**
-     * Verifies that both the human and bot players can shoot independently (concurrently/asynchronously)
-     * as long as their respective cue balls are at rest.
-     */
     @Test
     void humanAndBotCanShootIndependentlyWhenTheirCueBallsAreStopped() {
         var game = new GameModel(new DirectScoringConf());
@@ -47,10 +39,6 @@ class GameModelTest {
         assertTrue(game.shootBot());
     }
 
-    /**
-     * Verifies that if the human cue ball enters a hole, the game immediately ends
-     * and the bot is declared the winner regardless of the current scores.
-     */
     @Test
     void pocketingHumanCueBallImmediatelyGivesTheWinToBot() {
         var game = new GameModel(new HumanCueAlreadyInHoleConf());
@@ -63,10 +51,6 @@ class GameModelTest {
         assertEquals(GameOverReason.HUMAN_CUE_BALL_POCKETED, snapshot.gameOverReason());
     }
 
-    /**
-     * Verifies that the game exposes baseline timing metrics such as average step duration
-     * and total simulation step counts.
-     */
     @Test
     void exposesBaselineStepMetrics() {
         var game = new GameModel(new DirectScoringConf());
@@ -77,10 +61,6 @@ class GameModelTest {
         assertTrue(game.snapshot().averageStepMillis() >= 0.0);
     }
 
-    /**
-     * Verifies that the bot's shot trajectory vector can be previewed/accessed before
-     * the bot actually executes its shot.
-     */
     @Test
     void botShotCanBePreviewedBeforeItIsExecuted() {
         var game = new GameModel(new DirectScoringConf());
@@ -93,10 +73,6 @@ class GameModelTest {
         assertTrue(preview.abs() > 0.0);
     }
 
-    /**
-     * Verifies that if a small ball is pocketed but it was kicked in by another small ball
-     * (not directly by a cue ball), it does not score points for the player.
-     */
     @Test
     void smallBallPocketedAfterSmallBallCollisionDoesNotScore() {
         var game = new GameModel(new IndirectPocketConf());

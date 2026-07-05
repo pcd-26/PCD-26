@@ -26,7 +26,14 @@ public class SequentialPoool {
     private static final double BOT_PREVIEW_SCALE = 0.35;
 
     /**
+     * Utility class; not meant to be instantiated.
+     */
+    private SequentialPoool() {
+    }
+
+    /**
      * Starts the playable sequential game.
+     *
      * @param args ignored
      */
     public static void main(String[] args) {
@@ -77,7 +84,7 @@ public class SequentialPoool {
             }
 
             renderedFrames++;
-            int currentFramesPerSecond = getCurrentFPS(renderedFrames, startTime, now);
+            int currentFramesPerSecond = framesPerSecond(renderedFrames, startTime, now);
             viewModel.update(game.board(), game.snapshot(), currentFramesPerSecond);
             updateBotShotPreview(game, viewModel, botAimStartedAt > 0);
             view.render();
@@ -85,35 +92,17 @@ public class SequentialPoool {
         }
     }
 
-    /**
-     * Instantiates a new game.
-     * @return a new GameModel
-     */
     private static GameModel newGame() {
         return new GameModel(new StandardGameBoardConf());
     }
 
-    /**
-     * Advances the game state by the elapsed time if the game is not yet finished.
-     *
-     * @param game the game model to advance
-     * @param elapsedMillis the time elapsed since the last update in milliseconds
-     */
     private static void advanceGame(GameModel game, long elapsedMillis) {
         if (!game.snapshot().isFinished()) {
             game.step(elapsedMillis);
         }
     }
 
-    /**
-     * Calculates the current frame rate (frames per second).
-     *
-     * @param renderedFrames the total number of frames rendered since starting
-     * @param startTime the start timestamp in milliseconds
-     * @param now the current timestamp in milliseconds
-     * @return the calculated frames per second as an integer
-     */
-    private static int getCurrentFPS(int renderedFrames, long startTime, long now) {
+    private static int framesPerSecond(int renderedFrames, long startTime, long now) {
         long elapsed = now - startTime;
         if (elapsed <= 0) {
             return 0;
@@ -121,15 +110,8 @@ public class SequentialPoool {
         return (int) (renderedFrames * 1000 / elapsed);
     }
 
-    /**
-     * Updates the bot's shot trajectory preview in the view model if the bot is currently aiming.
-     *
-     * @param game the active game model
-     * @param viewModel the shared view model to update with the preview coordinates
-     * @param isBotAiming true if the bot has started its think/aim phase; false otherwise
-     */
-    private static void updateBotShotPreview(GameModel game, ViewModel viewModel, boolean isBotAiming) {
-        if (!game.canBotShoot() || !isBotAiming) {
+    private static void updateBotShotPreview(GameModel game, ViewModel viewModel, boolean botAiming) {
+        if (!game.canBotShoot() || !botAiming) {
             return;
         }
         var bot = game.board().getBotBall();
@@ -141,20 +123,11 @@ public class SequentialPoool {
         viewModel.setShotPreview(bot.pos(), target, impulse.abs(), Player.BOT);
     }
 
-    /**
-     * Checks whether the human player is currently aiming a shot.
-     *
-     * @param viewModel the shared view model containing shot preview info
-     * @return true if a human shot preview is active in the view model; false otherwise
-     */
     static boolean isHumanAiming(ViewModel viewModel) {
         var preview = viewModel.getShotPreview(Player.HUMAN);
         return preview != null && preview.player() == Player.HUMAN;
     }
 
-    /**
-     * Tries to make a frame go into sleep.
-     */
     private static void sleepFrame() {
         try {
             Thread.sleep(FRAME_SLEEP_MILLIS);

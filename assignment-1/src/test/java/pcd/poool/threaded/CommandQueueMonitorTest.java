@@ -10,10 +10,6 @@ import org.junit.jupiter.api.Test;
 
 class CommandQueueMonitorTest {
 
-    /**
-     * Verifies that the queue behaves as a FIFO (First-In, First-Out) buffer, returning commands
-     * in the exact order they were submitted.
-     */
     @Test
     void pollReturnsCommandsInSubmissionOrder() {
         var queue = new CommandQueueMonitor();
@@ -28,10 +24,6 @@ class CommandQueueMonitorTest {
         assertNull(queue.poll());
     }
 
-    /**
-     * Verifies that closing the monitor rejects all currently queued commands that have not been executed,
-     * and that any future command submissions are immediately rejected.
-     */
     @Test
     void closeRejectsPendingCommandsAndPreventsNewSubmissions() {
         var queue = new CommandQueueMonitor();

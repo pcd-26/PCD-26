@@ -82,12 +82,6 @@ public class ThreadedPoool {
         }
     }
 
-    /**
-     * Instantiates and starts a new ThreadedGameRunner with the given board configuration.
-     *
-     * @param boardProfile the initial layout and setup of the board
-     * @return the started ThreadedGameRunner instance
-     */
     private static ThreadedGameRunner newStartedRunner(BoardConf boardProfile) {
         var runner = new ThreadedGameRunner(boardProfile);
         runner.start();
@@ -149,14 +143,6 @@ public class ThreadedPoool {
                 Player.BOT);
     }
 
-    /**
-     * Computes the current frames per second (FPS) rate.
-     *
-     * @param renderedFrames total frames rendered during the run
-     * @param startTime the start time of the run in milliseconds
-     * @param now the current system time in milliseconds
-     * @return the calculated frames per second as an integer
-     */
     private static int framePerSec(int renderedFrames, long startTime, long now) {
         long elapsed = now - startTime;
         if (elapsed <= 0) {
@@ -165,9 +151,6 @@ public class ThreadedPoool {
         return (int) (renderedFrames * 1000 / elapsed);
     }
 
-    /**
-     * Puts the current thread to sleep for a configured frame duration to cap frame rate and yield CPU.
-     */
     private static void sleepFrame() {
         try {
             Thread.sleep(FRAME_SLEEP_MILLIS);

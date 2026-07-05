@@ -10,10 +10,6 @@ import pcd.poool.model.common.math.V2d;
 
 class SpatialCollisionDetectorTest {
 
-    /**
-     * Verifies that the spatial grid correctly registers broad-phase collision candidate pairs
-     * for balls residing in adjacent or overlapping grid cells, while ignoring distant balls.
-     */
     @Test
     void detectsPairsForBallsWhoseBoundingCellsOverlap() {
         var detector = new SpatialCollisionDetector();
@@ -28,10 +24,6 @@ class SpatialCollisionDetectorTest {
         assertEquals(new SpatialCollisionDetector.Pair(0, 1), pairs.get(0));
     }
 
-    /**
-     * Verifies that candidate pair results are sorted consistently (first index smaller than second)
-     * to guarantee deterministic order of physics execution.
-     */
     @Test
     void returnsPairsInDeterministicOrder() {
         var detector = new SpatialCollisionDetector();
@@ -48,9 +40,6 @@ class SpatialCollisionDetectorTest {
                 new SpatialCollisionDetector.Pair(1, 2)), pairs);
     }
 
-    /**
-     * Verifies that list inputs with zero or a single ball return no pairwise candidates.
-     */
     @Test
     void returnsNoPairsForEmptyOrSingleBallScenarios() {
         var detector = new SpatialCollisionDetector();

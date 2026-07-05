@@ -13,10 +13,6 @@ from scripts import plot_benchmarks
 
 class PlotBenchmarksTest(unittest.TestCase):
     def test_speedup_layout_writes_only_speedup_chart(self) -> None:
-        """Verifies that the speedup layout generates only the speedup-vs-balls chart
-
-        when running in a limited speedup layout mode, avoiding rendering extra metrics.
-        """
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp) / "results"
             output_dir = Path(tmp) / "charts"
@@ -47,11 +43,6 @@ class PlotBenchmarksTest(unittest.TestCase):
             self.assertFalse((output_dir / "scalability-elapsed-time-vs-workers.png").exists())
 
     def test_speedup_profile_keeps_only_sequential_comparisons(self) -> None:
-        """Verifies that the speedup profile correctly limits generated charts
-
-        to speedup-vs-balls and speedup-vs-workers when explicitly using the
-        'speedup' profile CLI flag.
-        """
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp) / "results"
             output_dir = Path(tmp) / "charts"
@@ -108,7 +99,6 @@ class PlotBenchmarksTest(unittest.TestCase):
 
 
 def _write_csv(path: Path, lines: list[str]) -> None:
-    """Helper function to write a list of string lines into a CSV file."""
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

@@ -13,12 +13,6 @@ import java.util.Set;
  */
 public class SpatialCollisionDetector {
 
-    /**
-     * Detects and returns all candidate collision ball pairs using a spatial grid broad-phase check.
-     *
-     * @param balls the list of all balls to check for collisions
-     * @return a sorted, deduplicated list of Pairs representing overlapping/colliding candidate ball indexes
-     */
     public List<Pair> detectCollisionPairs(List<Ball> balls) {
         if (balls.size() < 2) {
             return List.of();
@@ -45,12 +39,6 @@ public class SpatialCollisionDetector {
         return orderedPairs;
     }
 
-    /**
-     * Helper method to generate all unique candidate pairs from a single grid cell's list of ball indexes.
-     *
-     * @param indexes list of ball indexes located in the same grid cell
-     * @param pairs set to accumulate unique candidate pairs
-     */
     private void collectPairs(List<Integer> indexes, Set<Pair> pairs) {
         for (int i = 0; i < indexes.size() - 1; i++) {
             for (int j = i + 1; j < indexes.size(); j++) {

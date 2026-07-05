@@ -47,11 +47,6 @@ if plt is not None:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parses command-line arguments for the benchmark plotting script.
-
-    Specifies the input directory for results, the output directory for charts,
-    and the rendering profile (full vs. speedup).
-    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--input-dir",
@@ -75,7 +70,6 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Main execution function that parses arguments and delegates rendering based on detected CSV files."""
     args = parse_args()
     input_dir = args.input_dir
     output_dir = args.output_dir
@@ -97,7 +91,6 @@ def main() -> None:
 
 
 def reset_chart_output(output_dir: Path) -> None:
-    """Safely cleans up the output directory by removing existing files/directories and recreating it empty."""
     if output_dir.exists():
         for child in output_dir.iterdir():
             if child.is_dir():
@@ -108,11 +101,6 @@ def reset_chart_output(output_dir: Path) -> None:
 
 
 def render_new_layout(input_dir: Path, output_dir: Path, profile: str = "full") -> None:
-    """Renders charts from the new CSV structure, including scalability and speedups.
-
-    Reads results, checks matplotlib availability, and plots execution time, throughput,
-    speedup, and coordination overhead metrics.
-    """
     headless = read_csv(input_dir / "aggregated-results.csv", required=True)
     speedup = read_csv(input_dir / "speedup-results.csv", required=True)
     scalability = read_csv(input_dir / "aggregated-scalability-results.csv", required=True)

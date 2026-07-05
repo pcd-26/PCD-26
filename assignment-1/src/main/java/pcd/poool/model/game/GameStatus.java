@@ -9,7 +9,7 @@ package pcd.poool.model.game;
  */
 public enum GameStatus {
     /** The game is active and no ball is currently moving. */
-    RUNNING_STILL,
+    RUNNING,
     /** At least one ball is moving after a shot or collision. */
     BALLS_MOVING,
     /** A terminal condition has been reached. */

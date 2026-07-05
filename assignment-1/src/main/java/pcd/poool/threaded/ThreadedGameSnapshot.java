@@ -25,12 +25,6 @@ public record ThreadedGameSnapshot(
         List<Hole> holes,
         V2d botPreviewShot) {
 
-    /**
-     * Creates a new ThreadedGameSnapshot by copying the state from the given GameModel.
-     *
-     * @param game the active game model to snapshot
-     * @return the created immutable ThreadedGameSnapshot instance
-     */
     static ThreadedGameSnapshot from(GameModel game) {
         var board = game.board();
         return new ThreadedGameSnapshot(

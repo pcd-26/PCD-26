@@ -1,11 +1,12 @@
 package pcd.poool;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.game.Player;
 import pcd.poool.view.board.ViewModel;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class SequentialPooolTest {
 
@@ -35,6 +36,6 @@ class SequentialPooolTest {
         viewModel.setShotPreview(new P2d(0, 1), new P2d(1, 1), 1.0, Player.HUMAN);
 
         assertTrue(SequentialPoool.isHumanAiming(viewModel));
-        assertNotNull(viewModel.getShotPreview(Player.BOT));
+        assertTrue(viewModel.getShotPreview(Player.BOT) != null);
     }
 }

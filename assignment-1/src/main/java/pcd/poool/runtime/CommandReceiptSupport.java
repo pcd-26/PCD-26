@@ -17,11 +17,6 @@ public class CommandReceiptSupport<T> {
     protected CommandReceiptSupport() {
     }
 
-    /**
-     * Marks the command execution as successfully completed with the given result and notifies waiting threads.
-     *
-     * @param result the result of the command execution
-     */
     public synchronized void complete(T result) {
         if (completed) {
             return;
@@ -31,11 +26,6 @@ public class CommandReceiptSupport<T> {
         notifyAll();
     }
 
-    /**
-     * Marks the command execution as failed with the given runtime exception and notifies waiting threads.
-     *
-     * @param failure the exception that occurred during execution
-     */
     public synchronized void fail(RuntimeException failure) {
         if (completed) {
             return;

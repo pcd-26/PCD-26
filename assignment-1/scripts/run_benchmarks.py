@@ -32,11 +32,6 @@ class BenchmarkRunConfig:
 
 # Run with flag `--mode speedup` to make benchmarks faster
 def parse_args() -> BenchmarkRunConfig:
-    """Parses command-line arguments to build a BenchmarkRunConfig object.
-
-    Includes arguments to set the benchmark mode, output results folder,
-    output charts folder, skipping the maven build, and setting the maven goal.
-    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
@@ -77,17 +72,11 @@ def parse_args() -> BenchmarkRunConfig:
 
 
 def main() -> None:
-    """Entry point of the benchmark runner script."""
     config = parse_args()
     run_local_benchmarks(config)
 
 
 def run_local_benchmarks(config: BenchmarkRunConfig) -> None:
-    """Runs the benchmark pipeline or suite based on the configuration.
-
-    Builds the Maven project if required, clears the results directory,
-    and launches the selected Java benchmark main class.
-    """
     if not config.skip_build:
         print_step(f"build-start goal={config.maven_goal}")
         run_command(build_maven_command(config.maven_goal))
@@ -109,12 +98,10 @@ def run_local_benchmarks(config: BenchmarkRunConfig) -> None:
 
 
 def build_maven_command(goal: str) -> list[str]:
-    """Generates the Maven command list to execute the specified lifecycle goal."""
     return [resolve_maven_command(), "-f", str(ASSIGNMENT_ROOT / "pom.xml"), "clean", goal]
 
 
 def build_pipeline_command(mode: str, results_root: Path, charts_root: Path) -> list[str]:
-    """Generates the Java invocation command list to run the full BenchmarkPipeline."""
     profile = "speedup" if mode == "speedup" else "full"
     return [
         resolve_java_command(),
@@ -133,7 +120,6 @@ def build_pipeline_command(mode: str, results_root: Path, charts_root: Path) -> 
 
 
 def build_suite_command(mode: str, results_root: Path) -> list[str]:
-    """Generates the Java invocation command list to run the standalone BenchmarkSuite."""
     return [
         resolve_java_command(),
         "-cp",
@@ -145,18 +131,12 @@ def build_suite_command(mode: str, results_root: Path) -> list[str]:
 
 
 def reset_directory(path: Path) -> None:
-    """Removes a directory and its contents if it exists, then recreates it empty."""
     if path.exists():
         shutil.rmtree(path)
     path.mkdir(parents=True, exist_ok=True)
 
 
 def resolve_maven_command() -> str:
-    """Finds and returns the path to the Maven executable.
-
-    Checks first for a maven wrapper (mvnw / mvnw.cmd) locally,
-    then queries the system PATH for standard maven installations.
-    """
     local_candidates = [
         ASSIGNMENT_ROOT / "mvnw.cmd",
         ASSIGNMENT_ROOT / "mvnw",
@@ -179,7 +159,6 @@ def resolve_maven_command() -> str:
 
 
 def resolve_java_command() -> str:
-    """Locates and returns the java executable path from the system PATH."""
     path_candidates = ["java.exe", "java"]
     for candidate in path_candidates:
         resolved = shutil.which(candidate)
@@ -190,10 +169,6 @@ def resolve_java_command() -> str:
 
 
 def run_command(command: list[str]) -> None:
-    """Runs a subprocess command asynchronously, logging its output in real-time.
-
-    Raises SystemExit if the command exits with a non-zero code.
-    """
     print_step(f"command-start cwd={REPO_ROOT} command={format_command(command)}")
     process = subprocess.Popen(
         command,
@@ -218,12 +193,10 @@ def run_command(command: list[str]) -> None:
 
 
 def print_step(message: str) -> None:
-    """Prints a formatted step message to standard output with immediate flushing."""
     print(f"[benchmark-runner] {message}", flush=True)
 
 
 def format_command(command: list[str]) -> str:
-    """Formats a command list into a shell-safe readable string representation."""
     return " ".join(shlex.quote(part) for part in command)
 
 

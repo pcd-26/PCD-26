@@ -11,10 +11,6 @@ class ViewFrameTest {
 
     private static final double EPSILON = 1e-9;
 
-    /**
-     * Verifies that combination of diagonal keyboard arrows yields the correct shot impulse
-     * magnitude and equal x/y components.
-     */
     @Test
     void diagonalArrowCombinationKeepsConfiguredImpulseMagnitude() {
         var shot = ViewFrame.shotImpulseFor(true, false, false, true);
@@ -23,9 +19,6 @@ class ViewFrameTest {
         assertEquals(shot.x(), shot.y(), EPSILON);
     }
 
-    /**
-     * Verifies that a bitwise keyboard direction mask creates the expected diagonal impulse.
-     */
     @Test
     void keyboardDirectionMaskCreatesSameDiagonalImpulse() {
         var shot = ViewFrame.keyboardShotImpulse(1 | 8);
@@ -34,9 +27,6 @@ class ViewFrameTest {
         assertEquals(shot.x(), shot.y(), EPSILON);
     }
 
-    /**
-     * Verifies that opposite arrow key directions cancel each other's impulses, yielding zero force.
-     */
     @Test
     void oppositeDirectionsCancelEachOther() {
         var shot = ViewFrame.shotImpulseFor(true, true, false, false);
@@ -44,10 +34,6 @@ class ViewFrameTest {
         assertEquals(0.0, shot.abs(), EPSILON);
     }
 
-    /**
-     * Verifies that clicking/targeting with the mouse creates an impulse vector pointing directly
-     * towards the clicked coordinates.
-     */
     @Test
     void mouseTargetCreatesImpulseTowardClickedPoint() {
         var shot = ViewFrame.shotImpulseToward(new P2d(0, 0), new P2d(2, 0));
@@ -56,9 +42,6 @@ class ViewFrameTest {
         assertEquals(0.0, shot.y(), EPSILON);
     }
 
-    /**
-     * Verifies that mouse drag distance proportionally controls shot impulse intensity.
-     */
     @Test
     void mouseDragDistanceControlsShotIntensity() {
         var shortShot = ViewFrame.mouseShotImpulse(new P2d(0, 0), new P2d(0.1, 0));
@@ -72,10 +55,6 @@ class ViewFrameTest {
                 EPSILON);
     }
 
-    /**
-     * Verifies that the mouse shot impulse magnitude is capped at MAX_MOUSE_SHOT_IMPULSE
-     * regardless of extreme drag distances.
-     */
     @Test
     void mouseShotIntensityIsCapped() {
         var shot = ViewFrame.mouseShotImpulse(new P2d(0, 0), new P2d(10, 0));
@@ -83,9 +62,6 @@ class ViewFrameTest {
         assertEquals(ViewFrame.MAX_MOUSE_SHOT_IMPULSE, shot.abs(), EPSILON);
     }
 
-    /**
-     * Verifies that the bot's shot preview state is correctly recognized as bot aiming.
-     */
     @Test
     void botPreviewIsDetectedIndependently() {
         var model = new ViewModel();
