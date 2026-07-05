@@ -94,9 +94,10 @@ public class SequentialPoool {
     }
 
     /**
-     * Updates (advances) game view.
-     * @param game
-     * @param elapsedMillis
+     * Advances the game state by the elapsed time if the game is not yet finished.
+     *
+     * @param game the game model to advance
+     * @param elapsedMillis the time elapsed since the last update in milliseconds
      */
     private static void advanceGame(GameModel game, long elapsedMillis) {
         if (!game.snapshot().isFinished()) {
@@ -105,11 +106,12 @@ public class SequentialPoool {
     }
 
     /**
-     * Calculates current frames per second.
-     * @param renderedFrames
-     * @param startTime
-     * @param now
-     * @return
+     * Calculates the current frame rate (frames per second).
+     *
+     * @param renderedFrames the total number of frames rendered since starting
+     * @param startTime the start timestamp in milliseconds
+     * @param now the current timestamp in milliseconds
+     * @return the calculated frames per second as an integer
      */
     private static int getCurrentFPS(int renderedFrames, long startTime, long now) {
         long elapsed = now - startTime;
@@ -120,10 +122,11 @@ public class SequentialPoool {
     }
 
     /**
-     * Shows ballshot trajectory preview for bot.
-     * @param game
-     * @param viewModel
-     * @param isBotAiming
+     * Updates the bot's shot trajectory preview in the view model if the bot is currently aiming.
+     *
+     * @param game the active game model
+     * @param viewModel the shared view model to update with the preview coordinates
+     * @param isBotAiming true if the bot has started its think/aim phase; false otherwise
      */
     private static void updateBotShotPreview(GameModel game, ViewModel viewModel, boolean isBotAiming) {
         if (!game.canBotShoot() || !isBotAiming) {
@@ -139,9 +142,10 @@ public class SequentialPoool {
     }
 
     /**
-     * Checks if human is currently aiming.
-     * @param viewModel
-     * @return boolean, true if aiming, false if not
+     * Checks whether the human player is currently aiming a shot.
+     *
+     * @param viewModel the shared view model containing shot preview info
+     * @return true if a human shot preview is active in the view model; false otherwise
      */
     static boolean isHumanAiming(ViewModel viewModel) {
         var preview = viewModel.getShotPreview(Player.HUMAN);
