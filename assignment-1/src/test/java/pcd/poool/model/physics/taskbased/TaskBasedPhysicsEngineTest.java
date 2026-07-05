@@ -268,6 +268,30 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
+    @Timeout(3)
+    void taskBasedPhysicsMatchesSequentialOutcomeWithSimpleCollision() {
+        var conf = new SimpleCollisionBoardConf();
+
+        var sequentialBoard = new Board(new PhysicsEngine());
+        sequentialBoard.init(conf);
+
+        try (var taskEngine = new TaskBasedPhysicsEngine(4)) {
+            var taskBoard = new Board(taskEngine);
+            taskBoard.init(conf);
+
+            for (int i = 0; i < 20; i++) {
+                sequentialBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+                taskBoard.updateState(PhysicsDefaults.FIXED_STEP_MILLIS);
+            }
+
+            assertBoardSnapshotsClose(sequentialBoard.getBalls(), taskBoard.getBalls());
+            assertBallSnapshotClose(sequentialBoard.getPlayerBall(), taskBoard.getPlayerBall());
+            assertBallSnapshotClose(sequentialBoard.getBotBall(), taskBoard.getBotBall());
+            assertEquals(sequentialBoard.getPocketedSmallBalls(), taskBoard.getPocketedSmallBalls());
+        }
+    }
+
+    @Test
     @Timeout(8)
     void highBallCountConfigurationCanBeSteppedRepeatedly() {
         try (var engine = new TaskBasedPhysicsEngine(4)) {
@@ -429,6 +453,36 @@ class TaskBasedPhysicsEngineTest {
                 }
             }
             return balls;
+        }
+
+        @Override
+        public List<Hole> getHoles() {
+            return List.of();
+        }
+    }
+
+    private static class SimpleCollisionBoardConf implements BoardConf {
+
+        @Override
+        public Boundary getBoardBoundary() {
+            return new Boundary(-1, -1, 1, 1);
+        }
+
+        @Override
+        public Ball getPlayerBall() {
+            return new Ball(new P2d(-0.18, 0), 0.05, 1.0, new V2d(0.35, 0.0));
+        }
+
+        @Override
+        public Ball getBotBall() {
+            return new Ball(new P2d(0.18, 0), 0.05, 1.0, new V2d(-0.35, 0.0));
+        }
+
+        @Override
+        public List<Ball> getSmallBalls() {
+            return List.of(
+                    new Ball(new P2d(0.0, 0.18), 0.03, 1.0, new V2d(0.0, 0.0)),
+                    new Ball(new P2d(0.0, -0.18), 0.03, 1.0, new V2d(0.0, 0.0)));
         }
 
         @Override
