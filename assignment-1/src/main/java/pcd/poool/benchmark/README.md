@@ -39,13 +39,14 @@ The wrapper:
 - compiles `assignment-1`
 - runs the Java benchmark pipeline
 - writes benchmark results under `benchmarks/results/`
-- exports `environment.csv` with CPU model, physical cores, logical threads,
-  JVM-visible processors, JVM, OS, and RAM
+- exports `environment.csv` with maximum JVM-visible threads, JVM, and OS
 - refreshes `benchmarks/charts/`
 - clears `benchmarks/charts/` before every run so only the latest chart set is
   kept
 - uses medians as the primary latency-oriented summary instead of emphasizing
   a single best-case run
+- keeps the `vs balls` speedup gate on the fixed high-worker configuration and
+  lets the `vs threads` family vary worker count explicitly
 - runs only the headless and scalability benchmark families in the local Python-driven flow
 - uses a standard `full` matrix capped at `2500` balls for manageable local
   execution time

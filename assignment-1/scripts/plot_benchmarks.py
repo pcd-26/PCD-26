@@ -164,7 +164,7 @@ def render_new_layout(input_dir: Path, output_dir: Path, profile: str = "full") 
         else:
             write_placeholder_pair(output_dir / "speedup-vs-workers", "Speedup vs worker count by implementation")
 
-    thread_pool_speedup = build_thread_pool_speedup(scalability, x_col="workers", value_col="meanElapsedMs")
+    thread_pool_speedup = build_thread_pool_speedup(scalability, x_col="workers", value_col="medianElapsedMs")
     if not thread_pool_speedup.empty:
         if plt is not None:
             plot_thread_pool_speedup_panels(
@@ -289,7 +289,7 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
             output_dir / "coordination-overhead-vs-workers.png",
             chart_context=chart_context,
         )
-        thread_pool_speedup = build_thread_pool_speedup(summary, x_col="threads", value_col="meanMillis")
+        thread_pool_speedup = build_thread_pool_speedup(summary, x_col="threads", value_col="medianMillis")
         if not thread_pool_speedup.empty:
             plot_thread_pool_speedup_panels(
                 thread_pool_speedup,
@@ -335,7 +335,7 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
         fallback_plot_thread_metric_panels(
             summary,
             output_dir / "scalability-elapsed-time-vs-workers.png",
-            value_col="meanMillis",
+            value_col="medianMillis",
             x_col="threads",
         )
         fallback_plot_thread_metric_panels(
@@ -348,7 +348,7 @@ def render_legacy_layout(input_dir: Path, output_dir: Path) -> None:
             runs,
             output_dir / "coordination-overhead-vs-workers.png",
         )
-        thread_pool_speedup = build_thread_pool_speedup(summary, x_col="threads", value_col="meanMillis")
+        thread_pool_speedup = build_thread_pool_speedup(summary, x_col="threads", value_col="medianMillis")
         if not thread_pool_speedup.empty:
             fallback_plot_thread_pool_speedup_panels(
                 thread_pool_speedup,
@@ -546,7 +546,7 @@ def build_thread_pool_speedup(df: pd.DataFrame, x_col: str, value_col: str) -> p
 
 
 def build_worker_speedup_from_scalability(df: pd.DataFrame) -> pd.DataFrame:
-    required = {"balls", "implementation", "workers", "steps", "seed", "meanElapsedMs"}
+    required = {"balls", "implementation", "workers", "steps", "seed", "medianElapsedMs"}
     missing = required - set(df.columns)
     if missing:
         return pd.DataFrame()
@@ -568,7 +568,7 @@ def build_worker_speedup_from_scalability(df: pd.DataFrame) -> pd.DataFrame:
         if merged.empty:
             continue
         merged["implementation"] = implementation
-        merged["speedup"] = merged["meanElapsedMs_seq"] / merged["meanElapsedMs_impl"]
+        merged["speedup"] = merged["medianElapsedMs_seq"] / merged["medianElapsedMs_impl"]
         rows.append(merged.loc[:, ["balls", "workers_impl", "implementation", "speedup"]].rename(columns={"workers_impl": "workers"}))
 
     if not rows:
@@ -770,28 +770,13 @@ def build_chart_context(environment: pd.DataFrame) -> str | None:
     row = environment.iloc[0].fillna("")
     parts: list[str] = []
 
-    cpu = _clean_text(row.get("cpuModel", ""))
-    physical = _safe_int(row.get("physicalCores"))
-    logical = _safe_int(row.get("logicalCpuCount"))
-    available = _safe_int(row.get("availableProcessors"))
-    ram_bytes = _safe_int(row.get("totalPhysicalMemoryBytes"))
+    max_threads = _safe_int(row.get("maxThreads"))
     os_name = _clean_text(row.get("osName", ""))
     jvm_name = _clean_text(row.get("jvmName", ""))
     jvm_version = _clean_text(row.get("jvmVersion", ""))
 
-    if cpu:
-        parts.append(f"CPU: {cpu}")
-    cpu_counts: list[str] = []
-    if physical is not None:
-        cpu_counts.append(f"{physical} physical cores")
-    if logical is not None:
-        cpu_counts.append(f"{logical} logical threads")
-    if available is not None:
-        cpu_counts.append(f"JVM available={available}")
-    if cpu_counts:
-        parts.append(", ".join(cpu_counts))
-    if ram_bytes is not None:
-        parts.append(f"RAM: {ram_bytes / (1024 ** 3):.1f} GiB")
+    if max_threads is not None:
+        parts.append(f"Max threads: {max_threads}")
     if jvm_version or jvm_name:
         parts.append(f"JVM: {jvm_version or jvm_name}")
     if os_name:

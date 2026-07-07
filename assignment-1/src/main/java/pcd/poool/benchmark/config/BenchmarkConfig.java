@@ -37,7 +37,13 @@ public record BenchmarkConfig(
     public static final int DEFAULT_BALLS = 100;
     public static final int DEFAULT_THREADS = Math.max(1, Runtime.getRuntime().availableProcessors());
     public static final int DEFAULT_STEPS = 600;
-    public static final long DEFAULT_SEED = 0L;
+    /**
+     * Canonical deterministic seed shared by the benchmark entry points.
+     *
+     * <p>This matches the workload catalog seed so the direct runners and the
+     * suite produce comparable snapshots without requiring a seed override.
+     */
+    public static final long DEFAULT_SEED = 42L;
     public static final int DEFAULT_WARMUP_RUNS = 2;
     public static final int DEFAULT_MEASURED_RUNS = 5;
     public static final boolean DEFAULT_GUI_ENABLED = false;
@@ -87,7 +93,7 @@ public record BenchmarkConfig(
      */
     public static List<BenchmarkConfig> defaultMatrix() {
         var configs = new ArrayList<BenchmarkConfig>();
-        for (var balls : List.of(100, 500, 1_000, 2_000, 2_500)) {
+        for (var balls : List.of(100, 500, 1_000, 1_500, 2_000, 2_500)) {
             configs.add(new BenchmarkConfig(
                     ImplementationType.SEQUENTIAL,
                     balls,

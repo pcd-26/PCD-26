@@ -93,4 +93,31 @@ class ViewFrameTest {
 
         assertTrue(ViewFrame.isBotAiming(model));
     }
+
+    /**
+     * Verifies that the shot preview line width scales between 2.0f and 5.0f
+     * as the launch force intensity goes from 0% to 100%.
+     */
+    @Test
+    void shotPreviewWidthScalesProportionatelyWithLaunchForce() {
+        // At 0% intensity
+        float minWidth = ViewFrame.calculateShotPreviewWidth(0.0);
+        assertEquals(2.0f, minWidth, (float) EPSILON);
+
+        // At 100% intensity (MAX_MOUSE_SHOT_IMPULSE)
+        float maxWidth = ViewFrame.calculateShotPreviewWidth(ViewFrame.MAX_MOUSE_SHOT_IMPULSE);
+        assertEquals(5.0f, maxWidth, (float) EPSILON);
+
+        // At 50% intensity
+        float midWidth = ViewFrame.calculateShotPreviewWidth(ViewFrame.MAX_MOUSE_SHOT_IMPULSE * 0.5);
+        assertEquals(3.5f, midWidth, (float) EPSILON);
+
+        // Clamping check for negative intensity (should clamp to 0%)
+        float negativeWidth = ViewFrame.calculateShotPreviewWidth(-1.0);
+        assertEquals(2.0f, negativeWidth, (float) EPSILON);
+
+        // Clamping check for excessive intensity (should clamp to 100%)
+        float excessiveWidth = ViewFrame.calculateShotPreviewWidth(100.0);
+        assertEquals(5.0f, excessiveWidth, (float) EPSILON);
+    }
 }

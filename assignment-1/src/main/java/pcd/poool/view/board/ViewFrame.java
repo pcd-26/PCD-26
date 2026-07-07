@@ -42,15 +42,20 @@ public class ViewFrame extends JFrame {
     private static final int PLAYER_BALL_STROKE_WIDTH = 3;
     private static final int BOT_BALL_STROKE_WIDTH = 3;
     private static final int SHOT_PREVIEW_STROKE_WIDTH = 3;
+    private static final float MIN_ARROW_WIDTH = 2.0f;
+    private static final float MAX_ARROW_WIDTH = 5.0f;
+    private static final float SHOT_PROJECTION_STROKE_WIDTH = 2.0f;
     private static final float[] SHOT_PROJECTION_DASH = {8.0f, 8.0f};
     private static final int HUD_X = 20;
+    private static final int HUD_STATS_X = 20;
     private static final int HUD_BALL_COUNT_Y = 40;
-    private static final int HUD_FPS_Y = 60;
-    private static final int HUD_SCORE_Y = 80;
-    private static final int HUD_STATUS_Y = 100;
-    private static final int HUD_METRICS_Y = 120;
-    private static final String SMALL_BALL_COUNT_LABEL = "Num small balls: ";
-    private static final String FPS_LABEL = "Frame per sec: ";
+    private static final int HUD_FPS_Y = 90;
+    private static final int HUD_HUMAN_READY_Y = 110;
+    private static final int HUD_BOT_READY_Y = 130;
+    private static final int HUD_STATUS_Y = 150;
+    private static final int HUD_METRICS_Y = 170;
+    private static final String SMALL_BALL_COUNT_LABEL = "Balls: ";
+    private static final String FPS_LABEL = "FPS: ";
     private static final String RESTART_HINT = "Press R to start a new game";
     static final double SHOT_IMPULSE = 1.4;
     static final double MAX_MOUSE_SHOT_IMPULSE = 2.4;
@@ -80,6 +85,14 @@ public class ViewFrame extends JFrame {
     private boolean humanDragActive;
     /** Whether a keyboard aiming interaction is active. */
     private boolean humanKeyboardActive;
+    /** System time when the game started. */
+    private long gameStartSystemTime = System.currentTimeMillis();
+    /** Button to restart the game. */
+    private JButton newGameButton;
+
+    private void resetCountdown() {
+        gameStartSystemTime = System.currentTimeMillis();
+    }
     
     /**
      * Creates a read-only frame.
@@ -142,6 +155,67 @@ public class ViewFrame extends JFrame {
         setSize(w, h + WINDOW_DECORATION_HEIGHT);
         setResizable(false);
         panel = new VisualiserPanel(w,h);
+        
+        // Setup New Game button with modern custom UI styling
+        newGameButton = new JButton("New Game") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                var game = ViewFrame.this.model.getGame();
+                boolean isBotWinner = (game != null && game.winner() == Player.BOT);
+                
+                Color bg;
+                if (isBotWinner) {
+                    if (getModel().isPressed()) {
+                        bg = new Color(175, 25, 25); // Darker red when pressed
+                    } else if (getModel().isRollover()) {
+                        bg = new Color(240, 40, 40); // Lighter vibrant red on hover
+                    } else {
+                        bg = new Color(210, 30, 30); // Standard premium red
+                    }
+                } else {
+                    if (getModel().isPressed()) {
+                        bg = new Color(25, 75, 175); // Darker blue when pressed
+                    } else if (getModel().isRollover()) {
+                        bg = new Color(40, 120, 240); // Lighter vibrant blue on hover
+                    } else {
+                        bg = new Color(30, 90, 210); // Standard premium blue
+                    }
+                }
+                
+                g2.setColor(bg);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                
+                g2.setColor(Color.WHITE);
+                g2.setFont(getFont());
+                var fm = g2.getFontMetrics();
+                int x = (getWidth() - fm.stringWidth(getText())) / 2;
+                int y = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
+                g2.drawString(getText(), x, y);
+                
+                g2.dispose();
+            }
+        };
+        newGameButton.setContentAreaFilled(false);
+        newGameButton.setBorderPainted(false);
+        newGameButton.setFocusPainted(false);
+        newGameButton.setRolloverEnabled(true);
+        newGameButton.setFont(newGameButton.getFont().deriveFont(Font.BOLD, 16f));
+        newGameButton.setBounds(w / 2 - 75, (h + WINDOW_DECORATION_HEIGHT) / 2 + 85, 150, 40);
+        newGameButton.setFocusable(false);
+        newGameButton.setVisible(false);
+        newGameButton.addActionListener(e -> {
+            resetInputState(humanAimingStopHandler);
+            resetCountdown();
+            if (restartHandler != null) {
+                restartHandler.run();
+            }
+        });
+        panel.setLayout(null);
+        panel.add(newGameButton);
+        
         getContentPane().add(panel);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         installInput(shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
@@ -159,6 +233,7 @@ public class ViewFrame extends JFrame {
             public void keyPressed(KeyEvent event) {
                 if (event.getKeyCode() == KeyEvent.VK_R && restartHandler != null) {
                     resetInputState(humanAimingStopHandler);
+                    resetCountdown();
                     restartHandler.run();
                     event.consume();
                     return;
@@ -227,6 +302,9 @@ public class ViewFrame extends JFrame {
     }
 
     private boolean tryStartHumanAiming(BooleanSupplier humanAimingStartHandler) {
+        if (System.currentTimeMillis() - gameStartSystemTime < 3000) {
+            return false;
+        }
         return humanAimingStartHandler == null || humanAimingStartHandler.getAsBoolean();
     }
 
@@ -373,6 +451,18 @@ public class ViewFrame extends JFrame {
     }
 
     /**
+     * Calculates the shot preview stroke width based on the launch force intensity.
+     * The width spans from MIN_ARROW_WIDTH (2.0f) to MAX_ARROW_WIDTH (5.0f) when going from 0% to 100% force.
+     *
+     * @param intensity the current launch force intensity
+     * @return the scaled stroke width
+     */
+    static float calculateShotPreviewWidth(double intensity) {
+        double ratio = Math.max(0.0, Math.min(1.0, intensity / MAX_MOUSE_SHOT_IMPULSE));
+        return (float) (MIN_ARROW_WIDTH + (MAX_ARROW_WIDTH - MIN_ARROW_WIDTH) * ratio);
+    }
+
+    /**
      * Requests a repaint and waits until the corresponding frame is rendered.
      */
     public void render(){
@@ -462,14 +552,14 @@ public class ViewFrame extends JFrame {
 	    		}
 		
 			    g2.setStroke(new BasicStroke(PLAYER_BALL_STROKE_WIDTH));
-                g2.setColor(Color.BLUE);
+                g2.setColor(new Color(30, 90, 210));
 	    		var pb = model.getPlayerBall();
 	    		if (pb != null) {
 	                drawCircle(g2, pb.pos(), pb.radius());
 	    		}
 
                 g2.setStroke(new BasicStroke(BOT_BALL_STROKE_WIDTH));
-                g2.setColor(Color.RED);
+                g2.setColor(new Color(220, 30, 30));
                 var bot = model.getBotBall();
                 if (bot != null) {
                     drawCircle(g2, bot.pos(), bot.radius());
@@ -477,14 +567,65 @@ public class ViewFrame extends JFrame {
 			    
                 g2.setColor(Color.BLACK);
 			    g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
-	    		g2.drawString(SMALL_BALL_COUNT_LABEL + balls.size(), HUD_X, HUD_BALL_COUNT_Y);
-	    		g2.drawString(FPS_LABEL + model.getFramePerSec(), HUD_X, HUD_FPS_Y);
+                Font oldFont = g2.getFont();
+                g2.setFont(oldFont.deriveFont(Font.BOLD, 18f));
+                String ballCountText = SMALL_BALL_COUNT_LABEL + balls.size();
+                var metrics = g2.getFontMetrics();
+                int centerCountX = (getWidth() - metrics.stringWidth(ballCountText)) / 2;
+                g2.drawString(ballCountText, centerCountX, HUD_BALL_COUNT_Y);
+                g2.setFont(oldFont);
+	    		g2.drawString(FPS_LABEL + model.getFramePerSec(), HUD_STATS_X, HUD_FPS_Y);
                 drawGameHud(g2);
                 drawShotPreview(g2);
+                drawCountdownOverlay(g2);
                 drawEndGameOverlay(g2);
+                
+                // Update New Game button visibility safely on EDT
+                var game = model.getGame();
+                boolean finished = (game != null && game.status() == GameStatus.FINISHED);
+                if (newGameButton != null && newGameButton.isVisible() != finished) {
+                    SwingUtilities.invokeLater(() -> newGameButton.setVisible(finished));
+                }
         	} finally {
 	    		sync.notifyFrameRendered(frame);
         	}
+        }
+
+        private void drawCountdownOverlay(Graphics2D g2) {
+            long elapsed = System.currentTimeMillis() - gameStartSystemTime;
+            if (elapsed >= 4000) {
+                return;
+            }
+
+            String text;
+            if (elapsed < 1000) {
+                text = "3";
+            } else if (elapsed < 2000) {
+                text = "2";
+            } else if (elapsed < 3000) {
+                text = "1";
+            } else {
+                text = "GO!";
+            }
+
+            Font oldFont = g2.getFont();
+            Color oldColor = g2.getColor();
+
+            g2.setFont(oldFont.deriveFont(Font.BOLD, 72f));
+            if (text.equals("GO!")) {
+                g2.setColor(new Color(40, 180, 90)); // Soft green
+            } else {
+                g2.setColor(new Color(230, 80, 80)); // Soft red/orange
+            }
+
+            var metrics = g2.getFontMetrics();
+            int x = (getWidth() - metrics.stringWidth(text)) / 2;
+            int y = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
+
+            g2.drawString(text, x, y);
+
+            g2.setFont(oldFont);
+            g2.setColor(oldColor);
         }
 
         private void drawEndGameOverlay(Graphics2D g2) {
@@ -496,7 +637,7 @@ public class ViewFrame extends JFrame {
             g2.setColor(new Color(255, 255, 255, 220));
             g2.fillRect(0, 0, getWidth(), getHeight());
             String title = game.winner() == null ? "Draw" : game.winner() + " wins";
-            g2.setColor(game.winner() == Player.BOT ? Color.RED : Color.BLUE);
+            g2.setColor(game.winner() == Player.BOT ? new Color(220, 30, 30) : new Color(30, 90, 210));
             g2.setFont(getFont().deriveFont(Font.BOLD, OVERLAY_TITLE_SIZE));
             drawCentered(g2, title, getHeight() / 2 - 25);
             g2.setColor(Color.BLACK);
@@ -530,11 +671,45 @@ public class ViewFrame extends JFrame {
         private void drawShotPreview(Graphics2D g2, ViewModel.ShotPreviewInfo preview) {
             var start = toScreenPoint(preview.from());
             var end = toScreenPoint(preview.to());
-            g2.setColor(preview.player() == Player.BOT ? Color.RED : new Color(30, 90, 210));
-            g2.setStroke(new BasicStroke(SHOT_PREVIEW_STROKE_WIDTH));
-            g2.draw(new Line2D.Double(start.x(), start.y(), end.x(), end.y()));
-            drawShotProjection(g2, start, end);
+            g2.setColor(preview.player() == Player.BOT ? new Color(220, 30, 30) : new Color(30, 90, 210));
+            float scaledWidth = calculateShotPreviewWidth(preview.intensity());
+            
+            // Draw the arrow vector (solid segment and arrowhead) with scaled width
+            g2.setStroke(new BasicStroke(scaledWidth));
+            
+            double dx = end.x() - start.x();
+            double dy = end.y() - start.y();
+            double distance = Math.hypot(dx, dy);
+            ScreenPoint arrowStart = start;
+            if (distance > 0) {
+                double radius = 0;
+                if (preview.player() == Player.HUMAN) {
+                    var pb = model.getPlayerBall();
+                    if (pb != null) {
+                        radius = pb.radius();
+                    }
+                } else if (preview.player() == Player.BOT) {
+                    var bot = model.getBotBall();
+                    if (bot != null) {
+                        radius = bot.radius();
+                    }
+                }
+                int screenRadius = (int) (radius * delta);
+                if (distance > screenRadius) {
+                    int offsetX = (int) Math.round((dx / distance) * screenRadius);
+                    int offsetY = (int) Math.round((dy / distance) * screenRadius);
+                    arrowStart = new ScreenPoint(start.x() + offsetX, start.y() + offsetY);
+                } else {
+                    arrowStart = end;
+                }
+            }
+            
+            g2.draw(new Line2D.Double(arrowStart.x(), arrowStart.y(), end.x(), end.y()));
             drawArrowHead(g2, start, end);
+            
+            // Draw the projection with the baseline width (dashed)
+            drawShotProjection(g2, start, end);
+            
             g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
             g2.drawString(String.format("Power: %.0f%%",
                     100 * preview.intensity() / MAX_MOUSE_SHOT_IMPULSE),
@@ -547,14 +722,14 @@ public class ViewFrame extends JFrame {
                 return;
             }
             g2.setStroke(new BasicStroke(
-                    SHOT_PREVIEW_STROKE_WIDTH,
+                    SHOT_PROJECTION_STROKE_WIDTH,
                     BasicStroke.CAP_BUTT,
                     BasicStroke.JOIN_BEVEL,
                     0,
                     SHOT_PROJECTION_DASH,
                     0));
             g2.draw(new Line2D.Double(end.x(), end.y(), projectionEnd.x(), projectionEnd.y()));
-            g2.setStroke(new BasicStroke(SHOT_PREVIEW_STROKE_WIDTH));
+            g2.setStroke(new BasicStroke(SHOT_PROJECTION_STROKE_WIDTH));
         }
 
         private ScreenPoint projectedToPanelEdge(ScreenPoint start, ScreenPoint end) {
@@ -586,16 +761,19 @@ public class ViewFrame extends JFrame {
             int arrowLength = 14;
             double leftAngle = angle + Math.PI * 0.8;
             double rightAngle = angle - Math.PI * 0.8;
-            g2.draw(new Line2D.Double(
-                    end.x(),
-                    end.y(),
-                    end.x() + Math.cos(leftAngle) * arrowLength,
-                    end.y() + Math.sin(leftAngle) * arrowLength));
-            g2.draw(new Line2D.Double(
-                    end.x(),
-                    end.y(),
-                    end.x() + Math.cos(rightAngle) * arrowLength,
-                    end.y() + Math.sin(rightAngle) * arrowLength));
+            
+            int[] xPoints = {
+                end.x(),
+                (int) Math.round(end.x() + Math.cos(leftAngle) * arrowLength),
+                (int) Math.round(end.x() + Math.cos(rightAngle) * arrowLength)
+            };
+            int[] yPoints = {
+                end.y(),
+                (int) Math.round(end.y() + Math.sin(leftAngle) * arrowLength),
+                (int) Math.round(end.y() + Math.sin(rightAngle) * arrowLength)
+            };
+            
+            g2.fillPolygon(xPoints, yPoints, 3);
         }
 
         private void drawGameHud(Graphics2D g2) {
@@ -603,25 +781,58 @@ public class ViewFrame extends JFrame {
             if (game == null) {
                 return;
             }
-            g2.drawString("Human: " + game.humanScore() + "  Bot: " + game.botScore(),
-                    HUD_X, HUD_SCORE_Y);
-            g2.drawString(statusText(game.status(), game.winner()), HUD_X, HUD_STATUS_Y);
+            String humanText = game.humanCanShoot() ? "Human ready" : "Human busy";
+            String botText = game.botCanShoot() ? "Bot ready" : "Bot busy";
+            
+            g2.drawString(humanText, HUD_STATS_X, HUD_HUMAN_READY_Y);
+            g2.drawString(botText, HUD_STATS_X, HUD_BOT_READY_Y);
+            g2.drawString(statusText(game.status(), game.winner()), HUD_STATS_X, HUD_STATUS_Y);
             g2.drawString(String.format("Avg step: %.4f ms", game.averageStepMillis()),
-                    HUD_X, HUD_METRICS_Y);
+                    HUD_STATS_X, HUD_METRICS_Y);
+            drawCornerScores(g2, game);
+        }
+
+        private void drawCornerScores(Graphics2D g2, pcd.poool.model.game.GameSnapshot game) {
+            Font oldFont = g2.getFont();
+            Color oldColor = g2.getColor();
+
+            // Set a premium, large font for labels and scores
+            Font labelFont = oldFont.deriveFont(Font.BOLD, 22f);
+            Font scoreFont = oldFont.deriveFont(Font.BOLD, 36f);
+
+            int labelY = getHeight() - 25; // Label Y (bottom)
+            int scoreY = labelY - 40;      // Score Y (above label)
+
+            // 1. Human (Left bottom corner) in blue
+            g2.setFont(scoreFont);
+            g2.setColor(new Color(30, 90, 210)); // Human color
+            g2.drawString(String.valueOf(game.humanScore()), 25, scoreY);
+            
+            g2.setFont(labelFont);
+            g2.drawString("Human", 25, labelY);
+
+            // 2. Bot (Right bottom corner) in red
+            g2.setFont(scoreFont);
+            g2.setColor(new Color(220, 30, 30)); // Bot color
+            var metrics = g2.getFontMetrics();
+            int botScoreX = getWidth() - 25 - metrics.stringWidth(String.valueOf(game.botScore()));
+            g2.drawString(String.valueOf(game.botScore()), botScoreX, scoreY);
+
+            g2.setFont(labelFont);
+            metrics = g2.getFontMetrics();
+            int botLabelX = getWidth() - 25 - metrics.stringWidth("Bot");
+            g2.drawString("Bot", botLabelX, labelY);
+
+            // Restore
+            g2.setFont(oldFont);
+            g2.setColor(oldColor);
         }
 
         private String statusText(GameStatus status, Object winner) {
             if (status == GameStatus.FINISHED) {
-                return winner == null ? "Finished: draw" : "Winner: " + winner;
+                return "Game status: Finished (" + (winner == null ? "draw" : "winner: " + winner) + ")";
             }
-            var game = model.getGame();
-            return "Human ready: " + yesNo(game.humanCanShoot())
-                    + "  Bot ready: " + yesNo(game.botCanShoot())
-                    + "  " + status;
-        }
-
-        private String yesNo(boolean value) {
-            return value ? "yes" : "no";
+            return "Game status: " + status;
         }
 
         private void drawCircle(Graphics2D g2, P2d center, double radius) {

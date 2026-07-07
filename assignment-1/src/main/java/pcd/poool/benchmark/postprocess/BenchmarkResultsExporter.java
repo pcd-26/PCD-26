@@ -33,7 +33,7 @@ final class BenchmarkResultsExporter {
             DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSSX").withZone(ZoneOffset.UTC);
 
     private static final String METADATA_HEADER =
-            "timestamp_utc,git_commit_hash,available_processors,os_name,os_version,os_arch,java_version,jvm_name,max_memory_bytes,board_width,board_height,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config";
+            "timestamp_utc,git_commit_hash,max_threads,os_name,os_version,os_arch,java_version,jvm_name,board_width,board_height,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config";
     private static final String AVG_TICK_TIME_HEADER =
             "engine_name,board_width,board_height,balls,threads,steps,seed,avg_tick_time_ns,min_tick_time_ns,max_tick_time_ns,std_tick_time_ns,throughput_steps_per_sec";
     private static final String THROUGHPUT_HEADER =
@@ -118,9 +118,9 @@ final class BenchmarkResultsExporter {
         for (var summary : summaries) {
             BenchmarkConfig config = summary.config();
             BenchmarkSummary baseline = baselines.get(new ScenarioKey(config.balls(), config.steps(), config.seed()));
-            double speedup = baseline == null || summary.meanElapsedMillis() <= 0.0
+            double speedup = baseline == null || summary.medianElapsedMillis() <= 0.0
                     ? Double.NaN
-                    : baseline.meanElapsedMillis() / summary.meanElapsedMillis();
+                    : baseline.medianElapsedMillis() / summary.medianElapsedMillis();
             rows.add(new DerivedRow(summary, speedup));
         }
         rows.sort(Comparator
@@ -145,13 +145,12 @@ final class BenchmarkResultsExporter {
             rows.add(new MetadataRow(
                     formattedTimestamp,
                     commit,
-                    telemetry.availableProcessors(),
+                    telemetry.maxThreads(),
                     telemetry.osName(),
                     telemetry.osVersion(),
                     telemetry.osArch(),
                     telemetry.jvmVersion(),
                     telemetry.jvmName(),
-                    telemetry.maxMemoryBytes(),
                     boardWidth(),
                     boardHeight(),
                     config.implementation().name().toLowerCase(Locale.ROOT),
@@ -330,13 +329,12 @@ final class BenchmarkResultsExporter {
     private record MetadataRow(
             String timestampUtc,
             String gitCommitHash,
-            int availableProcessors,
+            int maxThreads,
             String osName,
             String osVersion,
             String osArch,
             String javaVersion,
             String jvmName,
-            long maxMemoryBytes,
             double boardWidth,
             double boardHeight,
             String engineName,
@@ -353,13 +351,12 @@ final class BenchmarkResultsExporter {
             return csvRow(
                     timestampUtc,
                     gitCommitHash,
-                    Integer.toString(availableProcessors),
+                    Integer.toString(maxThreads),
                     osName,
                     osVersion,
                     osArch,
                     javaVersion,
                     jvmName,
-                    Long.toString(maxMemoryBytes),
                     formatDouble(boardWidth),
                     formatDouble(boardHeight),
                     engineName,

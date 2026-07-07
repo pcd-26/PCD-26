@@ -1,9 +1,11 @@
 package pcd.poool.model.physics.taskbased;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,12 +32,13 @@ import pcd.poool.model.common.math.V2d;
  *   <li>integrate balls in parallel over disjoint index ranges;</li>
  *   <li>detect hole interactions in parallel and merge local results on the
  *       coordinator thread;</li>
- *   <li>build one local spatial grid per task, merge the grids on the
- *       coordinator thread, then generate deterministic candidate pairs;</li>
- *   <li>group candidate collisions into deterministic non-conflicting rounds
- *       and resolve each round with executor tasks. Collisions in the same
- *       round never mutate the same ball, while independent contacts are
- *       scheduled as early as possible.</li>
+ *   <li>build one local ownership grid per task and merge the buckets on the
+ *       coordinator thread;</li>
+ *   <li>resolve only canonically owned cell interactions in parallel, while
+ *       workers accumulate sparse collision deltas instead of mutating the
+ *       board directly;</li>
+ *   <li>merge the sparse deltas on the coordinator thread and apply the final
+ *       deterministic writes to the authoritative board state.</li>
  * </ol>
  *
  * <p>The coordinator thread is the caller of {@link #step(Board, long)} and
@@ -46,6 +49,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
     private static final int MIN_ITEMS_PER_PARALLEL_TASK = 64;
+    private static final int MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY = 256;
     private static final int MIN_PAIRS_FOR_ACCUMULATED_SOLVER = 512;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
@@ -163,7 +167,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         runRanges(activeBalls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
-                activeBalls.get(i).ball().updateState(dt, bounds);
+                activeBalls.get(i).updateState(dt, bounds);
             }
             if (profile != null) {
                 profile.integrationWorkerItems[workerIndex] += to - from;
@@ -178,8 +182,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long holeStart = profile == null ? 0 : System.nanoTime();
-        var holeInteractions = detectHoleInteractions(board.getHoles(), activeBalls, profile);
-        board.applyHoleInteractions(holeInteractions);
+        board.applyHoleInteractions();
         if (profile != null) {
             profile.holeInteractionNanos += System.nanoTime() - holeStart;
         }
@@ -190,77 +193,24 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.stateReadNanos += System.nanoTime() - collisionReadStart;
             profile.collisionBalls += collisionBalls.size();
         }
-        var collisionPairs = detectCollisionPairsPacked(collisionBalls, profile);
-        if (profile != null) {
-            profile.candidatePairs += collisionPairs.size();
+        if (collisionBalls.size() < 2) {
+            return;
         }
-        long resolutionStart = profile == null ? 0 : System.nanoTime();
-        resolveCollisionsInParallelRounds(board, collisionBalls, collisionPairs, profile);
-        if (profile != null) {
-            profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
-        }
+        detectAndResolveCollisions(board, collisionBalls, profile);
     }
 
-    private List<ActiveBall> activeBalls(Board board) {
-        var activeBalls = new ArrayList<ActiveBall>();
+    private List<Ball> activeBalls(Board board) {
+        var activeBalls = new ArrayList<Ball>();
         var playerBall = board.getPlayerBallEntity();
         if (playerBall != null) {
-            activeBalls.add(new ActiveBall(playerBall, BallRole.PLAYER));
+            activeBalls.add(playerBall);
         }
         var botBall = board.getBotBallEntity();
         if (botBall != null) {
-            activeBalls.add(new ActiveBall(botBall, BallRole.BOT));
+            activeBalls.add(botBall);
         }
-        for (var ball : board.getSmallBallEntities()) {
-            activeBalls.add(new ActiveBall(ball, BallRole.SMALL));
-        }
+        activeBalls.addAll(board.getSmallBallEntities());
         return activeBalls;
-    }
-
-    private Board.HoleInteractions detectHoleInteractions(
-            List<Hole> holes,
-            List<ActiveBall> activeBalls,
-            StepProfileAccumulator profile) {
-        if (holes.isEmpty() || activeBalls.isEmpty()) {
-            return new Board.HoleInteractions(false, false, List.of());
-        }
-
-        long holeDetectionStart = profile == null ? 0 : System.nanoTime();
-        // The tasks only report local pocketing facts; the coordinator merges
-        // the booleans and pocketed-ball list in a deterministic order.
-        var results = runRanges(activeBalls.size(), (from, to, workerIndex) -> {
-            boolean playerBallPocketed = false;
-            boolean botBallPocketed = false;
-            var pocketedSmallBalls = new ArrayList<Ball>();
-            for (int i = from; i < to; i++) {
-                var activeBall = activeBalls.get(i);
-                if (isInsideAnyHole(activeBall.ball(), holes)) {
-                    if (activeBall.role() == BallRole.PLAYER) {
-                        playerBallPocketed = true;
-                    } else if (activeBall.role() == BallRole.BOT) {
-                        botBallPocketed = true;
-                    } else {
-                        pocketedSmallBalls.add(activeBall.ball());
-                    }
-                }
-            }
-            return new HoleTaskResult(playerBallPocketed, botBallPocketed, pocketedSmallBalls);
-        }, profile);
-
-        long aggregationStart = profile == null ? 0 : System.nanoTime();
-        boolean playerBallPocketed = false;
-        boolean botBallPocketed = false;
-        var pocketedSmallBalls = new ArrayList<Ball>();
-        for (var result : results) {
-            playerBallPocketed |= result.playerBallPocketed();
-            botBallPocketed |= result.botBallPocketed();
-            pocketedSmallBalls.addAll(result.pocketedSmallBalls());
-        }
-        if (profile != null) {
-            profile.holeInteractionNanos += System.nanoTime() - holeDetectionStart;
-            profile.aggregationNanos += System.nanoTime() - aggregationStart;
-        }
-        return new Board.HoleInteractions(playerBallPocketed, botBallPocketed, List.copyOf(pocketedSmallBalls));
     }
 
     List<SpatialCollisionDetector.Pair> detectCollisionPairs(List<Ball> balls) {
@@ -335,6 +285,203 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         long[] orderedPairs = pairs.toArray();
         java.util.Arrays.sort(orderedPairs);
         return new CollisionPairs(orderedPairs, mergedGrid.size(), maxCellOccupancy);
+    }
+
+    private void detectAndResolveCollisions(Board board, List<Ball> balls, StepProfileAccumulator profile) {
+        long collisionStart = profile == null ? 0 : System.nanoTime();
+        double cellSize = computeOwnershipCellSize(balls);
+
+        @SuppressWarnings("unchecked")
+        Map<SpatialGridSupport.GridCell, IntBag>[] localGrids = new Map[poolSize];
+
+        long localGridStart = profile == null ? 0 : System.nanoTime();
+        runRanges(balls.size(), (from, to, workerIndex) -> {
+            long workerStart = profile == null ? 0 : System.nanoTime();
+            var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
+            for (int i = from; i < to; i++) {
+                var centerCell = computeCenterCell(balls.get(i), cellSize);
+                localGrid.computeIfAbsent(centerCell.cell(), ignored -> new IntBag()).add(i);
+            }
+            localGrids[workerIndex] = localGrid;
+            if (profile != null) {
+                profile.localGridWorkerItems[workerIndex] += to - from;
+                profile.localGridWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
+            }
+            return null;
+        }, profile);
+        if (profile != null) {
+            profile.localGridBuildNanos += System.nanoTime() - localGridStart;
+        }
+
+        long aggregationStart = profile == null ? 0 : System.nanoTime();
+        var mergedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
+        for (var localGrid : localGrids) {
+            if (localGrid == null) {
+                continue;
+            }
+            for (var entry : localGrid.entrySet()) {
+                mergedGrid.computeIfAbsent(entry.getKey(), ignored -> new IntBag()).addAll(entry.getValue());
+            }
+        }
+
+        var orderedCells = new ArrayList<CellBucket>(mergedGrid.size());
+        int maxCellOccupancy = 0;
+        for (var entry : mergedGrid.entrySet()) {
+            orderedCells.add(new CellBucket(entry.getKey(), entry.getValue()));
+            maxCellOccupancy = Math.max(maxCellOccupancy, entry.getValue().size());
+        }
+        orderedCells.sort((first, second) -> first.cell().compareTo(second.cell()));
+        if (profile != null) {
+            profile.gridMergeNanos += System.nanoTime() - aggregationStart;
+            profile.aggregationNanos += System.nanoTime() - aggregationStart;
+            profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
+        }
+
+        long resolutionStart = profile == null ? 0 : System.nanoTime();
+        var localDeltas = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCells.size())];
+        var localPairs = new LongBag[Math.min(poolSize, orderedCells.size())];
+        runRanges(orderedCells.size(), (from, to, workerIndex) -> {
+            var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
+            var pairAccumulator = new LongBag();
+            for (int i = from; i < to; i++) {
+                resolveOwnedCell(orderedCells.get(i), mergedGrid, balls, deltaAccumulator, pairAccumulator);
+            }
+            localDeltas[workerIndex] = deltaAccumulator;
+            localPairs[workerIndex] = pairAccumulator;
+            return null;
+        }, profile);
+        if (profile != null) {
+            profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
+        }
+
+        long mergeApplyStart = profile == null ? 0 : System.nanoTime();
+        var mergedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
+        int pairCount = 0;
+        for (int i = 0; i < localDeltas.length; i++) {
+            if (localDeltas[i] != null) {
+                mergedDeltas.merge(localDeltas[i]);
+            }
+            if (localPairs[i] != null) {
+                pairCount += localPairs[i].size();
+            }
+        }
+
+        long[] contactPairs = new long[pairCount];
+        int offset = 0;
+        for (var localPairBag : localPairs) {
+            if (localPairBag == null) {
+                continue;
+            }
+            offset = localPairBag.copyInto(contactPairs, offset);
+        }
+        Arrays.sort(contactPairs);
+        for (long packedPair : contactPairs) {
+            board.recordCollision(balls.get(firstIndex(packedPair)), balls.get(secondIndex(packedPair)));
+        }
+        applyMergedDeltas(balls, mergedDeltas, profile);
+        if (profile != null) {
+            profile.candidatePairs += pairCount;
+            profile.mergedCells += orderedCells.size();
+            profile.collisionDetectionNanos += mergeApplyStart - collisionStart;
+            profile.mergeApplyNanos += System.nanoTime() - mergeApplyStart;
+            profile.aggregationNanos += System.nanoTime() - mergeApplyStart;
+        }
+    }
+
+    private void resolveOwnedCell(
+            CellBucket bucket,
+            Map<SpatialGridSupport.GridCell, IntBag> mergedGrid,
+            List<Ball> balls,
+            SparseCollisionDeltaAccumulator deltas,
+            LongBag contactPairs) {
+        IntBag indexes = bucket.indexes();
+        collectPairsWithinBag(indexes, balls, deltas, contactPairs);
+        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x() + 1, bucket.cell().y() - 1)),
+                balls, deltas, contactPairs);
+        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x() + 1, bucket.cell().y())),
+                balls, deltas, contactPairs);
+        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x() + 1, bucket.cell().y() + 1)),
+                balls, deltas, contactPairs);
+        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x(), bucket.cell().y() + 1)),
+                balls, deltas, contactPairs);
+    }
+
+    private void collectPairsWithinBag(
+            IntBag indexes,
+            List<Ball> balls,
+            SparseCollisionDeltaAccumulator deltas,
+            LongBag contactPairs) {
+        for (int i = 0; i < indexes.size() - 1; i++) {
+            int first = indexes.get(i);
+            for (int j = i + 1; j < indexes.size(); j++) {
+                addContributionIfColliding(balls, first, indexes.get(j), deltas, contactPairs);
+            }
+        }
+    }
+
+    private void collectCrossPairs(
+            IntBag firstBag,
+            IntBag secondBag,
+            List<Ball> balls,
+            SparseCollisionDeltaAccumulator deltas,
+            LongBag contactPairs) {
+        if (secondBag == null) {
+            return;
+        }
+        for (int i = 0; i < firstBag.size(); i++) {
+            int first = firstBag.get(i);
+            for (int j = 0; j < secondBag.size(); j++) {
+                addContributionIfColliding(balls, first, secondBag.get(j), deltas, contactPairs);
+            }
+        }
+    }
+
+    private void addContributionIfColliding(
+            List<Ball> balls,
+            int first,
+            int second,
+            SparseCollisionDeltaAccumulator deltas,
+            LongBag contactPairs) {
+        CollisionContribution contribution = computeCollisionContribution(balls, first, second);
+        if (contribution == null) {
+            return;
+        }
+        deltas.add(contribution);
+        contactPairs.add(encodePair(first, second));
+    }
+
+    private void applyMergedDeltas(
+            List<Ball> balls,
+            SparseCollisionDeltaAccumulator merged,
+            StepProfileAccumulator profile) {
+        if (merged.touchedCount() == 0) {
+            return;
+        }
+        if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
+            applyMergedDeltasSequentially(balls, merged);
+            return;
+        }
+        runRanges(merged.touchedCount(), (from, to, workerIndex) -> {
+            long workerStart = profile == null ? 0 : System.nanoTime();
+            for (int i = from; i < to; i++) {
+                int ballIndex = merged.touchedIndex(i);
+                balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
+                balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
+            }
+            if (profile != null) {
+                profile.applyWorkerItems[workerIndex] += to - from;
+                profile.applyWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
+            }
+            return null;
+        }, profile);
+    }
+
+    private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
+        for (int i = 0; i < merged.touchedCount(); i++) {
+            int ballIndex = merged.touchedIndex(i);
+            balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
+            balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
+        }
     }
 
     private void resolveCollisionsInParallelRounds(
@@ -528,15 +675,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private boolean isInsideAnyHole(Ball ball, List<Hole> holes) {
-        for (var hole : holes) {
-            if (hole.contains(ball.getPos())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void collectPairs(List<Integer> indexes, LongPairSet pairs) {
         if (indexes == null) {
             return;
@@ -546,6 +684,73 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 pairs.add(encodePair(indexes.get(i), indexes.get(j)));
             }
         }
+    }
+
+    private CenterCell computeCenterCell(Ball ball, double cellSize) {
+        return new CenterCell(new SpatialGridSupport.GridCell(
+                SpatialGridSupport.toCellCoordinate(ball.getPos().x(), cellSize),
+                SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize)));
+    }
+
+    private double computeOwnershipCellSize(List<Ball> balls) {
+        double maxRadius = balls.stream()
+                .mapToDouble(Ball::getRadius)
+                .max()
+                .orElse(PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
+        return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
+    }
+
+    private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
+        var a = balls.get(firstIndex);
+        var b = balls.get(secondIndex);
+
+        double dx = b.getPos().x() - a.getPos().x();
+        double dy = b.getPos().y() - a.getPos().y();
+        double dist = Math.hypot(dx, dy);
+        double minD = a.getRadius() + b.getRadius();
+        if (dist >= minD) {
+            return null;
+        }
+        if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
+            dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+            dy = 0.0;
+            dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+        }
+
+        double nx = dx / dist;
+        double ny = dy / dist;
+        double totalMass = a.getMass() + b.getMass();
+        double overlap = minD - dist;
+        double firstPositionCorrection = overlap * (b.getMass() / totalMass);
+        double secondPositionCorrection = overlap * (a.getMass() / totalMass);
+
+        double firstVelocityDeltaX = 0.0;
+        double firstVelocityDeltaY = 0.0;
+        double secondVelocityDeltaX = 0.0;
+        double secondVelocityDeltaY = 0.0;
+        double relativeVelocityX = b.getVel().x() - a.getVel().x();
+        double relativeVelocityY = b.getVel().y() - a.getVel().y();
+        double relativeVelocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+        if (relativeVelocityAlongNormal <= 0.0) {
+            double impulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityAlongNormal
+                    / (1.0 / a.getMass() + 1.0 / b.getMass());
+            firstVelocityDeltaX = -(impulse / a.getMass()) * nx;
+            firstVelocityDeltaY = -(impulse / a.getMass()) * ny;
+            secondVelocityDeltaX = (impulse / b.getMass()) * nx;
+            secondVelocityDeltaY = (impulse / b.getMass()) * ny;
+        }
+
+        return new CollisionContribution(
+                firstIndex,
+                secondIndex,
+                -nx * firstPositionCorrection,
+                -ny * firstPositionCorrection,
+                firstVelocityDeltaX,
+                firstVelocityDeltaY,
+                nx * secondPositionCorrection,
+                ny * secondPositionCorrection,
+                secondVelocityDeltaX,
+                secondVelocityDeltaY);
     }
 
     private List<RangeChunk> buildRangeChunks(int itemCount) {
@@ -595,10 +800,21 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private record RangeChunk(int fromInclusive, int toExclusive, int workerIndex) {}
 
-    private record HoleTaskResult(
-            boolean playerBallPocketed,
-            boolean botBallPocketed,
-            List<Ball> pocketedSmallBalls) {}
+    private record CenterCell(SpatialGridSupport.GridCell cell) {}
+
+    private record CellBucket(SpatialGridSupport.GridCell cell, IntBag indexes) {}
+
+    private record CollisionContribution(
+            int firstIndex,
+            int secondIndex,
+            double firstPositionDeltaX,
+            double firstPositionDeltaY,
+            double firstVelocityDeltaX,
+            double firstVelocityDeltaY,
+            double secondPositionDeltaX,
+            double secondPositionDeltaY,
+            double secondVelocityDeltaX,
+            double secondVelocityDeltaY) {}
 
     private record CollisionPairs(long[] encodedPairs, int mergedCells, int maxCellOccupancy) {
 
@@ -628,6 +844,73 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
         private int size() {
             return encodedPairs.length;
+        }
+    }
+
+    private static final class IntBag {
+
+        private int[] values = new int[8];
+        private int size;
+
+        private void add(int value) {
+            ensureCapacity(size + 1);
+            values[size++] = value;
+        }
+
+        private void addAll(IntBag other) {
+            ensureCapacity(size + other.size);
+            System.arraycopy(other.values, 0, values, size, other.size);
+            size += other.size;
+        }
+
+        private int get(int index) {
+            return values[index];
+        }
+
+        private int size() {
+            return size;
+        }
+
+        private void ensureCapacity(int required) {
+            if (required <= values.length) {
+                return;
+            }
+            int newCapacity = values.length;
+            while (newCapacity < required) {
+                newCapacity *= 2;
+            }
+            values = Arrays.copyOf(values, newCapacity);
+        }
+    }
+
+    private static final class LongBag {
+
+        private long[] values = new long[16];
+        private int size;
+
+        private void add(long value) {
+            ensureCapacity(size + 1);
+            values[size++] = value;
+        }
+
+        private int size() {
+            return size;
+        }
+
+        private int copyInto(long[] target, int offset) {
+            System.arraycopy(values, 0, target, offset, size);
+            return offset + size;
+        }
+
+        private void ensureCapacity(int required) {
+            if (required <= values.length) {
+                return;
+            }
+            int newCapacity = values.length;
+            while (newCapacity < required) {
+                newCapacity *= 2;
+            }
+            values = Arrays.copyOf(values, newCapacity);
         }
     }
 
@@ -734,12 +1017,85 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private record ActiveBall(Ball ball, BallRole role) {}
+    private static final class SparseCollisionDeltaAccumulator {
 
-    private enum BallRole {
-        PLAYER,
-        BOT,
-        SMALL
+        private final double[] positionDeltaX;
+        private final double[] positionDeltaY;
+        private final double[] velocityDeltaX;
+        private final double[] velocityDeltaY;
+        private final boolean[] touched;
+        private int[] touchedIndexes;
+        private int touchedCount;
+
+        private SparseCollisionDeltaAccumulator(int ballCount) {
+            positionDeltaX = new double[ballCount];
+            positionDeltaY = new double[ballCount];
+            velocityDeltaX = new double[ballCount];
+            velocityDeltaY = new double[ballCount];
+            touched = new boolean[ballCount];
+            touchedIndexes = new int[Math.max(8, Math.min(ballCount, 64))];
+        }
+
+        private void add(CollisionContribution contribution) {
+            int first = contribution.firstIndex();
+            int second = contribution.secondIndex();
+            touch(first);
+            touch(second);
+            positionDeltaX[first] += contribution.firstPositionDeltaX();
+            positionDeltaY[first] += contribution.firstPositionDeltaY();
+            velocityDeltaX[first] += contribution.firstVelocityDeltaX();
+            velocityDeltaY[first] += contribution.firstVelocityDeltaY();
+            positionDeltaX[second] += contribution.secondPositionDeltaX();
+            positionDeltaY[second] += contribution.secondPositionDeltaY();
+            velocityDeltaX[second] += contribution.secondVelocityDeltaX();
+            velocityDeltaY[second] += contribution.secondVelocityDeltaY();
+        }
+
+        private void merge(SparseCollisionDeltaAccumulator other) {
+            for (int i = 0; i < other.touchedCount; i++) {
+                int index = other.touchedIndexes[i];
+                touch(index);
+                positionDeltaX[index] += other.positionDeltaX[index];
+                positionDeltaY[index] += other.positionDeltaY[index];
+                velocityDeltaX[index] += other.velocityDeltaX[index];
+                velocityDeltaY[index] += other.velocityDeltaY[index];
+            }
+        }
+
+        private int touchedCount() {
+            return touchedCount;
+        }
+
+        private int touchedIndex(int index) {
+            return touchedIndexes[index];
+        }
+
+        private double positionDeltaX(int ballIndex) {
+            return positionDeltaX[ballIndex];
+        }
+
+        private double positionDeltaY(int ballIndex) {
+            return positionDeltaY[ballIndex];
+        }
+
+        private double velocityDeltaX(int ballIndex) {
+            return velocityDeltaX[ballIndex];
+        }
+
+        private double velocityDeltaY(int ballIndex) {
+            return velocityDeltaY[ballIndex];
+        }
+
+        private void touch(int index) {
+            if (touched[index]) {
+                return;
+            }
+            touched[index] = true;
+            if (touchedCount == touchedIndexes.length) {
+                touchedIndexes = Arrays.copyOf(touchedIndexes, touchedIndexes.length * 2);
+            }
+            touchedIndexes[touchedCount++] = index;
+        }
     }
 
     /**

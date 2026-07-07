@@ -50,8 +50,8 @@ class BenchmarkScalabilityAnalyzerTest {
         List<String> efficiencyLines = Files.readAllLines(tempDir.resolve("analysis").resolve(BenchmarkScalabilityAnalyzer.EFFICIENCY_TABLE_FILE_NAME));
         List<String> scalabilityLines = Files.readAllLines(tempDir.resolve("analysis").resolve(BenchmarkScalabilityAnalyzer.SCALABILITY_TABLE_FILE_NAME));
 
-        assertEquals("balls,steps,seed,implementation,threads,meanMillis,medianMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,sequentialMeanMillis,speedup,speedupBelowOne", speedupLines.get(0));
-        assertEquals("balls,steps,seed,implementation,threads,meanMillis,medianMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,sequentialMeanMillis,speedup,efficiency,efficiencyDegradation", efficiencyLines.get(0));
+        assertEquals("balls,steps,seed,implementation,threads,meanMillis,medianMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,sequentialMedianMillis,speedup,speedupBelowOne", speedupLines.get(0));
+        assertEquals("balls,steps,seed,implementation,threads,meanMillis,medianMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,sequentialMedianMillis,speedup,efficiency,efficiencyDegradation", efficiencyLines.get(0));
         assertEquals("balls,steps,seed,sequentialThroughput,threadedBestThreads,threadedBestThroughput,threadedCpuUtilization,threadedSpeedup,threadedEfficiency,threadedSaturationPoint,threadedSlowerThanSequential,threadedEfficiencyDegradation,executorBestThreads,executorBestThroughput,executorCpuUtilization,executorSpeedup,executorEfficiency,executorSaturationPoint,executorSlowerThanThreaded,executorEfficiencyDegradation", scalabilityLines.get(0));
 
         assertTrue(speedupLines.stream().anyMatch(line -> line.startsWith("100,100,42,threads,1,12.000000,12.000000,833.333333,833.333333,55.000000,55.000000,10.000000,0.833333,true")));

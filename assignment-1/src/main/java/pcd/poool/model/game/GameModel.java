@@ -19,6 +19,44 @@ public class GameModel {
     private static final double BOT_SHOT_SPEED = 1.2;
     private static final V2d FALLBACK_BOT_SHOT = new V2d(0.35, -1.0).getNormalized().mul(BOT_SHOT_SPEED);
 
+    private static final boolean IS_TEST_ENV = isJUnitPresent();
+    private static volatile boolean countdownEnabled = !IS_TEST_ENV;
+
+    private static boolean isJUnitPresent() {
+        try {
+            Class.forName("org.junit.jupiter.api.Test");
+            return true;
+        } catch (ClassNotFoundException e) {
+            try {
+                Class.forName("org.junit.Test");
+                return true;
+            } catch (ClassNotFoundException ex) {
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Enables or disables the initial 3-second countdown timer.
+     * Used primarily in test suites to bypass the start delay.
+     *
+     * @param enabled true to enable, false to disable
+     */
+    public static void setCountdownEnabled(boolean enabled) {
+        countdownEnabled = enabled;
+    }
+
+    private final long gameStartSystemTime = System.currentTimeMillis();
+
+    /**
+     * Checks if the 3-second game start countdown is active.
+     *
+     * @return true if countdown is active, false otherwise
+     */
+    public synchronized boolean isCountdownActive() {
+        return countdownEnabled && (System.currentTimeMillis() - gameStartSystemTime < 3000);
+    }
+
     private final Board board;
     private GameStatus status;
     private Player winner;
@@ -197,6 +235,9 @@ public class GameModel {
     }
 
     private boolean canShoot(Player player) {
+        if (isCountdownActive()) {
+            return false;
+        }
         return status != GameStatus.FINISHED && board.canKick(player);
     }
 

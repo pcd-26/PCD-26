@@ -7,6 +7,11 @@ are parallel, and which phases remain serialized.
 The goal is not to claim that one engine is always faster. The goal is to make
 the design choices easy to justify and to keep the concurrency story readable.
 
+For a more detailed tick-by-tick audit, including the exact Amdahl bottlenecks
+and synchronization points in the current implementation, see:
+
+- `docs/performance/physics-architecture-analysis.md`
+
 ## 1. Project Architecture
 
 The physics code is organized around one shared domain model and three
