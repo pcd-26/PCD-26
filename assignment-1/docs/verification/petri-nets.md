@@ -1,9 +1,28 @@
 # Assignment 1 Petri Nets for Concurrent Physics Execution
 
-This document gives an abstract Petri net view of the tick pipeline used by
-the concurrent physics implementations in Assignment 1.
+This directory contains LaTeX-ready Petri net diagrams for the concurrent
+physics execution model used in Assignment 1.
 
-The model intentionally stays above low-level ball physics. It focuses on:
+Sources:
+
+- `assignment-1/docs/verification/petri-nets/physics-tick-petri-net.tex`
+- `assignment-1/docs/verification/petri-nets/shot-command-petri-net.tex`
+
+Suggested LaTeX inclusion:
+
+```latex
+\begin{figure}[ht]
+  \centering
+  \input{assignment-1/docs/verification/petri-nets/physics-tick-petri-net.tex}
+  \caption{Abstract Petri net for the concurrent physics tick pipeline.}
+\end{figure}
+```
+
+TODO for the final report: include the generated TikZ sources directly from
+the document preamble or a local figure wrapper, rather than exporting and
+tracking standalone PDF assets.
+
+The main model intentionally stays above low-level ball physics. It focuses on:
 
 - phase ordering;
 - worker coordination;
