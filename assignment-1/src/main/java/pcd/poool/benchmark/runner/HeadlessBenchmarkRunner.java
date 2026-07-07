@@ -229,7 +229,7 @@ public final class HeadlessBenchmarkRunner {
                 result.checksum(),
                 jvm,
                 os,
-                telemetry.availableProcessors());
+                telemetry.maxThreads());
     }
 
     private static double coordinationMillis(BenchmarkRunResult result) {

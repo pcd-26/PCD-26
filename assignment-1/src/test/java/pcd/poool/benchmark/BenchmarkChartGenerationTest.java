@@ -34,7 +34,7 @@ class BenchmarkChartGenerationTest {
                 "executor,500,4,100,1,9.000000,9.000000,0.000000,11111.111111,11111.111111,0.000000,1.600000,1.600000,0.000000,0.160000,0.160000,0.000000,1.000000"));
 
         write(inputDir.resolve("speedup-results.csv"), List.of(
-                "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                "balls,workers,seed,implementation,medianSequentialMs,medianParallelMs,speedup",
                 "100,2,1,threads,10.000000,6.000000,1.666667",
                 "100,2,1,executor,10.000000,7.000000,1.428571",
                 "500,4,1,threads,20.000000,8.000000,2.500000",
@@ -74,8 +74,8 @@ class BenchmarkChartGenerationTest {
                 "threads,500,4,100,1,10.000000,10.000000,11.000000,12.000000,100.000000,100.000000,0.000000,0.000000",
                 "executor,500,4,100,1,11.000000,11.000000,12.000000,13.000000,90.909091,90.909091,0.000000,0.000000"));
         write(inputDir.resolve("environment.csv"), List.of(
-                "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
-                "8,Test CPU,4,8,17179869184,JVM,21,Windows 11,10.0,amd64,1,1,1,true,123"));
+                "maxThreads,jvmName,jvmVersion,osName,osVersion,osArch",
+                "8,JVM,21,Windows 11,10.0,amd64"));
 
         write(inputDir.resolve("raw-results.csv"), List.of(
                 "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors",
@@ -117,7 +117,7 @@ class BenchmarkChartGenerationTest {
                 "sequential,100,1,100,1,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000",
                 "threads,100,2,100,1,6.000000,6.000000,0.000000,1666.666667,1666.666667,0.000000,1.000000,1.000000,0.000000,0.100000,0.100000,0.000000,1.000000"));
         write(inputDir.resolve("speedup-results.csv"), List.of(
-                "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                "balls,workers,seed,implementation,medianSequentialMs,medianParallelMs,speedup",
                 "100,2,1,threads,10.000000,6.000000,1.666667"));
         write(inputDir.resolve("aggregated-scalability-results.csv"), List.of(
                 "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
@@ -150,7 +150,7 @@ class BenchmarkChartGenerationTest {
                 "threads,100,2,100,1,1,6.000000,6.000000,6.000000,6.000000,6.000000,0.000000,1666.666667,1666.666667,72.000000,72.000000,1.666667,0.833333,11",
                 "executor,100,2,100,1,1,7.000000,7.000000,7.000000,7.000000,7.000000,0.000000,1428.571429,1428.571429,68.000000,68.000000,1.428571,0.714286,11"));
         write(inputDir.resolve("speedup-table.csv"), List.of(
-                "balls,steps,seed,implementation,threads,meanMillis,medianMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,sequentialMeanMillis,speedup,speedupBelowOne",
+                "balls,steps,seed,implementation,threads,meanMillis,medianMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,sequentialMedianMillis,speedup,speedupBelowOne",
                 "100,100,1,threads,2,6.000000,6.000000,1666.666667,1666.666667,72.000000,72.000000,10.000000,1.666667,false",
                 "100,100,1,executor,2,7.000000,7.000000,1428.571429,1428.571429,68.000000,68.000000,10.000000,1.428571,false"));
         write(inputDir.resolve("benchmark-runs.csv"), List.of(
@@ -160,8 +160,8 @@ class BenchmarkChartGenerationTest {
                 "timestamp,implementation,balls,threads,steps,seed,requestedUpdates,completedUpdates,elapsedMillis,meanUpdateIntervalMillis,meanUpdateLatencyMillis,maxUpdateLatencyMillis,updateRatePerSecond,meanEdtDelayMillis,maxEdtDelayMillis,delayedUpdates",
                 "2026-06-21T13:15:30Z,sequential,100,1,100,1,20,20,30.000000,1.500000,2.000000,3.000000,666.666667,1.200000,2.500000,0"));
         write(inputDir.resolve("environment.csv"), List.of(
-                "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
-                "8,Test CPU,4,8,17179869184,JVM,21,Windows 11,10.0,amd64,1,1,1,true,123"));
+                "maxThreads,jvmName,jvmVersion,osName,osVersion,osArch",
+                "8,JVM,21,Windows 11,10.0,amd64"));
 
         runScript(inputDir, outputDir);
 

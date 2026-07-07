@@ -14,7 +14,10 @@ class BenchmarkConfigTest {
         var matrix = BenchmarkConfig.defaultMatrix();
         var workerMatrix = BenchmarkConfig.workerMatrix();
 
-        assertEquals(5 + 2 * 5 * workerMatrix.size(), matrix.size());
+        assertEquals(6 + 2 * 6 * workerMatrix.size(), matrix.size());
+        assertEquals(BenchmarkConfig.DEFAULT_SEED, BenchmarkConfig.defaults().seed());
+        assertTrue(matrix.stream().allMatch(config -> config.seed() == BenchmarkConfig.DEFAULT_SEED));
+        assertEquals(6, matrix.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL).count());
         assertTrue(matrix.stream().anyMatch(config ->
                 config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL
                         && config.balls() == 100

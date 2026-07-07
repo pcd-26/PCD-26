@@ -39,8 +39,7 @@ The wrapper:
 - compiles `assignment-1`
 - runs the Java benchmark pipeline
 - writes benchmark results under `benchmarks/results/`
-- exports `environment.csv` with CPU model, physical cores, logical threads,
-  JVM-visible processors, JVM, OS, and RAM
+- exports `environment.csv` with maximum JVM-visible threads, JVM, and OS
 - refreshes `benchmarks/charts/`
 - clears `benchmarks/charts/` before every run so only the latest chart set is
   kept
