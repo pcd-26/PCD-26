@@ -1,0 +1,8 @@
+target=pcd.poool.verification.jpf.ThreadedMiniHarness
+classpath=verification/jpf/src
+search.class=gov.nasa.jpf.search.DFSearch
+listener=gov.nasa.jpf.listener.ErrorTraceGenerator
+vm.storage.class=gov.nasa.jpf.jvm.ElementInfo
+vm.por=true
+vm.max_heap=64m
+search.depth_limit=40
