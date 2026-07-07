@@ -1,5 +1,7 @@
 /assignment-1/.idea
 /assignment-1/target
+assignment-1/verification/jpf/.jpf-core/
+assignment-1/verification/jpf/.jpf-build/
 assignment-1/pcd-ass-01.iml
 __pycache__/
 *.pyc

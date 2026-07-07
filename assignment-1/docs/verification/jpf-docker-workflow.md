@@ -16,17 +16,51 @@ Use the official `jpf-core` repository and its Docker support.
 The JPF project README states that the container can be built and started with
 the provided `Dockerfile` and `docker-compose.yml`.
 
+If you are using the `jpf-core` Docker setup, start the JPF container from the
+`jpf-core` checkout and open a shell in it. A typical pattern is:
+
+```bash
+cd <path-to-jpf-core>
+docker compose build
+docker compose run --rm <jpf-service> bash
+```
+
+If you built a standalone image instead, the equivalent pattern is:
+
+```bash
+docker build -t jpf-core .
+docker run --rm -it -v "${PWD}:/repo" -w /repo jpf-core bash
+```
+
+If you prefer to keep the JPF source tree inside this repository, use the local
+bootstrap script:
+
+```bash
+python assignment-1/verification/jpf/bootstrap_jpf.py
+```
+
+That clones `jpf-core` into `assignment-1/verification/jpf/.jpf-core`, which is
+ignored by git.
+
 Inside that container, JPF can be built from source with the usual Gradle
 build.
 
-The JUnit integration test expects a runtime classpath that exposes the JPF
-launcher class. Provide it through:
+The helper script can run JPF in two ways:
 
-- `JPF_CP`
+- Docker mode, which builds `jpf-core` inside the container and runs JPF there;
+- local mode, which uses the runtime classpath produced by the local `jpf-core` build.
 
-If your local setup uses a different launcher class, override it with:
+If the local Java runtime is too new for the JPF build, the helper falls back
+to Docker automatically.
 
-- `JPF_LAUNCHER`
+The standard local runtime jars include:
+
+- `assignment-1/verification/jpf/.jpf-core/build/RunJPF.jar`
+- `assignment-1/verification/jpf/.jpf-core/build/jpf.jar`
+- `assignment-1/verification/jpf/.jpf-core/build/jpf-classes.jar`
+- `assignment-1/verification/jpf/.jpf-core/build/jpf-annotations.jar`
+- `assignment-1/verification/jpf/.jpf-core/build/asm-9.5.jar`
+- `assignment-1/verification/jpf/.jpf-core/build/junit-4.13.1.jar`
 
 ## 2. Compile The Minimal Harnesses
 
@@ -38,12 +72,9 @@ They are compiled by the JUnit integration test into:
 
 - `assignment-1/target/jpf-classes`
 
-The important point is that the resulting classpath must include only the
-minimal harness classes and the JPF runtime, not the full application build.
-
-The integration test compiles the harnesses automatically into:
-
-- `assignment-1/target/jpf-classes`
+The important point is that these runtime entries must come from `jpf-core`,
+not from the full application build. The harness classes are compiled by the
+JUnit test into `assignment-1/target/jpf-classes`.
 
 ## 3. Run The Thread-Based Model
 
@@ -82,25 +113,55 @@ The test compiles the harnesses and then runs both JPF configs:
 - `threaded-minimal.jpf`
 - `taskbased-minimal.jpf`
 
-Example invocation:
+Recommended Docker invocation:
 
-```bash
-JPF_CP="<classpath that exposes gov.nasa.jpf.tool.RunJPF>" \
-  mvn -f assignment-1/pom.xml \
-  -Djpf.cp="$JPF_CP" \
-  -Dtest=pcd.poool.verification.JpfVerificationArtifactsTest \
-  test
+PowerShell:
+
+```powershell
+python assignment-1/verification/jpf/run_jpf.py --docker --model both
 ```
 
-If you need to override the launcher class:
+POSIX shell:
 
 ```bash
-JPF_CP="<classpath that exposes gov.nasa.jpf.tool.RunJPF>" \
-  mvn -f assignment-1/pom.xml \
-  -Djpf.cp="$JPF_CP" \
-  -Djpf.launcher=gov.nasa.jpf.tool.RunJPF \
-  -Dtest=pcd.poool.verification.JpfVerificationArtifactsTest \
-  test
+python assignment-1/verification/jpf/run_jpf.py --docker --model both
+```
+
+The Docker helper normalizes the Gradle wrapper line endings inside the
+container before building `jpf-core`, which avoids the `^M` wrapper failure on
+Windows checkouts.
+
+If you already built JPF locally and want to run the two `.jpf` files manually
+from `assignment-1/` instead of through Maven, use:
+
+PowerShell:
+
+```powershell
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/threaded-minimal.jpf
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/taskbased-minimal.jpf
+```
+
+POSIX shell:
+
+```bash
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/threaded-minimal.jpf
+
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/taskbased-minimal.jpf
+```
+
+If you want to run them from the local helper script after cloning and
+building `jpf-core`, use:
+
+PowerShell:
+
+```powershell
+python assignment-1/verification/jpf/run_jpf.py --model both
+```
+
+POSIX shell:
+
+```bash
+python assignment-1/verification/jpf/run_jpf.py --model both
 ```
 
 ## 6. What To Record
@@ -108,7 +169,8 @@ JPF_CP="<classpath that exposes gov.nasa.jpf.tool.RunJPF>" \
 For the report, record:
 
 - the command used to start the JPF container;
-- the JPF runtime classpath passed through `JPF_CP` or `-Djpf.cp`;
+- the Docker command used to build and launch JPF, if you use `--docker`;
+- the local `jpf-core` launcher jar used to start JPF;
 - the exact JPF invocation for each model;
 - whether JPF found a counterexample or completed cleanly;
 - the main limitation of the model, if any.
