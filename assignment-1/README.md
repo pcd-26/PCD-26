@@ -48,6 +48,12 @@ Besides the source code, the assignment should contain a brief report, including
   [`docs/verification/jpf-verification-plan.md`](docs/verification/jpf-verification-plan.md).
   The Docker-oriented execution flow is documented in
   [`docs/verification/jpf-docker-workflow.md`](docs/verification/jpf-docker-workflow.md).
+  The minimal model semantics are documented in
+  [`docs/verification/jpf-models.md`](docs/verification/jpf-models.md).
+  The JUnit integration test compiles the minimal harnesses into
+  `assignment-1/target/jpf-classes` and runs them through JPF when
+  `JPF_CP` or `-Djpf.cp` points to a runtime that exposes
+  `gov.nasa.jpf.tool.RunJPF`.
 
 The `assignment-01`folder in the repo includes two sketches that could be used as a starting point
 - [`sketch01`](./sketch-01.md) is an example of main loop using a sequential approach to implement the dynamics of the bouncing balls, as requested in the game

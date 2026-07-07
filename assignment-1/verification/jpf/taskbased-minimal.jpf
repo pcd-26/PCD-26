@@ -1,7 +1,6 @@
 target=pcd.poool.verification.jpf.TaskBasedMiniHarness
-classpath=verification/jpf/src
+classpath=target/jpf-classes
 search.class=gov.nasa.jpf.search.DFSearch
-listener=gov.nasa.jpf.listener.ErrorTraceGenerator
 vm.storage.class=gov.nasa.jpf.jvm.ElementInfo
 vm.por=true
 vm.max_heap=64m
