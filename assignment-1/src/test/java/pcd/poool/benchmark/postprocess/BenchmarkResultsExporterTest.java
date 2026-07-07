@@ -19,20 +19,11 @@ class BenchmarkResultsExporterTest {
     void exportsSummaryTablesAndRuntimeMetadata() throws Exception {
         var telemetry = new RuntimeTelemetry(
                 8,
-                "Test CPU",
-                4,
-                8,
-                16_000_000_000L,
                 "Test JVM",
                 "21",
                 "Test OS",
                 "1.0",
-                "amd64",
-                2_000_000_000L,
-                1_000_000_000L,
-                500_000_000L,
-                true,
-                123L);
+                "amd64");
 
         var sequential100 = summary(
                 BenchmarkConfig.ImplementationType.SEQUENTIAL,
@@ -83,7 +74,7 @@ class BenchmarkResultsExporterTest {
         var speedupLines = Files.readAllLines(exported.speedupFile());
         var crossoverLines = Files.readAllLines(exported.crossoverFile());
 
-        assertEquals("timestamp_utc,git_commit_hash,available_processors,os_name,os_version,os_arch,java_version,jvm_name,max_memory_bytes,board_width,board_height,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config", metadataLines.get(0));
+        assertEquals("timestamp_utc,git_commit_hash,max_threads,os_name,os_version,os_arch,java_version,jvm_name,board_width,board_height,implementation,balls,threads,steps,seed,warmup_runs,measured_runs,benchmark_config", metadataLines.get(0));
         assertTrue(metadataLines.get(1).contains("deadbeefcafebabe"));
         assertTrue(metadataLines.get(1).contains("implementation=sequential balls=100 threads=1 steps=10 seed=42"));
         assertEquals("engine_name,board_width,board_height,balls,threads,steps,seed,avg_tick_time_ns,min_tick_time_ns,max_tick_time_ns,std_tick_time_ns,throughput_steps_per_sec", avgTickLines.get(0));

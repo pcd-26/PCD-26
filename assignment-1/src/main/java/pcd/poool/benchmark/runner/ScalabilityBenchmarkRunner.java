@@ -214,7 +214,7 @@ public final class ScalabilityBenchmarkRunner {
                 tasksSubmitted(result),
                 jvm,
                 os,
-                telemetry.availableProcessors());
+                telemetry.maxThreads());
     }
 
     private static BenchmarkRequest parseArgs(String[] args) {

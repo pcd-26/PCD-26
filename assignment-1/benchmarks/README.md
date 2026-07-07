@@ -67,7 +67,7 @@ Headless raw runs currently collect:
 - `mergeApplyTimeMillis`
 - `jvm`
 - `os`
-- `availableProcessors`
+- `maxThreads`
 
 Headless summary output currently reports:
 
@@ -86,7 +86,7 @@ Scalability raw runs currently collect:
 - `tasksSubmitted`
 - `jvm`
 - `os`
-- `availableProcessors`
+- `maxThreads`
 
 In strict speedup mode, the coordination fields are retained for CSV
 compatibility but remain zero because profiling is disabled during the measured
@@ -298,13 +298,14 @@ The benchmark uses these definitions:
 
 - average tick time = mean measured tick duration
 - throughput = measured ticks per second
-- speedup = sequential average tick time / engine average tick time
+- speedup = sequential median tick time / engine median tick time
 - efficiency = speedup / worker count
 - crossover = smallest workload where a parallel engine has speedup > `1`
 
 Speedup is always computed against the matching sequential baseline for the
 same workload size, collision profile, board size, ball count, tick count, and
-seed.
+seed. Using the median reduces sensitivity to outlier runs and makes the
+comparison more stable across machines.
 
 ### Runtime metadata
 
@@ -345,9 +346,9 @@ The benchmark infrastructure is covered by deterministic tests that verify:
   headless aggregation.
 - Current result snapshots mix legacy and newer CSV layouts, which makes casual
   file-to-file comparisons easy to misread.
-- The repository now relies on deterministic seeds, but the default seed is not
-  the same across every benchmark entry point, so users still need to check the
-  exact command line before comparing snapshots.
+- The repository now relies on deterministic seeds, and the same default seed
+  is shared across every benchmark entry point. Override `--seed` only when you
+  deliberately want a different initial state.
 - The current data model still estimates coordination cost rather than
   separating every synchronization phase into a first-class benchmark metric.
 - Performance claims still depend on the exact workload, seed, warmup policy,

@@ -45,7 +45,7 @@ class BenchmarkPipelineTest {
                         "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
                         "sequential,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
                 writeCsv(speedup, List.of(
-                        "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                        "balls,workers,seed,implementation,medianSequentialMs,medianParallelMs,speedup",
                         "100,1,42,sequential,10.000000,10.000000,1.000000"));
                 return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of(), List.of());
             }
@@ -59,8 +59,8 @@ class BenchmarkPipelineTest {
                         "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks,stateReadTimeMillis,partitionTimeMillis,movementTimeMillis,holeInteractionTimeMillis,collisionDetectionTimeMillis,collisionResolutionTimeMillis,mergeApplyTimeMillis",
                         "2026-06-21T13:15:30Z,sequential,100,1,10,42,1,10.000000,1000.000000,50.000000,11,SUCCESS,,0.000000,0.000000,0.000000,0.000000,0,0,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
                 writeCsv(outputDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME), List.of(
-                        "availableProcessors,cpuModel,physicalCores,logicalCpuCount,totalPhysicalMemoryBytes,jvmName,jvmVersion,osName,osVersion,osArch,maxMemoryBytes,totalMemoryBytes,freeMemoryBytes,processCpuTimeSupported,processCpuTimeNanos",
-                        "8,Test CPU,4,8,17179869184,JVM,17,OS,1,amd64,1,1,1,true,123"));
+                        "maxThreads,jvmName,jvmVersion,osName,osVersion,osArch",
+                        "8,JVM,17,OS,1,amd64"));
                 return new BenchmarkSuite.SuiteReport(outputDir, 1, 0);
             }
 
@@ -131,7 +131,7 @@ class BenchmarkPipelineTest {
                         "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted",
                         "sequential,100,1,10,42,10.000000,10.000000,0.000000,1000.000000,1000.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000"));
                 writeCsv(speedup, List.of(
-                        "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                        "balls,workers,seed,implementation,medianSequentialMs,medianParallelMs,speedup",
                         "100,1,42,sequential,10.000000,10.000000,1.000000"));
                 return new HeadlessBenchmarkRunner.BenchmarkReport(benchmarkRequest.outputFile(), aggregated, speedup, List.of(), List.of());
             }

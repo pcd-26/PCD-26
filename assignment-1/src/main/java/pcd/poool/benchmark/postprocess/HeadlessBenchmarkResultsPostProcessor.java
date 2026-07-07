@@ -25,7 +25,7 @@ final class HeadlessBenchmarkResultsPostProcessor {
     private static final String AGGREGATED_HEADER =
             "implementation,balls,workers,steps,seed,meanElapsedMs,medianElapsedMs,stdElapsedMs,meanThroughput,medianThroughput,stdThroughput,meanCoordinationMs,medianCoordinationMs,stdCoordinationMs,meanCoordinationRatio,medianCoordinationRatio,stdCoordinationRatio,meanTasksSubmitted";
     private static final String SPEEDUP_HEADER =
-            "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup";
+            "balls,workers,seed,implementation,medianSequentialMs,medianParallelMs,speedup";
 
     private HeadlessBenchmarkResultsPostProcessor() {
     }
@@ -128,14 +128,14 @@ final class HeadlessBenchmarkResultsPostProcessor {
                         row.steps(),
                         row.seed()));
             }
-            double speedup = baseline.meanElapsedMs() <= 0.0 ? Double.NaN : baseline.meanElapsedMs() / row.meanElapsedMs();
+            double speedup = baseline.medianElapsedMs() <= 0.0 ? Double.NaN : baseline.medianElapsedMs() / row.medianElapsedMs();
             speedupRows.add(new SpeedupRow(
                     row.balls(),
                     row.workers(),
                     row.seed(),
                     row.implementation(),
-                    baseline.meanElapsedMs(),
-                    row.meanElapsedMs(),
+                    baseline.medianElapsedMs(),
+                    row.medianElapsedMs(),
                     speedup));
         }
 
@@ -412,8 +412,8 @@ final class HeadlessBenchmarkResultsPostProcessor {
             int workers,
             long seed,
             BenchmarkConfig.ImplementationType implementation,
-            double meanSequentialMs,
-            double meanParallelMs,
+            double medianSequentialMs,
+            double medianParallelMs,
             double speedup) implements CsvRow {
 
         @Override
@@ -423,8 +423,8 @@ final class HeadlessBenchmarkResultsPostProcessor {
                     Integer.toString(workers),
                     Long.toString(seed),
                     implementation.name().toLowerCase(Locale.ROOT),
-                    formatDouble(meanSequentialMs),
-                    formatDouble(meanParallelMs),
+                    formatDouble(medianSequentialMs),
+                    formatDouble(medianParallelMs),
                     formatDouble(speedup));
         }
     }

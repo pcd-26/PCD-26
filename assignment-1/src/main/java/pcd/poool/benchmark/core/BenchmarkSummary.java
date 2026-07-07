@@ -55,16 +55,16 @@ public record BenchmarkSummary(
      * Computes speedup against a sequential baseline summary.
      *
      * @param sequentialBaseline sequential baseline summary
-     * @return baseline elapsed time divided by this summary elapsed time
+     * @return baseline median elapsed time divided by this summary median elapsed time
      */
     public double speedupAgainst(BenchmarkSummary sequentialBaseline) {
         if (sequentialBaseline == null) {
             throw new IllegalArgumentException("sequentialBaseline must not be null");
         }
-        if (meanElapsedMillis <= 0.0) {
+        if (medianElapsedMillis <= 0.0) {
             return Double.NaN;
         }
-        return sequentialBaseline.meanElapsedMillis / meanElapsedMillis;
+        return sequentialBaseline.medianElapsedMillis / medianElapsedMillis;
     }
 
     /**

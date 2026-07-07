@@ -18,24 +18,12 @@ class RuntimeTelemetryTest {
     void captureCollectsRuntimeAndEnvironmentMetadata() {
         var telemetry = RuntimeTelemetry.capture();
 
-        assertEquals(Runtime.getRuntime().availableProcessors(), telemetry.availableProcessors());
-        assertNotNull(telemetry.cpuModel());
+        assertEquals(Runtime.getRuntime().availableProcessors(), telemetry.maxThreads());
         assertNotNull(telemetry.jvmName());
         assertNotNull(telemetry.jvmVersion());
         assertNotNull(telemetry.osName());
         assertNotNull(telemetry.osVersion());
         assertNotNull(telemetry.osArch());
-        assertTrue(telemetry.logicalCpuCount() == null || telemetry.logicalCpuCount() > 0);
-        assertTrue(telemetry.physicalCores() == null || telemetry.physicalCores() > 0);
-        assertTrue(telemetry.totalPhysicalMemoryBytes() == null || telemetry.totalPhysicalMemoryBytes() > 0L);
-        assertTrue(telemetry.maxMemoryBytes() > 0L);
-        assertTrue(telemetry.totalMemoryBytes() > 0L);
-        assertTrue(telemetry.freeMemoryBytes() >= 0L);
-        assertTrue(telemetry.totalMemoryBytes() >= telemetry.freeMemoryBytes());
-        if (telemetry.processCpuTimeSupported()) {
-            assertNotNull(telemetry.processCpuTimeNanos());
-            assertTrue(telemetry.processCpuTimeNanos() >= 0L);
-        }
     }
 
     @Test
@@ -47,7 +35,7 @@ class RuntimeTelemetryTest {
         var lines = Files.readAllLines(file);
         assertEquals(RuntimeTelemetry.csvHeader(), lines.get(0));
         assertEquals(2, lines.size());
-        assertTrue(lines.get(1).contains(String.valueOf(telemetry.availableProcessors())));
+        assertTrue(lines.get(1).contains(String.valueOf(telemetry.maxThreads())));
         assertTrue(lines.get(1).contains(telemetry.jvmName()));
     }
 }
