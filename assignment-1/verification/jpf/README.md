@@ -36,3 +36,8 @@ They do not model:
 
 The next task is to implement the two minimal harnesses and connect the JPF
 configuration files to their main classes.
+
+## Execution Notes
+
+The recommended execution flow is documented in
+[`docs/verification/jpf-docker-workflow.md`](../../docs/verification/jpf-docker-workflow.md).
