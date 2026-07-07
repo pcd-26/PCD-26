@@ -1,7 +1,7 @@
 target=pcd.poool.verification.jpf.TaskBasedMiniHarness
 classpath=target/jpf-classes
 search.class=gov.nasa.jpf.search.DFSearch
-vm.storage.class=gov.nasa.jpf.jvm.ElementInfo
+vm.storage.class=gov.nasa.jpf.vm.JenkinsStateSet
 vm.por=true
 vm.max_heap=64m
 search.depth_limit=40
