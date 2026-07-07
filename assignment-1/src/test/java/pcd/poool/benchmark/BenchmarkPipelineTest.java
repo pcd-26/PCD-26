@@ -35,6 +35,7 @@ class BenchmarkPipelineTest {
             @Override
             public HeadlessBenchmarkRunner.BenchmarkReport runHeadless(HeadlessBenchmarkRunner.BenchmarkRequest benchmarkRequest) throws IOException {
                 events.add("headless");
+                assertTrue(benchmarkRequest.workers() > 0);
                 Files.createDirectories(benchmarkRequest.outputFile().getParent());
                 writeCsv(benchmarkRequest.outputFile(), List.of(
                         "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors",
