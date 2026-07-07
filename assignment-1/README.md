@@ -168,12 +168,13 @@ chart directory is cleared before every run so it keeps only the latest chart
 set. This standard command always runs the full benchmark flow, which by
 default covers workloads up to `2500` balls. The exported
 `environment.csv` also captures the benchmark machine context automatically,
-including CPU model, physical cores, logical threads, JVM-visible processors,
-JVM, OS, and total RAM; the same key metadata is printed inside the generated
-chart images. The benchmark summaries and charts now prefer median latency-style
+including the JVM-visible maximum thread count, JVM, and OS; the same key
+metadata is printed inside the generated chart images. The benchmark summaries and charts now prefer median latency-style
 metrics over "best run" reporting, so the exported results stay closer to the
 typical observed behavior. The local Python-driven benchmark flow excludes GUI
-benchmark collection and runs only the headless and scalability families.
+benchmark collection and runs only the headless and scalability families. All
+benchmark entry points use the same deterministic default seed, so the
+generated snapshots stay comparable unless you intentionally override `--seed`.
 
 If you need the reduced benchmark suite for a specific case, pass:
 

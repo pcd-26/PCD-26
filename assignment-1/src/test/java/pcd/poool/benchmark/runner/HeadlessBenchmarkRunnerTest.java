@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.runner;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,6 +8,10 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import pcd.poool.benchmark.BenchmarkConfig;
+import pcd.poool.benchmark.BenchmarkRunResult;
+import pcd.poool.benchmark.HeadlessBenchmarkRunner;
+import pcd.poool.benchmark.RuntimeTelemetryCsvWriter;
 
 class HeadlessBenchmarkRunnerTest {
 
@@ -22,11 +26,23 @@ class HeadlessBenchmarkRunnerTest {
                 BenchmarkConfig.ImplementationType.SEQUENTIAL,
                 BenchmarkConfig.ImplementationType.THREADS,
                 BenchmarkConfig.ImplementationType.EXECUTOR), request.implementations());
-        assertEquals(List.of(100, 500, 1_000, 2_000, 2_500), request.balls());
+        assertEquals(List.of(100, 500, 1_000, 1_500, 2_000, 2_500), request.balls());
         assertEquals(1_000, request.steps());
         assertEquals(42L, request.seed());
         assertTrue(request.warmupRuns() >= 2);
         assertTrue(request.measuredRuns() >= 5);
+    }
+
+    @Test
+    void speedupGateDefaultsUseOneMoreThanTheDefaultWorkerCount() {
+        var request = HeadlessBenchmarkRunner.speedupGateDefaults();
+
+        assertEquals(HeadlessBenchmarkRunner.defaults().workers() + 1, request.workers());
+        assertEquals(List.of(
+                BenchmarkConfig.ImplementationType.SEQUENTIAL,
+                BenchmarkConfig.ImplementationType.THREADS,
+                BenchmarkConfig.ImplementationType.EXECUTOR), request.implementations());
+        assertEquals(List.of(100, 500, 1_000, 1_500, 2_000, 2_500), request.balls());
     }
 
     @Test

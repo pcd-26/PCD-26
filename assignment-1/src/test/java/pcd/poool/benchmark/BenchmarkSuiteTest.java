@@ -23,14 +23,15 @@ class BenchmarkSuiteTest {
         var configs = BenchmarkSuite.buildMatrix(tempDir);
         var workerMatrix = BenchmarkConfig.workerMatrix();
 
-        assertEquals(5 + 10 * workerMatrix.size(), configs.size());
+        assertEquals(6 + 12 * workerMatrix.size(), configs.size());
         Path expectedOutputDir = tempDir;
         assertTrue(Files.isDirectory(expectedOutputDir));
         assertTrue(configs.stream().allMatch(config -> config.outputDir().equals(expectedOutputDir)));
-        assertEquals(5, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL).count());
-        assertEquals(5 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS).count());
-        assertEquals(5 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR).count());
-        assertEquals(5, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL && config.threads() == 1).count());
+        assertTrue(configs.stream().allMatch(config -> config.seed() == BenchmarkConfig.DEFAULT_SEED));
+        assertEquals(6, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL).count());
+        assertEquals(6 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS).count());
+        assertEquals(6 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR).count());
+        assertEquals(6, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL && config.threads() == 1).count());
         assertTrue(configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS).map(BenchmarkConfig::threads).allMatch(workerMatrix::contains));
         assertTrue(configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR).map(BenchmarkConfig::threads).allMatch(workerMatrix::contains));
     }
@@ -43,6 +44,7 @@ class BenchmarkSuiteTest {
         Path expectedOutputDir = tempDir.resolve("smoke");
         assertTrue(Files.isDirectory(expectedOutputDir));
         assertTrue(configs.stream().allMatch(config -> config.outputDir().equals(expectedOutputDir)));
+        assertTrue(configs.stream().allMatch(config -> config.seed() == BenchmarkConfig.DEFAULT_SEED));
         assertTrue(configs.stream().allMatch(config -> config.balls() == 100));
         assertTrue(configs.stream().allMatch(config -> config.steps() == 1000));
         assertTrue(configs.stream().allMatch(config -> config.warmupRuns() == 1));

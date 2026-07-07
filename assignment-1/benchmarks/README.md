@@ -67,7 +67,7 @@ Headless raw runs currently collect:
 - `mergeApplyTimeMillis`
 - `jvm`
 - `os`
-- `availableProcessors`
+- `maxThreads`
 
 Headless summary output currently reports:
 
@@ -86,7 +86,7 @@ Scalability raw runs currently collect:
 - `tasksSubmitted`
 - `jvm`
 - `os`
-- `availableProcessors`
+- `maxThreads`
 
 In strict speedup mode, the coordination fields are retained for CSV
 compatibility but remain zero because profiling is disabled during the measured
@@ -135,8 +135,9 @@ mode:
 python scripts/run_benchmarks.py --mode speedup
 ```
 
-That mode runs only the headless benchmark, uses the five canonical workload
-sizes, and keeps the suite fast enough to run before and after a change.
+That mode runs only the headless benchmark, uses the six canonical workload
+sizes, pins the worker count to `availableProcessors + 1`, and keeps the suite
+fast enough to run before and after a change.
 It also regenerates the `speedup-vs-balls` chart. Compare the resulting
 `aggregated-results.csv` and `speedup-results.csv` against the previous run or
 baseline commit to decide whether the change is an actual improvement.
@@ -298,13 +299,22 @@ The benchmark uses these definitions:
 
 - average tick time = mean measured tick duration
 - throughput = measured ticks per second
-- speedup = sequential average tick time / engine average tick time
+- speedup = sequential median tick time / engine median tick time
 - efficiency = speedup / worker count
 - crossover = smallest workload where a parallel engine has speedup > `1`
 
 Speedup is always computed against the matching sequential baseline for the
 same workload size, collision profile, board size, ball count, tick count, and
-seed.
+seed. Using the median reduces sensitivity to outlier runs and makes the
+comparison more stable across machines.
+
+The executor-based engine can show a non-monotonic speedup curve across ball
+counts. This is expected: with fewer balls, the coordination overhead can
+dominate; with more balls, the extra parallel work can amortize that cost; and
+for some intermediate sizes the balance can temporarily move back below `1`.
+That is why the `vs balls` comparison keeps the worker count fixed and
+explains the result with the median, while `vs threads` varies the worker
+count explicitly.
 
 ### Runtime metadata
 
@@ -345,9 +355,9 @@ The benchmark infrastructure is covered by deterministic tests that verify:
   headless aggregation.
 - Current result snapshots mix legacy and newer CSV layouts, which makes casual
   file-to-file comparisons easy to misread.
-- The repository now relies on deterministic seeds, but the default seed is not
-  the same across every benchmark entry point, so users still need to check the
-  exact command line before comparing snapshots.
+- The repository now relies on deterministic seeds, and the same default seed
+  is shared across every benchmark entry point. Override `--seed` only when you
+  deliberately want a different initial state.
 - The current data model still estimates coordination cost rather than
   separating every synchronization phase into a first-class benchmark metric.
 - Performance claims still depend on the exact workload, seed, warmup policy,

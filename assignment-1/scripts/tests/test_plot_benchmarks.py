@@ -32,7 +32,7 @@ class PlotBenchmarksTest(unittest.TestCase):
             _write_csv(
                 input_dir / "speedup-results.csv",
                 [
-                    "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                    "balls,workers,seed,implementation,medianSequentialMs,medianParallelMs,speedup",
                     "100,1,42,sequential,10.000000,10.000000,1.000000",
                 ],
             )
@@ -67,7 +67,7 @@ class PlotBenchmarksTest(unittest.TestCase):
             _write_csv(
                 input_dir / "speedup-results.csv",
                 [
-                    "balls,workers,seed,implementation,meanSequentialMs,meanParallelMs,speedup",
+                    "balls,workers,seed,implementation,medianSequentialMs,medianParallelMs,speedup",
                     "100,1,42,sequential,10.000000,10.000000,1.000000",
                 ],
             )
