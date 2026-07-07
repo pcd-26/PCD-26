@@ -43,7 +43,9 @@ Besides the source code, the assignment should contain a brief report, including
 - Performance tests to check and discuss: 
   - how much the concurrent version is better than a sequential one
   - how much the program is effective in exploiting available cores
-- Verification of the program (or some parts of it), using model-checking and JPF in particular 
+- Verification of the program (or some parts of it), using model-checking and JPF in particular.
+  A proposed JPF scope and execution plan is documented in
+  [`docs/verification/jpf-verification-plan.md`](docs/verification/jpf-verification-plan.md).
 
 The `assignment-01`folder in the repo includes two sketches that could be used as a starting point
 - [`sketch01`](./sketch-01.md) is an example of main loop using a sequential approach to implement the dynamics of the bouncing balls, as requested in the game
