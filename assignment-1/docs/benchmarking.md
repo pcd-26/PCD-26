@@ -182,9 +182,9 @@ The benchmark matrix defines the supported comparison space.
 
 ### 5.1 Implementations
 
-- `sequential`
-- `threads`
-- `executor`
+- `sequential` (average case) and `sequential-worst` (worst-case concentrated spatial layout)
+- `threads` (average case) and `threads-worst` (worst-case concentrated spatial layout)
+- `executor` (average case) and `executor-worst` (worst-case concentrated spatial layout)
 
 `executor` is the task-based implementation backed by the Executor Framework.
 
@@ -223,6 +223,10 @@ compiler stabilize and to reduce one-time class-loading effects.
 
 The benchmark scenarios must be listed explicitly in the report and in any
 benchmark output.
+
+Each ball count scenario (S1 to S5) is evaluated under two distinct spatial distribution profiles:
+1. **Average-Case (Uniform Grid):** Balls are placed in a uniform grid spanning the board bounds, simulating typical, sparse workloads.
+2. **Worst-Case (Single-Cell Concentration):** All balls are packed extremely close together around the origin `(0, 0)`, placing them within a single grid cell. This triggers massive multi-body overlaps and tests implementation behavior under heavy local contact hotspots.
 
 Recommended scenario set:
 

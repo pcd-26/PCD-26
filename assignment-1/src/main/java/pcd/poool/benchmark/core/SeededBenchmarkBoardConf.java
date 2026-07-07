@@ -29,11 +29,17 @@ final class SeededBenchmarkBoardConf implements BoardConf {
 
     private final int ballCount;
     private final long seed;
+    private final boolean worstCase;
     private final List<Ball> smallBalls;
 
     SeededBenchmarkBoardConf(int ballCount, long seed) {
+        this(ballCount, seed, false);
+    }
+
+    SeededBenchmarkBoardConf(int ballCount, long seed, boolean worstCase) {
         this.ballCount = ballCount;
         this.seed = seed;
+        this.worstCase = worstCase;
         this.smallBalls = buildSmallBalls();
     }
 
@@ -71,22 +77,47 @@ final class SeededBenchmarkBoardConf implements BoardConf {
         double radius = Math.max(
                 MIN_SMALL_BALL_RADIUS,
                 Math.min(MAX_SMALL_BALL_RADIUS, Math.min(cellWidth, cellHeight) * 0.22));
-        double jitterX = cellWidth * JITTER_FRACTION;
-        double jitterY = cellHeight * JITTER_FRACTION;
-        double velocityLimit = Math.min(VELOCITY_SCALE, Math.min(cellWidth, cellHeight));
         var rng = new SplittableRandom(seed);
         var balls = new ArrayList<Ball>(ballCount);
 
-        for (int index = 0; index < ballCount; index++) {
-            int row = index / columns;
-            int column = index % columns;
-            double baseX = INNER_LEFT + (column + 0.5) * cellWidth;
-            double baseY = INNER_BOTTOM + (row + 0.5) * cellHeight;
-            double x = clamp(baseX + centeredJitter(rng, jitterX), INNER_LEFT + radius, INNER_RIGHT - radius);
-            double y = clamp(baseY + centeredJitter(rng, jitterY), INNER_BOTTOM + radius, INNER_TOP - radius);
-            double vx = centeredJitter(rng, velocityLimit);
-            double vy = centeredJitter(rng, velocityLimit);
-            balls.add(Ball.ofUniformMaterial(new P2d(x, y), radius, new V2d(vx, vy)));
+        if (worstCase) {
+            // Worst case: place all balls in a single cell (size 2 * radius) at the origin
+            double boxSize = radius * 0.9;
+            int side = (int) Math.ceil(Math.sqrt(ballCount));
+            double spacing = side > 1 ? boxSize / (side - 1) : boxSize;
+            double startX = -boxSize / 2.0;
+            double startY = -boxSize / 2.0;
+            double velocityLimit = Math.min(VELOCITY_SCALE, Math.min(cellWidth, cellHeight)) * 0.1; // lower velocity to avoid instant explosion
+
+            for (int index = 0; index < ballCount; index++) {
+                int r = index / side;
+                int c = index % side;
+                double x = startX + c * spacing;
+                double y = startY + r * spacing;
+                // Add tiny jitter to prevent coincident centers
+                x += centeredJitter(rng, spacing * 0.05);
+                y += centeredJitter(rng, spacing * 0.05);
+                double vx = centeredJitter(rng, velocityLimit);
+                double vy = centeredJitter(rng, velocityLimit);
+                balls.add(Ball.ofUniformMaterial(new P2d(x, y), radius, new V2d(vx, vy)));
+            }
+        } else {
+            // Average case: uniform grid
+            double jitterX = cellWidth * JITTER_FRACTION;
+            double jitterY = cellHeight * JITTER_FRACTION;
+            double velocityLimit = Math.min(VELOCITY_SCALE, Math.min(cellWidth, cellHeight));
+
+            for (int index = 0; index < ballCount; index++) {
+                int row = index / columns;
+                int column = index % columns;
+                double baseX = INNER_LEFT + (column + 0.5) * cellWidth;
+                double baseY = INNER_BOTTOM + (row + 0.5) * cellHeight;
+                double x = clamp(baseX + centeredJitter(rng, jitterX), INNER_LEFT + radius, INNER_RIGHT - radius);
+                double y = clamp(baseY + centeredJitter(rng, jitterY), INNER_BOTTOM + radius, INNER_TOP - radius);
+                double vx = centeredJitter(rng, velocityLimit);
+                double vy = centeredJitter(rng, velocityLimit);
+                balls.add(Ball.ofUniformMaterial(new P2d(x, y), radius, new V2d(vx, vy)));
+            }
         }
         return balls;
     }

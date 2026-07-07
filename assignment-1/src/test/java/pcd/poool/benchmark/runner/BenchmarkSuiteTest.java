@@ -23,23 +23,21 @@ class BenchmarkSuiteTest {
         var configs = BenchmarkSuite.buildMatrix(tempDir);
         var workerMatrix = BenchmarkConfig.workerMatrix();
 
-        assertEquals(5 + 10 * workerMatrix.size(), configs.size());
+        assertEquals(12 + 24 * workerMatrix.size(), configs.size());
         Path expectedOutputDir = tempDir;
         assertTrue(Files.isDirectory(expectedOutputDir));
         assertTrue(configs.stream().allMatch(config -> config.outputDir().equals(expectedOutputDir)));
-        assertEquals(5, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL).count());
-        assertEquals(5 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS).count());
-        assertEquals(5 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR).count());
-        assertEquals(5, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL && config.threads() == 1).count());
-        assertTrue(configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS).map(BenchmarkConfig::threads).allMatch(workerMatrix::contains));
-        assertTrue(configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR).map(BenchmarkConfig::threads).allMatch(workerMatrix::contains));
+        assertEquals(12, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL || config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL_WORST).count());
+        assertEquals(12 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS || config.implementation() == BenchmarkConfig.ImplementationType.THREADS_WORST).count());
+        assertEquals(12 * workerMatrix.size(), configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR || config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR_WORST).count());
+        assertEquals(12, configs.stream().filter(config -> (config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL || config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL_WORST) && config.threads() == 1).count());
     }
 
     @Test
     void buildSmokeMatrixCreatesOutputDirectoryAndLightweightConfigurations() throws Exception {
         var configs = BenchmarkSuite.buildSmokeMatrix(tempDir.resolve("smoke"));
 
-        assertEquals(5, configs.size());
+        assertEquals(10, configs.size());
         Path expectedOutputDir = tempDir.resolve("smoke");
         assertTrue(Files.isDirectory(expectedOutputDir));
         assertTrue(configs.stream().allMatch(config -> config.outputDir().equals(expectedOutputDir)));
@@ -47,9 +45,9 @@ class BenchmarkSuiteTest {
         assertTrue(configs.stream().allMatch(config -> config.steps() == 1000));
         assertTrue(configs.stream().allMatch(config -> config.warmupRuns() == 1));
         assertTrue(configs.stream().allMatch(config -> config.measuredRuns() == 1));
-        assertEquals(1, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL).count());
-        assertEquals(2, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS).count());
-        assertEquals(2, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR).count());
+        assertEquals(2, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL || config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL_WORST).count());
+        assertEquals(4, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.THREADS || config.implementation() == BenchmarkConfig.ImplementationType.THREADS_WORST).count());
+        assertEquals(4, configs.stream().filter(config -> config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR || config.implementation() == BenchmarkConfig.ImplementationType.EXECUTOR_WORST).count());
     }
 
     @Test

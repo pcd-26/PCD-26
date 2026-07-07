@@ -88,18 +88,20 @@ public record BenchmarkConfig(
     public static List<BenchmarkConfig> defaultMatrix() {
         var configs = new ArrayList<BenchmarkConfig>();
         for (var balls : List.of(100, 500, 1_000, 1_500, 2_000, 2_500)) {
-            configs.add(new BenchmarkConfig(
-                    ImplementationType.SEQUENTIAL,
-                    balls,
-                    1,
-                    DEFAULT_STEPS,
-                    DEFAULT_SEED,
-                    DEFAULT_WARMUP_RUNS,
-                    DEFAULT_MEASURED_RUNS,
-                    false,
-                    false,
-                    DEFAULT_OUTPUT_DIR));
-            for (var implementation : List.of(ImplementationType.THREADS, ImplementationType.EXECUTOR)) {
+            for (var implementation : List.of(ImplementationType.SEQUENTIAL, ImplementationType.SEQUENTIAL_WORST)) {
+                configs.add(new BenchmarkConfig(
+                        implementation,
+                        balls,
+                        1,
+                        DEFAULT_STEPS,
+                        DEFAULT_SEED,
+                        DEFAULT_WARMUP_RUNS,
+                        DEFAULT_MEASURED_RUNS,
+                        false,
+                        false,
+                        DEFAULT_OUTPUT_DIR));
+            }
+            for (var implementation : List.of(ImplementationType.THREADS, ImplementationType.THREADS_WORST, ImplementationType.EXECUTOR, ImplementationType.EXECUTOR_WORST)) {
                 for (var threads : workerMatrix()) {
                     configs.add(new BenchmarkConfig(
                             implementation,
@@ -268,7 +270,16 @@ public record BenchmarkConfig(
      * @return worker count actually used by the runtime
      */
     public int effectiveThreads() {
-        return implementation == ImplementationType.SEQUENTIAL ? 1 : threads;
+        return (implementation == ImplementationType.SEQUENTIAL || implementation == ImplementationType.SEQUENTIAL_WORST) ? 1 : threads;
+    }
+
+    /**
+     * Checks if the configuration represents a worst-case scenario.
+     *
+     * @return true if the implementation is a worst-case type, false otherwise
+     */
+    public boolean worstCase() {
+        return implementation.isWorstCase();
     }
 
     /**
@@ -299,6 +310,16 @@ public record BenchmarkConfig(
      */
     public BenchmarkConfig withImplementation(ImplementationType value) {
         return new BenchmarkConfig(value, balls, threads, steps, seed, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, outputDir);
+    }
+
+    /**
+     * Creates a copy with a worst-case or average-case implementation version.
+     *
+     * @param worstCase whether to use the worst-case implementation
+     * @return updated configuration
+     */
+    public BenchmarkConfig withWorstCase(boolean worstCase) {
+        return withImplementation(worstCase ? implementation.toWorstCase() : implementation.toAverageCase());
     }
 
     /**
@@ -423,7 +444,47 @@ public record BenchmarkConfig(
     public enum ImplementationType {
         SEQUENTIAL,
         THREADS,
-        EXECUTOR;
+        EXECUTOR,
+        SEQUENTIAL_WORST,
+        THREADS_WORST,
+        EXECUTOR_WORST;
+
+        /**
+         * Checks if the implementation type represents a worst-case scenario.
+         *
+         * @return true if it is a worst-case implementation, false otherwise
+         */
+        public boolean isWorstCase() {
+            return this == SEQUENTIAL_WORST || this == THREADS_WORST || this == EXECUTOR_WORST;
+        }
+
+        /**
+         * Converts this implementation type to its worst-case counterpart.
+         *
+         * @return the worst-case counterpart
+         */
+        public ImplementationType toWorstCase() {
+            return switch (this) {
+                case SEQUENTIAL -> SEQUENTIAL_WORST;
+                case THREADS -> THREADS_WORST;
+                case EXECUTOR -> EXECUTOR_WORST;
+                default -> this;
+            };
+        }
+
+        /**
+         * Converts this implementation type to its average-case counterpart.
+         *
+         * @return the average-case counterpart
+         */
+        public ImplementationType toAverageCase() {
+            return switch (this) {
+                case SEQUENTIAL_WORST -> SEQUENTIAL;
+                case THREADS_WORST -> THREADS;
+                case EXECUTOR_WORST -> EXECUTOR;
+                default -> this;
+            };
+        }
 
         /**
          * Parses a textual implementation name.
@@ -435,10 +496,13 @@ public record BenchmarkConfig(
             if (value == null) {
                 throw new IllegalArgumentException("implementation must not be null");
             }
-            return switch (value.trim().toLowerCase(Locale.ROOT)) {
+            return switch (value.trim().toLowerCase(Locale.ROOT).replace("-", "_")) {
                 case "sequential", "seq" -> SEQUENTIAL;
                 case "threads", "threaded", "thread" -> THREADS;
                 case "executor", "task", "taskbased" -> EXECUTOR;
+                case "sequential_worst", "seq_worst" -> SEQUENTIAL_WORST;
+                case "threads_worst", "threaded_worst", "thread_worst" -> THREADS_WORST;
+                case "executor_worst", "task_worst", "taskbased_worst" -> EXECUTOR_WORST;
                 default -> throw new IllegalArgumentException("unknown implementation: " + value);
             };
         }

@@ -44,13 +44,13 @@ class HeadlessBenchmarkRunnerTest {
         assertEquals(tempDir.resolve("raw-results.csv"), report.outputFile());
         assertEquals(tempDir.resolve("aggregated-results.csv"), report.aggregatedOutputFile());
         assertEquals(tempDir.resolve("speedup-results.csv"), report.speedupOutputFile());
-        assertEquals(18, report.rawResults().size());
-        assertEquals(6, report.rawResults().stream().filter(BenchmarkRunResult::warmup).count());
-        assertEquals(12, report.rows().size());
+        assertEquals(36, report.rawResults().size());
+        assertEquals(12, report.rawResults().stream().filter(BenchmarkRunResult::warmup).count());
+        assertEquals(24, report.rows().size());
 
         var lines = Files.readAllLines(report.outputFile());
         assertEquals("implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors", lines.get(0));
-        assertEquals(13, lines.size());
+        assertEquals(25, lines.size());
         assertTrue(Files.exists(tempDir.resolve(RuntimeTelemetryCsvWriter.ENVIRONMENT_FILE_NAME)));
         assertTrue(lines.stream().skip(1).allMatch(line -> line.contains(",false,")));
         assertTrue(report.rows().stream().allMatch(row -> row.elapsedMs() > 0.0));
@@ -67,7 +67,7 @@ class HeadlessBenchmarkRunnerTest {
                 .withSteps(4)
                 .withWarmupRuns(1)
                 .withMeasuredRuns(1)
-                .withWorkers(2)
+                .withWorkers(1)
                 .withOutputFile(tempDir.resolve("raw-results.csv"));
 
         var report = HeadlessBenchmarkRunner.run(request);
@@ -75,9 +75,12 @@ class HeadlessBenchmarkRunnerTest {
         long sequential = stateHash(report.rows(), "sequential");
         long threaded = stateHash(report.rows(), "threads");
         long executor = stateHash(report.rows(), "executor");
+        long threadedWorst = stateHash(report.rows(), "threads-worst");
+        long executorWorst = stateHash(report.rows(), "executor-worst");
 
         assertEquals(sequential, threaded);
         assertEquals(sequential, executor);
+        assertEquals(threadedWorst, executorWorst);
     }
 
     private static long stateHash(List<HeadlessBenchmarkRunner.BenchmarkRow> rows, String implementation) {

@@ -104,8 +104,13 @@ final class BenchmarkResultsExporter {
     private static Map<ScenarioKey, BenchmarkSummary> baselineByScenario(List<BenchmarkSummary> summaries) {
         Map<ScenarioKey, BenchmarkSummary> baselines = new LinkedHashMap<>();
         for (var summary : summaries) {
-            if (summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
-                baselines.put(new ScenarioKey(summary.config().balls(), summary.config().steps(), summary.config().seed()), summary);
+            var impl = summary.config().implementation();
+            if (impl == BenchmarkConfig.ImplementationType.SEQUENTIAL || impl == BenchmarkConfig.ImplementationType.SEQUENTIAL_WORST) {
+                baselines.put(new ScenarioKey(
+                        summary.config().balls(),
+                        summary.config().steps(),
+                        summary.config().seed(),
+                        impl.isWorstCase()), summary);
             }
         }
         return baselines;
@@ -117,7 +122,12 @@ final class BenchmarkResultsExporter {
         var rows = new ArrayList<DerivedRow>(summaries.size());
         for (var summary : summaries) {
             BenchmarkConfig config = summary.config();
-            BenchmarkSummary baseline = baselines.get(new ScenarioKey(config.balls(), config.steps(), config.seed()));
+            var impl = config.implementation();
+            BenchmarkSummary baseline = baselines.get(new ScenarioKey(
+                    config.balls(),
+                    config.steps(),
+                    config.seed(),
+                    impl.isWorstCase()));
             double speedup = baseline == null || summary.meanElapsedMillis() <= 0.0
                     ? Double.NaN
                     : baseline.meanElapsedMillis() / summary.meanElapsedMillis();
@@ -318,7 +328,7 @@ final class BenchmarkResultsExporter {
         String toCsv();
     }
 
-    private record ScenarioKey(int balls, int steps, long seed) {
+    private record ScenarioKey(int balls, int steps, long seed, boolean worstCase) {
     }
 
     private record CrossoverKey(BenchmarkConfig.ImplementationType implementation, int workerCount, long seed) {

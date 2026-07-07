@@ -104,15 +104,15 @@ public final class HeadlessSimulationRunner {
      */
     static BenchmarkRunner.BenchmarkExecution simulateExecution(BenchmarkConfig config) {
         return switch (config.implementation()) {
-            case SEQUENTIAL -> simulateSequential(config);
-            case THREADS -> simulateThreaded(config);
-            case EXECUTOR -> simulateTaskBased(config);
+            case SEQUENTIAL, SEQUENTIAL_WORST -> simulateSequential(config);
+            case THREADS, THREADS_WORST -> simulateThreaded(config);
+            case EXECUTOR, EXECUTOR_WORST -> simulateTaskBased(config);
         };
     }
 
     private static BenchmarkRunner.BenchmarkExecution simulateSequential(BenchmarkConfig config) {
         var board = new Board(new PhysicsEngine());
-        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
+        board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed(), config.worstCase()));
         runSimulationLoop(board, config, null, null);
         return new BenchmarkRunner.BenchmarkExecution(
                 checksum(board),
@@ -138,7 +138,7 @@ public final class HeadlessSimulationRunner {
         try {
             PhysicsStepper stepper = threadedEngine != null ? threadedEngine : taskBasedEngine;
             var board = new Board(stepper);
-            board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
+            board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed(), config.worstCase()));
             var instrumentation = runSimulationLoop(board, config, threadedEngine, taskBasedEngine);
             return new BenchmarkRunner.BenchmarkExecution(
                     checksum(board),

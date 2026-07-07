@@ -141,8 +141,9 @@ shared-state rules, see
 [`docs/physics-engines-and-concurrency.md`](docs/physics-engines-and-concurrency.md).
 
 For headless comparisons that must stay free of GUI rendering, use the seeded
-simulation runner. It accepts the implementation type, ball count, thread
-count, number of simulation steps, and random seed:
+simulation runner. It accepts, in order:
+`implementation type` | `ball count` | `thread
+count` | `simulation steps count` | `random seed`
 
 ```bash
 java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessSimulationRunner sequential 100 1 600 0

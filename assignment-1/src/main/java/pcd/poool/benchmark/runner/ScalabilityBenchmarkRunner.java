@@ -73,66 +73,72 @@ public final class ScalabilityBenchmarkRunner {
         RuntimeTelemetryCsvWriter.export(outputDir, telemetry);
 
         for (int ballCount : request.balls()) {
-            for (BenchmarkConfig.ImplementationType implementation : request.implementations()) {
-                if (implementation == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
-                    var config = new BenchmarkConfig(
-                            implementation,
-                            ballCount,
-                            1,
-                            request.steps(),
-                            request.seed(),
-                            request.warmupRuns(),
-                            request.measuredRuns(),
-                            false,
-                            false,
-                            outputDir);
+            for (BenchmarkConfig.ImplementationType baseImplementation : request.implementations()) {
+                if (baseImplementation == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
+                    for (boolean worstCase : new boolean[]{false, true}) {
+                        BenchmarkConfig.ImplementationType implementation = worstCase ? baseImplementation.toWorstCase() : baseImplementation;
+                        var config = new BenchmarkConfig(
+                                implementation,
+                                ballCount,
+                                1,
+                                request.steps(),
+                                request.seed(),
+                                request.warmupRuns(),
+                                request.measuredRuns(),
+                                false,
+                                false,
+                                outputDir);
 
-                    BenchmarkScenarioLogging.printScenarioStart(config);
-                    var scenarioResults = runScenario(config);
-                    rawResults.addAll(scenarioResults);
-                    var measuredResults = scenarioResults.stream()
-                            .filter(result -> !result.warmup())
-                            .toList();
-                    for (int runIndex = 1; runIndex <= measuredResults.size(); runIndex++) {
-                        var result = measuredResults.get(runIndex - 1);
-                        if (result.failed()) {
-                            throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
+                        BenchmarkScenarioLogging.printScenarioStart(config);
+                        var scenarioResults = runScenario(config);
+                        rawResults.addAll(scenarioResults);
+                        var measuredResults = scenarioResults.stream()
+                                .filter(result -> !result.warmup())
+                                .toList();
+                        for (int runIndex = 1; runIndex <= measuredResults.size(); runIndex++) {
+                            var result = measuredResults.get(runIndex - 1);
+                            if (result.failed()) {
+                                throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
+                            }
+                            var row = toRow(result, telemetry, config, runIndex);
+                            rows.add(row);
                         }
-                        var row = toRow(result, telemetry, config, runIndex);
-                        rows.add(row);
+                        BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
                     }
-                    BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
                     continue;
                 }
 
                 for (int workers : request.workerCounts()) {
-                    var config = new BenchmarkConfig(
-                            implementation,
-                            ballCount,
-                            workers,
-                            request.steps(),
-                            request.seed(),
-                            request.warmupRuns(),
-                            request.measuredRuns(),
-                            false,
-                            false,
-                            outputDir);
+                    for (boolean worstCase : new boolean[]{false, true}) {
+                        BenchmarkConfig.ImplementationType implementation = worstCase ? baseImplementation.toWorstCase() : baseImplementation;
+                        var config = new BenchmarkConfig(
+                                implementation,
+                                ballCount,
+                                workers,
+                                request.steps(),
+                                request.seed(),
+                                request.warmupRuns(),
+                                request.measuredRuns(),
+                                false,
+                                false,
+                                outputDir);
 
-                    BenchmarkScenarioLogging.printScenarioStart(config);
-                    var scenarioResults = runScenario(config);
-                    rawResults.addAll(scenarioResults);
-                    var measuredResults = scenarioResults.stream()
-                            .filter(result -> !result.warmup())
-                            .toList();
-                    for (int runIndex = 1; runIndex <= measuredResults.size(); runIndex++) {
-                        var result = measuredResults.get(runIndex - 1);
-                        if (result.failed()) {
-                            throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
+                        BenchmarkScenarioLogging.printScenarioStart(config);
+                        var scenarioResults = runScenario(config);
+                        rawResults.addAll(scenarioResults);
+                        var measuredResults = scenarioResults.stream()
+                                .filter(result -> !result.warmup())
+                                .toList();
+                        for (int runIndex = 1; runIndex <= measuredResults.size(); runIndex++) {
+                            var result = measuredResults.get(runIndex - 1);
+                            if (result.failed()) {
+                                throw new IllegalStateException("benchmark run failed: " + result.failureMessage());
+                            }
+                            var row = toRow(result, telemetry, config, runIndex);
+                            rows.add(row);
                         }
-                        var row = toRow(result, telemetry, config, runIndex);
-                        rows.add(row);
+                        BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
                     }
-                    BenchmarkScenarioLogging.printScenarioDone(config, request.measuredRuns());
                 }
             }
         }
@@ -182,7 +188,7 @@ public final class ScalabilityBenchmarkRunner {
         BenchmarkEngineAdapter adapter = BenchmarkEngineAdapters.forImplementation(config.implementation(), config.effectiveThreads());
         try (BenchmarkEngineAdapter.BenchmarkEngineSession session = adapter.open()) {
             var board = new Board(session.stepper());
-            board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed()));
+            board.init(new SeededBenchmarkBoardConf(config.balls(), config.seed(), config.worstCase()));
             var result = BenchmarkRunner.time(runIndex, warmup, config.steps(), () ->
                     session.execute(board, config.steps(), config.instrumentationEnabled()));
             blackhole = result.checksum();
@@ -200,7 +206,7 @@ public final class ScalabilityBenchmarkRunner {
         String jvm = telemetry.jvmName() + " " + telemetry.jvmVersion();
         String os = telemetry.osName() + " " + telemetry.osVersion() + " " + telemetry.osArch();
         return new BenchmarkRow(
-                config.implementation().name().toLowerCase(Locale.ROOT),
+                config.implementation().name().toLowerCase(Locale.ROOT).replace("_", "-"),
                 config.balls(),
                 config.effectiveThreads(),
                 config.steps(),

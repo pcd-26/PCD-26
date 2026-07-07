@@ -55,9 +55,9 @@ public final class BenchmarkEngineAdapters {
      */
     public static BenchmarkEngineAdapter forImplementation(BenchmarkConfig.ImplementationType implementation, int workerCount) {
         return switch (implementation) {
-            case SEQUENTIAL -> sequential();
-            case THREADS -> threaded(workerCount);
-            case EXECUTOR -> taskBased(workerCount);
+            case SEQUENTIAL, SEQUENTIAL_WORST -> sequential();
+            case THREADS, THREADS_WORST -> threaded(workerCount);
+            case EXECUTOR, EXECUTOR_WORST -> taskBased(workerCount);
         };
     }
 

@@ -395,18 +395,33 @@ def plot_metric_by_ball(
     add_chart_context(fig, chart_context)
 
     for implementation in IMPL_ORDER:
-        subset = df[df["implementation"].astype(str).str.lower() == implementation].copy()
-        if subset.empty:
-            continue
-        grouped = subset.groupby("balls", as_index=False)[value_col].median().sort_values("balls")
-        ax.plot(
-            grouped["balls"],
-            grouped[value_col],
-            marker="o",
-            linewidth=2.2,
-            color=IMPL_COLORS.get(implementation),
-            label=implementation,
-        )
+        norm_impls = df["implementation"].astype(str).str.lower().str.replace('_', '-')
+        subset = df[norm_impls == implementation].copy()
+        if not subset.empty:
+            grouped = subset.groupby("balls", as_index=False)[value_col].median().sort_values("balls")
+            ax.plot(
+                grouped["balls"],
+                grouped[value_col],
+                marker="o",
+                linewidth=2.2,
+                color=IMPL_COLORS.get(implementation),
+                label=f"{implementation} (average)",
+            )
+        
+        worst_impl = f"{implementation}-worst"
+        subset_worst = df[norm_impls == worst_impl].copy()
+        if not subset_worst.empty:
+            grouped_worst = subset_worst.groupby("balls", as_index=False)[value_col].median().sort_values("balls")
+            ax.plot(
+                grouped_worst["balls"],
+                grouped_worst[value_col],
+                marker="x",
+                linestyle="--",
+                linewidth=1.8,
+                color=IMPL_COLORS.get(implementation),
+                alpha=0.45,
+                label=f"{implementation} (worst-case)",
+            )
 
     ax.set_xlabel("Number of balls")
     ax.set_ylabel(ylabel)
@@ -463,18 +478,33 @@ def plot_worker_panels(
         ax = axes_list[index]
         subset = df[df["balls"] == ball]
         for implementation in implementations:
-            impl_subset = subset[subset["implementation"].astype(str).str.lower() == implementation].copy()
-            if impl_subset.empty:
-                continue
-            impl_subset = impl_subset.sort_values(x_col)
-            ax.plot(
-                impl_subset[x_col],
-                impl_subset[value_col],
-                marker="o",
-                linewidth=2.0,
-                color=IMPL_COLORS.get(implementation),
-                label=implementation,
-            )
+            norm_impls = subset["implementation"].astype(str).str.lower().str.replace('_', '-')
+            impl_subset = subset[norm_impls == implementation].copy()
+            if not impl_subset.empty:
+                impl_subset = impl_subset.sort_values(x_col)
+                ax.plot(
+                    impl_subset[x_col],
+                    impl_subset[value_col],
+                    marker="o",
+                    linewidth=2.0,
+                    color=IMPL_COLORS.get(implementation),
+                    label=f"{implementation} (average)",
+                )
+            
+            worst_impl = f"{implementation}-worst"
+            impl_subset_worst = subset[norm_impls == worst_impl].copy()
+            if not impl_subset_worst.empty:
+                impl_subset_worst = impl_subset_worst.sort_values(x_col)
+                ax.plot(
+                    impl_subset_worst[x_col],
+                    impl_subset_worst[value_col],
+                    marker="x",
+                    linestyle="--",
+                    linewidth=1.6,
+                    color=IMPL_COLORS.get(implementation),
+                    alpha=0.45,
+                    label=f"{implementation} (worst-case)",
+                )
         ax.set_title(f"{ball} balls", fontsize=11)
         if x_col in {"workers", "worker_count"}:
             ax.set_xlabel("Worker threads")
@@ -528,21 +558,42 @@ def build_thread_pool_speedup(df: pd.DataFrame, x_col: str, value_col: str) -> p
     if missing:
         return pd.DataFrame()
 
-    baseline = df[df["implementation"].astype(str).str.lower() == "threads"].copy()
-    executor = df[df["implementation"].astype(str).str.lower() == "executor"].copy()
-    if baseline.empty or executor.empty:
+    df_copy = df.copy()
+    norm_impls = df_copy["implementation"].astype(str).str.lower().str.replace('_', '-')
+    
+    baseline_avg = df_copy[norm_impls == "threads"].copy()
+    executor_avg = df_copy[norm_impls == "executor"].copy()
+    
+    baseline_worst = df_copy[norm_impls == "threads-worst"].copy()
+    executor_worst = df_copy[norm_impls == "executor-worst"].copy()
+    
+    results = []
+    
+    if not baseline_avg.empty and not executor_avg.empty:
+        merged_avg = baseline_avg.merge(
+            executor_avg,
+            on=["balls", x_col, "steps", "seed"],
+            suffixes=("_threads", "_executor"),
+        )
+        if not merged_avg.empty:
+            merged_avg["speedup"] = merged_avg[f"{value_col}_threads"] / merged_avg[f"{value_col}_executor"]
+            merged_avg["case"] = "average"
+            results.append(merged_avg.loc[:, ["balls", x_col, "speedup", "case"]].copy())
+            
+    if not baseline_worst.empty and not executor_worst.empty:
+        merged_worst = baseline_worst.merge(
+            executor_worst,
+            on=["balls", x_col, "steps", "seed"],
+            suffixes=("_threads", "_executor"),
+        )
+        if not merged_worst.empty:
+            merged_worst["speedup"] = merged_worst[f"{value_col}_threads"] / merged_worst[f"{value_col}_executor"]
+            merged_worst["case"] = "worst"
+            results.append(merged_worst.loc[:, ["balls", x_col, "speedup", "case"]].copy())
+            
+    if not results:
         return pd.DataFrame()
-
-    merged = baseline.merge(
-        executor,
-        on=["balls", x_col, "steps", "seed"],
-        suffixes=("_threads", "_executor"),
-    )
-    if merged.empty:
-        return pd.DataFrame()
-
-    merged["speedup"] = merged[f"{value_col}_threads"] / merged[f"{value_col}_executor"]
-    return merged.loc[:, ["balls", x_col, "speedup"]].copy()
+    return pd.concat(results, ignore_index=True)
 
 
 def build_worker_speedup_from_scalability(df: pd.DataFrame) -> pd.DataFrame:
@@ -551,25 +602,44 @@ def build_worker_speedup_from_scalability(df: pd.DataFrame) -> pd.DataFrame:
     if missing:
         return pd.DataFrame()
 
-    baseline = df[df["implementation"].astype(str).str.lower() == "sequential"].copy()
-    if baseline.empty:
-        return pd.DataFrame()
-
+    df_copy = df.copy()
+    norm_impls = df_copy["implementation"].astype(str).str.lower().str.replace('_', '-')
+    
     rows = []
-    for implementation in ("threads", "executor"):
-        impl_rows = df[df["implementation"].astype(str).str.lower() == implementation].copy()
-        if impl_rows.empty:
-            continue
-        merged = impl_rows.merge(
-            baseline,
-            on=["balls", "steps", "seed"],
-            suffixes=("_impl", "_seq"),
-        )
-        if merged.empty:
-            continue
-        merged["implementation"] = implementation
-        merged["speedup"] = merged["meanElapsedMs_seq"] / merged["meanElapsedMs_impl"]
-        rows.append(merged.loc[:, ["balls", "workers_impl", "implementation", "speedup"]].rename(columns={"workers_impl": "workers"}))
+    # Average case
+    baseline_avg = df_copy[norm_impls == "sequential"].copy()
+    if not baseline_avg.empty:
+        for implementation in ("threads", "executor"):
+            impl_rows = df_copy[norm_impls == implementation].copy()
+            if impl_rows.empty:
+                continue
+            merged = impl_rows.merge(
+                baseline_avg,
+                on=["balls", "steps", "seed"],
+                suffixes=("_impl", "_seq"),
+            )
+            if not merged.empty:
+                merged["implementation"] = implementation
+                merged["speedup"] = merged["meanElapsedMs_seq"] / merged["meanElapsedMs_impl"]
+                rows.append(merged.loc[:, ["balls", "workers_impl", "implementation", "speedup"]].rename(columns={"workers_impl": "workers"}))
+                
+    # Worst case
+    baseline_worst = df_copy[norm_impls == "sequential-worst"].copy()
+    if not baseline_worst.empty:
+        for implementation in ("threads", "executor"):
+            worst_impl = f"{implementation}-worst"
+            impl_rows = df_copy[norm_impls == worst_impl].copy()
+            if impl_rows.empty:
+                continue
+            merged = impl_rows.merge(
+                baseline_worst,
+                on=["balls", "steps", "seed"],
+                suffixes=("_impl", "_seq"),
+            )
+            if not merged.empty:
+                merged["implementation"] = worst_impl
+                merged["speedup"] = merged["meanElapsedMs_seq"] / merged["meanElapsedMs_impl"]
+                rows.append(merged.loc[:, ["balls", "workers_impl", "implementation", "speedup"]].rename(columns={"workers_impl": "workers"}))
 
     if not rows:
         return pd.DataFrame()
@@ -586,7 +656,7 @@ def plot_thread_pool_speedup_panels(
     title: str,
     chart_context: str | None = None,
 ) -> None:
-    required = {"balls", x_col, "speedup"}
+    required = {"balls", x_col, "speedup", "case"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"missing required columns for {output_file.name}: {sorted(missing)}")
@@ -613,14 +683,33 @@ def plot_thread_pool_speedup_panels(
     for index, ball in enumerate(balls_values):
         ax = axes_list[index]
         subset = df[df["balls"] == ball].copy()
-        grouped = subset.groupby(x_col, as_index=False)["speedup"].median().sort_values(x_col)
-        ax.plot(
-            grouped[x_col],
-            grouped["speedup"],
-            marker="o",
-            linewidth=2.0,
-            color=IMPL_COLORS.get("executor"),
-        )
+        
+        avg_subset = subset[subset["case"] == "average"]
+        if not avg_subset.empty:
+            grouped = avg_subset.groupby(x_col, as_index=False)["speedup"].median().sort_values(x_col)
+            ax.plot(
+                grouped[x_col],
+                grouped["speedup"],
+                marker="o",
+                linewidth=2.0,
+                color=IMPL_COLORS.get("executor"),
+                label="average case"
+            )
+            
+        worst_subset = subset[subset["case"] == "worst"]
+        if not worst_subset.empty:
+            grouped_worst = worst_subset.groupby(x_col, as_index=False)["speedup"].median().sort_values(x_col)
+            ax.plot(
+                grouped_worst[x_col],
+                grouped_worst["speedup"],
+                marker="x",
+                linestyle="--",
+                linewidth=1.6,
+                color=IMPL_COLORS.get("executor"),
+                alpha=0.45,
+                label="worst-case"
+            )
+            
         ax.set_title(f"{ball} balls", fontsize=11)
         if x_col in {"workers", "worker_count"}:
             ax.set_xlabel("Worker threads")
@@ -633,6 +722,16 @@ def plot_thread_pool_speedup_panels(
     for ax in axes_list[len(balls_values):]:
         ax.axis("off")
 
+    handles, labels = axes_list[0].get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.90),
+            ncol=max(1, len(handles)),
+            frameon=False,
+        )
     save_figure(fig, output_file)
 
 

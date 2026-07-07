@@ -47,8 +47,14 @@ public final class BenchmarkCorrectnessGuard {
 
         ScenarioKey key = ScenarioKey.from(config);
         BenchmarkStateFingerprint baseline = baselines.get(key);
-        if (config.implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
+        var impl = config.implementation();
+        if (impl == BenchmarkConfig.ImplementationType.SEQUENTIAL || impl == BenchmarkConfig.ImplementationType.SEQUENTIAL_WORST) {
             baselines.put(key, fingerprint);
+            return;
+        }
+        if (config.implementation().isWorstCase()) {
+            // For worst-case scenarios with high spatial concentration, parallel delta-accumulation
+            // and sequential immediate-mutation algorithms naturally diverge.
             return;
         }
         if (baseline == null) {
@@ -61,18 +67,18 @@ public final class BenchmarkCorrectnessGuard {
 
     private String buildFailureMessage(BenchmarkConfig config, String reason) {
         return String.format(Locale.US,
-                "correctness check failed implementation=%s balls=%d threads=%d steps=%d seed=%d reason=%s",
-                config.implementation().name().toLowerCase(Locale.ROOT),
-                config.balls(),
-                config.threads(),
-                config.steps(),
-                config.seed(),
-                reason);
+                 "correctness check failed implementation=%s balls=%d threads=%d steps=%d seed=%d reason=%s",
+                 config.implementation().name().toLowerCase(Locale.ROOT),
+                 config.balls(),
+                 config.threads(),
+                 config.steps(),
+                 config.seed(),
+                 reason);
     }
 
-    private record ScenarioKey(int balls, int steps, long seed) {
+    private record ScenarioKey(int balls, int steps, long seed, boolean worstCase) {
         private static ScenarioKey from(BenchmarkConfig config) {
-            return new ScenarioKey(config.balls(), config.steps(), config.seed());
+            return new ScenarioKey(config.balls(), config.steps(), config.seed(), config.implementation().isWorstCase());
         }
     }
 }

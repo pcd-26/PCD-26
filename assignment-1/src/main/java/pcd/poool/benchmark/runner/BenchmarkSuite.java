@@ -150,13 +150,14 @@ public final class BenchmarkSuite {
             var rawResults = runScenario(config, workload, out);
             var summary = BenchmarkRunner.summarize(config, rawResults);
             summaries.add(summary);
-            if (summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL) {
-                sequentialBaselines.put(new ScenarioKey(config.balls(), config.steps(), config.seed()), summary);
+            var impl = summary.config().implementation();
+            if (impl == BenchmarkConfig.ImplementationType.SEQUENTIAL || impl == BenchmarkConfig.ImplementationType.SEQUENTIAL_WORST) {
+                sequentialBaselines.put(new ScenarioKey(config.balls(), config.steps(), config.seed(), impl.isWorstCase()), summary);
             }
 
             BenchmarkSummary sequentialBaseline = sequentialBaselines.getOrDefault(
-                    new ScenarioKey(config.balls(), config.steps(), config.seed()),
-                    summary.config().implementation() == BenchmarkConfig.ImplementationType.SEQUENTIAL ? summary : null);
+                    new ScenarioKey(config.balls(), config.steps(), config.seed(), config.implementation().isWorstCase()),
+                    (impl == BenchmarkConfig.ImplementationType.SEQUENTIAL || impl == BenchmarkConfig.ImplementationType.SEQUENTIAL_WORST) ? summary : null);
 
             if (sequentialBaseline == null) {
                 err.printf(Locale.US,
@@ -223,24 +224,29 @@ public final class BenchmarkSuite {
 
         var configs = new ArrayList<BenchmarkConfig>();
         for (var balls : BALL_COUNTS) {
-            configs.add(baseConfig()
-                    .withBalls(balls)
-                    .withThreads(1)
-                    .withImplementation(BenchmarkConfig.ImplementationType.SEQUENTIAL)
-                    .withOutputDir(outputDir));
-            for (var threads : THREAD_COUNTS) {
+            for (boolean worstCase : new boolean[]{false, true}) {
                 configs.add(baseConfig()
                         .withBalls(balls)
-                        .withThreads(threads)
-                        .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
+                        .withThreads(1)
+                        .withImplementation(BenchmarkConfig.ImplementationType.SEQUENTIAL)
+                        .withWorstCase(worstCase)
                         .withOutputDir(outputDir));
-            }
-            for (var threads : THREAD_COUNTS) {
-                configs.add(baseConfig()
-                        .withBalls(balls)
-                        .withThreads(threads)
-                        .withImplementation(BenchmarkConfig.ImplementationType.EXECUTOR)
-                        .withOutputDir(outputDir));
+                for (var threads : THREAD_COUNTS) {
+                    configs.add(baseConfig()
+                            .withBalls(balls)
+                            .withThreads(threads)
+                            .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
+                            .withWorstCase(worstCase)
+                            .withOutputDir(outputDir));
+                }
+                for (var threads : THREAD_COUNTS) {
+                    configs.add(baseConfig()
+                            .withBalls(balls)
+                            .withThreads(threads)
+                            .withImplementation(BenchmarkConfig.ImplementationType.EXECUTOR)
+                            .withWorstCase(worstCase)
+                            .withOutputDir(outputDir));
+                }
             }
         }
         return List.copyOf(configs);
@@ -259,33 +265,38 @@ public final class BenchmarkSuite {
         Files.createDirectories(outputDir);
 
         var configs = new ArrayList<BenchmarkConfig>();
-        configs.add(baseConfig()
-                .withBalls(CI_SMOKE_BALLS)
-                .withSteps(CI_SMOKE_STEPS)
-                .withWarmupRuns(CI_SMOKE_WARMUP)
-                .withMeasuredRuns(CI_SMOKE_MEASURED)
-                .withThreads(1)
-                .withImplementation(BenchmarkConfig.ImplementationType.SEQUENTIAL)
-                .withOutputDir(outputDir));
-        for (var threads : CI_SMOKE_THREAD_COUNTS) {
+        for (boolean worstCase : new boolean[]{false, true}) {
             configs.add(baseConfig()
                     .withBalls(CI_SMOKE_BALLS)
                     .withSteps(CI_SMOKE_STEPS)
                     .withWarmupRuns(CI_SMOKE_WARMUP)
                     .withMeasuredRuns(CI_SMOKE_MEASURED)
-                    .withThreads(threads)
-                    .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
+                    .withThreads(1)
+                    .withImplementation(BenchmarkConfig.ImplementationType.SEQUENTIAL)
+                    .withWorstCase(worstCase)
                     .withOutputDir(outputDir));
-        }
-        for (var threads : CI_SMOKE_THREAD_COUNTS) {
-            configs.add(baseConfig()
-                    .withBalls(CI_SMOKE_BALLS)
-                    .withSteps(CI_SMOKE_STEPS)
-                    .withWarmupRuns(CI_SMOKE_WARMUP)
-                    .withMeasuredRuns(CI_SMOKE_MEASURED)
-                    .withThreads(threads)
-                    .withImplementation(BenchmarkConfig.ImplementationType.EXECUTOR)
-                    .withOutputDir(outputDir));
+            for (var threads : CI_SMOKE_THREAD_COUNTS) {
+                configs.add(baseConfig()
+                        .withBalls(CI_SMOKE_BALLS)
+                        .withSteps(CI_SMOKE_STEPS)
+                        .withWarmupRuns(CI_SMOKE_WARMUP)
+                        .withMeasuredRuns(CI_SMOKE_MEASURED)
+                        .withThreads(threads)
+                        .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
+                        .withWorstCase(worstCase)
+                        .withOutputDir(outputDir));
+            }
+            for (var threads : CI_SMOKE_THREAD_COUNTS) {
+                configs.add(baseConfig()
+                        .withBalls(CI_SMOKE_BALLS)
+                        .withSteps(CI_SMOKE_STEPS)
+                        .withWarmupRuns(CI_SMOKE_WARMUP)
+                        .withMeasuredRuns(CI_SMOKE_MEASURED)
+                        .withThreads(threads)
+                        .withImplementation(BenchmarkConfig.ImplementationType.EXECUTOR)
+                        .withWorstCase(worstCase)
+                        .withOutputDir(outputDir));
+            }
         }
         return List.copyOf(configs);
     }
@@ -421,7 +432,7 @@ public final class BenchmarkSuite {
     public record SuiteReport(Path outputDir, int completedConfigs, int failedConfigs) {
     }
 
-    private record ScenarioKey(int balls, int steps, long seed) {
+    private record ScenarioKey(int balls, int steps, long seed, boolean worstCase) {
     }
 
     private static void resetDirectory(Path directory) throws Exception {
