@@ -45,6 +45,8 @@ The wrapper:
   kept
 - uses medians as the primary latency-oriented summary instead of emphasizing
   a single best-case run
+- keeps the `vs balls` speedup gate on the fixed high-worker configuration and
+  lets the `vs threads` family vary worker count explicitly
 - runs only the headless and scalability benchmark families in the local Python-driven flow
 - uses a standard `full` matrix capped at `2500` balls for manageable local
   execution time

@@ -136,7 +136,8 @@ python scripts/run_benchmarks.py --mode speedup
 ```
 
 That mode runs only the headless benchmark, uses the six canonical workload
-sizes, and keeps the suite fast enough to run before and after a change.
+sizes, pins the worker count to `availableProcessors + 1`, and keeps the suite
+fast enough to run before and after a change.
 It also regenerates the `speedup-vs-balls` chart. Compare the resulting
 `aggregated-results.csv` and `speedup-results.csv` against the previous run or
 baseline commit to decide whether the change is an actual improvement.
@@ -306,6 +307,14 @@ Speedup is always computed against the matching sequential baseline for the
 same workload size, collision profile, board size, ball count, tick count, and
 seed. Using the median reduces sensitivity to outlier runs and makes the
 comparison more stable across machines.
+
+The executor-based engine can show a non-monotonic speedup curve across ball
+counts. This is expected: with fewer balls, the coordination overhead can
+dominate; with more balls, the extra parallel work can amortize that cost; and
+for some intermediate sizes the balance can temporarily move back below `1`.
+That is why the `vs balls` comparison keeps the worker count fixed and
+explains the result with the median, while `vs threads` varies the worker
+count explicitly.
 
 ### Runtime metadata
 
