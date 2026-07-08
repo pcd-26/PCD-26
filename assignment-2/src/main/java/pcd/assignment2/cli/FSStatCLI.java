@@ -1,5 +1,6 @@
 package pcd.assignment2.cli;
 
+import io.reactivex.rxjava3.core.Observable;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportListener;
 import pcd.assignment2.eventloop.EventLoopFSStat;
@@ -72,34 +73,7 @@ public class FSStatCLI {
         } else if ("loop".equals(paradigm)) {
             EventLoopFSStat.getFSReport(directory, maxFS, nb, listener);
         } else if ("rx".equals(paradigm)) {
-            ReactiveFSStat.getFSReport(directory, maxFS, nb)
-                .subscribe(
-                    listener::onUpdate,
-                    listener::onError,
-                    () -> {
-                        // For RX, we don't receive onCompleted with a report parameter, so we fetch the final one from blocking subscribe or handle inside update
-                        // A clean way is to track the last report in updates:
-                    }
-                );
-            // Let's refine Rx CLI subscribe logic:
-            // Since onUpdate receives reports, we can store the last one.
-            // Let's do it cleanly by subscribing to the Rx stream and saving the last report.
-            final FSReport[] lastReport = new FSReport[1];
-            ReactiveFSStat.getFSReport(directory, maxFS, nb)
-                .subscribe(
-                    report -> {
-                        lastReport[0] = report;
-                        listener.onUpdate(report);
-                    },
-                    listener::onError,
-                    () -> {
-                        if (lastReport[0] != null) {
-                            listener.onCompleted(lastReport[0]);
-                        } else {
-                            completionLatch.countDown();
-                        }
-                    }
-                );
+            subscribeReactiveScan(ReactiveFSStat.getFSReport(directory, maxFS, nb), listener, completionLatch);
         } else {
             System.err.println("Unknown paradigm: " + paradigm + ". Use: vt, loop, or rx.");
             System.exit(1);
@@ -114,6 +88,31 @@ public class FSStatCLI {
         // Force shutdown RxJava schedulers if any were active
         io.reactivex.rxjava3.schedulers.Schedulers.shutdown();
         System.exit(0);
+    }
+
+    static void subscribeReactiveScan(
+        Observable<FSReport> reportStream,
+        FSReportListener listener,
+        CountDownLatch completionLatch
+    ) {
+        final FSReport[] lastReport = new FSReport[1];
+        reportStream.subscribe(
+            report -> {
+                lastReport[0] = report;
+                listener.onUpdate(report);
+            },
+            error -> {
+                listener.onError(error);
+                completionLatch.countDown();
+            },
+            () -> {
+                if (lastReport[0] != null) {
+                    listener.onCompleted(lastReport[0]);
+                } else {
+                    completionLatch.countDown();
+                }
+            }
+        );
     }
 
     private static void printFinalReport(FSReport report) {
