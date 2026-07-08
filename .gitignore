@@ -1,7 +1,29 @@
-/assignment-1/.idea
-/assignment-1/target
-assignment-1/verification/jpf/.jpf-core/
-assignment-1/verification/jpf/.jpf-build/
-assignment-1/pcd-ass-01.iml
-__pycache__/
-*.pyc
+# IDE and workspace metadata
+**/.idea/
+**/.vscode/
+**/*.iml
+
+# Python caches
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+
+# Java build output
+**/target/
+**/build/
+**/out/
+**/*.class
+
+# JPF local checkout/build artifacts
+**/verification/jpf/.jpf-core/
+**/verification/jpf/.jpf-build/
+
+# Temporary benchmark / scratch output
+.tmp-bench-*/
+benchmarks/results/
+
+# Misc OS/editor files
+.DS_Store
+Thumbs.db
+*.log

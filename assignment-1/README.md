@@ -86,7 +86,6 @@ and bot can each kick their own cue ball whenever that specific ball is
 stopped, with no enforced turn alternation. It can be launched with:
 
 ```bash
-mvn -f assignment-1/pom.xml test
 java -cp assignment-1/target/classes pcd.poool.SequentialPoool
 ```
 
