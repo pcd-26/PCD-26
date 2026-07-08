@@ -123,6 +123,23 @@ public class FSStatTest {
     }
 
     @Test
+    public void testReactiveFSStatEmptyDirectory(@TempDir Path tempDir) {
+        AtomicReference<FSReport> finalReport = new AtomicReference<>();
+
+        ReactiveFSStat.getFSReport(tempDir.toString(), 100, 4)
+            .blockingSubscribe(finalReport::set, error -> fail(error.getMessage()));
+
+        assertNotNull(finalReport.get());
+        FSReport report = finalReport.get();
+        assertEquals(0, report.totalFiles());
+        long[] bands = report.bandsCount();
+        assertEquals(5, bands.length);
+        for (long band : bands) {
+            assertEquals(0, band);
+        }
+    }
+
+    @Test
     public void testEventLoopFSStat(@TempDir Path tempDir) throws Exception {
         createDummyFiles(tempDir);
         CountDownLatch latch = new CountDownLatch(1);
