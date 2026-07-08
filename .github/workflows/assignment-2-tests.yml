@@ -1,0 +1,46 @@
+name: Assignment 2 Tests CI
+
+on:
+  pull_request:
+    paths:
+      - "assignment-2/**"
+      - ".github/workflows/assignment-2-tests.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "assignment-2/**"
+      - ".github/workflows/assignment-2-tests.yml"
+  workflow_dispatch:
+    inputs:
+      test_selector:
+        description: "Optional Maven -Dtest selector, for example FSStatTest or FSStatTest#someMethod"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    name: Build and test assignment-2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build and test
+        working-directory: assignment-2
+        env:
+          TEST_SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.test_selector || '' }}
+        run: |
+          if [ -n "$TEST_SELECTOR" ]; then
+            mvn -B clean test -Dtest="$TEST_SELECTOR"
+          else
+            mvn -B clean test
+          fi
