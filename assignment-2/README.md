@@ -40,3 +40,51 @@ The deliverable must be a zipped folder `Assignment-02`, to be submitted on the 
 	- A brief analsysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
 	- A brief description of the strategy adopted
 
+---
+
+## How to Run
+
+All commands below are designed to be run from the **project root directory** (without changing directories).
+
+### 1. Using Helper Shell Scripts (Recommended)
+
+To run the **Desktop GUI** mode:
+```bash
+./assignment-2/run-gui.sh
+```
+
+To run the **Command-Line CLI** mode:
+```bash
+./assignment-2/run-cli.sh <directory> <maxFS> <nb> [paradigm: vt|rx|loop]
+```
+* **Example (Virtual Threads, scanning workspace root)**:
+  ```bash
+  ./assignment-2/run-cli.sh . 10485760 5 vt
+  ```
+* **Example (Reactive RxJava)**:
+  ```bash
+  ./assignment-2/run-cli.sh . 10485760 5 rx
+  ```
+* **Example (Event Loop Vert.x)**:
+  ```bash
+  ./assignment-2/run-cli.sh . 10485760 5 loop
+  ```
+*(Note: running `./assignment-2/run-cli.sh` without arguments runs with the defaults: `. 10485760 5 vt`)*.
+
+---
+
+### 2. Using Maven directly (from Project Root)
+
+To run the **Desktop GUI** mode:
+```bash
+mvn -f assignment-2/pom.xml compile exec:java -Dexec.mainClass="pcd.assignment2.gui.FSStatGUI"
+```
+
+To run the **Command-Line CLI** mode:
+```bash
+mvn -f assignment-2/pom.xml compile exec:java -Dexec.mainClass="pcd.assignment2.cli.FSStatCLI" -Dexec.args="<directory> <maxFS> <nb> [paradigm: vt|rx|loop]"
+```
+
+
+
+
