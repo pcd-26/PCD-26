@@ -3,4 +3,6 @@
 # Example: ./assignment-2/run-cli.sh . 10 5 MiB vt
 
 ARGS="${*:-. 10 5 MiB vt}"
+mvn -f assignment-2/pom.xml test || true
 mvn -f assignment-2/pom.xml compile exec:java -Dexec.mainClass="pcd.assignment2.cli.FSStatCLI" -Dexec.args="$ARGS"
+
