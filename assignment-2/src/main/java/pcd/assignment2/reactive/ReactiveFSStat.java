@@ -25,14 +25,32 @@ import java.util.concurrent.TimeUnit;
  */
 public class ReactiveFSStat {
 
+    /**
+     * Immutable helper class that aggregates file statistics (total files and size band distribution)
+     * as files are emitted through the reactive stream.
+     */
     private static class Accumulator {
+        /** The root directory path of the scan. */
         final String directory;
+        /** The maximum file size threshold. */
         final long maxFS;
+        /** The number of file size bands. */
         final int nb;
+        /** The current total of files scanned. */
         final long totalFiles;
+        /** The current count of files in each size band. */
         final long[] bandsCount;
+        /** The timestamp when the scan started. */
         final long startTime;
 
+        /**
+         * Creates the initial accumulator state.
+         *
+         * @param directory The scanned root directory.
+         * @param maxFS     The maximum file size limit.
+         * @param nb        The number of size bands.
+         * @param startTime The start time timestamp.
+         */
         Accumulator(String directory, long maxFS, int nb, long startTime) {
             this.directory = directory;
             this.maxFS = maxFS;
@@ -42,6 +60,12 @@ public class ReactiveFSStat {
             this.startTime = startTime;
         }
 
+        /**
+         * Accumulates a scanned file into the statistics.
+         *
+         * @param prev The previous accumulator state.
+         * @param file The file to aggregate.
+         */
         Accumulator(Accumulator prev, File file) {
             this.directory = prev.directory;
             this.maxFS = prev.maxFS;
@@ -53,6 +77,11 @@ public class ReactiveFSStat {
             this.startTime = prev.startTime;
         }
 
+        /**
+         * Converts the current accumulation state to a user-facing FSReport snapshot.
+         *
+         * @return A new FSReport instance representing the current state.
+         */
         FSReport toReport() {
             return new FSReport(
                 directory,
@@ -101,7 +130,8 @@ public class ReactiveFSStat {
     private static Observable<File> walk(File rootDir) {
         return Observable.create(emitter -> {
             try {
-                walkRecursive(rootDir, emitter);
+                java.util.Set<String> visitedPaths = new java.util.HashSet<>();
+                walkRecursive(rootDir, emitter, visitedPaths);
                 if (!emitter.isDisposed()) {
                     emitter.onComplete();
                 }
@@ -117,13 +147,24 @@ public class ReactiveFSStat {
      * Recursively traverses directories, emitting regular files found to the observer emitter.
      * Halts traversal immediately if the stream is disposed.
      *
-     * @param dir     The current directory.
-     * @param emitter The Observable emitter to push files to.
+     * @param dir          The current directory.
+     * @param emitter      The Observable emitter to push files to.
+     * @param visitedPaths Set tracking already visited canonical directory paths to prevent symlink loops.
      */
-    private static void walkRecursive(File dir, ObservableEmitter<File> emitter) {
+    private static void walkRecursive(File dir, ObservableEmitter<File> emitter, java.util.Set<String> visitedPaths) {
         if (emitter.isDisposed()) {
             return;
         }
+
+        try {
+            String canonicalPath = dir.getCanonicalPath();
+            if (!visitedPaths.add(canonicalPath)) {
+                return; // Cycle detected: skip this directory
+            }
+        } catch (java.io.IOException e) {
+            return; // Skip on access/resolution failure
+        }
+
         File[] files = dir.listFiles();
         if (files == null) {
             return;
@@ -133,7 +174,7 @@ public class ReactiveFSStat {
                 return;
             }
             if (file.isDirectory()) {
-                walkRecursive(file, emitter);
+                walkRecursive(file, emitter, visitedPaths);
             } else if (file.isFile()) {
                 emitter.onNext(file);
             }
