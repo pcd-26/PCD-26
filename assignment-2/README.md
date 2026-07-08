@@ -1,90 +1,167 @@
 PCD a.y. 2025-2026 - ISI LM UNIBO - Cesena Campus
 
-# Assignment #02 -  `FSStat`
+# Assignment #02 - `FSStat`
 
 v1.0.0-20260412
 
-The assignment is about implementing a library called `FSStatLib` providing an **asynchronous  method** called `getFSReport` (details in the following) and a simple program exemplifying the use of the library.  
+This assignment implements `FSStatLib`, an asynchronous library that scans a directory tree and computes:
 
-The library and the example program must be developed using the three different programming approaches discussed in the course, so producing three different versions:  
-1. Asynchronous programming based on event-loops 
-2. Reactive programming using Rx
+- the total number of files, recursively;
+- the file-size distribution across `NB + 1` bands;
+- the number of files larger than `MaxFS`.
+
+Three independent implementations are provided:
+
+1. Event-loop based asynchronous programming
+2. Reactive programming with RxJava
 3. Virtual Threads
 
-**Important remark**: each version should be designed focussing exclusively on the programming discipline that characterises each approach. That is: don't generalise or reuse code when this would negatively impact on the design and programming discipline promoted by each individual approach.
+An interactive Swing GUI is also included to start and cancel scans and to view progress updates live.
 
-### Details
+## Requirements Recap
 
-The asynchronous method `getFSReport` must compute some statistics about the size of the files of some directory `D`, including recursively its subdirectories. In particular, the method should asynchronously compute and return a report `R` including:
-- The total number of files that belongs to `D` (including subdirectories, recursively);
-- The distribution of file sizes, that is: given a file size `MaxFS` and a number of file size bands `NB` dividing the file size range `[0, MaxFS]`, the method computes for each band the number of files with a size included in it and the number of files with a size bigger that `MaxFS` (so complexively `NB` + 1 size ranges).
+The `getFSReport` operation scans a directory `D` and produces a report containing:
 
-`D`, `MaxFS`, `NB`are parameters of the method. 
+- the total number of files under `D`, including subdirectories;
+- the distribution of file sizes over `NB` bands in the range `[0, MaxFS]`;
+- one extra band for files with size greater than `MaxFS`.
 
-### Optional point [*]
+Internally, sizes are handled in **bytes**. For user-facing input, the GUI and CLI can display or accept a selectable size unit (`B`, `KiB`, `MiB`, `GiB`) and convert it to bytes automatically. Common aliases like `KB/MB/GB` are also accepted as input for convenience, but the displayed labels use binary prefixes.
 
-Develop an *interactive* extension of the library, which should provide the possibility to:
-- possibly stop the generation of a report;
-- dynamically get updates about statitistics, in order to e.g. visualise them.
+Execution time is shown as:
 
-A minimal GUI program can be used to show the features of the extended version, with e.g. buttons to start and stop the generation of report and a text area (or, a graphic panel) to visulise dynamically the statitics.
-  
+- seconds
+- followed by milliseconds in parentheses
 
-**[*]** mandatory for students aiming at excellence grade (30 cum laude).
+Example: `1.234 s (1234 ms)`
 
-### The deliverable
+## Project Layout
 
-The deliverable must be a zipped folder `Assignment-02`, to be submitted on the course web site, including:  
-- `src` directory with sources
-- `doc` directory with a short report in PDF (`report.pdf`). The report should include:
-	- A brief analsysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
-	- A brief description of the strategy adopted
+- `src/main/java/pcd/assignment2/common`: shared report and utility classes
+- `src/main/java/pcd/assignment2/virtualthreads`: virtual-thread implementation
+- `src/main/java/pcd/assignment2/reactive`: RxJava implementation
+- `src/main/java/pcd/assignment2/eventloop`: Vert.x implementation
+- `src/main/java/pcd/assignment2/cli`: command-line entry point
+- `src/main/java/pcd/assignment2/gui`: Swing GUI
+- `src/test/java/pcd/assignment2`: unit tests and benchmark helper
 
----
+## Prerequisites
+
+- JDK 21
+- Maven 3.9+ or a compatible Maven installation
+
+## How to Build
+
+From the repository root:
+
+```bash
+mvn -f assignment-2/pom.xml compile
+```
+
+If you want to run the full verification suite:
+
+```bash
+mvn -f assignment-2/pom.xml test
+```
 
 ## How to Run
 
-All commands below are designed to be run from the **project root directory** (without changing directories).
+All commands below are meant to be run from the repository root.
 
-### 1. Using Helper Shell Scripts (Recommended)
+### 1. GUI mode
 
-To run the **Desktop GUI** mode:
+Launch the interactive Swing application:
+
 ```bash
 ./assignment-2/run-gui.sh
 ```
 
-To run the **Command-Line CLI** mode:
-```bash
-./assignment-2/run-cli.sh <directory> <maxFS> <nb> [paradigm: vt|rx|loop]
+On Windows PowerShell:
+
+```powershell
+.\assignment-2\run-gui.ps1
 ```
-* **Example (Virtual Threads, scanning workspace root)**:
-  ```bash
-  ./assignment-2/run-cli.sh . 10485760 5 vt
-  ```
-* **Example (Reactive RxJava)**:
-  ```bash
-  ./assignment-2/run-cli.sh . 10485760 5 rx
-  ```
-* **Example (Event Loop Vert.x)**:
-  ```bash
-  ./assignment-2/run-cli.sh . 10485760 5 loop
-  ```
-*(Note: running `./assignment-2/run-cli.sh` without arguments runs with the defaults: `. 10485760 5 vt`)*.
 
----
+If script execution is blocked by PowerShell policy, use:
 
-### 2. Using Maven directly (from Project Root)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\assignment-2\run-gui.ps1
+```
 
-To run the **Desktop GUI** mode:
+Or directly with Maven:
+
 ```bash
 mvn -f assignment-2/pom.xml compile exec:java -Dexec.mainClass="pcd.assignment2.gui.FSStatGUI"
 ```
 
-To run the **Command-Line CLI** mode:
+### 2. CLI mode
+
+Launch the console version:
+
 ```bash
-mvn -f assignment-2/pom.xml compile exec:java -Dexec.mainClass="pcd.assignment2.cli.FSStatCLI" -Dexec.args="<directory> <maxFS> <nb> [paradigm: vt|rx|loop]"
+./assignment-2/run-cli.sh <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]
 ```
 
+On Windows PowerShell:
 
+```powershell
+.\assignment-2\run-cli.ps1 <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]
+```
 
+If script execution is blocked by PowerShell policy, use:
 
+```powershell
+powershell -ExecutionPolicy Bypass -File .\assignment-2\run-cli.ps1 <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]
+```
+
+Examples:
+
+```bash
+./assignment-2/run-cli.sh . 10 5 MiB vt
+./assignment-2/run-cli.sh . 10485760 5 vt
+./assignment-2/run-cli.sh . 50 4 KiB rx
+./assignment-2/run-cli.sh . 10 5 MiB loop
+```
+
+Direct Maven equivalent:
+
+```bash
+mvn -f assignment-2/pom.xml compile exec:java -Dexec.mainClass="pcd.assignment2.cli.FSStatCLI" -Dexec.args="<directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]"
+```
+
+Notes:
+
+- `vt` uses virtual threads
+- `rx` uses RxJava
+- `loop` uses Vert.x
+- if no size unit is provided, the CLI assumes bytes
+- if no paradigm is provided, the CLI defaults to `vt`
+
+## GUI Usage
+
+The GUI lets you:
+
+- choose the directory to scan
+- choose the maximum file size and its unit
+- choose the number of bands
+- choose the execution paradigm
+- start and cancel the scan
+- observe file counts and elapsed time updates live
+
+The result table shows band labels in the selected unit and the execution time in the `seconds (ms)` format.
+
+## Notes on Timing and Units
+
+- file sizes are always computed from `File.length()`, so the internal unit is bytes
+- the selected display/input unit only affects the user interface and CLI parsing
+- the report itself stores sizes in bytes to keep the implementation consistent across all three paradigms
+
+## Tests
+
+The test suite includes:
+
+- band-index verification
+- happy-path scans for all three implementations
+- empty-directory coverage for the reactive implementation
+- CLI Rx subscription regression coverage
+- duration and size-unit formatting tests

@@ -3,6 +3,7 @@ package pcd.assignment2.cli;
 import io.reactivex.rxjava3.core.Observable;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
 import pcd.assignment2.reactive.ReactiveFSStat;
 import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
@@ -19,19 +20,32 @@ public class FSStatCLI {
     /**
      * Entry point to launch the CLI directory scan.
      *
-     * @param args Command-line arguments: [directory] [maxFS] [nb] [paradigm (optional: vt|rx|loop)]
+     * @param args Command-line arguments: [directory] [maxFS] [nb] [sizeUnit?] [paradigm?]
      */
     public static void main(String[] args) {
         if (args.length < 3) {
-            System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [paradigm: vt|rx|loop]");
-            System.err.println("Example: java -cp ... pcd.assignment2.cli.FSStatCLI . 10485760 5 vt");
+            System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
+            System.err.println("Example: java -cp ... pcd.assignment2.cli.FSStatCLI . 10 5 MB vt");
             System.exit(1);
         }
 
         String directory = args[0];
-        long maxFS = Long.parseLong(args[1]);
+        double maxFSInput = Double.parseDouble(args[1]);
         int nb = Integer.parseInt(args[2]);
-        String paradigm = args.length > 3 ? args[3].toLowerCase() : "vt";
+        SizeUnit sizeUnit = SizeUnit.BYTES;
+        String paradigm = "vt";
+
+        for (int i = 3; i < args.length; i++) {
+            String value = args[i].toLowerCase();
+            if ("vt".equals(value) || "rx".equals(value) || "loop".equals(value)) {
+                paradigm = value;
+            } else {
+                sizeUnit = SizeUnit.parse(value);
+            }
+        }
+
+        final SizeUnit displayUnit = sizeUnit;
+        long maxFS = sizeUnit.toBytes(maxFSInput);
 
         File dir = new File(directory);
         if (!dir.exists() || !dir.isDirectory()) {
@@ -41,7 +55,7 @@ public class FSStatCLI {
 
         System.out.println("Starting CLI scan using paradigm: " + paradigm.toUpperCase());
         System.out.println("Directory: " + dir.getAbsolutePath());
-        System.out.println("Max Size Threshold: " + maxFS + " bytes");
+        System.out.println("Max Size Threshold: " + sizeUnit.format(maxFS) + " (" + maxFS + " bytes)");
         System.out.println("Number of bands: " + nb);
         System.out.println("----------------------------------------------");
 
@@ -57,7 +71,7 @@ public class FSStatCLI {
             @Override
             public void onCompleted(FSReport report) {
                 System.out.print(String.format("\rProgress: %d files scanned... Done!%n", report.totalFiles()));
-                printFinalReport(report);
+                printFinalReport(report, displayUnit);
                 completionLatch.countDown();
             }
 
@@ -116,18 +130,22 @@ public class FSStatCLI {
     }
 
     private static void printFinalReport(FSReport report) {
+        printFinalReport(report, SizeUnit.BYTES);
+    }
+
+    private static void printFinalReport(FSReport report, SizeUnit displayUnit) {
         System.out.println("\n==============================================");
         System.out.println("FINAL FILE SIZE DISTRIBUTION REPORT");
         System.out.println("==============================================");
         System.out.println("Directory Scanned: " + report.directory());
         System.out.println("Total Files Scanned: " + report.totalFiles());
-        System.out.println("Duration: " + report.durationMs() + " ms");
+        System.out.println("Duration: " + report.formatDuration());
         System.out.println("----------------------------------------------");
         System.out.printf("%-30s | %-10s%n", "Size Range Band", "File Count");
         System.out.println("----------------------------------------------");
         long[] counts = report.bandsCount();
         for (int i = 0; i < counts.length; i++) {
-            System.out.printf("%-30s | %-10d%n", report.getBandLabel(i), counts[i]);
+            System.out.printf("%-30s | %-10d%n", report.getBandLabel(i, displayUnit), counts[i]);
         }
         System.out.println("==============================================");
     }
