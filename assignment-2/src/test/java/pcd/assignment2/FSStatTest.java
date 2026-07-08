@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
 import pcd.assignment2.reactive.ReactiveFSStat;
 import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
@@ -31,6 +32,27 @@ public class FSStatTest {
         assertEquals(3, FSReport.getBandIndex(75, 100, 4));
         assertEquals(3, FSReport.getBandIndex(100, 100, 4));
         assertEquals(4, FSReport.getBandIndex(101, 100, 4));
+    }
+
+    @Test
+    public void testDurationFormatting() {
+        assertEquals("1.234 s (1234 ms)", FSReport.formatDuration(1234));
+        assertEquals("0.000 s (0 ms)", FSReport.formatDuration(0));
+    }
+
+    @Test
+    public void testSizeUnitFormattingAndParsing() {
+        assertEquals(SizeUnit.MEGABYTES, SizeUnit.parse("mb"));
+        assertEquals(SizeUnit.BYTES, SizeUnit.parse("bytes"));
+        assertEquals("10.0 MiB", SizeUnit.MEGABYTES.format(10 * 1024 * 1024L));
+        assertEquals("1,024 B", SizeUnit.BYTES.format(1024));
+    }
+
+    @Test
+    public void testBandLabelsCanUseSelectedUnit() {
+        FSReport report = new FSReport("root", 10 * 1024 * 1024L, 4, new long[] {0, 0, 0, 0, 0}, 0, 0);
+        assertTrue(report.getBandLabel(0, SizeUnit.MEGABYTES).contains("MiB"));
+        assertTrue(report.getBandLabel(4, SizeUnit.MEGABYTES).startsWith("> "));
     }
 
     private void createDummyFiles(Path tempDir) throws IOException {

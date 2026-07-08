@@ -1,15 +1,17 @@
 package pcd.assignment2.common;
 
+import java.util.Locale;
+
 /**
  * Represents an immutable filesystem statistics report.
  * Contains information about directory scanning results including file distribution across size bands.
  *
  * @param directory  The scanned directory path.
- * @param maxFS      The maximum file size boundary.
+ * @param maxFS      The maximum file size boundary, stored in bytes.
  * @param nb         The number of size bands dividing the [0, maxFS] range.
  * @param bandsCount The counts of files falling within each band.
  * @param totalFiles The total count of files scanned recursively.
- * @param durationMs The elapsed time of the scan.
+ * @param durationMs The elapsed time of the scan, in milliseconds.
  */
 public record FSReport(
     String directory,
@@ -21,6 +23,25 @@ public record FSReport(
 ) {
     public FSReport {
         bandsCount = bandsCount.clone();
+    }
+
+    /**
+     * Formats the elapsed time as seconds plus milliseconds.
+     *
+     * @param durationMs duration in milliseconds
+     * @return a human readable duration such as {@code 1.234 s (1234 ms)}
+     */
+    public static String formatDuration(long durationMs) {
+        return String.format(Locale.US, "%.3f s (%d ms)", durationMs / 1000.0, durationMs);
+    }
+
+    /**
+     * Formats the elapsed time for this report.
+     *
+     * @return a human readable duration string
+     */
+    public String formatDuration() {
+        return formatDuration(durationMs);
     }
 
     @Override
@@ -64,11 +85,22 @@ public record FSReport(
      * @return A formatted String representing the size range (e.g. "[0 - 1,000] bytes").
      */
     public String getBandLabel(int index) {
+        return getBandLabel(index, SizeUnit.BYTES);
+    }
+
+    /**
+     * Gets a human-readable text label describing a specific size band's range.
+     *
+     * @param index The band index.
+     * @param unit  the display unit to use for the formatted range
+     * @return A formatted String representing the size range.
+     */
+    public String getBandLabel(int index, SizeUnit unit) {
         if (index < 0 || index > nb) {
             throw new IllegalArgumentException("Index out of bounds: " + index);
         }
         if (index == nb) {
-            return String.format("> %,d bytes", maxFS);
+            return String.format("> %s", unit.format(maxFS));
         }
         double bandWidth = (double) maxFS / nb;
         long min = Math.round(index * bandWidth);
@@ -76,6 +108,6 @@ public record FSReport(
         if (index == nb - 1) {
             max = maxFS;
         }
-        return String.format("[%,d - %,d] bytes", min, max);
+        return String.format("[%s - %s]", unit.format(min), unit.format(max));
     }
 }
