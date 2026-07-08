@@ -1,7 +1,9 @@
 package pcd.assignment2.cli;
 
+import io.reactivex.rxjava3.core.Observable;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
 import pcd.assignment2.reactive.ReactiveFSStat;
 import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
@@ -18,19 +20,32 @@ public class FSStatCLI {
     /**
      * Entry point to launch the CLI directory scan.
      *
-     * @param args Command-line arguments: [directory] [maxFS] [nb] [paradigm (optional: vt|rx|loop)]
+     * @param args Command-line arguments: [directory] [maxFS] [nb] [sizeUnit?] [paradigm?]
      */
     public static void main(String[] args) {
         if (args.length < 3) {
-            System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [paradigm: vt|rx|loop]");
-            System.err.println("Example: java -cp ... pcd.assignment2.cli.FSStatCLI . 10485760 5 vt");
+            System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
+            System.err.println("Example: java -cp ... pcd.assignment2.cli.FSStatCLI . 10 5 MB vt");
             System.exit(1);
         }
 
         String directory = args[0];
-        long maxFS = Long.parseLong(args[1]);
+        double maxFSInput = Double.parseDouble(args[1]);
         int nb = Integer.parseInt(args[2]);
-        String paradigm = args.length > 3 ? args[3].toLowerCase() : "vt";
+        SizeUnit sizeUnit = SizeUnit.BYTES;
+        String paradigm = "vt";
+
+        for (int i = 3; i < args.length; i++) {
+            String value = args[i].toLowerCase();
+            if ("vt".equals(value) || "rx".equals(value) || "loop".equals(value)) {
+                paradigm = value;
+            } else {
+                sizeUnit = SizeUnit.parse(value);
+            }
+        }
+
+        final SizeUnit displayUnit = sizeUnit;
+        long maxFS = sizeUnit.toBytes(maxFSInput);
 
         File dir = new File(directory);
         if (!dir.exists() || !dir.isDirectory()) {
@@ -40,7 +55,7 @@ public class FSStatCLI {
 
         System.out.println("Starting CLI scan using paradigm: " + paradigm.toUpperCase());
         System.out.println("Directory: " + dir.getAbsolutePath());
-        System.out.println("Max Size Threshold: " + maxFS + " bytes");
+        System.out.println("Max Size Threshold: " + sizeUnit.format(maxFS) + " (" + maxFS + " bytes)");
         System.out.println("Number of bands: " + nb);
         System.out.println("----------------------------------------------");
 
@@ -56,7 +71,7 @@ public class FSStatCLI {
             @Override
             public void onCompleted(FSReport report) {
                 System.out.print(String.format("\rProgress: %d files scanned... Done!%n", report.totalFiles()));
-                printFinalReport(report);
+                printFinalReport(report, displayUnit);
                 completionLatch.countDown();
             }
 
@@ -72,34 +87,7 @@ public class FSStatCLI {
         } else if ("loop".equals(paradigm)) {
             EventLoopFSStat.getFSReport(directory, maxFS, nb, listener);
         } else if ("rx".equals(paradigm)) {
-            ReactiveFSStat.getFSReport(directory, maxFS, nb)
-                .subscribe(
-                    listener::onUpdate,
-                    listener::onError,
-                    () -> {
-                        // For RX, we don't receive onCompleted with a report parameter, so we fetch the final one from blocking subscribe or handle inside update
-                        // A clean way is to track the last report in updates:
-                    }
-                );
-            // Let's refine Rx CLI subscribe logic:
-            // Since onUpdate receives reports, we can store the last one.
-            // Let's do it cleanly by subscribing to the Rx stream and saving the last report.
-            final FSReport[] lastReport = new FSReport[1];
-            ReactiveFSStat.getFSReport(directory, maxFS, nb)
-                .subscribe(
-                    report -> {
-                        lastReport[0] = report;
-                        listener.onUpdate(report);
-                    },
-                    listener::onError,
-                    () -> {
-                        if (lastReport[0] != null) {
-                            listener.onCompleted(lastReport[0]);
-                        } else {
-                            completionLatch.countDown();
-                        }
-                    }
-                );
+            subscribeReactiveScan(ReactiveFSStat.getFSReport(directory, maxFS, nb), listener, completionLatch);
         } else {
             System.err.println("Unknown paradigm: " + paradigm + ". Use: vt, loop, or rx.");
             System.exit(1);
@@ -116,19 +104,48 @@ public class FSStatCLI {
         System.exit(0);
     }
 
+    static void subscribeReactiveScan(
+        Observable<FSReport> reportStream,
+        FSReportListener listener,
+        CountDownLatch completionLatch
+    ) {
+        final FSReport[] lastReport = new FSReport[1];
+        reportStream.subscribe(
+            report -> {
+                lastReport[0] = report;
+                listener.onUpdate(report);
+            },
+            error -> {
+                listener.onError(error);
+                completionLatch.countDown();
+            },
+            () -> {
+                if (lastReport[0] != null) {
+                    listener.onCompleted(lastReport[0]);
+                } else {
+                    completionLatch.countDown();
+                }
+            }
+        );
+    }
+
     private static void printFinalReport(FSReport report) {
+        printFinalReport(report, SizeUnit.BYTES);
+    }
+
+    private static void printFinalReport(FSReport report, SizeUnit displayUnit) {
         System.out.println("\n==============================================");
         System.out.println("FINAL FILE SIZE DISTRIBUTION REPORT");
         System.out.println("==============================================");
         System.out.println("Directory Scanned: " + report.directory());
         System.out.println("Total Files Scanned: " + report.totalFiles());
-        System.out.println("Duration: " + report.durationMs() + " ms");
+        System.out.println("Duration: " + report.formatDuration());
         System.out.println("----------------------------------------------");
         System.out.printf("%-30s | %-10s%n", "Size Range Band", "File Count");
         System.out.println("----------------------------------------------");
         long[] counts = report.bandsCount();
         for (int i = 0; i < counts.length; i++) {
-            System.out.printf("%-30s | %-10d%n", report.getBandLabel(i), counts[i]);
+            System.out.printf("%-30s | %-10d%n", report.getBandLabel(i, displayUnit), counts[i]);
         }
         System.out.println("==============================================");
     }

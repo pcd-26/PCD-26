@@ -1,7 +1,8 @@
 {
     "conventionalCommits.scopes": [
         "assignment-1",
-        "assignment-4"
+        "assignment-4",
+        "assignment-2"
     ],
     "latex-workshop.latex.autoBuild.run": "onSave",
     "latex-workshop.latex.autoClean.run": "onBuilt",

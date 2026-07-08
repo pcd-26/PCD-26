@@ -31,6 +31,12 @@ To prevent GUI freezes in Swing, intermediate report updates must not saturate t
 - Reports are generated and sampled periodically (every 100ms) rather than on every file scanned.
 - All final callbacks on the listeners are forced onto the EDT via `SwingUtilities.invokeLater`.
 
+### 1.4. Size Units and Time Formatting
+
+- The internal report model stores file sizes in **bytes** and timings in **milliseconds**.
+- The CLI and GUI expose a selectable display/input unit (`B`, `KiB`, `MiB`, `GiB`) and convert it to bytes before scanning. For convenience, the parser also accepts `KB`, `MB`, and `GB` as aliases.
+- User-facing duration output is normalized to `seconds (ms)` format, for example `1.234 s (1234 ms)`.
+
 ---
 
 ## 2. API Reference
@@ -40,11 +46,11 @@ To prevent GUI freezes in Swing, intermediate report updates must not saturate t
 #### `FSReport` (Record)
 An immutable value object containing:
 - `directory`: The scanned directory root path.
-- `maxFS`: The maximum file size threshold.
+- `maxFS`: The maximum file size threshold, stored internally in bytes.
 - `nb`: The number of file size bands.
 - `bandsCount`: Array of size `nb + 1` representing the file distribution.
 - `totalFiles`: Total number of files.
-- `durationMs`: Total duration of the scan so far.
+- `durationMs`: Total duration of the scan so far, in milliseconds.
 
 #### `FSReportListener` (Interface)
 Defines callbacks for async updates:
@@ -74,3 +80,16 @@ Run the GUI application using the following command:
 ```bash
 mvn -f assignment-2/pom.xml exec:java -Dexec.mainClass="pcd.assignment2.gui.FSStatGUI"
 ```
+
+## 4. CLI Examples
+
+The CLI accepts an optional size unit and an optional paradigm:
+
+```bash
+./assignment-2/run-cli.sh . 10 5 MB vt
+./assignment-2/run-cli.sh . 10485760 5 vt
+./assignment-2/run-cli.sh . 50 4 KB rx
+./assignment-2/run-cli.sh . 10 5 MB loop
+```
+
+If the unit is omitted, bytes are assumed. If the paradigm is omitted, `vt` is used.

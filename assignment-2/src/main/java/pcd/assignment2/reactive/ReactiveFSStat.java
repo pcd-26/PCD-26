@@ -86,6 +86,7 @@ public class ReactiveFSStat {
                 .subscribeOn(Schedulers.io())
                 .scan(initial, Accumulator::new)
                 .skip(1) // Skip the initial accumulator state
+                .defaultIfEmpty(initial)
                 .map(Accumulator::toReport)
                 .sample(100, TimeUnit.MILLISECONDS, true); // Sample updates, but ensure the final one is emitted
         });

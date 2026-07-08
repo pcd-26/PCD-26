@@ -4,6 +4,7 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
 import pcd.assignment2.reactive.ReactiveFSStat;
 import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
@@ -21,6 +22,7 @@ public class FSStatGUI extends JFrame {
 
     private final JTextField dirField;
     private final JSpinner maxFsSpinner;
+    private final JComboBox<SizeUnit> maxFsUnitCombo;
     private final JSpinner nbSpinner;
     private final JComboBox<String> paradigmCombo;
     private final JButton startBtn;
@@ -64,17 +66,27 @@ public class FSStatGUI extends JFrame {
 
         // MaxFS and NB
         gbc.gridx = 0; gbc.gridy = 1;
-        configPanel.add(new JLabel("Max File Size (bytes):"), gbc);
+        configPanel.add(new JLabel("Max File Size:"), gbc);
 
-        maxFsSpinner = new JSpinner(new SpinnerNumberModel(10 * 1024 * 1024L, 1L, 1024L * 1024 * 1024 * 1024L, 1024L));
+        maxFsSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 1024.0 * 1024 * 1024 * 1024, 1.0));
         gbc.gridx = 1;
         configPanel.add(maxFsSpinner, gbc);
 
+        maxFsUnitCombo = new JComboBox<>(new SizeUnit[] {
+            SizeUnit.BYTES,
+            SizeUnit.KILOBYTES,
+            SizeUnit.MEGABYTES,
+            SizeUnit.GIGABYTES
+        });
+        maxFsUnitCombo.setSelectedItem(SizeUnit.MEGABYTES);
         gbc.gridx = 2;
+        configPanel.add(maxFsUnitCombo, gbc);
+
+        gbc.gridx = 3;
         configPanel.add(new JLabel("Number of Bands:"), gbc);
 
         nbSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 100, 1));
-        gbc.gridx = 3;
+        gbc.gridx = 4;
         configPanel.add(nbSpinner, gbc);
 
         // Paradigm Selector
@@ -97,7 +109,7 @@ public class FSStatGUI extends JFrame {
         actionPanel.add(startBtn);
         actionPanel.add(stopBtn);
 
-        gbc.gridx = 3; gbc.gridwidth = 1;
+        gbc.gridx = 4; gbc.gridwidth = 1;
         configPanel.add(actionPanel, gbc);
 
         add(configPanel, BorderLayout.NORTH);
@@ -115,7 +127,7 @@ public class FSStatGUI extends JFrame {
         summaryPanel.add(totalFilesVal);
 
         summaryPanel.add(new JLabel("Execution Time:"));
-        durationVal = new JLabel("0 ms");
+        durationVal = new JLabel(FSReport.formatDuration(0));
         durationVal.setFont(durationVal.getFont().deriveFont(Font.BOLD));
         summaryPanel.add(durationVal);
         centerPanel.add(summaryPanel, BorderLayout.NORTH);
@@ -173,17 +185,19 @@ public class FSStatGUI extends JFrame {
             return;
         }
 
-        long maxFS = ((Number) maxFsSpinner.getValue()).longValue();
+        double maxFSInput = ((Number) maxFsSpinner.getValue()).doubleValue();
+        SizeUnit sizeUnit = (SizeUnit) maxFsUnitCombo.getSelectedItem();
         int nb = (Integer) nbSpinner.getValue();
         String paradigm = (String) paradigmCombo.getSelectedItem();
+        long maxFS = sizeUnit.toBytes(maxFSInput);
 
         // UI Reset
         tableModel.setRowCount(0);
         for (int i = 0; i <= nb; i++) {
-            tableModel.addRow(new Object[]{getBandRangeLabel(i, maxFS, nb), 0L});
+            tableModel.addRow(new Object[]{getBandRangeLabel(i, maxFS, nb, sizeUnit), 0L});
         }
         totalFilesVal.setText("0");
-        durationVal.setText("0 ms");
+        durationVal.setText(FSReport.formatDuration(0));
         progressBar.setIndeterminate(true);
         statusLabel.setText(" Scanning using " + paradigm + "...");
         setRunningState(true);
@@ -192,14 +206,14 @@ public class FSStatGUI extends JFrame {
             currentJob = VirtualThreadsFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
                 @Override
                 public void onUpdate(FSReport report) {
-                    SwingUtilities.invokeLater(() -> updateUI(report));
+                    SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
                 }
 
                 @Override
                 public void onCompleted(FSReport report) {
                     SwingUtilities.invokeLater(() -> {
-                        updateUI(report);
-                        scanFinished("Scan completed in " + report.durationMs() + " ms.");
+                        updateUI(report, sizeUnit);
+                        scanFinished("Scan completed in " + report.formatDuration() + ".");
                     });
                 }
 
@@ -212,14 +226,14 @@ public class FSStatGUI extends JFrame {
             currentJob = EventLoopFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
                 @Override
                 public void onUpdate(FSReport report) {
-                    SwingUtilities.invokeLater(() -> updateUI(report));
+                    SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
                 }
 
                 @Override
                 public void onCompleted(FSReport report) {
                     SwingUtilities.invokeLater(() -> {
-                        updateUI(report);
-                        scanFinished("Scan completed in " + report.durationMs() + " ms.");
+                        updateUI(report, sizeUnit);
+                        scanFinished("Scan completed in " + report.formatDuration() + ".");
                     });
                 }
 
@@ -229,11 +243,21 @@ public class FSStatGUI extends JFrame {
                 }
             });
         } else if ("Reactive Programming (Rx)".equals(paradigm)) {
+            final FSReport[] lastReport = new FSReport[1];
             rxDisposable = ReactiveFSStat.getFSReport(path, maxFS, nb)
                 .subscribe(
-                    report -> SwingUtilities.invokeLater(() -> updateUI(report)),
+                    report -> {
+                        lastReport[0] = report;
+                        SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
+                    },
                     error -> SwingUtilities.invokeLater(() -> scanFailed(error.getMessage())),
-                    () -> SwingUtilities.invokeLater(() -> scanFinished("Scan completed."))
+                    () -> SwingUtilities.invokeLater(() -> {
+                        if (lastReport[0] != null) {
+                            scanFinished("Scan completed in " + lastReport[0].formatDuration() + ".");
+                        } else {
+                            scanFinished("Scan completed.");
+                        }
+                    })
                 );
         }
     }
@@ -255,14 +279,15 @@ public class FSStatGUI extends JFrame {
         setRunningState(false);
     }
 
-    private void updateUI(FSReport report) {
+    private void updateUI(FSReport report, SizeUnit displayUnit) {
         totalFilesVal.setText(String.format("%,d", report.totalFiles()));
-        durationVal.setText(report.durationMs() + " ms");
+        durationVal.setText(report.formatDuration());
 
         long[] bands = report.bandsCount();
         for (int i = 0; i < bands.length; i++) {
             if (i < tableModel.getRowCount()) {
                 tableModel.setValueAt(bands[i], i, 1);
+                tableModel.setValueAt(getBandRangeLabel(i, report.maxFS(), report.nb(), displayUnit), i, 0);
             }
         }
     }
@@ -290,13 +315,14 @@ public class FSStatGUI extends JFrame {
         stopBtn.setEnabled(running);
         dirField.setEnabled(!running);
         maxFsSpinner.setEnabled(!running);
+        maxFsUnitCombo.setEnabled(!running);
         nbSpinner.setEnabled(!running);
         paradigmCombo.setEnabled(!running);
     }
 
-    private String getBandRangeLabel(int index, long maxFS, int nb) {
+    private String getBandRangeLabel(int index, long maxFS, int nb, SizeUnit unit) {
         if (index == nb) {
-            return String.format("> %,d bytes", maxFS);
+            return String.format("> %s", unit.format(maxFS));
         }
         double bandWidth = (double) maxFS / nb;
         long min = Math.round(index * bandWidth);
@@ -304,7 +330,7 @@ public class FSStatGUI extends JFrame {
         if (index == nb - 1) {
             max = maxFS;
         }
-        return String.format("[%,d - %,d] bytes", min, max);
+        return String.format("[%s - %s]", unit.format(min), unit.format(max));
     }
 
     /**

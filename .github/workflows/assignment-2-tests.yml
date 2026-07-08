@@ -1,4 +1,4 @@
-name: Assignment 1 Tests CI
+name: Assignment 2 Tests CI
 
 on:
   pull_request:
@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       test_selector:
-        description: "Optional Maven -Dtest selector, for example BoardTest or BoardTest#initializesFromConfig"
+        description: "Optional Maven -Dtest selector, for example FSStatTest or FSStatTest#someMethod"
         required: false
         default: ""
 
 jobs:
   test:
-    name: Build and test assignment-1
+    name: Build and test assignment-2
     runs-on: ubuntu-latest
 
     steps:
@@ -23,31 +23,22 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install plotting dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r assignment-1/requirements.txt
-
       - name: Build and test
-        working-directory: assignment-1
+        working-directory: assignment-2
         env:
           TEST_SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.test_selector || '' }}
         run: |
           if [ -n "$TEST_SELECTOR" ]; then
             mvn -B clean test -Dtest="$TEST_SELECTOR"
           else
-            mvn -B clean verify
+            mvn -B clean test
           fi
 
   package:
-    name: Build Assignment-01 zip
+    name: Build Assignment-02 zip
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -66,18 +57,14 @@ jobs:
 
           stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
           echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
-          echo "zip_name=Assignment-01-$stamp.zip" >> "$GITHUB_OUTPUT"
-          echo "release_zip_name=Assignment-01-latest.zip" >> "$GITHUB_OUTPUT"
-          echo "release_tag=latest" >> "$GITHUB_OUTPUT"
+          echo "zip_name=Assignment-02-$stamp.zip" >> "$GITHUB_OUTPUT"
+          echo "release_zip_name=Assignment-02-latest.zip" >> "$GITHUB_OUTPUT"
+          echo "release_tag=latest-assignment-02" >> "$GITHUB_OUTPUT"
 
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base zip unzip
-
-      - name: Build report PDF
-        working-directory: assignment-1/report
-        run: pdflatex -interaction=nonstopmode -halt-on-error -jobname=report main.tex
+          sudo apt-get install -y zip unzip
 
       - name: Create delivery package
         shell: bash
@@ -87,18 +74,12 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-01
+          mkdir -p package/Assignment-02
 
-          cp -R assignment-1/. package/Assignment-01
-          rm -rf \
-            package/Assignment-01/docs \
-            package/Assignment-01/report \
-            package/Assignment-01/target
+          cp -R assignment-2/. package/Assignment-02
+          rm -rf package/Assignment-02/target
 
-          mkdir -p package/Assignment-01/doc
-          cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
-
-          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-01)
+          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-02)
 
       - name: Check package contents
         shell: bash
@@ -108,18 +89,15 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
-          test -f package/Assignment-01/doc/report.pdf
-          test -f package/Assignment-01/pom.xml
-          test -d package/Assignment-01/src/main
-          test -d package/Assignment-01/src/test
-          test ! -d package/Assignment-01/report
-          test ! -d package/Assignment-01/docs
-          test ! -d package/Assignment-01/target
+          test -f package/Assignment-02/pom.xml
+          test -d package/Assignment-02/src/main
+          test -d package/Assignment-02/src/test
+          test ! -d package/Assignment-02/target
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
         with:
-          name: Assignment-01-${{ steps.delivery_meta.outputs.stamp }}
+          name: Assignment-02-${{ steps.delivery_meta.outputs.stamp }}
           path: ${{ steps.delivery_meta.outputs.zip_name }}
 
       - name: Publish delivery release
@@ -138,8 +116,8 @@ jobs:
           else
             gh release create "$RELEASE_TAG" \
               --target "$TARGET_SHA" \
-              --title "Latest Assignment Packages" \
-              --notes "Shared release for the latest assignment delivery zip. New assets replace the previous delivery package on successful workflow runs."
+              --title "Latest Assignment 2 Packages" \
+              --notes "Shared release for the latest assignment 2 delivery zip. New assets replace the previous delivery package on successful workflow runs."
           fi
 
           for attempt in 1 2 3 4 5; do
