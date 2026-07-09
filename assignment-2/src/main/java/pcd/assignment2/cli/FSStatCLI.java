@@ -17,46 +17,47 @@ import java.util.concurrent.CountDownLatch;
  */
 public class FSStatCLI {
 
+    static final class ParsedArguments {
+        final String directory;
+        final double maxFSInput;
+        final int nb;
+        final SizeUnit sizeUnit;
+        final String paradigm;
+
+        ParsedArguments(String directory, double maxFSInput, int nb, SizeUnit sizeUnit, String paradigm) {
+            this.directory = directory;
+            this.maxFSInput = maxFSInput;
+            this.nb = nb;
+            this.sizeUnit = sizeUnit;
+            this.paradigm = paradigm;
+        }
+    }
+
     /**
      * Entry point to launch the CLI directory scan.
      *
      * @param args Command-line arguments: [directory] [maxFS] [nb] [sizeUnit?] [paradigm?]
      */
     public static void main(String[] args) {
-        if (args.length < 3) {
-            System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
-            System.err.println("Example: java -cp ... pcd.assignment2.cli.FSStatCLI . 10 5 MB vt");
+        ParsedArguments parsed = parseArguments(args);
+        if (parsed == null) {
             System.exit(1);
+            return;
         }
 
-        String directory = args[0];
-        double maxFSInput = Double.parseDouble(args[1]);
-        int nb = Integer.parseInt(args[2]);
-        SizeUnit sizeUnit = SizeUnit.BYTES;
-        String paradigm = "vt";
+        final SizeUnit displayUnit = parsed.sizeUnit;
+        long maxFS = parsed.sizeUnit.toBytes(parsed.maxFSInput);
 
-        for (int i = 3; i < args.length; i++) {
-            String value = args[i].toLowerCase();
-            if ("vt".equals(value) || "rx".equals(value) || "loop".equals(value)) {
-                paradigm = value;
-            } else {
-                sizeUnit = SizeUnit.parse(value);
-            }
-        }
-
-        final SizeUnit displayUnit = sizeUnit;
-        long maxFS = sizeUnit.toBytes(maxFSInput);
-
-        File dir = new File(directory);
+        File dir = new File(parsed.directory);
         if (!dir.exists() || !dir.isDirectory()) {
-            System.err.println("Error: Target path is not a valid directory: " + directory);
+            System.err.println("Error: Target path is not a valid directory: " + parsed.directory);
             System.exit(1);
         }
 
-        System.out.println("Starting CLI scan using paradigm: " + paradigm.toUpperCase());
+        System.out.println("Starting CLI scan using paradigm: " + parsed.paradigm.toUpperCase());
         System.out.println("Directory: " + dir.getAbsolutePath());
-        System.out.println("Max Size Threshold: " + sizeUnit.format(maxFS) + " (" + maxFS + " bytes)");
-        System.out.println("Number of bands: " + nb);
+        System.out.println("Max Size Threshold: " + displayUnit.format(maxFS) + " (" + maxFS + " bytes)");
+        System.out.println("Number of bands: " + parsed.nb);
         System.out.println("----------------------------------------------");
 
         CountDownLatch completionLatch = new CountDownLatch(1);
@@ -82,14 +83,14 @@ public class FSStatCLI {
             }
         };
 
-        if ("vt".equals(paradigm)) {
-            VirtualThreadsFSStat.getFSReport(directory, maxFS, nb, listener);
-        } else if ("loop".equals(paradigm)) {
-            EventLoopFSStat.getFSReport(directory, maxFS, nb, listener);
-        } else if ("rx".equals(paradigm)) {
-            subscribeReactiveScan(ReactiveFSStat.getFSReport(directory, maxFS, nb), listener, completionLatch);
+        if ("vt".equals(parsed.paradigm)) {
+            VirtualThreadsFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
+        } else if ("loop".equals(parsed.paradigm)) {
+            EventLoopFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
+        } else if ("rx".equals(parsed.paradigm)) {
+            subscribeReactiveScan(ReactiveFSStat.getFSReport(parsed.directory, maxFS, parsed.nb), listener, completionLatch);
         } else {
-            System.err.println("Unknown paradigm: " + paradigm + ". Use: vt, loop, or rx.");
+            System.err.println("Unknown paradigm: " + parsed.paradigm + ". Use: vt, loop, or rx.");
             System.exit(1);
         }
 
@@ -102,6 +103,31 @@ public class FSStatCLI {
         // Force shutdown RxJava schedulers if any were active
         io.reactivex.rxjava3.schedulers.Schedulers.shutdown();
         System.exit(0);
+    }
+
+    static ParsedArguments parseArguments(String[] args) {
+        if (args == null || args.length < 3) {
+            System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
+            System.err.println("Example: java -cp ... pcd.assignment2.cli.FSStatCLI . 10 5 MB vt");
+            return null;
+        }
+
+        String directory = args[0];
+        double maxFSInput = Double.parseDouble(args[1]);
+        int nb = Integer.parseInt(args[2]);
+        SizeUnit sizeUnit = SizeUnit.BYTES;
+        String paradigm = "vt";
+
+        for (int i = 3; i < args.length; i++) {
+            String value = args[i].toLowerCase();
+            if ("vt".equals(value) || "rx".equals(value) || "loop".equals(value)) {
+                paradigm = value;
+            } else {
+                sizeUnit = SizeUnit.parse(value);
+            }
+        }
+
+        return new ParsedArguments(directory, maxFSInput, nb, sizeUnit, paradigm);
     }
 
     static void subscribeReactiveScan(

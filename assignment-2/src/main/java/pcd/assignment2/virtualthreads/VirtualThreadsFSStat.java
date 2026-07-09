@@ -27,8 +27,13 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public class VirtualThreadsFSStat {
 
+    /**
+     * Holds the shared job execution state, including cancellation flags.
+     */
     private static class JobState {
-        // Volatile boolean checked by all scanning threads to abort processing quickly upon cancellation.
+        /**
+         * Volatile boolean checked by all scanning threads to abort processing quickly upon cancellation.
+         */
         volatile boolean cancelled = false;
     }
 
@@ -53,6 +58,7 @@ public class VirtualThreadsFSStat {
         }
 
         long startTime = System.currentTimeMillis();
+        java.util.Set<String> visitedPaths = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
         ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -91,7 +97,7 @@ public class VirtualThreadsFSStat {
                 activeTasks.incrementAndGet();
                 executor.submit(() -> {
                     try {
-                        scanDirectory(rootDir, maxFS, nb, executor, activeTasks, totalFiles, bandsCount, state, completionLatch);
+                        scanDirectory(rootDir, maxFS, nb, executor, activeTasks, totalFiles, bandsCount, state, completionLatch, visitedPaths);
                     } catch (Exception e) {
                         listener.onError(e);
                         updaterThread.interrupt();
@@ -149,15 +155,16 @@ public class VirtualThreadsFSStat {
      * Recursively walks a directory, submitting sub-directory scanning tasks to the virtual executor,
      * and incrementing the size distribution counters for any regular files found.
      *
-     * @param dir         The directory to scan.
-     * @param maxFS       The maximum file size threshold.
-     * @param nb          The number of size bands.
-     * @param executor    The ExecutorService executing virtual threads.
-     * @param activeTasks Counter of active scanning tasks.
-     * @param totalFiles  Accumulator for total file count.
-     * @param bandsCount  Accumulators for size bands distribution.
-     * @param state       The shared job cancellation state.
-     * @param latch       The latch to trigger completion when activeTasks drops to zero.
+     * @param dir          The directory to scan.
+     * @param maxFS        The maximum file size threshold.
+     * @param nb           The number of size bands.
+     * @param executor     The ExecutorService executing virtual threads.
+     * @param activeTasks  Counter of active scanning tasks.
+     * @param totalFiles   Accumulator for total file count.
+     * @param bandsCount   Accumulators for size bands distribution.
+     * @param state        The shared job cancellation state.
+     * @param latch        The latch to trigger completion when activeTasks drops to zero.
+     * @param visitedPaths Thread-safe set tracking already visited directory paths to avoid symlink loops.
      */
     private static void scanDirectory(
         File dir,
@@ -168,10 +175,20 @@ public class VirtualThreadsFSStat {
         LongAdder totalFiles,
         LongAdder[] bandsCount,
         JobState state,
-        CountDownLatch latch
+        CountDownLatch latch,
+        java.util.Set<String> visitedPaths
     ) {
         if (state.cancelled) {
             return;
+        }
+
+        try {
+            String canonicalPath = dir.getCanonicalPath();
+            if (!visitedPaths.add(canonicalPath)) {
+                return; // Cycle detected: skip this directory
+            }
+        } catch (java.io.IOException e) {
+            return; // Skip on access/resolution failure
         }
 
         File[] files = dir.listFiles();
@@ -187,7 +204,7 @@ public class VirtualThreadsFSStat {
                 activeTasks.incrementAndGet();
                 executor.submit(() -> {
                     try {
-                        scanDirectory(file, maxFS, nb, executor, activeTasks, totalFiles, bandsCount, state, latch);
+                        scanDirectory(file, maxFS, nb, executor, activeTasks, totalFiles, bandsCount, state, latch, visitedPaths);
                     } catch (Exception e) {
                         // Continue on subdirectory access errors
                     } finally {
