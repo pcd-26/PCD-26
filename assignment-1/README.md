@@ -89,6 +89,9 @@ stopped, with no enforced turn alternation. It can be launched with:
 java -cp assignment-1/target/classes pcd.poool.SequentialPoool
 ```
 
+The launcher compiles the project first and then starts the game; it does not
+run the test suite automatically.
+
 The human player can press, drag, and release the mouse on the board to kick the
 blue cue ball toward the release point when the human ball is available. The
 visible shot vector previews direction and power; longer drags produce
