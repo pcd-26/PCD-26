@@ -79,17 +79,12 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-02
+          mkdir -p package/Assignment-02/doc
 
           make -C assignment-2/report
 
-          cp -R assignment-2/. package/Assignment-02
-          rm -rf \
-            package/Assignment-02/docs \
-            package/Assignment-02/report \
-            package/Assignment-02/target
-
-          mkdir -p package/Assignment-02/doc
+          cp assignment-2/pom.xml package/Assignment-02/pom.xml
+          cp -R assignment-2/src package/Assignment-02/src
           cp assignment-2/report/report.pdf package/Assignment-02/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-02)
@@ -106,9 +101,15 @@ jobs:
           test -d package/Assignment-02/src/main
           test -d package/Assignment-02/src/test
           test -f package/Assignment-02/doc/report.pdf
-          test ! -d package/Assignment-02/report
-          test ! -d package/Assignment-02/docs
-          test ! -d package/Assignment-02/target
+          test ! -e package/Assignment-02/docs
+          test ! -e package/Assignment-02/report
+          test ! -e package/Assignment-02/target
+          test ! -e package/Assignment-02/.agents
+          test ! -e package/Assignment-02/README.md
+          test ! -e package/Assignment-02/run-cli.sh
+          test ! -e package/Assignment-02/run-cli.ps1
+          test ! -e package/Assignment-02/run-gui.sh
+          test ! -e package/Assignment-02/run-gui.ps1
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
