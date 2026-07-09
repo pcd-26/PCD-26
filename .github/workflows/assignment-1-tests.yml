@@ -77,7 +77,7 @@ jobs:
 
       - name: Build report PDF
         working-directory: assignment-1/report
-        run: pdflatex -interaction=nonstopmode -halt-on-error -jobname=report main.tex
+        run: make
 
       - name: Create delivery package
         shell: bash
