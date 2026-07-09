@@ -64,7 +64,7 @@ jobs:
           echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
           echo "zip_name=Assignment-02-$stamp.zip" >> "$GITHUB_OUTPUT"
           echo "release_zip_name=Assignment-02-latest.zip" >> "$GITHUB_OUTPUT"
-          echo "release_tag=latest-assignment-02" >> "$GITHUB_OUTPUT"
+          echo "release_tag=latest" >> "$GITHUB_OUTPUT"
 
       - name: Install packaging tools
         run: |
@@ -133,8 +133,8 @@ jobs:
           else
             gh release create "$RELEASE_TAG" \
               --target "$TARGET_SHA" \
-              --title "Latest Assignment 2 Packages" \
-              --notes "Shared release for the latest assignment 2 delivery zip. New assets replace the previous delivery package on successful workflow runs."
+              --title "Latest Assignment Packages" \
+              --notes "Shared release for the latest assignment delivery zips. New assets replace the previous delivery packages on successful workflow runs."
           fi
 
           for attempt in 1 2 3 4 5; do
