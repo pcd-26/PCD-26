@@ -14,31 +14,19 @@
     ],
     "latex-workshop.latex.recipes": [
         {
-            "name": "pdflatex report",
+            "name": "make report",
             "tools": [
-                "pdflatex-report",
-                "clean-report-temporary-files"
+                "make-report"
             ]
         }
     ],
     "latex-workshop.latex.tools": [
         {
-            "name": "pdflatex-report",
-            "command": "pdflatex",
+            "name": "make-report",
+            "command": "mingw32-make",
             "args": [
-                "-interaction=nonstopmode",
-                "-halt-on-error",
-                "-jobname=report",
-                "%DOC%"
-            ]
-        },
-        {
-            "name": "clean-report-temporary-files",
-            "command": "powershell",
-            "args": [
-                "-NoProfile",
-                "-Command",
-                "Remove-Item -LiteralPath '%DIR%\\report.aux','%DIR%\\report.log','%DIR%\\report.out','%DIR%\\report.toc' -Force -ErrorAction SilentlyContinue; exit 0"
+                "-C",
+                "%DIR%"
             ]
         }
     ]

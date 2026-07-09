@@ -1,0 +1,30 @@
+name: Assignment 3 Report CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-report:
+    name: Build assignment-3 report PDF
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install LaTeX tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base
+
+      - name: Build report
+        working-directory: assignment-3/report
+        run: make
+
+      - name: Upload report PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: Assignment-03-report
+          path: assignment-3/report/report.pdf
