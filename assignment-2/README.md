@@ -69,7 +69,7 @@ mvn -f assignment-2/pom.xml test
 All commands below are meant to be run from the repository root.
 
 > [!NOTE]
-> The helper shell scripts (`.sh` and `.ps1` files) automatically execute the Maven test suite before launching the application. The program will start either way, regardless of the test output. If you want to launch the application directly without running the tests, run the direct Maven commands instead.
+> The helper shell scripts (`.sh` and `.ps1` files) launch the application directly. They do not run the Maven test suite first. If you want to run the tests manually, use the dedicated Maven command below.
 
 ### 1. GUI mode
 
