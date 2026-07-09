@@ -99,9 +99,9 @@ public enum SizeUnit {
         }
         return switch (value.trim().toLowerCase(Locale.ROOT)) {
             case "b", "byte", "bytes" -> BYTES;
-            case "kb", "k", "kilobyte", "kilobytes" -> KILOBYTES;
-            case "mb", "m", "megabyte", "megabytes" -> MEGABYTES;
-            case "gb", "g", "gigabyte", "gigabytes" -> GIGABYTES;
+            case "kb", "kib", "k", "kilobyte", "kilobytes" -> KILOBYTES;
+            case "mb", "mib", "m", "megabyte", "megabytes" -> MEGABYTES;
+            case "gb", "gib", "g", "gigabyte", "gigabytes" -> GIGABYTES;
             default -> throw new IllegalArgumentException("Unsupported size unit: " + value);
         };
     }
