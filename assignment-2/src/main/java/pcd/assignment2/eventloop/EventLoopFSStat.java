@@ -29,13 +29,28 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class EventLoopFSStat {
 
+    /**
+     * Holds the shared job execution and progress tracking state.
+     */
     private static class JobState {
+        /** Volatile boolean checked to abort processing quickly upon cancellation. */
         volatile boolean cancelled = false;
+        /** Counter of active asynchronous filesystem operations. */
         final AtomicInteger pendingOps = new AtomicInteger(0);
+        /** Total files successfully scanned. */
         final AtomicLong totalFiles = new AtomicLong(0);
+        /** Array tracking the file count distribution per size band. */
         final AtomicLong[] bandsCount;
+        /** Thread-safe set tracking already visited directory paths to avoid symlink loops. */
+        final java.util.Set<String> visitedPaths = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        /** Vert.x periodic timer ID for publishing updates. */
         long timerId = -1;
 
+        /**
+         * Creates a new JobState with the specified number of bands.
+         *
+         * @param nb The number of size bands.
+         */
         JobState(int nb) {
             bandsCount = new AtomicLong[nb + 1];
             for (int i = 0; i <= nb; i++) {
@@ -152,6 +167,22 @@ public class EventLoopFSStat {
                 checkCompletion.run();
             }
             return;
+        }
+
+        try {
+            java.io.File fileObj = new java.io.File(path);
+            String canonicalPath = fileObj.getCanonicalPath();
+            if (!state.visitedPaths.add(canonicalPath)) {
+                if (state.pendingOps.decrementAndGet() == 0) {
+                    checkCompletion.run();
+                }
+                return; // Cycle detected: skip this directory
+            }
+        } catch (java.io.IOException e) {
+            if (state.pendingOps.decrementAndGet() == 0) {
+                checkCompletion.run();
+            }
+            return; // Skip on path resolution failure
         }
 
         fs.readDir(path, res -> {
