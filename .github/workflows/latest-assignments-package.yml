@@ -50,12 +50,7 @@ jobs:
 
       - name: Prepare delivery metadata
         id: delivery_meta
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
-          echo "zip_name=Assignment-01-$stamp.zip" >> "$GITHUB_OUTPUT"
+        run: echo "zip_name=Assignment-01.zip" >> "$GITHUB_OUTPUT"
 
       - name: Create delivery package
         shell: bash
@@ -129,12 +124,7 @@ jobs:
 
       - name: Prepare delivery metadata
         id: delivery_meta
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
-          echo "zip_name=Assignment-02-$stamp.zip" >> "$GITHUB_OUTPUT"
+        run: echo "zip_name=Assignment-02.zip" >> "$GITHUB_OUTPUT"
 
       - name: Create delivery package
         shell: bash
@@ -201,12 +191,7 @@ jobs:
 
       - name: Prepare delivery metadata
         id: delivery_meta
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
-          echo "zip_name=Assignment-03-$stamp.zip" >> "$GITHUB_OUTPUT"
+        run: echo "zip_name=Assignment-03.zip" >> "$GITHUB_OUTPUT"
 
       - name: Create delivery package
         shell: bash
@@ -260,12 +245,7 @@ jobs:
 
       - name: Prepare delivery metadata
         id: delivery_meta
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
-          echo "zip_name=Assignment-04-$stamp.zip" >> "$GITHUB_OUTPUT"
+        run: echo "zip_name=Assignment-04.zip" >> "$GITHUB_OUTPUT"
 
       - name: Create delivery package
         shell: bash
@@ -344,22 +324,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          release_tag="latest"
           bundle_root="bundle"
-          bundle_name="latest-assignments-package.zip"
           target_sha="${GITHUB_SHA}"
 
+          mkdir -p "$bundle_root"
           git archive --format=zip --prefix=PCD-26/ -o "$bundle_root/source-code.zip" "$target_sha"
           git archive --format=tar --prefix=PCD-26/ "$target_sha" | gzip -n > "$bundle_root/source-code.tar.gz"
-
-          (cd "$bundle_root" && zip -qr "../$bundle_name" .)
 
       - name: Publish release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: latest
-          BUNDLE_ZIP: latest-assignments-package.zip
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -385,4 +361,9 @@ jobs:
             fi
           done < <(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' || true)
 
-          gh release upload "$RELEASE_TAG" "$BUNDLE_ZIP" --clobber
+          gh release upload "$RELEASE_TAG" bundle/Assignment-01.zip --clobber
+          gh release upload "$RELEASE_TAG" bundle/Assignment-02.zip --clobber
+          gh release upload "$RELEASE_TAG" bundle/Assignment-03.zip --clobber
+          gh release upload "$RELEASE_TAG" bundle/Assignment-04.zip --clobber
+          gh release upload "$RELEASE_TAG" bundle/source-code.zip --clobber
+          gh release upload "$RELEASE_TAG" bundle/source-code.tar.gz --clobber
