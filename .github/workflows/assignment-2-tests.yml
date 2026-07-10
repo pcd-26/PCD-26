@@ -127,6 +127,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          git tag -f "$RELEASE_TAG" "$TARGET_SHA"
+          git push origin --force "refs/tags/$RELEASE_TAG"
+
           cp "$DELIVERY_ZIP" "$RELEASE_ZIP"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             :
