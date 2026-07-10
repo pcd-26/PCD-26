@@ -9,8 +9,6 @@ jobs:
   build-report:
     name: Build assignment-4 report PDF
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout
@@ -34,8 +32,6 @@ jobs:
           stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
           echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
           echo "zip_name=Assignment-04-$stamp.zip" >> "$GITHUB_OUTPUT"
-          echo "release_zip_name=Assignment-04-latest.zip" >> "$GITHUB_OUTPUT"
-          echo "release_tag=latest" >> "$GITHUB_OUTPUT"
 
       - name: Create delivery package
         shell: bash
@@ -67,35 +63,5 @@ jobs:
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
         with:
-          name: Assignment-04-${{ steps.delivery_meta.outputs.stamp }}
+          name: assignment-04-package
           path: ${{ steps.delivery_meta.outputs.zip_name }}
-
-      - name: Publish delivery release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
-          RELEASE_ZIP: ${{ steps.delivery_meta.outputs.release_zip_name }}
-          RELEASE_TAG: ${{ steps.delivery_meta.outputs.release_tag }}
-          TARGET_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-
-          cp "$DELIVERY_ZIP" "$RELEASE_ZIP"
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            :
-          else
-            gh release create "$RELEASE_TAG" \
-              --target "$TARGET_SHA" \
-              --title "Latest Assignment Packages" \
-              --notes "Shared release for the latest assignment delivery zips. New assets replace the previous delivery packages on successful workflow runs."
-          fi
-
-          for attempt in 1 2 3 4 5; do
-            if gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" --clobber; then
-              exit 0
-            fi
-            sleep "$attempt"
-          done
-
-          echo "failed to upload release asset after retries" >&2
-          exit 1
