@@ -1,0 +1,127 @@
+name: Latest Assignments Package
+
+on:
+  workflow_run:
+    workflows:
+      - Assignment 1 Tests CI
+      - Assignment 2 Tests CI
+      - Assignment 3 Report CI
+      - Assignment 4 Report CI
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: latest-assignments-package-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  assemble:
+    name: Build latest assignments package
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Build release bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          bundle_root="bundle"
+          downloads_root="downloads"
+          bundle_name="latest-assignments-package.zip"
+          release_tag="latest"
+
+          rm -rf "$bundle_root" "$downloads_root" "$bundle_name"
+          mkdir -p "$bundle_root" "$downloads_root"
+
+          workflows=(
+            "Assignment 1 Tests CI|assignment-01-package|Assignment-01.zip"
+            "Assignment 2 Tests CI|assignment-02-package|Assignment-02.zip"
+            "Assignment 3 Report CI|assignment-03-package|Assignment-03.zip"
+            "Assignment 4 Report CI|assignment-04-package|Assignment-04.zip"
+          )
+
+          for entry in "${workflows[@]}"; do
+            IFS='|' read -r workflow_name artifact_name output_name <<< "$entry"
+
+            run_id="$(
+              gh run list \
+                --workflow "$workflow_name" \
+                --commit "$TARGET_SHA" \
+                --status completed \
+                --limit 20 \
+                --json databaseId,conclusion \
+                --jq '.[] | select(.conclusion == "success") | .databaseId' \
+              | head -n 1
+            )"
+
+            if [ -z "$run_id" ]; then
+              echo "workflow '$workflow_name' is not ready yet for commit $TARGET_SHA" >&2
+              exit 0
+            fi
+
+            artifact_dir="$downloads_root/$artifact_name"
+            mkdir -p "$artifact_dir"
+            gh run download "$run_id" --name "$artifact_name" --dir "$artifact_dir"
+
+            downloaded_zip="$(
+              find "$artifact_dir" -maxdepth 1 -type f -name '*.zip' -print -quit
+            )"
+
+            if [ -z "$downloaded_zip" ]; then
+              echo "no zip artifact found for $workflow_name ($artifact_name)" >&2
+              exit 1
+            fi
+
+            cp "$downloaded_zip" "$bundle_root/$output_name"
+          done
+
+          git archive --format=zip --prefix=PCD-26/ -o "$bundle_root/source-code.zip" "$TARGET_SHA"
+          git archive --format=tar --prefix=PCD-26/ "$TARGET_SHA" | gzip -n > "$bundle_root/source-code.tar.gz"
+
+          (cd "$bundle_root" && zip -qr "../$bundle_name" .)
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RELEASE_TAG: latest
+          BUNDLE_ZIP: latest-assignments-package.zip
+        run: |
+          set -euo pipefail
+
+          git tag -f "$RELEASE_TAG" "$TARGET_SHA"
+          git push origin --force "refs/tags/$RELEASE_TAG"
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --target "$TARGET_SHA" \
+              --title "Latest Assignments Package" \
+              --notes "Unified package with all assignment delivery zips and repository source archives."
+          else
+            gh release create "$RELEASE_TAG" \
+              --target "$TARGET_SHA" \
+              --title "Latest Assignments Package" \
+              --notes "Unified package with all assignment delivery zips and repository source archives."
+          fi
+
+          while IFS= read -r asset_name; do
+            if [ -n "$asset_name" ]; then
+              gh release delete-asset "$RELEASE_TAG" "$asset_name" --yes
+            fi
+          done < <(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' || true)
+
+          gh release upload "$RELEASE_TAG" "$BUNDLE_ZIP" --clobber
