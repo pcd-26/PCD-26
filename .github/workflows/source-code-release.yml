@@ -1,0 +1,54 @@
+name: Source Code Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: source-code-release-main
+  cancel-in-progress: true
+
+jobs:
+  publish-source-code-release:
+    name: Update source code release tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare release metadata
+        id: release_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "release_tag=source-code-release" >> "$GITHUB_OUTPUT"
+          echo "release_title=Source Code Release" >> "$GITHUB_OUTPUT"
+          echo "release_notes=Shared release for the repository source archives. The tag is kept on the current main commit so the generated zip and tar.gz stay in sync with the latest source." >> "$GITHUB_OUTPUT"
+
+      - name: Publish source code release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.release_tag }}
+          RELEASE_TITLE: ${{ steps.release_meta.outputs.release_title }}
+          RELEASE_NOTES: ${{ steps.release_meta.outputs.release_notes }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          git tag -f "$RELEASE_TAG" "$TARGET_SHA"
+          git push origin --force "refs/tags/$RELEASE_TAG"
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --target "$TARGET_SHA" --title "$RELEASE_TITLE" --notes "$RELEASE_NOTES"
+          else
+            gh release create "$RELEASE_TAG" \
+              --target "$TARGET_SHA" \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES"
+          fi
