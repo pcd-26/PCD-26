@@ -1,111 +1,356 @@
 name: Latest Assignments Package
 
 on:
-  workflow_run:
-    workflows:
-      - Assignment 1 Tests CI
-      - Assignment 2 Tests CI
-      - Assignment 3 Report CI
-      - Assignment 4 Report CI
-    types:
-      - completed
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
-  group: latest-assignments-package-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: latest-assignments-package-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
-  assemble:
-    name: Build latest assignments package
+  assignment-1:
+    name: Build assignment-1 package
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: write
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Build release bundle
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install plotting dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r assignment-1/requirements.txt
+
+      - name: Build and test
+        working-directory: assignment-1
+        run: mvn -B clean verify
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base zip unzip
+
+      - name: Build report PDF
+        working-directory: assignment-1/report
+        run: make
+
+      - name: Prepare delivery metadata
+        id: delivery_meta
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
 
-          bundle_root="bundle"
-          downloads_root="downloads"
-          bundle_name="latest-assignments-package.zip"
+          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
+          echo "zip_name=Assignment-01-$stamp.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create delivery package
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          rm -rf package "$DELIVERY_ZIP"
+          mkdir -p package/Assignment-01/doc
+
+          cp assignment-1/pom.xml package/Assignment-01/pom.xml
+          cp -R assignment-1/src package/Assignment-01/src
+          cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
+
+          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-01)
+
+      - name: Check package contents
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          unzip -l "$DELIVERY_ZIP"
+          test -f package/Assignment-01/doc/report.pdf
+          test -f package/Assignment-01/pom.xml
+          test -d package/Assignment-01/src/main
+          test -d package/Assignment-01/src/test
+          test ! -e package/Assignment-01/docs
+          test ! -e package/Assignment-01/report
+          test ! -e package/Assignment-01/target
+          test ! -e package/Assignment-01/reference
+          test ! -e package/Assignment-01/benchmarks
+          test ! -e package/Assignment-01/scripts
+          test ! -e package/Assignment-01/verification
+          test ! -e package/Assignment-01/README.md
+          test ! -e package/Assignment-01/board.png
+          test ! -e package/Assignment-01/run.sh
+          test ! -e package/Assignment-01/requirements.txt
+
+      - name: Upload delivery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-01-package
+          path: ${{ steps.delivery_meta.outputs.zip_name }}
+
+  assignment-2:
+    name: Build assignment-2 package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base zip unzip
+
+      - name: Build and test
+        working-directory: assignment-2
+        run: mvn -B clean test
+
+      - name: Prepare delivery metadata
+        id: delivery_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
+          echo "zip_name=Assignment-02-$stamp.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create delivery package
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          rm -rf package "$DELIVERY_ZIP"
+          mkdir -p package/Assignment-02/doc
+
+          make -C assignment-2/report
+
+          cp assignment-2/pom.xml package/Assignment-02/pom.xml
+          cp -R assignment-2/src package/Assignment-02/src
+          cp assignment-2/report/report.pdf package/Assignment-02/doc/report.pdf
+
+          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-02)
+
+      - name: Check package contents
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          unzip -l "$DELIVERY_ZIP"
+          test -f package/Assignment-02/pom.xml
+          test -d package/Assignment-02/src/main
+          test -d package/Assignment-02/src/test
+          test -f package/Assignment-02/doc/report.pdf
+          test ! -e package/Assignment-02/docs
+          test ! -e package/Assignment-02/report
+          test ! -e package/Assignment-02/target
+          test ! -e package/Assignment-02/.agents
+          test ! -e package/Assignment-02/README.md
+          test ! -e package/Assignment-02/run-cli.sh
+          test ! -e package/Assignment-02/run-cli.ps1
+          test ! -e package/Assignment-02/run-gui.sh
+          test ! -e package/Assignment-02/run-gui.ps1
+
+      - name: Upload delivery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-02-package
+          path: ${{ steps.delivery_meta.outputs.zip_name }}
+
+  assignment-3:
+    name: Build assignment-3 package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install LaTeX tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base zip unzip
+
+      - name: Build report
+        working-directory: assignment-3/report
+        run: make
+
+      - name: Prepare delivery metadata
+        id: delivery_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
+          echo "zip_name=Assignment-03-$stamp.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create delivery package
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          rm -rf package "$DELIVERY_ZIP"
+          mkdir -p package/Assignment-03/doc
+
+          cp assignment-3/report/report.pdf package/Assignment-03/doc/report.pdf
+
+          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-03)
+
+      - name: Check package contents
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          unzip -l "$DELIVERY_ZIP"
+          test -f package/Assignment-03/doc/report.pdf
+          test ! -e package/Assignment-03/report
+          test ! -e package/Assignment-03/docs
+          test ! -e package/Assignment-03/target
+
+      - name: Upload delivery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-03-package
+          path: ${{ steps.delivery_meta.outputs.zip_name }}
+
+  assignment-4:
+    name: Build assignment-4 package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install LaTeX tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base zip unzip
+
+      - name: Build report
+        working-directory: assignment-4/report
+        run: make
+
+      - name: Prepare delivery metadata
+        id: delivery_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
+          echo "zip_name=Assignment-04-$stamp.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create delivery package
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          rm -rf package "$DELIVERY_ZIP"
+          mkdir -p package/Assignment-04/doc
+
+          cp assignment-4/report/report.pdf package/Assignment-04/doc/report.pdf
+
+          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-04)
+
+      - name: Check package contents
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          unzip -l "$DELIVERY_ZIP"
+          test -f package/Assignment-04/doc/report.pdf
+          test ! -e package/Assignment-04/report
+          test ! -e package/Assignment-04/docs
+          test ! -e package/Assignment-04/target
+
+      - name: Upload delivery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-04-package
+          path: ${{ steps.delivery_meta.outputs.zip_name }}
+
+  assemble:
+    name: Build latest assignments package
+    runs-on: ubuntu-latest
+    needs:
+      - assignment-1
+      - assignment-2
+      - assignment-3
+      - assignment-4
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download assignment packages
+        uses: actions/download-artifact@v4
+        with:
+          name: assignment-01-package
+          path: bundle
+
+      - name: Download assignment 2 package
+        uses: actions/download-artifact@v4
+        with:
+          name: assignment-02-package
+          path: bundle
+
+      - name: Download assignment 3 package
+        uses: actions/download-artifact@v4
+        with:
+          name: assignment-03-package
+          path: bundle
+
+      - name: Download assignment 4 package
+        uses: actions/download-artifact@v4
+        with:
+          name: assignment-04-package
+          path: bundle
+
+      - name: Build source archives and final bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
           release_tag="latest"
+          bundle_root="bundle"
+          bundle_name="latest-assignments-package.zip"
+          target_sha="${GITHUB_SHA}"
 
-          rm -rf "$bundle_root" "$downloads_root" "$bundle_name"
-          mkdir -p "$bundle_root" "$downloads_root"
-
-          download_artifact() {
-            local workflow_name="$1"
-            local artifact_name="$2"
-            local artifact_dir="$3"
-            local run_id=""
-            local attempt=""
-
-            for attempt in 1 2 3 4 5 6 7 8 9 10; do
-              run_id="$(
-                gh run list \
-                  --workflow "$workflow_name" \
-                  --commit "$TARGET_SHA" \
-                  --status completed \
-                  --limit 20 \
-                  --json databaseId,conclusion \
-                  --jq '.[] | select(.conclusion == "success") | .databaseId' \
-                | head -n 1
-              )"
-
-              if [ -n "$run_id" ]; then
-                rm -rf "$artifact_dir"
-                mkdir -p "$artifact_dir"
-
-                if gh run download "$run_id" --name "$artifact_name" --dir "$artifact_dir"; then
-                  if find "$artifact_dir" -maxdepth 1 -type f -name '*.zip' -print -quit | grep -q .; then
-                    return 0
-                  fi
-                fi
-              fi
-
-              sleep "$attempt"
-            done
-
-            return 1
-          }
-
-          workflows=(
-            "Assignment 1 Tests CI|assignment-01-package|Assignment-01.zip"
-            "Assignment 2 Tests CI|assignment-02-package|Assignment-02.zip"
-            "Assignment 3 Report CI|assignment-03-package|Assignment-03.zip"
-            "Assignment 4 Report CI|assignment-04-package|Assignment-04.zip"
-          )
-
-          for entry in "${workflows[@]}"; do
-            IFS='|' read -r workflow_name artifact_name output_name <<< "$entry"
-
-            artifact_dir="$downloads_root/$artifact_name"
-            if ! download_artifact "$workflow_name" "$artifact_name" "$artifact_dir"; then
-              echo "artifact '$artifact_name' for workflow '$workflow_name' is not ready yet for commit $TARGET_SHA" >&2
-              exit 1
-            fi
-
-            downloaded_zip="$(
-              find "$artifact_dir" -maxdepth 1 -type f -name '*.zip' -print -quit
-            )"
-            cp "$downloaded_zip" "$bundle_root/$output_name"
-          done
-
-          git archive --format=zip --prefix=PCD-26/ -o "$bundle_root/source-code.zip" "$TARGET_SHA"
-          git archive --format=tar --prefix=PCD-26/ "$TARGET_SHA" | gzip -n > "$bundle_root/source-code.tar.gz"
+          git archive --format=zip --prefix=PCD-26/ -o "$bundle_root/source-code.zip" "$target_sha"
+          git archive --format=tar --prefix=PCD-26/ "$target_sha" | gzip -n > "$bundle_root/source-code.tar.gz"
 
           (cd "$bundle_root" && zip -qr "../$bundle_name" .)
 
@@ -113,9 +358,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           RELEASE_TAG: latest
           BUNDLE_ZIP: latest-assignments-package.zip
+          TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
