@@ -14,11 +14,11 @@ The assignment is about concurrent programming based on message passing, synchro
 - **Implementation Status:** Completed using **Apache Pekko** (Typed Actor model) in Java, including the **Bonus part** (Zone-Based Control and Partial Arming).
 
 #### Key Components and Architecture
-The system consists of the following typed actors under package `pcd.assignment3.shas`:
-1. [ControlUnitActor](src/main/java/pcd/assignment3/shas/controlunit/ControlUnitActor.java): The central FSM controller. It maintains the current state (Disarmed, Exit Delay, Armed, Entry Delay, Alarm) and active zones.
-2. [KeypadActor](src/main/java/pcd/assignment3/shas/keypad/KeypadActor.java): Accumulates keypad character entries (`0-9`), supports clearing (`*`), submitting (`#`), and zone selection/deselection for partial arming.
-3. [SensorActor](src/main/java/pcd/assignment3/shas/sensor/SensorActor.java): Simulates peripheral sensors (motion detectors and door/window sensors) assigned to specific zones.
-4. [SirenActor](src/main/java/pcd/assignment3/shas/siren/SirenActor.java): Simulates the alarm siren.
+The system consists of the following typed actors under package `pcd.shas`:
+1. [ControlUnitActor](src/main/java/pcd/shas/controlunit/ControlUnitActor.java): The central FSM controller. It maintains the current state (Disarmed, Exit Delay, Armed, Entry Delay, Alarm) and active zones.
+2. [KeypadActor](src/main/java/pcd/shas/keypad/KeypadActor.java): Accumulates keypad character entries (`0-9`), supports clearing (`*`), submitting (`#`), and zone selection/deselection for partial arming.
+3. [SensorActor](src/main/java/pcd/shas/sensor/SensorActor.java): Simulates peripheral sensors (motion detectors and door/window sensors) assigned to specific zones.
+4. [SirenActor](src/main/java/pcd/shas/siren/SirenActor.java): Simulates the alarm siren.
 
 #### FSM State Transitions
 ```mermaid
@@ -49,7 +49,7 @@ stateDiagram-v2
   ```
 - **Run Simulator (Interactive CLI):**
   ```bash
-  mvn -f assignment-3/pom.xml exec:java -Dexec.mainClass="pcd.assignment3.shas.Main"
+  mvn -f assignment-3/pom.xml exec:java -Dexec.mainClass="pcd.shas.Main"
   ```
 
 

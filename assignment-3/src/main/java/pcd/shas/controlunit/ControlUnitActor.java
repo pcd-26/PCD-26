@@ -1,4 +1,4 @@
-package pcd.assignment3.shas.controlunit;
+package pcd.shas.controlunit;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -7,14 +7,20 @@ import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import org.apache.pekko.actor.typed.javadsl.TimerScheduler;
-import pcd.assignment3.shas.common.SensorInfo;
-import pcd.assignment3.shas.keypad.KeypadActor;
-import pcd.assignment3.shas.siren.SirenActor;
+import pcd.shas.common.SensorInfo;
+import pcd.shas.keypad.KeypadActor;
+import pcd.shas.keypad.PinSubmitted;
+import pcd.shas.sensor.SensorActor;
+import pcd.shas.sensor.SensorEvent;
+import pcd.shas.siren.AlertDevice;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -65,6 +71,18 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
     public record QueryState(ActorRef<StateReport> replyTo) implements Command {}
 
     /**
+     * Command to request the references of spawned keypad and sensors.
+     *
+     * @param replyTo actor to send the keypad and sensors report to
+     */
+    public record GetKeypadAndSensors(ActorRef<KeypadAndSensorsReport> replyTo) implements Command {}
+
+    /**
+     * Report containing the references of the spawned keypad and sensors.
+     */
+    public record KeypadAndSensorsReport(ActorRef<KeypadActor.Command> keypad, Map<String, ActorRef<SensorActor.Command>> sensors) {}
+
+    /**
      * Internal command sent when the Exit Delay timer expires.
      */
     private record ExitDelayTimeout() implements Command {}
@@ -89,12 +107,23 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
     private final String correctPin;
     private final Duration exitDelayDuration;
     private final Duration entryDelayDuration;
-    private final ActorRef<SirenActor.Command> siren;
+    private final ActorRef<AlertDevice.Command> siren;
     private final TimerScheduler<Command> timers;
+
+    // References to spawned child actors
+    private final ActorRef<KeypadActor.Command> keypad;
+    private final Map<String, ActorRef<SensorActor.Command>> sensors;
 
     // FSM State Data
     private boolean fullyArmed = false;
     private final Set<String> activeZones = new HashSet<>();
+
+    /**
+     * Backward-compatible factory method for tests that do not configure physical sensors initially.
+     */
+    public static Behavior<Command> create(String correctPin, Duration exitDelayDuration, Duration entryDelayDuration, ActorRef<AlertDevice.Command> siren) {
+        return create(correctPin, exitDelayDuration, entryDelayDuration, siren, Collections.emptyList());
+    }
 
     /**
      * Factory method to create a ControlUnitActor behavior.
@@ -102,22 +131,60 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
      * @param correctPin         the correct PIN code to authorize arming/disarming/silencing
      * @param exitDelayDuration  the duration of the exit delay
      * @param entryDelayDuration the duration of the entry delay
-     * @param siren              reference to the SirenActor
+     * @param siren              reference to the AlertDevice (e.g. SirenActor)
+     * @param sensorConfigs      the list of sensor configurations to spawn as children
      * @return the behavior of the ControlUnitActor wrapped with a timer scheduler
      */
-    public static Behavior<Command> create(String correctPin, Duration exitDelayDuration, Duration entryDelayDuration, ActorRef<SirenActor.Command> siren) {
+    public static Behavior<Command> create(String correctPin, Duration exitDelayDuration, Duration entryDelayDuration, ActorRef<AlertDevice.Command> siren, List<SensorInfo> sensorConfigs) {
         return Behaviors.withTimers(timers ->
-                Behaviors.setup(context -> new ControlUnitActor(context, correctPin, exitDelayDuration, entryDelayDuration, siren, timers))
+                Behaviors.setup(context -> {
+                    // 1. Create message adapters to satisfy DIP (Dependency Inversion Principle)
+                    // The Control Unit adapts Keypad and Sensor events to its own internal command format.
+                    ActorRef<SensorEvent> sensorAdapter = context.messageAdapter(SensorEvent.class,
+                            event -> new SensorTriggered(event.info(), event.timestamp()));
+
+                    ActorRef<PinSubmitted> keypadAdapter = context.messageAdapter(PinSubmitted.class,
+                            event -> new KeypadPinEntered(event.pin(), event.selectedZones(), event.keypadRef()));
+
+                    // 2. Spawn Keypad child actor
+                    ActorRef<KeypadActor.Command> keypadRef = context.spawn(
+                            KeypadActor.create(keypadAdapter),
+                            "keypad"
+                    );
+
+                    // 3. Spawn Sensor child actors
+                    Map<String, ActorRef<SensorActor.Command>> sensorsMap = new HashMap<>();
+                    for (SensorInfo info : sensorConfigs) {
+                        ActorRef<SensorActor.Command> sensorRef = context.spawn(
+                                SensorActor.create(info, sensorAdapter),
+                                "sensor-" + info.id()
+                        );
+                        sensorsMap.put(info.id(), sensorRef);
+                    }
+
+                    return new ControlUnitActor(context, correctPin, exitDelayDuration, entryDelayDuration, siren, timers, keypadRef, sensorsMap);
+                })
         );
     }
 
-    private ControlUnitActor(ActorContext<Command> context, String correctPin, Duration exitDelayDuration, Duration entryDelayDuration, ActorRef<SirenActor.Command> siren, TimerScheduler<Command> timers) {
+    private ControlUnitActor(
+            ActorContext<Command> context,
+            String correctPin,
+            Duration exitDelayDuration,
+            Duration entryDelayDuration,
+            ActorRef<AlertDevice.Command> siren,
+            TimerScheduler<Command> timers,
+            ActorRef<KeypadActor.Command> keypad,
+            Map<String, ActorRef<SensorActor.Command>> sensors
+    ) {
         super(context);
         this.correctPin = correctPin;
         this.exitDelayDuration = exitDelayDuration;
         this.entryDelayDuration = entryDelayDuration;
         this.siren = siren;
         this.timers = timers;
+        this.keypad = keypad;
+        this.sensors = sensors;
     }
 
     @Override
@@ -136,6 +203,7 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
                     cmd.replyTo().tell(new StateReport(AlarmState.DISARMED, false, Collections.emptySet()));
                     return Behaviors.same();
                 })
+                .onMessage(GetKeypadAndSensors.class, this::onGetKeypadAndSensors)
                 .build();
     }
 
@@ -169,6 +237,7 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
                     .onMessage(KeypadPinEntered.class, this::onKeypadPinEnteredInExitDelay)
                     .onMessage(ExitDelayTimeout.class, this::onExitDelayTimeout)
                     .onMessage(QueryState.class, this::onQueryInExitDelay)
+                    .onMessage(GetKeypadAndSensors.class, this::onGetKeypadAndSensors)
                     .build();
         } else {
             cmd.keypadRef().tell(new KeypadActor.PinRejected());
@@ -211,6 +280,7 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
                 .onMessage(SensorTriggered.class, this::onSensorTriggeredInArmed)
                 .onMessage(KeypadPinEntered.class, this::onKeypadPinEnteredInArmed)
                 .onMessage(QueryState.class, this::onQueryInArmed)
+                .onMessage(GetKeypadAndSensors.class, this::onGetKeypadAndSensors)
                 .build();
     }
 
@@ -237,6 +307,7 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
                     .onMessage(KeypadPinEntered.class, this::onKeypadPinEnteredInEntryDelay)
                     .onMessage(EntryDelayTimeout.class, this::onEntryDelayTimeout)
                     .onMessage(QueryState.class, this::onQueryInEntryDelay)
+                    .onMessage(GetKeypadAndSensors.class, this::onGetKeypadAndSensors)
                     .build();
         } else {
             getContext().getLog().info("Armed: Sensor '{}' triggered in inactive zone '{}'. (Ignored)", cmd.sensorInfo().id(), zone);
@@ -289,11 +360,12 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
     private Behavior<Command> onEntryDelayTimeout(EntryDelayTimeout cmd) {
         getContext().getLog().error("Entry Delay: Timeout reached. Transitioning to ALARM state!");
         System.out.println("System: [TIMEOUT] - Entry delay elapsed. Triggering emergency alarm!");
-        siren.tell(new SirenActor.Activate());
+        siren.tell(new AlertDevice.Activate());
         return Behaviors.receive(Command.class)
                 .onMessage(SensorTriggered.class, this::onSensorTriggeredInAlarm)
                 .onMessage(KeypadPinEntered.class, this::onKeypadPinEnteredInAlarm)
                 .onMessage(QueryState.class, this::onQueryInAlarm)
+                .onMessage(GetKeypadAndSensors.class, this::onGetKeypadAndSensors)
                 .build();
     }
 
@@ -312,7 +384,7 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
 
     private Behavior<Command> onKeypadPinEnteredInAlarm(KeypadPinEntered cmd) {
         if (correctPin.equals(cmd.pin())) {
-            siren.tell(new SirenActor.Deactivate());
+            siren.tell(new AlertDevice.Deactivate());
             cmd.keypadRef().tell(new KeypadActor.PinAccepted());
             getContext().getLog().info("Alarm: Correct PIN entered. Disarming system and deactivating siren.");
             System.out.println("System: [DISARMED] - Siren silenced and alarm turned off.");
@@ -336,5 +408,10 @@ public class ControlUnitActor extends AbstractBehavior<ControlUnitActor.Command>
     private void resetStateData() {
         this.fullyArmed = false;
         this.activeZones.clear();
+    }
+
+    private Behavior<Command> onGetKeypadAndSensors(GetKeypadAndSensors cmd) {
+        cmd.replyTo().tell(new KeypadAndSensorsReport(keypad, sensors));
+        return Behaviors.same();
     }
 }

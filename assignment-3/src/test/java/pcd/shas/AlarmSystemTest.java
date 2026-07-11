@@ -1,4 +1,4 @@
-package pcd.assignment3.shas;
+package pcd.shas;
 
 import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
 import org.apache.pekko.actor.testkit.typed.javadsl.TestProbe;
@@ -6,11 +6,12 @@ import org.apache.pekko.actor.typed.ActorRef;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import pcd.assignment3.shas.common.SensorInfo;
-import pcd.assignment3.shas.common.SensorType;
-import pcd.assignment3.shas.controlunit.ControlUnitActor;
-import pcd.assignment3.shas.keypad.KeypadActor;
-import pcd.assignment3.shas.siren.SirenActor;
+import pcd.shas.common.SensorInfo;
+import pcd.shas.common.SensorType;
+import pcd.shas.controlunit.ControlUnitActor;
+import pcd.shas.keypad.KeypadActor;
+import pcd.shas.siren.AlertDevice;
+import pcd.shas.siren.SirenActor;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -38,7 +39,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testInitialStateDisarmed() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef())
         );
@@ -53,7 +54,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testIncorrectPinRejected() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef())
         );
@@ -70,7 +71,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testArmingFullAndArmedTransition() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         // Short exit delay for testing speed
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofMillis(300), Duration.ofMillis(300), sirenProbe.getRef())
@@ -98,7 +99,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testDisarmDuringExitDelay() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofSeconds(5), Duration.ofSeconds(5), sirenProbe.getRef())
         );
@@ -121,7 +122,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testIntrusionTriggersAlarm() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofMillis(100), Duration.ofMillis(200), sirenProbe.getRef())
         );
@@ -142,7 +143,7 @@ public class AlarmSystemTest {
         assertEquals(ControlUnitActor.AlarmState.ENTRY_DELAY, stateProbe.receiveMessage().state());
 
         // Expect siren to activate after entry delay (200ms + margin)
-        sirenProbe.expectMessage(Duration.ofMillis(400), new SirenActor.Activate());
+        sirenProbe.expectMessage(Duration.ofMillis(400), new AlertDevice.Activate());
 
         controlUnit.tell(new ControlUnitActor.QueryState(stateProbe.getRef()));
         assertEquals(ControlUnitActor.AlarmState.ALARM, stateProbe.receiveMessage().state());
@@ -150,7 +151,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testDisarmDuringEntryDelay() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofMillis(50), Duration.ofSeconds(5), sirenProbe.getRef())
         );
@@ -179,7 +180,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testStopAlarm() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofMillis(50), Duration.ofMillis(50), sirenProbe.getRef())
         );
@@ -193,12 +194,12 @@ public class AlarmSystemTest {
         controlUnit.tell(new ControlUnitActor.SensorTriggered(sensor, java.time.Instant.now()));
 
         // Wait for alarm
-        sirenProbe.expectMessage(new SirenActor.Activate());
+        sirenProbe.expectMessage(new AlertDevice.Activate());
 
         // Stop the alarm
         controlUnit.tell(new ControlUnitActor.KeypadPinEntered("1234", Collections.emptySet(), keypadProbe.getRef()));
         keypadProbe.expectMessage(new KeypadActor.PinAccepted());
-        sirenProbe.expectMessage(new SirenActor.Deactivate());
+        sirenProbe.expectMessage(new AlertDevice.Deactivate());
 
         TestProbe<ControlUnitActor.StateReport> stateProbe = testKit.createTestProbe(ControlUnitActor.StateReport.class);
         controlUnit.tell(new ControlUnitActor.QueryState(stateProbe.getRef()));
@@ -207,7 +208,7 @@ public class AlarmSystemTest {
 
     @Test
     public void testPartialArmingAndZoneIsolation() {
-        TestProbe<SirenActor.Command> sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        TestProbe<AlertDevice.Command> sirenProbe = testKit.createTestProbe(AlertDevice.Command.class);
         ActorRef<ControlUnitActor.Command> controlUnit = testKit.spawn(
                 ControlUnitActor.create("1234", Duration.ofMillis(50), Duration.ofSeconds(5), sirenProbe.getRef())
         );

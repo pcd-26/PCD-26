@@ -1,16 +1,17 @@
-package pcd.assignment3.shas;
+package pcd.shas;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.AskPattern;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
-import pcd.assignment3.shas.common.SensorInfo;
-import pcd.assignment3.shas.common.SensorType;
-import pcd.assignment3.shas.controlunit.ControlUnitActor;
-import pcd.assignment3.shas.keypad.KeypadActor;
-import pcd.assignment3.shas.sensor.SensorActor;
-import pcd.assignment3.shas.siren.SirenActor;
+import pcd.shas.common.SensorInfo;
+import pcd.shas.common.SensorType;
+import pcd.shas.controlunit.ControlUnitActor;
+import pcd.shas.keypad.KeypadActor;
+import pcd.shas.sensor.SensorActor;
+import pcd.shas.siren.AlertDevice;
+import pcd.shas.siren.SirenActor;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -53,19 +54,7 @@ public class Main {
 
         // Define a root behavior that acts as a guardian and spawns all child actors.
         Behavior<Void> rootBehavior = Behaviors.setup(context -> {
-            // 1. Spawn Siren
-            ActorRef<SirenActor.Command> siren = context.spawn(SirenActor.create(), "siren");
-
-            // 2. Spawn Control Unit
-            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
-                    ControlUnitActor.create(DEFAULT_PIN, EXIT_DELAY, ENTRY_DELAY, siren),
-                    "control-unit"
-            );
-
-            // 3. Spawn Keypad
-            ActorRef<KeypadActor.Command> keypad = context.spawn(KeypadActor.create(controlUnit), "keypad");
-
-            // 4. Define and Spawn Sensors
+            // Define and Spawn Sensors configuration
             List<SensorInfo> sensorConfigs = List.of(
                     new SensorInfo("front_door", SensorType.DOOR_WINDOW, "Perimeter"),
                     new SensorInfo("back_door", SensorType.DOOR_WINDOW, "Perimeter"),
@@ -74,17 +63,32 @@ public class Main {
                     new SensorInfo("bedroom_motion", SensorType.MOTION, "Sleeping Area")
             );
 
-            Map<String, ActorRef<SensorActor.Command>> sensors = new HashMap<>();
-            for (SensorInfo info : sensorConfigs) {
-                ActorRef<SensorActor.Command> sensorRef = context.spawn(
-                        SensorActor.create(info, controlUnit),
-                        "sensor-" + info.id()
-                );
-                sensors.put(info.id(), sensorRef);
-            }
+            // 1. Spawn Siren (conforming to AlertDevice DIP abstraction)
+            ActorRef<AlertDevice.Command> siren = context.spawn(SirenActor.create(), "siren");
+
+            // 2. Spawn Control Unit (which spawns keypad and sensors internally)
+            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
+                    ControlUnitActor.create(DEFAULT_PIN, EXIT_DELAY, ENTRY_DELAY, siren, sensorConfigs),
+                    "control-unit"
+            );
 
             // Start interactive CLI loop in a separate thread so it doesn't block the actor system
-            Thread cliThread = new Thread(() -> runCli(context.getSystem(), controlUnit, keypad, sensors, sensorConfigs));
+            Thread cliThread = new Thread(() -> {
+                try {
+                    // Query the keypad and sensor references from the ControlUnitActor (ask pattern)
+                    CompletionStage<ControlUnitActor.KeypadAndSensorsReport> stage = AskPattern.ask(
+                            controlUnit,
+                            ControlUnitActor.GetKeypadAndSensors::new,
+                            Duration.ofSeconds(3),
+                            context.getSystem().scheduler()
+                    );
+                    ControlUnitActor.KeypadAndSensorsReport report = stage.toCompletableFuture().get();
+                    runCli(context.getSystem(), controlUnit, report.keypad(), report.sensors(), sensorConfigs);
+                } catch (Exception e) {
+                    System.err.println("Fatal error: Failed to query alarm system components: " + e.getMessage());
+                    context.getSystem().terminate();
+                }
+            });
             cliThread.setDaemon(true);
             cliThread.start();
 
@@ -227,6 +231,7 @@ public class Main {
                     ControlUnitActor.QueryState::new,
                     Duration.ofSeconds(2),
                     system.scheduler()
+                    
             );
 
             ControlUnitActor.StateReport report = stage.toCompletableFuture().get();
