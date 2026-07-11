@@ -5,9 +5,9 @@ package pcd.shas.common;
  *
  * @param id   the unique identifier of the sensor
  * @param type the type of the sensor (e.g., MOTION, DOOR_WINDOW)
- * @param zone the zone where the sensor is installed (e.g., Perimeter, Living Area)
+ * @param zone the zone where the sensor is installed
  */
-public record SensorInfo(String id, SensorType type, String zone) {
+public record SensorInfo(String id, SensorType type, Zone zone) {
     /**
      * Compact constructor validating that the sensor information parameters are not null or empty.
      */
@@ -18,8 +18,8 @@ public record SensorInfo(String id, SensorType type, String zone) {
         if (type == null) {
             throw new IllegalArgumentException("Sensor type cannot be null");
         }
-        if (zone == null || zone.isBlank()) {
-            throw new IllegalArgumentException("Sensor zone cannot be null or empty");
+        if (zone == null) {
+            throw new IllegalArgumentException("Sensor zone cannot be null");
         }
     }
 }

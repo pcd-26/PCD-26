@@ -3,13 +3,14 @@
 \subsection{Actor Responsibilities}
 The smart home alarm is split into small typed actors with a clear ownership model.
 The control unit owns the alarm state machine, the configured PIN, and the delay timers.
+It also owns the currently active zone set used to decide whether an intrusion event is relevant.
 The siren actor owns only its on/off state.
 The keypad actor collects local key presses and forwards PIN submissions without validation.
 The sensor actor is reusable and forwards activations for motion and door/window sensors.
 
 \subsection{Typed Message Protocols}
 Each actor exposes a dedicated typed protocol.
-The control unit accepts PIN submissions, sensor activations, and internal timeout messages.
+The control unit accepts PIN submissions, sensor activations, arming-mode commands, and internal timeout messages.
 The keypad accepts key presses and direct PIN submissions.
 The sensor accepts activation messages.
 The siren accepts activate, deactivate, and status-query messages for tests and demo code.
@@ -19,6 +20,31 @@ The control unit state machine follows five states: \textit{DISARMED}, \textit{E
 The configured PIN arms and disarms the system according to the current state.
 Entering \textit{EXIT\_DELAY} starts a single exit-delay timer, and entering \textit{ENTRY\_DELAY} starts a single entry-delay timer.
 Timeout expiration is delivered as a normal actor message, and obsolete timers are cancelled when the actor leaves the timed state.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+Current state & Trigger & Next state \\
+\hline
+DISARMED & Correct PIN & EXIT\_DELAY \\
+DISARMED & ArmAll / ArmPartial & DISARMED \\
+EXIT\_DELAY & Exit timeout & ARMED \\
+EXIT\_DELAY & Correct PIN & DISARMED \\
+ARMED & Active-zone sensor event & ENTRY\_DELAY \\
+ARMED & Inactive-zone sensor event & ARMED \\
+ENTRY\_DELAY & Entry timeout & ALARM \\
+ENTRY\_DELAY & Correct PIN & DISARMED \\
+ALARM & Correct PIN & DISARMED \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Zone-Based Control}
+Each sensor belongs to exactly one logical zone.
+Before arming, the control unit can be configured for full arming or partial arming with an immutable set of active zones.
+When the system is \textit{ARMED}, only sensors from active zones can trigger \textit{ENTRY\_DELAY}.
+Sensors from inactive zones are ignored and only logged.
+When the system returns to \textit{DISARMED}, the active-zone selection is reset to the full set.
 
 \subsection{Stale Timeouts}
 Timeout messages are ignored unless they match the current state.
@@ -45,3 +71,4 @@ Run the demonstration with \texttt{mvn -f assignment-3/shas/pom.xml exec:java}.
 The implementation favors small actors over a monolithic controller.
 Configuration is loaded from the standard Typesafe Config mechanism so tests can override values without editing production files.
 The runnable demo uses short timer overrides to show the whole scenario quickly while leaving the production defaults unchanged.
+It also scripts a night-mode partial arming example so the zone-based behavior is visible without manual interaction.
