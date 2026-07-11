@@ -1,4 +1,4 @@
-package pcd.assignment3.common;
+package pcd.assignment3.shas.common;
 
 /**
  * Enumerates the types of peripheral sensors supported by the smart home alarm system.

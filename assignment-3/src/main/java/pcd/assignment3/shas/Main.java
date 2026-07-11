@@ -1,16 +1,16 @@
-package pcd.assignment3;
+package pcd.assignment3.shas;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.AskPattern;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
-import pcd.assignment3.common.SensorInfo;
-import pcd.assignment3.common.SensorType;
-import pcd.assignment3.controlunit.ControlUnitActor;
-import pcd.assignment3.keypad.KeypadActor;
-import pcd.assignment3.sensor.SensorActor;
-import pcd.assignment3.siren.SirenActor;
+import pcd.assignment3.shas.common.SensorInfo;
+import pcd.assignment3.shas.common.SensorType;
+import pcd.assignment3.shas.controlunit.ControlUnitActor;
+import pcd.assignment3.shas.keypad.KeypadActor;
+import pcd.assignment3.shas.sensor.SensorActor;
+import pcd.assignment3.shas.siren.SirenActor;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;

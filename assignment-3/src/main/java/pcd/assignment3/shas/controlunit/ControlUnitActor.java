@@ -1,4 +1,4 @@
-package pcd.assignment3.controlunit;
+package pcd.assignment3.shas.controlunit;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -7,9 +7,9 @@ import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import org.apache.pekko.actor.typed.javadsl.TimerScheduler;
-import pcd.assignment3.common.SensorInfo;
-import pcd.assignment3.keypad.KeypadActor;
-import pcd.assignment3.siren.SirenActor;
+import pcd.assignment3.shas.common.SensorInfo;
+import pcd.assignment3.shas.keypad.KeypadActor;
+import pcd.assignment3.shas.siren.SirenActor;
 
 import java.time.Duration;
 import java.time.Instant;
