@@ -20,8 +20,12 @@ The goal of the exercise is to design and implement in Go language a championshi
 - To be implemented in Go using an interaction model based on message passing
   - no shared memory is allowed
 - **Implementation path**: [assignment-3/src/main/go/pcd/hotc](file:///home/francesco/Documents/PCD-26/assignment-3/src/main/go/pcd/hotc)
-  - Run the program: `go run . -m <rounds>` (inside the implementation directory)
-  - Run tests: `go test -v ./...` (inside the implementation directory)
+  - Run the program: `go run . -m <rounds>` (inside the implementation directory) or using the root scripts:
+    - **Bash**: `./run-hotc.sh [-m <rounds>]`
+    - **PowerShell**: `.\run-hotc.ps1 [-m <rounds>]`
+  - Run tests: `go test -v ./...` (inside the implementation directory) or using the root scripts:
+    - **Bash**: `./test-hotc.sh`
+    - **PowerShell**: `.\test-hotc.ps1`
 
 
 
