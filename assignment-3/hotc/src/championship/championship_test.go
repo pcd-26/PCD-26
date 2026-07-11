@@ -113,6 +113,43 @@ func TestPlayChampionshipRoundProgression(t *testing.T) {
 	}
 }
 
+func TestPlayChampionshipPropagatesWinnersAndHalvesPlayers(t *testing.T) {
+	players := mustPlayers(t, 8)
+
+	result, err := PlayChampionship(players, headsOnlyFactory)
+	if err != nil {
+		t.Fatalf("expected championship to succeed, got error: %v", err)
+	}
+
+	rounds := result.Rounds()
+	if len(rounds) != 3 {
+		t.Fatalf("unexpected round count: got %d want %d", len(rounds), 3)
+	}
+
+	expectedParticipants := [][]int{
+		{1, 2, 3, 4, 5, 6, 7, 8},
+		{1, 3, 5, 7},
+		{1, 5},
+	}
+	expectedWinners := [][]int{
+		{1, 3, 5, 7},
+		{1, 5},
+		{1},
+	}
+
+	for roundIndex, round := range rounds {
+		assertRoundParticipants(t, round, expectedParticipants[roundIndex])
+		assertRoundWinners(t, round, expectedWinners[roundIndex])
+		if len(round.Winners())*2 != len(expectedParticipants[roundIndex]) {
+			t.Fatalf("round %d did not halve players: participants=%d winners=%d", roundIndex+1, len(expectedParticipants[roundIndex]), len(round.Winners()))
+		}
+	}
+
+	if result.Champion().ID() != 1 {
+		t.Fatalf("unexpected champion: got %d want %d", result.Champion().ID(), 1)
+	}
+}
+
 func headsOnlyFactory(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
 	return NewFixedCoinTosser(Heads)
 }
@@ -148,4 +185,40 @@ func assertRoundSizes(t *testing.T, result ChampionshipResult, want []int) {
 			t.Fatalf("unexpected match count at round %d: got %d want %d", i+1, round.MatchCount(), want[i])
 		}
 	}
+}
+
+func assertRoundParticipants(t *testing.T, round RoundResult, want []int) {
+	t.Helper()
+
+	got := roundParticipants(round)
+	if len(got) != len(want) {
+		t.Fatalf("unexpected participant count in round %d: got %d want %d", round.RoundNumber(), len(got), len(want))
+	}
+	for i, playerID := range want {
+		if got[i] != playerID {
+			t.Fatalf("unexpected participant at position %d in round %d: got %d want %d", i, round.RoundNumber(), got[i], playerID)
+		}
+	}
+}
+
+func assertRoundWinners(t *testing.T, round RoundResult, want []int) {
+	t.Helper()
+
+	got := round.Winners()
+	if len(got) != len(want) {
+		t.Fatalf("unexpected winner count in round %d: got %d want %d", round.RoundNumber(), len(got), len(want))
+	}
+	for i, playerID := range want {
+		if got[i].ID() != playerID {
+			t.Fatalf("unexpected winner at position %d in round %d: got %d want %d", i, round.RoundNumber(), got[i].ID(), playerID)
+		}
+	}
+}
+
+func roundParticipants(round RoundResult) []int {
+	participants := make([]int, 0, round.MatchCount()*2)
+	for _, match := range round.Matches() {
+		participants = append(participants, match.FirstPlayer().ID(), match.SecondPlayer().ID())
+	}
+	return participants
 }
