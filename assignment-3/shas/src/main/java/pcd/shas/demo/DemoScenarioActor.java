@@ -1,0 +1,243 @@
+package pcd.shas.demo;
+
+import org.apache.pekko.actor.typed.ActorRef;
+import org.apache.pekko.actor.typed.Behavior;
+import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
+import org.apache.pekko.actor.typed.javadsl.ActorContext;
+import org.apache.pekko.actor.typed.javadsl.Behaviors;
+import org.apache.pekko.actor.typed.javadsl.Receive;
+import org.apache.pekko.actor.typed.javadsl.TimerScheduler;
+import pcd.shas.AlarmConfiguration;
+import pcd.shas.controlunit.ControlUnitActor;
+import pcd.shas.keypad.KeypadActor;
+import pcd.shas.sensor.SensorActor;
+import pcd.shas.siren.SirenActor;
+
+import java.time.Duration;
+import java.util.Objects;
+
+/**
+ * Scripted demo that drives the complete smart home alarm scenario.
+ */
+public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.Command> {
+
+    private static final Object NEXT_STEP_TIMER = "next-step";
+    private static final Duration STEP_GAP = Duration.ofMillis(150);
+    private static final Duration FINAL_GRACE = Duration.ofMillis(300);
+
+    /**
+     * Root protocol for the demo scenario.
+     */
+    public interface Command {}
+
+    /**
+     * Starts the scripted run.
+     */
+    public record Start() implements Command {}
+
+    private record Advance() implements Command {}
+
+    private record ControlStateObserved(ControlUnitActor.StateSnapshot snapshot) implements Command {}
+
+    private record SirenStateObserved(SirenActor.StateSnapshot snapshot) implements Command {}
+
+    private enum Step {
+        START,
+        AFTER_PIN,
+        AFTER_EXIT_DELAY,
+        AFTER_SENSOR_IN_ARMED,
+        AFTER_ENTRY_DELAY,
+        AFTER_DISARM,
+        STOPPING
+    }
+
+    private final TimerScheduler<Command> timers;
+    private final ActorRef<KeypadActor.Command> keypad;
+    private final ActorRef<SensorActor.Command> sensor;
+    private final ActorRef<ControlUnitActor.Command> controlUnit;
+    private final ActorRef<SirenActor.Command> siren;
+    private final ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter;
+    private final ActorRef<SirenActor.StateSnapshot> sirenStateAdapter;
+    private final Duration exitDelay;
+    private final Duration entryDelay;
+
+    private Step step = Step.START;
+    private String pendingControlLabel = "";
+    private String pendingSirenLabel = "";
+
+    public static Behavior<Command> create(AlarmConfiguration configuration) {
+        Objects.requireNonNull(configuration, "configuration");
+
+        return Behaviors.setup(context -> Behaviors.withTimers(timers -> {
+            ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter =
+                    context.messageAdapter(ControlUnitActor.StateSnapshot.class, ControlStateObserved::new);
+            ActorRef<SirenActor.StateSnapshot> sirenStateAdapter =
+                    context.messageAdapter(SirenActor.StateSnapshot.class, SirenStateObserved::new);
+
+            ActorRef<SirenActor.Command> siren = context.spawn(SirenActor.create(), "siren");
+            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
+                    ControlUnitActor.create(
+                            configuration.correctPin(),
+                            configuration.exitDelay(),
+                            configuration.entryDelay(),
+                            siren
+                    ),
+                    "control-unit"
+            );
+            ActorRef<KeypadActor.Command> keypad = context.spawn(KeypadActor.create(controlUnit), "keypad");
+            ActorRef<SensorActor.Command> sensor = context.spawn(
+                    SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, "Perimeter", controlUnit),
+                    "front-door-sensor"
+            );
+
+            DemoScenarioActor actor = new DemoScenarioActor(
+                    context,
+                    timers,
+                    keypad,
+                    sensor,
+                    controlUnit,
+                    siren,
+                    controlStateAdapter,
+                    sirenStateAdapter,
+                    configuration.exitDelay(),
+                    configuration.entryDelay()
+            );
+            return actor;
+        }));
+    }
+
+    private DemoScenarioActor(
+            ActorContext<Command> context,
+            TimerScheduler<Command> timers,
+            ActorRef<KeypadActor.Command> keypad,
+            ActorRef<SensorActor.Command> sensor,
+            ActorRef<ControlUnitActor.Command> controlUnit,
+            ActorRef<SirenActor.Command> siren,
+            ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter,
+            ActorRef<SirenActor.StateSnapshot> sirenStateAdapter,
+            Duration exitDelay,
+            Duration entryDelay
+    ) {
+        super(context);
+        this.timers = timers;
+        this.keypad = keypad;
+        this.sensor = sensor;
+        this.controlUnit = controlUnit;
+        this.siren = siren;
+        this.controlStateAdapter = controlStateAdapter;
+        this.sirenStateAdapter = sirenStateAdapter;
+        this.exitDelay = exitDelay;
+        this.entryDelay = entryDelay;
+    }
+
+    @Override
+    public Receive<Command> createReceive() {
+        return newReceiveBuilder()
+                .onMessage(Start.class, this::onStart)
+                .onMessage(Advance.class, this::onAdvance)
+                .onMessage(ControlStateObserved.class, this::onControlStateObserved)
+                .onMessage(SirenStateObserved.class, this::onSirenStateObserved)
+                .build();
+    }
+
+    private Behavior<Command> onStart(Start command) {
+        getContext().getLog().info("Demo step 1: system starts in DISARMED");
+        queryState("initial state");
+        getContext().getLog().info("Demo step 2: correct PIN is submitted through KeypadActor");
+        pressPin("1234");
+        queryState("after correct PIN submission");
+        step = Step.AFTER_PIN;
+        timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+        return this;
+    }
+
+    private Behavior<Command> onAdvance(Advance command) {
+        switch (step) {
+            case AFTER_PIN -> {
+                getContext().getLog().info("Demo step 4: sensor event during EXIT_DELAY is ignored");
+                sensor.tell(new SensorActor.Activate());
+                queryState("after sensor activation during EXIT_DELAY");
+                step = Step.AFTER_EXIT_DELAY;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), exitDelay.plus(STEP_GAP));
+            }
+            case AFTER_EXIT_DELAY -> {
+                getContext().getLog().info("Demo step 5: system automatically enters ARMED");
+                queryState("after exit-delay expiration");
+                getContext().getLog().info("Demo step 6: a sensor is activated");
+                sensor.tell(new SensorActor.Activate());
+                queryState("after armed sensor activation");
+                step = Step.AFTER_SENSOR_IN_ARMED;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+            }
+            case AFTER_SENSOR_IN_ARMED -> {
+                getContext().getLog().info("Demo step 7: system enters ENTRY_DELAY");
+                queryState("during entry delay");
+                getContext().getLog().info("Demo step 8: entry delay expires");
+                step = Step.AFTER_ENTRY_DELAY;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), entryDelay.plus(STEP_GAP));
+            }
+            case AFTER_ENTRY_DELAY -> {
+                queryState("after entry-delay expiration");
+                querySirenState("alarm active");
+                getContext().getLog().info("Demo step 9: system enters ALARM and activates the siren");
+                getContext().getLog().info("Demo step 10: correct PIN is submitted");
+                pressPin("1234");
+                queryState("after correct PIN in alarm");
+                querySirenState("after correct PIN in alarm");
+                step = Step.AFTER_DISARM;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+            }
+            case AFTER_DISARM -> {
+                queryState("after disarm");
+                querySirenState("after disarm");
+                getContext().getLog().info("Demo step 11: system returns to DISARMED and the siren deactivates");
+                step = Step.STOPPING;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), FINAL_GRACE);
+            }
+            case STOPPING -> {
+                getContext().getLog().info("Demo complete: stopping the actor system");
+                return Behaviors.stopped();
+            }
+            case START -> {
+                return this;
+            }
+        }
+
+        return this;
+    }
+
+    private Behavior<Command> onControlStateObserved(ControlStateObserved observed) {
+        getContext().getLog().info(
+                "Control unit reports {}: {}",
+                pendingControlLabel,
+                observed.snapshot().state()
+        );
+        return this;
+    }
+
+    private Behavior<Command> onSirenStateObserved(SirenStateObserved observed) {
+        getContext().getLog().info(
+                "Siren reports {}: {}",
+                pendingSirenLabel,
+                observed.snapshot().active() ? "ACTIVE" : "INACTIVE"
+        );
+        return this;
+    }
+
+    private void queryState(String label) {
+        pendingControlLabel = label;
+        controlUnit.tell(new ControlUnitActor.QueryState(controlStateAdapter));
+    }
+
+    private void querySirenState(String label) {
+        pendingSirenLabel = label;
+        siren.tell(new SirenActor.QueryState(sirenStateAdapter));
+    }
+
+    private void pressPin(String pin) {
+        for (char character : pin.toCharArray()) {
+            keypad.tell(new KeypadActor.PressKey(character));
+        }
+        keypad.tell(new KeypadActor.PressKey('#'));
+    }
+}

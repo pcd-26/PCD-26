@@ -10,6 +10,6 @@ class MainTest {
 
     @Test
     void mainStartsAndTerminatesActorSystem() {
-        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> Main.main(new String[0]));
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> Main.main(new String[0]));
     }
 }
