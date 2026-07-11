@@ -39,7 +39,7 @@ func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]
 	matchCount := len(players) / 2
 	// The coordinator owns this channel and receives exactly one outcome per match.
 	// It is intentionally never closed: the coordinator already knows the exact message count.
-	outcomes := make(chan matchOutcome, matchCount)
+	outcomes := make(chan matchOutcome)
 
 	for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
 		matchNumber := matchIndex + 1
