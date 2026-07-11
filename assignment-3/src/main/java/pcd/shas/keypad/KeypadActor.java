@@ -1,4 +1,4 @@
-package pcd.assignment3.shas.keypad;
+package pcd.shas.keypad;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -6,14 +6,13 @@ import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
-import pcd.assignment3.shas.controlunit.ControlUnitActor;
 
 import java.util.HashSet;
 import java.util.Set;
 
 /**
  * An actor representing the user keypad for arming, disarming, and stopping the alarm.
- * It accumulates keystrokes, manages zone selection, and forwards submitted PINs to the Control Unit.
+ * It accumulates keystrokes, manages zone selection, and forwards submitted PINs to the configured listener.
  */
 public class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
 
@@ -58,23 +57,23 @@ public class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
      */
     public record PinRejected() implements Command {}
 
-    private final ActorRef<ControlUnitActor.Command> controlUnit;
+    private final ActorRef<PinSubmitted> listener;
     private final StringBuilder pinBuffer = new StringBuilder();
     private final Set<String> selectedZones = new HashSet<>();
 
     /**
      * Factory method to create a KeypadActor behavior.
      *
-     * @param controlUnit the central control unit actor reference
+     * @param listener the keypad submission event listener (e.g., adapted Control Unit)
      * @return the behavior of the KeypadActor
      */
-    public static Behavior<Command> create(ActorRef<ControlUnitActor.Command> controlUnit) {
-        return Behaviors.setup(context -> new KeypadActor(context, controlUnit));
+    public static Behavior<Command> create(ActorRef<PinSubmitted> listener) {
+        return Behaviors.setup(context -> new KeypadActor(context, listener));
     }
 
-    private KeypadActor(ActorContext<Command> context, ActorRef<ControlUnitActor.Command> controlUnit) {
+    private KeypadActor(ActorContext<Command> context, ActorRef<PinSubmitted> listener) {
         super(context);
-        this.controlUnit = controlUnit;
+        this.listener = listener;
     }
 
     @Override
@@ -156,9 +155,9 @@ public class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
             System.out.println("Keypad DISPLAY: [NO PIN ENTERED]");
             return;
         }
-        getContext().getLog().info("Submitting PIN code to control unit...");
+        getContext().getLog().info("Submitting PIN code to listener...");
         // Pass a copy of the selected zones
         Set<String> zonesToArm = new HashSet<>(selectedZones);
-        controlUnit.tell(new ControlUnitActor.KeypadPinEntered(enteredPin, zonesToArm, getContext().getSelf()));
+        listener.tell(new PinSubmitted(enteredPin, zonesToArm, getContext().getSelf()));
     }
 }

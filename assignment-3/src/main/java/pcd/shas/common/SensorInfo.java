@@ -1,4 +1,4 @@
-package pcd.assignment3.shas.common;
+package pcd.shas.common;
 
 /**
  * An immutable record representing the configuration and metadata of a sensor.
