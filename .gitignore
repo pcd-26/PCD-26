@@ -27,3 +27,8 @@ benchmarks/results/
 .DS_Store
 Thumbs.db
 *.log
+
+# Go build artifacts
+**/hotc
+**/*.exe
+
