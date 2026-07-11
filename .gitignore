@@ -29,3 +29,7 @@ Thumbs.db
 *.log
 
 */report.pdf
+# Go build artifacts
+**/hotc
+**/*.exe
+
