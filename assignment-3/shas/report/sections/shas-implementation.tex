@@ -1,0 +1,47 @@
+\section{Smart Home Alarm Implementation}
+
+\subsection{Actor Responsibilities}
+The smart home alarm is split into small typed actors with a clear ownership model.
+The control unit owns the alarm state machine, the configured PIN, and the delay timers.
+The siren actor owns only its on/off state.
+The keypad actor collects local key presses and forwards PIN submissions without validation.
+The sensor actor is reusable and forwards activations for motion and door/window sensors.
+
+\subsection{Typed Message Protocols}
+Each actor exposes a dedicated typed protocol.
+The control unit accepts PIN submissions, sensor activations, and internal timeout messages.
+The keypad accepts key presses and direct PIN submissions.
+The sensor accepts activation messages.
+The siren accepts activate, deactivate, and status-query messages for tests and demo code.
+
+\subsection{State Machine and Timers}
+The control unit state machine follows five states: \textit{DISARMED}, \textit{EXIT\_DELAY}, \textit{ARMED}, \textit{ENTRY\_DELAY}, and \textit{ALARM}.
+The configured PIN arms and disarms the system according to the current state.
+Entering \textit{EXIT\_DELAY} starts a single exit-delay timer, and entering \textit{ENTRY\_DELAY} starts a single entry-delay timer.
+Timeout expiration is delivered as a normal actor message, and obsolete timers are cancelled when the actor leaves the timed state.
+
+\subsection{Stale Timeouts}
+Timeout messages are ignored unless they match the current state.
+This keeps the behavior deterministic even if a timeout message arrives after a state change.
+The tests exercise this case directly by injecting timeout messages into the control unit protocol.
+
+\subsection{Siren Integration}
+The siren is activated only when the control unit enters \textit{ALARM}.
+It is deactivated when the control unit returns to \textit{DISARMED}.
+Repeated activate and deactivate messages are idempotent.
+
+\subsection{Shared State}
+The implementation does not use shared mutable state.
+Each actor owns its own state and communicates exclusively through message passing.
+This makes the behavior easy to test and keeps the demo deterministic.
+
+\subsection{Build and Run}
+The project uses Java 21 and Maven.
+Build the project with \texttt{mvn -f assignment-3/shas/pom.xml compile}.
+Run the automated tests with \texttt{mvn -f assignment-3/shas/pom.xml test}.
+Run the demonstration with \texttt{mvn -f assignment-3/shas/pom.xml exec:java}.
+
+\subsection{Design Decisions}
+The implementation favors small actors over a monolithic controller.
+Configuration is loaded from the standard Typesafe Config mechanism so tests can override values without editing production files.
+The runnable demo uses short timer overrides to show the whole scenario quickly while leaving the production defaults unchanged.
