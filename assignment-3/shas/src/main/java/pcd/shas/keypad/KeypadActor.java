@@ -6,158 +6,91 @@ import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
+import pcd.shas.controlunit.ControlUnitActor;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Objects;
 
 /**
- * An actor representing the user keypad for arming, disarming, and stopping the alarm.
- * It accumulates keystrokes, manages zone selection, and forwards submitted PINs to the configured listener.
+ * Typed keypad actor that collects local PIN input and forwards submissions to the control unit.
  */
-public class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
+public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
 
     /**
-     * Interface for all commands accepted by the KeypadActor.
+     * Root protocol for the keypad.
      */
     public interface Command {}
 
     /**
-     * Simulates pressing a single character key on the keypad.
-     * Use digits '0'-'9', '#' to submit PIN, and '*' to clear the PIN buffer.
+     * Simulates pressing a single keypad key.
      */
     public record PressKey(char key) implements Command {}
 
     /**
-     * Simulates directly submitting a full PIN string (useful for testing or direct CLI).
+     * Simulates direct submission of a PIN.
      */
-    public record DirectPinSubmit(String pin) implements Command {}
-
-    /**
-     * Command to select a zone for partial arming.
-     */
-    public record SelectZone(String zone) implements Command {}
-
-    /**
-     * Command to deselect a zone.
-     */
-    public record DeselectZone(String zone) implements Command {}
-
-    /**
-     * Command to clear all zone selections.
-     */
-    public record ClearZoneSelection() implements Command {}
-
-    /**
-     * Response from the Control Unit indicating the PIN was correct and accepted.
-     */
-    public record PinAccepted() implements Command {}
-
-    /**
-     * Response from the Control Unit indicating the PIN was incorrect.
-     */
-    public record PinRejected() implements Command {}
-
-    private final ActorRef<PinSubmitted> listener;
-    private final StringBuilder pinBuffer = new StringBuilder();
-    private final Set<String> selectedZones = new HashSet<>();
-
-    /**
-     * Factory method to create a KeypadActor behavior.
-     *
-     * @param listener the keypad submission event listener (e.g., adapted Control Unit)
-     * @return the behavior of the KeypadActor
-     */
-    public static Behavior<Command> create(ActorRef<PinSubmitted> listener) {
-        return Behaviors.setup(context -> new KeypadActor(context, listener));
+    public record SubmitPin(String pin) implements Command {
+        public SubmitPin {
+            Objects.requireNonNull(pin, "pin");
+        }
     }
 
-    private KeypadActor(ActorContext<Command> context, ActorRef<PinSubmitted> listener) {
+    private final ActorRef<ControlUnitActor.Command> controlUnit;
+    private final StringBuilder pinBuffer = new StringBuilder();
+
+    /**
+     * Creates a keypad actor that forwards submissions to the provided control unit.
+     *
+     * @param controlUnit the control unit actor
+     * @return the keypad behavior
+     */
+    public static Behavior<Command> create(ActorRef<ControlUnitActor.Command> controlUnit) {
+        Objects.requireNonNull(controlUnit, "controlUnit");
+        return Behaviors.setup(context -> new KeypadActor(context, controlUnit));
+    }
+
+    private KeypadActor(ActorContext<Command> context, ActorRef<ControlUnitActor.Command> controlUnit) {
         super(context);
-        this.listener = listener;
+        this.controlUnit = controlUnit;
     }
 
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
                 .onMessage(PressKey.class, this::onPressKey)
-                .onMessage(DirectPinSubmit.class, this::onDirectPinSubmit)
-                .onMessage(SelectZone.class, this::onSelectZone)
-                .onMessage(DeselectZone.class, this::onDeselectZone)
-                .onMessage(ClearZoneSelection.class, this::onClearZoneSelection)
-                .onMessage(PinAccepted.class, this::onPinAccepted)
-                .onMessage(PinRejected.class, this::onPinRejected)
+                .onMessage(SubmitPin.class, this::onSubmitPin)
                 .build();
     }
 
-    private Behavior<Command> onPressKey(PressKey cmd) {
-        char key = cmd.key();
-        if (key == '#') {
-            submitPin();
-        } else if (key == '*') {
-            pinBuffer.setLength(0);
-            getContext().getLog().info("Keypad buffer cleared.");
-            System.out.println("Keypad: [Buffer cleared]");
-        } else if (Character.isDigit(key)) {
+    private Behavior<Command> onPressKey(PressKey command) {
+        char key = command.key();
+        if (Character.isDigit(key)) {
             pinBuffer.append(key);
-            String masked = "*".repeat(pinBuffer.length());
-            getContext().getLog().info("Keypad key pressed: {}, current: {}", key, masked);
-            System.out.println("Keypad: " + masked);
-        } else {
-            getContext().getLog().warn("Invalid key pressed on keypad: {}", key);
+            return this;
         }
+
+        if (key == '#') {
+            submitBufferedPin();
+            return this;
+        }
+
+        if (key == '*') {
+            pinBuffer.setLength(0);
+        }
+
         return this;
     }
 
-    private Behavior<Command> onDirectPinSubmit(DirectPinSubmit cmd) {
-        pinBuffer.setLength(0);
-        pinBuffer.append(cmd.pin());
-        submitPin();
+    private Behavior<Command> onSubmitPin(SubmitPin command) {
+        controlUnit.tell(new ControlUnitActor.PinSubmitted(command.pin()));
         return this;
     }
 
-    private Behavior<Command> onSelectZone(SelectZone cmd) {
-        selectedZones.add(cmd.zone());
-        getContext().getLog().info("Zone selected: {}", cmd.zone());
-        System.out.println("Keypad: Selected zone '" + cmd.zone() + "'. Active selections: " + selectedZones);
-        return this;
-    }
-
-    private Behavior<Command> onDeselectZone(DeselectZone cmd) {
-        selectedZones.remove(cmd.zone());
-        getContext().getLog().info("Zone deselected: {}", cmd.zone());
-        System.out.println("Keypad: Deselected zone '" + cmd.zone() + "'. Active selections: " + selectedZones);
-        return this;
-    }
-
-    private Behavior<Command> onClearZoneSelection(ClearZoneSelection cmd) {
-        selectedZones.clear();
-        getContext().getLog().info("Zone selection cleared.");
-        System.out.println("Keypad: Zone selections cleared (will arm all zones).");
-        return this;
-    }
-
-    private Behavior<Command> onPinAccepted(PinAccepted cmd) {
-        getContext().getLog().info("PIN verification succeeded!");
-        System.out.println("\nKeypad DISPLAY: [PIN ACCEPTED]\n");
-        return this;
-    }
-
-    private Behavior<Command> onPinRejected(PinRejected cmd) {
-        getContext().getLog().warn("PIN verification failed!");
-        System.out.println("\nKeypad DISPLAY: [ACCESS DENIED - INCORRECT PIN]\n");
-        return this;
-    }
-
-    private void submitPin() {
-        String enteredPin = pinBuffer.toString();
-        pinBuffer.setLength(0); // clear the buffer after submitting
-        if (enteredPin.isEmpty()) {
-            System.out.println("Keypad DISPLAY: [NO PIN ENTERED]");
+    private void submitBufferedPin() {
+        if (pinBuffer.isEmpty()) {
             return;
         }
-        getContext().getLog().info("Submitting PIN code to listener...");
-        // Pass a copy of the selected zones
-        Set<String> zonesToArm = new HashSet<>(selectedZones);
-        listener.tell(new PinSubmitted(enteredPin, zonesToArm, getContext().getSelf()));
+
+        controlUnit.tell(new ControlUnitActor.PinSubmitted(pinBuffer.toString()));
+        pinBuffer.setLength(0);
     }
 }

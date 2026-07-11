@@ -7,55 +7,92 @@ import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import pcd.shas.common.SensorInfo;
+import pcd.shas.common.SensorType;
+import pcd.shas.controlunit.ControlUnitActor;
 
-import java.time.Instant;
+import java.util.Objects;
 
 /**
- * An actor representing a physical sensor in the smart home alarm system.
- * It receives simulated triggers and forwards them to the configured listener.
+ * Typed reusable sensor actor that forwards activations to the control unit.
  */
-public class SensorActor extends AbstractBehavior<SensorActor.Command> {
+public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
     /**
-     * Interface for all commands accepted by the SensorActor.
+     * Root protocol for the sensor.
      */
     public interface Command {}
 
     /**
-     * Message representing a simulated trigger event (e.g., motion detected or door opened).
+     * Simulates a physical activation of the sensor.
      */
-    public record Trigger() implements Command {}
+    public record Activate() implements Command {}
 
-    private final SensorInfo info;
-    private final ActorRef<SensorEvent> listener;
+    private final String sensorId;
+    private final SensorType sensorType;
+    private final String zone;
+    private final ActorRef<ControlUnitActor.Command> controlUnit;
 
     /**
-     * Factory method to create a SensorActor behavior.
+     * Creates a reusable sensor actor.
      *
-     * @param info     the metadata of the sensor
-     * @param listener the reference to the sensor event listener (e.g., adapted Control Unit)
-     * @return the behavior of the SensorActor
+     * @param sensorId unique sensor identifier
+     * @param sensorType sensor type
+     * @param zone installation zone
+     * @param controlUnit control unit actor
+     * @return the sensor behavior
      */
-    public static Behavior<Command> create(SensorInfo info, ActorRef<SensorEvent> listener) {
-        return Behaviors.setup(context -> new SensorActor(context, info, listener));
+    public static Behavior<Command> create(
+            String sensorId,
+            SensorType sensorType,
+            String zone,
+            ActorRef<ControlUnitActor.Command> controlUnit
+    ) {
+        validate(sensorId, sensorType, zone, controlUnit);
+        return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, zone, controlUnit));
     }
 
-    private SensorActor(ActorContext<Command> context, SensorInfo info, ActorRef<SensorEvent> listener) {
+    private SensorActor(
+            ActorContext<Command> context,
+            String sensorId,
+            SensorType sensorType,
+            String zone,
+            ActorRef<ControlUnitActor.Command> controlUnit
+    ) {
         super(context);
-        this.info = info;
-        this.listener = listener;
+        this.sensorId = sensorId;
+        this.sensorType = sensorType;
+        this.zone = zone;
+        this.controlUnit = controlUnit;
     }
 
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(Trigger.class, this::onTrigger)
+                .onMessage(Activate.class, this::onActivate)
                 .build();
     }
 
-    private Behavior<Command> onTrigger(Trigger trigger) {
-        getContext().getLog().info("Sensor '{}' (Type: {}, Zone: {}) was triggered!", info.id(), info.type(), info.zone());
-        listener.tell(new SensorEvent(info, Instant.now()));
+    private Behavior<Command> onActivate(Activate command) {
+        getContext().getLog().info(
+                "Sensor activated: id={}, type={}, zone={}",
+                sensorId,
+                sensorType,
+                zone
+        );
+        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo(sensorId, sensorType, zone)));
         return this;
+    }
+
+    private static void validate(String sensorId, SensorType sensorType, String zone, ActorRef<ControlUnitActor.Command> controlUnit) {
+        Objects.requireNonNull(sensorId, "sensorId");
+        Objects.requireNonNull(sensorType, "sensorType");
+        Objects.requireNonNull(zone, "zone");
+        Objects.requireNonNull(controlUnit, "controlUnit");
+        if (sensorId.isBlank()) {
+            throw new IllegalArgumentException("sensorId cannot be blank");
+        }
+        if (zone.isBlank()) {
+            throw new IllegalArgumentException("zone cannot be blank");
+        }
     }
 }
