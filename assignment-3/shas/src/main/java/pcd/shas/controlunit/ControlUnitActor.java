@@ -77,9 +77,9 @@ public final class ControlUnitActor {
         }
     }
 
-    private record ExitDelayTimeout() implements Command {}
+    record ExitDelayTimeout() implements Command {}
 
-    private record EntryDelayTimeout() implements Command {}
+    record EntryDelayTimeout() implements Command {}
 
     /**
      * Creates the control unit with default delay durations.
