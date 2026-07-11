@@ -1,9 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"os"
 
-const applicationName = "Heads-or-Tails Championship"
+	"hotc/championship"
+)
 
 func main() {
-	fmt.Println(applicationName)
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, championship.NewRandomCoinTosserFactory()))
 }
