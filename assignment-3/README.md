@@ -11,8 +11,47 @@ The assignment is about concurrent programming based on message passing, synchro
 
 - [Description](https://github.com/nicolasfara/seminar-pcd-actor-pekko-code/blob/master/assignment_3_smart_home_alarm.md) by N. Farabegoli
 - [Description local file](assignment_3_smart_home_alarm.md)
-- To be implemented using Apache Pekko, used as reference framework in lab 
-  - alternatively, you may use any other actor-based framework or platform: in that case, ask teachers before proceeding
+- **Implementation Status:** Completed using **Apache Pekko** (Typed Actor model) in Java, including the **Bonus part** (Zone-Based Control and Partial Arming).
+
+#### Key Components and Architecture
+The system consists of the following typed actors under package `pcd.shas`:
+1. [ControlUnitActor](src/main/java/pcd/shas/controlunit/ControlUnitActor.java): The central FSM controller. It maintains the current state (Disarmed, Exit Delay, Armed, Entry Delay, Alarm) and active zones.
+2. [KeypadActor](src/main/java/pcd/shas/keypad/KeypadActor.java): Accumulates keypad character entries (`0-9`), supports clearing (`*`), submitting (`#`), and zone selection/deselection for partial arming.
+3. [SensorActor](src/main/java/pcd/shas/sensor/SensorActor.java): Simulates peripheral sensors (motion detectors and door/window sensors) assigned to specific zones.
+4. [SirenActor](src/main/java/pcd/shas/siren/SirenActor.java): Simulates the alarm siren.
+
+#### FSM State Transitions
+```mermaid
+stateDiagram-v2
+    [*] --> DISARMED
+    
+    DISARMED --> EXIT_DELAY : Correct PIN entered (Full or Partial)
+    EXIT_DELAY --> DISARMED : Correct PIN entered (Cancel)
+    EXIT_DELAY --> ARMED : Exit Delay Timeout
+
+    ARMED --> DISARMED : Correct PIN entered
+    ARMED --> ENTRY_DELAY : Sensor triggered in active zone
+
+    ENTRY_DELAY --> DISARMED : Correct PIN entered
+    ENTRY_DELAY --> ALARM : Entry Delay Timeout
+
+    ALARM --> DISARMED : Correct PIN entered
+```
+
+#### Build and Execution Commands
+- **Compile:**
+  ```bash
+  mvn -f assignment-3/pom.xml compile
+  ```
+- **Run Tests:**
+  ```bash
+  mvn -f assignment-3/pom.xml test
+  ```
+- **Run Simulator (Interactive CLI):**
+  ```bash
+  mvn -f assignment-3/pom.xml exec:java -Dexec.mainClass="pcd.shas.Main"
+  ```
+
 
 ### Exercise #2 - *Heads-or-Tails Championship*
 
