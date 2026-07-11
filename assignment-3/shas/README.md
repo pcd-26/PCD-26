@@ -9,8 +9,9 @@ Smart Home Alarm System implemented in Java with Apache Pekko.
 This project is the initial Apache Pekko Typed setup for assignment 3.
 
 The source tree now defines the smart-home alarm domain model and the typed
-control-unit protocol under `pcd.shas`, while the bootstrap entry point
-remains minimal: it creates an actor system and shuts it down immediately.
+control-unit actor under `pcd.shas`, including configurable exit-delay and
+entry-delay timers. The bootstrap entry point remains minimal: it creates an
+actor system and shuts it down immediately.
 
 ## Build and Test
 

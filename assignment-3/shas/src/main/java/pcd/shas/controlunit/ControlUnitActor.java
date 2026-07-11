@@ -10,7 +10,6 @@ import pcd.shas.common.SensorInfo;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Control unit for the smart home alarm system.
@@ -54,16 +53,6 @@ public final class ControlUnitActor {
             Objects.requireNonNull(sensorInfo, "sensorInfo");
         }
     }
-
-    /**
-     * External request indicating that the exit delay has elapsed.
-     */
-    public record ExitDelayExpired() implements Command {}
-
-    /**
-     * External request indicating that the entry delay has elapsed.
-     */
-    public record EntryDelayExpired() implements Command {}
 
     /**
      * Query for the current alarm state, used by tests.
@@ -152,8 +141,6 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayExpired.class, message -> Behaviors.same())
-                .onMessage(EntryDelayExpired.class, message -> Behaviors.same())
                 .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(QueryState.class, message -> {
@@ -172,6 +159,12 @@ public final class ControlUnitActor {
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(PinSubmitted.class, message -> {
+                    if (configuredPin.equals(message.pin())) {
+                        timers.cancel(EXIT_DELAY_TIMER_KEY);
+                        context.getLog().info("Transition EXIT_DELAY -> DISARMED");
+                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                    }
+
                     context.getLog().info("Ignoring PIN submission while EXIT_DELAY is active");
                     return Behaviors.same();
                 })
@@ -184,12 +177,6 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayExpired.class, message -> {
-                    timers.cancel(EXIT_DELAY_TIMER_KEY);
-                    context.getLog().info("Transition EXIT_DELAY -> ARMED");
-                    return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
-                })
-                .onMessage(EntryDelayExpired.class, message -> Behaviors.same())
                 .onMessage(ExitDelayTimeout.class, message -> {
                     timers.cancel(EXIT_DELAY_TIMER_KEY);
                     context.getLog().info("Transition EXIT_DELAY -> ARMED");
@@ -231,8 +218,6 @@ public final class ControlUnitActor {
                     timers.startSingleTimer(ENTRY_DELAY_TIMER_KEY, new EntryDelayTimeout(), entryDelayDuration);
                     return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
                 })
-                .onMessage(ExitDelayExpired.class, message -> Behaviors.same())
-                .onMessage(EntryDelayExpired.class, message -> Behaviors.same())
                 .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(QueryState.class, message -> {
@@ -269,18 +254,12 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayExpired.class, message -> Behaviors.same())
-                .onMessage(EntryDelayExpired.class, message -> {
-                    timers.cancel(ENTRY_DELAY_TIMER_KEY);
-                    context.getLog().info("Transition ENTRY_DELAY -> ALARM");
-                    return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
-                })
-                .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(EntryDelayTimeout.class, message -> {
                     timers.cancel(ENTRY_DELAY_TIMER_KEY);
                     context.getLog().info("Transition ENTRY_DELAY -> ALARM");
                     return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
                 })
+                .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.ENTRY_DELAY));
                     return Behaviors.same();
@@ -314,8 +293,6 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayExpired.class, message -> Behaviors.same())
-                .onMessage(EntryDelayExpired.class, message -> Behaviors.same())
                 .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(QueryState.class, message -> {
