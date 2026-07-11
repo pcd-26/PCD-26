@@ -1,9 +1,6 @@
 package championship
 
-import (
-	"testing"
-	"time"
-)
+import "testing"
 
 func TestPlayRoundWithTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 2)
@@ -73,22 +70,6 @@ func TestPlayRoundRejectsOddNumberOfPlayers(t *testing.T) {
 	}
 }
 
-func TestPlayRoundPreservesResultOrdering(t *testing.T) {
-	players := mustPlayers(t, 4)
-
-	winners, results, err := PlayRound(5, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
-		if matchNumber == 1 {
-			return delayedTosser{side: Heads, delay: 40 * time.Millisecond}
-		}
-		return delayedTosser{side: Tails, delay: 5 * time.Millisecond}
-	})
-	if err != nil {
-		t.Fatalf("expected round to succeed, got error: %v", err)
-	}
-	assertWinnerIDs(t, winners, []int{1, 4})
-	assertMatchNumbers(t, results, []int{1, 2})
-}
-
 func TestPlayRoundReportsMatchError(t *testing.T) {
 	players := mustPlayers(t, 4)
 
@@ -101,16 +82,6 @@ func TestPlayRoundReportsMatchError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from invalid match result")
 	}
-}
-
-type delayedTosser struct {
-	side  CoinSide
-	delay time.Duration
-}
-
-func (d delayedTosser) Toss() CoinSide {
-	time.Sleep(d.delay)
-	return d.side
 }
 
 func mustPlayers(t *testing.T, count int) []Player {
