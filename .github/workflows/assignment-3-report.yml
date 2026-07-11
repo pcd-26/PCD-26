@@ -20,7 +20,7 @@ jobs:
           sudo apt-get install -y texlive-latex-base zip unzip
 
       - name: Build report
-        working-directory: assignment-3/report
+        working-directory: assignment-3/shas/report
         run: make
 
       - name: Prepare delivery metadata
@@ -43,7 +43,7 @@ jobs:
           rm -rf package "$DELIVERY_ZIP"
           mkdir -p package/Assignment-03/doc
 
-          cp assignment-3/report/report.pdf package/Assignment-03/doc/report.pdf
+          cp assignment-3/shas/report/report.pdf package/Assignment-03/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-03)
 
