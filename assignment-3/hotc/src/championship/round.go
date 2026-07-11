@@ -37,8 +37,9 @@ func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]
 	}
 
 	matchCount := len(players) / 2
+	// The coordinator owns this channel and receives exactly one outcome per match.
+	// It is intentionally never closed: the coordinator already knows the exact message count.
 	outcomes := make(chan matchOutcome, matchCount)
-	defer close(outcomes)
 
 	for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
 		matchNumber := matchIndex + 1
@@ -47,6 +48,7 @@ func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]
 		tosser := tosserFactory(round, matchNumber, firstPlayer, secondPlayer)
 
 		go func(matchIndex, matchNumber int, firstPlayer, secondPlayer Player, tosser CoinTosser) {
+			// Each match goroutine sends exactly one outcome to the coordinator.
 			if tosser == nil {
 				outcomes <- matchOutcome{matchIndex: matchIndex, err: fmt.Errorf("coin tosser must not be nil")}
 				return

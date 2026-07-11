@@ -17,14 +17,14 @@ type RandomCoinTosser struct {
 }
 
 // NewRandomCoinTosser creates an independent random toss generator.
-func NewRandomCoinTosser() RandomCoinTosser {
-	return RandomCoinTosser{
+func NewRandomCoinTosser() *RandomCoinTosser {
+	return &RandomCoinTosser{
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
 // Toss returns a random coin side.
-func (r RandomCoinTosser) Toss() CoinSide {
+func (r *RandomCoinTosser) Toss() CoinSide {
 	if r.rng.Intn(2) == 0 {
 		return Heads
 	}
