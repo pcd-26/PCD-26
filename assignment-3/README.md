@@ -19,6 +19,10 @@ The assignment is about concurrent programming based on message passing, synchro
 The goal of the exercise is to design and implement in Go language a championship of `N` players playing a `Heads-or-Tails` game. The number of players `N` is equal to 2<sup>`m`</sup>, so that  the championship is organized in `m` rounds: at each round, games run concurrently and the winners goes to the next round, until the final round. For instance: with `m = 3`, we have 8 players, at the first round playing 4 games concurently; the 4 winners go on playing the next round, playing 2 games concurrently (i.e. the semi-finals); finally, the 2 winners play the final game and we have a winner. 
 - To be implemented in Go using an interaction model based on message passing
   - no shared memory is allowed
+- **Implementation path**: [assignment-3/src/main/go/pcd/hotc](file:///home/francesco/Documents/PCD-26/assignment-3/src/main/go/pcd/hotc)
+  - Run the program: `go run . -m <rounds>` (inside the implementation directory)
+  - Run tests: `go test -v ./...` (inside the implementation directory)
+
 
 
 ### The deliverable
