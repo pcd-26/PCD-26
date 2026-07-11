@@ -7,6 +7,7 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.TimerScheduler;
 import pcd.shas.common.AlarmState;
 import pcd.shas.common.SensorInfo;
+import pcd.shas.siren.SirenActor;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -84,10 +85,11 @@ public final class ControlUnitActor {
      * Creates the control unit with default delay durations.
      *
      * @param configuredPin the alarm PIN
+     * @param siren the typed siren actor
      * @return the typed behavior
      */
-    public static Behavior<Command> create(String configuredPin) {
-        return create(configuredPin, Duration.ofSeconds(5), Duration.ofSeconds(5));
+    public static Behavior<Command> create(String configuredPin, ActorRef<SirenActor.Command> siren) {
+        return create(configuredPin, Duration.ofSeconds(5), Duration.ofSeconds(5), siren);
     }
 
     /**
@@ -96,20 +98,23 @@ public final class ControlUnitActor {
      * @param configuredPin the alarm PIN
      * @param exitDelayDuration delay before the system becomes armed
      * @param entryDelayDuration delay before the system enters alarm after intrusion
+     * @param siren the typed siren actor
      * @return the typed behavior
      */
     public static Behavior<Command> create(
             String configuredPin,
             Duration exitDelayDuration,
-            Duration entryDelayDuration
+            Duration entryDelayDuration,
+            ActorRef<SirenActor.Command> siren
     ) {
         validateConfiguredPin(configuredPin);
         Objects.requireNonNull(exitDelayDuration, "exitDelayDuration");
         Objects.requireNonNull(entryDelayDuration, "entryDelayDuration");
+        Objects.requireNonNull(siren, "siren");
 
         return Behaviors.setup(context ->
                 Behaviors.withTimers(timers ->
-                        disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration)
+                        disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren)
                 )
         );
     }
@@ -119,14 +124,15 @@ public final class ControlUnitActor {
             TimerScheduler<Command> timers,
             String configuredPin,
             Duration exitDelayDuration,
-            Duration entryDelayDuration
+            Duration entryDelayDuration,
+            ActorRef<SirenActor.Command> siren
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         context.getLog().info("Transition DISARMED -> EXIT_DELAY");
                         timers.startSingleTimer(EXIT_DELAY_TIMER_KEY, new ExitDelayTimeout(), exitDelayDuration);
-                        return exitDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                        return exitDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                     }
 
                     context.getLog().info("Ignoring PIN submission while DISARMED");
@@ -155,14 +161,16 @@ public final class ControlUnitActor {
             TimerScheduler<Command> timers,
             String configuredPin,
             Duration exitDelayDuration,
-            Duration entryDelayDuration
+            Duration entryDelayDuration,
+            ActorRef<SirenActor.Command> siren
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         timers.cancel(EXIT_DELAY_TIMER_KEY);
                         context.getLog().info("Transition EXIT_DELAY -> DISARMED");
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                        siren.tell(new SirenActor.Deactivate());
+                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                     }
 
                     context.getLog().info("Ignoring PIN submission while EXIT_DELAY is active");
@@ -180,7 +188,7 @@ public final class ControlUnitActor {
                 .onMessage(ExitDelayTimeout.class, message -> {
                     timers.cancel(EXIT_DELAY_TIMER_KEY);
                     context.getLog().info("Transition EXIT_DELAY -> ARMED");
-                    return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                    return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                 })
                 .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(QueryState.class, message -> {
@@ -195,14 +203,16 @@ public final class ControlUnitActor {
             TimerScheduler<Command> timers,
             String configuredPin,
             Duration exitDelayDuration,
-            Duration entryDelayDuration
+            Duration entryDelayDuration,
+            ActorRef<SirenActor.Command> siren
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         context.getLog().info("Transition ARMED -> DISARMED");
                         timers.cancel(ENTRY_DELAY_TIMER_KEY);
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                        siren.tell(new SirenActor.Deactivate());
+                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                     }
 
                     context.getLog().info("Ignoring PIN submission while ARMED");
@@ -216,7 +226,7 @@ public final class ControlUnitActor {
                             message.sensorInfo().zone()
                     );
                     timers.startSingleTimer(ENTRY_DELAY_TIMER_KEY, new EntryDelayTimeout(), entryDelayDuration);
-                    return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                    return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                 })
                 .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
@@ -232,14 +242,16 @@ public final class ControlUnitActor {
             TimerScheduler<Command> timers,
             String configuredPin,
             Duration exitDelayDuration,
-            Duration entryDelayDuration
+            Duration entryDelayDuration,
+            ActorRef<SirenActor.Command> siren
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         timers.cancel(ENTRY_DELAY_TIMER_KEY);
                         context.getLog().info("Transition ENTRY_DELAY -> DISARMED");
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                        siren.tell(new SirenActor.Deactivate());
+                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                     }
 
                     context.getLog().info("Ignoring PIN submission while ENTRY_DELAY is active");
@@ -257,7 +269,8 @@ public final class ControlUnitActor {
                 .onMessage(EntryDelayTimeout.class, message -> {
                     timers.cancel(ENTRY_DELAY_TIMER_KEY);
                     context.getLog().info("Transition ENTRY_DELAY -> ALARM");
-                    return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                    siren.tell(new SirenActor.Activate());
+                    return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                 })
                 .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
                 .onMessage(QueryState.class, message -> {
@@ -272,13 +285,15 @@ public final class ControlUnitActor {
             TimerScheduler<Command> timers,
             String configuredPin,
             Duration exitDelayDuration,
-            Duration entryDelayDuration
+            Duration entryDelayDuration,
+            ActorRef<SirenActor.Command> siren
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         context.getLog().info("Transition ALARM -> DISARMED");
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration);
+                        siren.tell(new SirenActor.Deactivate());
+                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren);
                     }
 
                     context.getLog().info("Ignoring PIN submission while ALARM is active");

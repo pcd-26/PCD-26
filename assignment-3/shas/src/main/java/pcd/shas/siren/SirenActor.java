@@ -1,60 +1,89 @@
 package pcd.shas.siren;
 
+import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
-import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 
+import java.util.Objects;
+
 /**
- * An actor representing the physical siren in the smart home alarm system.
- * It changes state between sounding (activated) and silent (deactivated) based on AlertDevice commands.
+ * Typed siren actor for the alarm system.
  */
-public class SirenActor extends AbstractBehavior<AlertDevice.Command> implements AlertDevice {
+public final class SirenActor {
+
+    private SirenActor() {
+        // Utility class.
+    }
 
     /**
-     * Factory method to create a SirenActor behavior.
+     * Root protocol for the siren.
+     */
+    public interface Command {}
+
+    /**
+     * Turns the siren on.
+     */
+    public record Activate() implements Command {}
+
+    /**
+     * Turns the siren off.
+     */
+    public record Deactivate() implements Command {}
+
+    /**
+     * Query for the current siren state.
      *
-     * @return the behavior of the SirenActor
+     * @param replyTo actor that should receive the state snapshot
      */
-    public static Behavior<AlertDevice.Command> create() {
-        return Behaviors.setup(SirenActor::new);
-    }
-
-    private SirenActor(ActorContext<AlertDevice.Command> context) {
-        super(context);
-    }
-
-    @Override
-    public Receive<AlertDevice.Command> createReceive() {
-        return silent();
+    public record QueryState(ActorRef<StateSnapshot> replyTo) implements Command {
+        public QueryState {
+            Objects.requireNonNull(replyTo, "replyTo");
+        }
     }
 
     /**
-     * Behavior when the siren is silent.
+     * Snapshot of the current siren state.
+     *
+     * @param active whether the siren is currently on
      */
-    private Receive<AlertDevice.Command> silent() {
-        return newReceiveBuilder()
-                .onMessage(AlertDevice.Activate.class, cmd -> {
-                    getContext().getLog().warn("SIREN ACTIVATED: WUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU!");
-                    System.out.println("\n>>> [SIREN ON] WUUUUU WUUUUU WUUUUU <<<\n");
-                    return Behaviors.receive(AlertDevice.Command.class)
-                            .onMessage(AlertDevice.Deactivate.class, this::onDeactivateInActive)
-                            .onMessage(AlertDevice.Activate.class, this::onIgnore)
-                            .build();
+    public record StateSnapshot(boolean active) {}
+
+    /**
+     * Creates the typed siren behavior.
+     *
+     * @return the siren behavior
+     */
+    public static Behavior<Command> create() {
+        return Behaviors.setup(SirenActor::silent);
+    }
+
+    private static Behavior<Command> silent(ActorContext<Command> context) {
+        return Behaviors.receive(Command.class)
+                .onMessage(Activate.class, message -> {
+                    context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
+                    return active(context);
                 })
-                .onMessage(AlertDevice.Deactivate.class, this::onIgnore)
+                .onMessage(Deactivate.class, message -> Behaviors.same())
+                .onMessage(QueryState.class, message -> {
+                    message.replyTo().tell(new StateSnapshot(false));
+                    return Behaviors.same();
+                })
                 .build();
     }
 
-    private Behavior<AlertDevice.Command> onDeactivateInActive(AlertDevice.Deactivate cmd) {
-        getContext().getLog().info("Siren deactivated.");
-        System.out.println("\n>>> [SIREN OFF] Siren silenced. <<<\n");
-        return Behaviors.setup(SirenActor::new); // transition back to initial silent state
-    }
-
-    private Behavior<AlertDevice.Command> onIgnore(AlertDevice.Command cmd) {
-        // Ignore duplicate active state commands
-        return Behaviors.same();
+    private static Behavior<Command> active(ActorContext<Command> context) {
+        return Behaviors.receive(Command.class)
+                .onMessage(Activate.class, message -> Behaviors.same())
+                .onMessage(Deactivate.class, message -> {
+                    context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
+                    return silent(context);
+                })
+                .onMessage(QueryState.class, message -> {
+                    message.replyTo().tell(new StateSnapshot(true));
+                    return Behaviors.same();
+                })
+                .build();
     }
 }
