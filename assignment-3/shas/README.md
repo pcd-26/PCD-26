@@ -6,15 +6,11 @@ Smart Home Alarm System implemented in Java with Apache Pekko.
 
 ## Overview
 
-This project contains the first exercise of assignment 3: a concurrent alarm
-system based on typed actors.
+This project is the initial Apache Pekko Typed setup for assignment 3.
 
-The system is organized around these actors under `pcd.shas`:
-
-1. `ControlUnitActor`: central FSM controller with arming, delays, and alarm handling
-2. `KeypadActor`: collects keypad input and zone selections
-3. `SensorActor`: simulates physical sensors in configured zones
-4. `SirenActor`: simulates the siren device
+The source tree already contains the package structure that will host the
+future alarm-system actors under `pcd.shas`, but the bootstrap entry point is
+currently minimal: it creates an actor system and shuts it down immediately.
 
 ## Build and Test
 
@@ -25,7 +21,7 @@ mvn compile
 mvn test
 ```
 
-To run the CLI simulator:
+To run the current bootstrap entry point:
 
 ```bash
 mvn exec:java -Dexec.mainClass="pcd.shas.Main"
@@ -37,4 +33,3 @@ mvn exec:java -Dexec.mainClass="pcd.shas.Main"
 - `src/main/java`: production sources
 - `src/test/java`: tests
 - `report`: LaTeX source for the report
-
