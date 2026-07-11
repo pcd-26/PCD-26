@@ -29,6 +29,7 @@ Thumbs.db
 *.log
 
 # Go build artifacts
-**/hotc
+assignment-3/hotc/src/hotc
+assignment-3/hotc/src/hotc.exe
 **/*.exe
 
