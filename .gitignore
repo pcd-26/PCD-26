@@ -27,3 +27,5 @@ benchmarks/results/
 .DS_Store
 Thumbs.db
 *.log
+
+*/report.pdf

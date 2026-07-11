@@ -113,6 +113,9 @@ jobs:
           test ! -e package/Assignment-01/README.md
           test ! -e package/Assignment-01/board.png
           test ! -e package/Assignment-01/run.sh
+          test ! -e package/Assignment-01/test.sh
+          test ! -e package/Assignment-01/run.ps1
+          test ! -e package/Assignment-01/test.ps1
           test ! -e package/Assignment-01/requirements.txt
 
       - name: Upload delivery package
