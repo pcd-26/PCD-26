@@ -7,3 +7,10 @@ This repository splits assignment 3 into two separate subprojects:
 
 Each subdirectory contains its own scripts and project files.
 
+### The deliverable
+
+The deliverable must be a zipped folder `Assignment-03`, to be submitted on the course web site, including:
+- `src` directory with sources
+- `doc` directory with a short report in PDF (`report.pdf`). The report should include:
+    - A brief analysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
+    - A brief description of the strategy adopted

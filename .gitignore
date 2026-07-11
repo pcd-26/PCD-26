@@ -34,3 +34,5 @@ assignment-3/hotc/src/hotc.exe
 **/*.exe
 
 /assignment-3/hotc/src/.gocache
+
+*/report.pdf
