@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import pcd.shas.common.AlarmState;
 import pcd.shas.common.SensorInfo;
 import pcd.shas.common.SensorType;
+import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 import pcd.shas.siren.SirenActor;
 
@@ -92,7 +93,7 @@ class ControlUnitActorTest {
         manualTime.timePasses(Duration.ofSeconds(1));
         assertState(controlUnit, AlarmState.ARMED);
 
-        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, "Perimeter")));
+        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         assertState(controlUnit, AlarmState.ENTRY_DELAY);
 
         manualTime.timePasses(Duration.ofSeconds(1));
@@ -107,7 +108,7 @@ class ControlUnitActorTest {
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         manualTime.timePasses(Duration.ofSeconds(1));
-        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, "Perimeter")));
+        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         assertState(controlUnit, AlarmState.ENTRY_DELAY);
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
@@ -126,7 +127,7 @@ class ControlUnitActorTest {
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         manualTime.timePasses(Duration.ofSeconds(1));
-        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, "Perimeter")));
+        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         manualTime.timePasses(Duration.ofSeconds(1));
 
         assertState(controlUnit, AlarmState.ALARM);
@@ -145,7 +146,7 @@ class ControlUnitActorTest {
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         manualTime.timePasses(Duration.ofSeconds(1));
-        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, "Perimeter")));
+        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         manualTime.timePasses(Duration.ofSeconds(1));
         assertState(controlUnit, AlarmState.ALARM);
         sirenProbe.expectMessage(new SirenActor.Activate());

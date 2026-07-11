@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import pcd.shas.common.SensorInfo;
 import pcd.shas.common.SensorType;
+import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 import pcd.shas.sensor.SensorActor;
 
@@ -30,23 +31,23 @@ class SensorActorTest {
     @Test
     void motionSensorForwardsActivationToControlUnit() {
         TestProbe<ControlUnitActor.Command> controlUnitProbe = testKit.createTestProbe(ControlUnitActor.Command.class);
-        var sensor = testKit.spawn(SensorActor.create("living_room_motion", SensorType.MOTION, "Living Area", controlUnitProbe.getRef()));
+        var sensor = testKit.spawn(SensorActor.create("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA, controlUnitProbe.getRef()));
 
         sensor.tell(new SensorActor.Activate());
 
         ControlUnitActor.SensorActivated message = (ControlUnitActor.SensorActivated) controlUnitProbe.receiveMessage();
-        assertEquals(new SensorInfo("living_room_motion", SensorType.MOTION, "Living Area"), message.sensorInfo());
+        assertEquals(new SensorInfo("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA), message.sensorInfo());
         assertNotNull(message.sensorInfo());
     }
 
     @Test
     void doorWindowSensorForwardsActivationToControlUnit() {
         TestProbe<ControlUnitActor.Command> controlUnitProbe = testKit.createTestProbe(ControlUnitActor.Command.class);
-        var sensor = testKit.spawn(SensorActor.create("front_door", SensorType.DOOR_WINDOW, "Perimeter", controlUnitProbe.getRef()));
+        var sensor = testKit.spawn(SensorActor.create("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnitProbe.getRef()));
 
         sensor.tell(new SensorActor.Activate());
 
         ControlUnitActor.SensorActivated message = (ControlUnitActor.SensorActivated) controlUnitProbe.receiveMessage();
-        assertEquals(new SensorInfo("front_door", SensorType.DOOR_WINDOW, "Perimeter"), message.sensorInfo());
+        assertEquals(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER), message.sensorInfo());
     }
 }

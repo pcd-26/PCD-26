@@ -8,6 +8,7 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import org.apache.pekko.actor.typed.javadsl.TimerScheduler;
 import pcd.shas.AlarmConfiguration;
+import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 import pcd.shas.keypad.KeypadActor;
 import pcd.shas.sensor.SensorActor;
@@ -15,6 +16,7 @@ import pcd.shas.siren.SirenActor;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Scripted demo that drives the complete smart home alarm scenario.
@@ -48,12 +50,18 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         AFTER_SENSOR_IN_ARMED,
         AFTER_ENTRY_DELAY,
         AFTER_DISARM,
+        NIGHT_MODE_CONFIGURED,
+        NIGHT_MODE_EXIT_DELAY,
+        NIGHT_MODE_ARMED,
+        NIGHT_MODE_ENTRY_DELAY,
+        NIGHT_MODE_DISARMED,
         STOPPING
     }
 
     private final TimerScheduler<Command> timers;
     private final ActorRef<KeypadActor.Command> keypad;
-    private final ActorRef<SensorActor.Command> sensor;
+    private final ActorRef<SensorActor.Command> perimeterSensor;
+    private final ActorRef<SensorActor.Command> livingRoomSensor;
     private final ActorRef<ControlUnitActor.Command> controlUnit;
     private final ActorRef<SirenActor.Command> siren;
     private final ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter;
@@ -85,16 +93,21 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
                     "control-unit"
             );
             ActorRef<KeypadActor.Command> keypad = context.spawn(KeypadActor.create(controlUnit), "keypad");
-            ActorRef<SensorActor.Command> sensor = context.spawn(
-                    SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, "Perimeter", controlUnit),
+            ActorRef<SensorActor.Command> perimeterSensor = context.spawn(
+                    SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnit),
                     "front-door-sensor"
+            );
+            ActorRef<SensorActor.Command> livingRoomSensor = context.spawn(
+                    SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, Zone.LIVING_AREA, controlUnit),
+                    "living-room-sensor"
             );
 
             DemoScenarioActor actor = new DemoScenarioActor(
                     context,
                     timers,
                     keypad,
-                    sensor,
+                    perimeterSensor,
+                    livingRoomSensor,
                     controlUnit,
                     siren,
                     controlStateAdapter,
@@ -110,7 +123,8 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
             ActorContext<Command> context,
             TimerScheduler<Command> timers,
             ActorRef<KeypadActor.Command> keypad,
-            ActorRef<SensorActor.Command> sensor,
+            ActorRef<SensorActor.Command> perimeterSensor,
+            ActorRef<SensorActor.Command> livingRoomSensor,
             ActorRef<ControlUnitActor.Command> controlUnit,
             ActorRef<SirenActor.Command> siren,
             ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter,
@@ -121,7 +135,8 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         super(context);
         this.timers = timers;
         this.keypad = keypad;
-        this.sensor = sensor;
+        this.perimeterSensor = perimeterSensor;
+        this.livingRoomSensor = livingRoomSensor;
         this.controlUnit = controlUnit;
         this.siren = siren;
         this.controlStateAdapter = controlStateAdapter;
@@ -155,7 +170,7 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         switch (step) {
             case AFTER_PIN -> {
                 getContext().getLog().info("Demo step 4: sensor event during EXIT_DELAY is ignored");
-                sensor.tell(new SensorActor.Activate());
+                perimeterSensor.tell(new SensorActor.Activate());
                 queryState("after sensor activation during EXIT_DELAY");
                 step = Step.AFTER_EXIT_DELAY;
                 timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), exitDelay.plus(STEP_GAP));
@@ -164,7 +179,7 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
                 getContext().getLog().info("Demo step 5: system automatically enters ARMED");
                 queryState("after exit-delay expiration");
                 getContext().getLog().info("Demo step 6: a sensor is activated");
-                sensor.tell(new SensorActor.Activate());
+                perimeterSensor.tell(new SensorActor.Activate());
                 queryState("after armed sensor activation");
                 step = Step.AFTER_SENSOR_IN_ARMED;
                 timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
@@ -177,13 +192,9 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
                 timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), entryDelay.plus(STEP_GAP));
             }
             case AFTER_ENTRY_DELAY -> {
-                queryState("after entry-delay expiration");
-                querySirenState("alarm active");
                 getContext().getLog().info("Demo step 9: system enters ALARM and activates the siren");
                 getContext().getLog().info("Demo step 10: correct PIN is submitted");
                 pressPin("1234");
-                queryState("after correct PIN in alarm");
-                querySirenState("after correct PIN in alarm");
                 step = Step.AFTER_DISARM;
                 timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
             }
@@ -191,6 +202,38 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
                 queryState("after disarm");
                 querySirenState("after disarm");
                 getContext().getLog().info("Demo step 11: system returns to DISARMED and the siren deactivates");
+                getContext().getLog().info("Demo step 12: night mode partial arming is configured for PERIMETER and GROUND_FLOOR");
+                controlUnit.tell(new ControlUnitActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
+                pressPin("1234");
+                queryState("after night-mode PIN submission");
+                step = Step.NIGHT_MODE_CONFIGURED;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), exitDelay.plus(STEP_GAP));
+            }
+            case NIGHT_MODE_CONFIGURED -> {
+                getContext().getLog().info("Demo step 13: system automatically enters ARMED in night mode");
+                queryState("after night-mode exit delay");
+                getContext().getLog().info("Demo step 14: a sensor in an inactive zone is ignored");
+                livingRoomSensor.tell(new SensorActor.Activate());
+                queryState("after inactive-zone sensor activation");
+                step = Step.NIGHT_MODE_EXIT_DELAY;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+            }
+            case NIGHT_MODE_EXIT_DELAY -> {
+                getContext().getLog().info("Demo step 15: a sensor in an active zone enters ENTRY_DELAY");
+                perimeterSensor.tell(new SensorActor.Activate());
+                queryState("after active-zone sensor activation");
+                step = Step.NIGHT_MODE_ARMED;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+            }
+            case NIGHT_MODE_ARMED -> {
+                getContext().getLog().info("Demo step 16: correct PIN returns the system to DISARMED");
+                pressPin("1234");
+                step = Step.NIGHT_MODE_DISARMED;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+            }
+            case NIGHT_MODE_DISARMED -> {
+                queryState("after night-mode disarm");
+                getContext().getLog().info("Demo step 17: night mode ends and the system is disarmed again");
                 step = Step.STOPPING;
                 timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), FINAL_GRACE);
             }

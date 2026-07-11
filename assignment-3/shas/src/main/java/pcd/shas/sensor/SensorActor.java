@@ -8,6 +8,7 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import pcd.shas.common.SensorInfo;
 import pcd.shas.common.SensorType;
+import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 
 import java.util.Objects;
@@ -29,7 +30,7 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
     private final String sensorId;
     private final SensorType sensorType;
-    private final String zone;
+    private final Zone zone;
     private final ActorRef<ControlUnitActor.Command> controlUnit;
 
     /**
@@ -44,7 +45,7 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
     public static Behavior<Command> create(
             String sensorId,
             SensorType sensorType,
-            String zone,
+            Zone zone,
             ActorRef<ControlUnitActor.Command> controlUnit
     ) {
         validate(sensorId, sensorType, zone, controlUnit);
@@ -55,7 +56,7 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
             ActorContext<Command> context,
             String sensorId,
             SensorType sensorType,
-            String zone,
+            Zone zone,
             ActorRef<ControlUnitActor.Command> controlUnit
     ) {
         super(context);
@@ -83,16 +84,13 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         return this;
     }
 
-    private static void validate(String sensorId, SensorType sensorType, String zone, ActorRef<ControlUnitActor.Command> controlUnit) {
+    private static void validate(String sensorId, SensorType sensorType, Zone zone, ActorRef<ControlUnitActor.Command> controlUnit) {
         Objects.requireNonNull(sensorId, "sensorId");
         Objects.requireNonNull(sensorType, "sensorType");
         Objects.requireNonNull(zone, "zone");
         Objects.requireNonNull(controlUnit, "controlUnit");
         if (sensorId.isBlank()) {
             throw new IllegalArgumentException("sensorId cannot be blank");
-        }
-        if (zone.isBlank()) {
-            throw new IllegalArgumentException("zone cannot be blank");
         }
     }
 }
