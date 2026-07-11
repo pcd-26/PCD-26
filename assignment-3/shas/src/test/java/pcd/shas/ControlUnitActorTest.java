@@ -10,6 +10,7 @@ import pcd.shas.common.AlarmState;
 import pcd.shas.common.SensorInfo;
 import pcd.shas.common.SensorType;
 import pcd.shas.controlunit.ControlUnitActor;
+import pcd.shas.siren.SirenActor;
 
 import java.time.Duration;
 
@@ -34,48 +35,58 @@ class ControlUnitActorTest {
 
     @Test
     void initialStateIsDisarmed() {
-        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(5), Duration.ofSeconds(5)));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(5), Duration.ofSeconds(5), sirenProbe.getRef()));
 
         assertState(controlUnit, AlarmState.DISARMED);
+        sirenProbe.expectNoMessage();
     }
 
     @Test
     void correctPinMovesSystemToExitDelayAndExitTimeoutArmsSystem() {
-        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(controlUnit, AlarmState.EXIT_DELAY);
 
         manualTime.timePasses(Duration.ofSeconds(1));
         assertState(controlUnit, AlarmState.ARMED);
+        sirenProbe.expectNoMessage();
     }
 
     @Test
     void incorrectPinHasNoEffectWhileDisarmed() {
-        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("0000"));
 
         assertState(controlUnit, AlarmState.DISARMED);
+        sirenProbe.expectNoMessage();
     }
 
     @Test
     void leavingExitDelayCancelsObsoleteTimeout() {
-        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(controlUnit, AlarmState.EXIT_DELAY);
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(controlUnit, AlarmState.DISARMED);
+        sirenProbe.expectMessage(new SirenActor.Deactivate());
 
         manualTime.timePasses(Duration.ofSeconds(1));
         assertState(controlUnit, AlarmState.DISARMED);
+        sirenProbe.expectNoMessage();
     }
 
     @Test
     void armedSensorMovesSystemToEntryDelayAndEntryTimeoutAlarmsSystem() {
-        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         manualTime.timePasses(Duration.ofSeconds(1));
@@ -86,11 +97,13 @@ class ControlUnitActorTest {
 
         manualTime.timePasses(Duration.ofSeconds(1));
         assertState(controlUnit, AlarmState.ALARM);
+        sirenProbe.expectMessage(new SirenActor.Activate());
     }
 
     @Test
     void entryDelayPinDisarmsBeforeTimeout() {
-        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         manualTime.timePasses(Duration.ofSeconds(1));
@@ -99,14 +112,17 @@ class ControlUnitActorTest {
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(controlUnit, AlarmState.DISARMED);
+        sirenProbe.expectMessage(new SirenActor.Deactivate());
 
         manualTime.timePasses(Duration.ofSeconds(1));
         assertState(controlUnit, AlarmState.DISARMED);
+        sirenProbe.expectNoMessage();
     }
 
     @Test
     void incorrectPinHasNoEffectInAlarm() {
-        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         manualTime.timePasses(Duration.ofSeconds(1));
@@ -114,15 +130,36 @@ class ControlUnitActorTest {
         manualTime.timePasses(Duration.ofSeconds(1));
 
         assertState(controlUnit, AlarmState.ALARM);
+        sirenProbe.expectMessage(new SirenActor.Activate());
 
         controlUnit.tell(new ControlUnitActor.PinSubmitted("0000"));
 
         assertState(controlUnit, AlarmState.ALARM);
+        sirenProbe.expectNoMessage();
+    }
+
+    @Test
+    void correctPinInAlarmDisarmsAndTurnsSirenOff() {
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
+
+        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        manualTime.timePasses(Duration.ofSeconds(1));
+        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, "Perimeter")));
+        manualTime.timePasses(Duration.ofSeconds(1));
+        assertState(controlUnit, AlarmState.ALARM);
+        sirenProbe.expectMessage(new SirenActor.Activate());
+
+        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+
+        assertState(controlUnit, AlarmState.DISARMED);
+        sirenProbe.expectMessage(new SirenActor.Deactivate());
     }
 
     @Test
     void controlUnitRejectsBlankConfiguredPin() {
-        assertThrows(IllegalArgumentException.class, () -> ControlUnitActor.create(" "));
+        var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
+        assertThrows(IllegalArgumentException.class, () -> ControlUnitActor.create(" ", sirenProbe.getRef()));
     }
 
     private void assertState(org.apache.pekko.actor.typed.ActorRef<ControlUnitActor.Command> controlUnit, AlarmState expected) {
