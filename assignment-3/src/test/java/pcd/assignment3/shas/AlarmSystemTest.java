@@ -1,4 +1,4 @@
-package pcd.assignment3;
+package pcd.assignment3.shas;
 
 import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
 import org.apache.pekko.actor.testkit.typed.javadsl.TestProbe;
@@ -6,11 +6,11 @@ import org.apache.pekko.actor.typed.ActorRef;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import pcd.assignment3.common.SensorInfo;
-import pcd.assignment3.common.SensorType;
-import pcd.assignment3.controlunit.ControlUnitActor;
-import pcd.assignment3.keypad.KeypadActor;
-import pcd.assignment3.siren.SirenActor;
+import pcd.assignment3.shas.common.SensorInfo;
+import pcd.assignment3.shas.common.SensorType;
+import pcd.assignment3.shas.controlunit.ControlUnitActor;
+import pcd.assignment3.shas.keypad.KeypadActor;
+import pcd.assignment3.shas.siren.SirenActor;
 
 import java.time.Duration;
 import java.util.Collections;

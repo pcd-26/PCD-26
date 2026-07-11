@@ -1,4 +1,4 @@
-package pcd.assignment3.sensor;
+package pcd.assignment3.shas.sensor;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -6,8 +6,8 @@ import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
-import pcd.assignment3.common.SensorInfo;
-import pcd.assignment3.controlunit.ControlUnitActor;
+import pcd.assignment3.shas.common.SensorInfo;
+import pcd.assignment3.shas.controlunit.ControlUnitActor;
 
 import java.time.Instant;
 
