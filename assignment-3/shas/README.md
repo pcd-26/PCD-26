@@ -12,7 +12,20 @@ The source tree now defines the smart-home alarm domain model plus typed
 peripheral actors under `pcd.shas`: the control unit, keypad, sensor, and
 siren. The keypad and sensor actors only forward messages, while the control
 unit owns the state machine and configurable timers. The bootstrap entry point
-remains minimal: it creates an actor system and shuts it down immediately.
+loads the application config, wires the core actors, and shuts the system down
+immediately.
+
+## Configuration
+
+The application reads its defaults from `src/main/resources/application.conf`.
+The current keys are:
+
+- `shas.correctPin`
+- `shas.exitDelay`
+- `shas.entryDelay`
+
+Tests can override these values with in-memory Typesafe Config instances
+without changing the production file.
 
 ## Build and Test
 
