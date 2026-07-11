@@ -104,6 +104,58 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	}
 }
 
+func TestPlayRoundUsesOneResultPerMatchAndNoPlayerTwice(t *testing.T) {
+	players := mustPlayers(t, 8)
+	started := make(chan int, 4)
+	done := make(chan int, 4)
+	release := []chan struct{}{
+		make(chan struct{}, 1),
+		make(chan struct{}, 1),
+		make(chan struct{}, 1),
+		make(chan struct{}, 1),
+	}
+	resultCh := make(chan roundExecution, 1)
+	defer func() {
+		for _, ch := range release {
+			signalRelease(ch)
+		}
+	}()
+
+	go func() {
+		winners, results, err := PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+			return coordinatedTosser{
+				matchNumber: matchNumber,
+				side:        Heads,
+				started:     started,
+				done:        done,
+				release:     release[matchNumber-1],
+			}
+		})
+		resultCh <- roundExecution{winners: winners, results: results, err: err}
+	}()
+
+	startedMatches := make(map[int]struct{}, 4)
+	for len(startedMatches) < 4 {
+		startedMatches[<-started] = struct{}{}
+	}
+	if len(startedMatches) != 4 {
+		t.Fatalf("expected exactly 4 started matches, got %d", len(startedMatches))
+	}
+
+	for _, ch := range release {
+		signalRelease(ch)
+	}
+
+	execution := <-resultCh
+	if execution.err != nil {
+		t.Fatalf("expected round to succeed, got error: %v", execution.err)
+	}
+	if len(execution.results) != 4 {
+		t.Fatalf("unexpected results count: got %d want %d", len(execution.results), 4)
+	}
+	assertRoundPlayerUsage(t, execution.results, []int{1, 2, 3, 4, 5, 6, 7, 8})
+}
+
 func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 	players := mustPlayers(t, 4)
 	started := make(chan int, 2)
