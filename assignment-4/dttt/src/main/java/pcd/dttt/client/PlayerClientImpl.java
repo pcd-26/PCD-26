@@ -23,16 +23,34 @@ public class PlayerClientImpl extends UnicastRemoteObject implements PlayerClien
         this.listener = listener;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param initialState the initial board state snapshot when the game starts
+     * @throws RemoteException if a remote communication error occurs
+     */
     @Override
     public void gameStarted(BoardState initialState) throws RemoteException {
         listener.onGameStarted(initialState);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param newState the updated board state snapshot
+     * @throws RemoteException if a remote communication error occurs
+     */
     @Override
     public void gameUpdated(BoardState newState) throws RemoteException {
         listener.onGameUpdated(newState);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param opponentName the nickname of the opponent who left
+     * @throws RemoteException if a remote communication error occurs
+     */
     @Override
     public void opponentLeft(String opponentName) throws RemoteException {
         listener.onOpponentLeft(opponentName);

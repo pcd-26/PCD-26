@@ -15,12 +15,30 @@ import pcd.dttt.common.Lobby;
  * and handles forwarding network callbacks to registered UI listeners.
  */
 public class GameControllerImpl implements GameController, GameEventListener {
+    /** The remote RMI reference to the matchmaking lobby. */
     private Lobby lobby;
+
+    /** The remote RMI reference to the current active match room. */
     private Game currentGame;
+
+    /** The remote player client stub instance exported for server callback invocation. */
     private PlayerClientImpl clientStub;
+
+    /** Nickname of the local player. */
     private String playerName;
+
+    /** Thread-safe list containing registered GUI/CLI event listeners. */
     private final List<GameEventListener> listeners = new ArrayList<>();
 
+    /**
+     * {@inheritDoc}
+     * Establishes the matchmaking Lobby lookup and exports the player's client callback stub.
+     *
+     * @param host the server IP address
+     * @param port the server RMI port
+     * @param playerName the nickname of the player connecting
+     * @throws Exception if lookup fails or stub exporting fails
+     */
     @Override
     public void connect(String host, int port, String playerName) throws Exception {
         this.playerName = playerName;
@@ -33,6 +51,13 @@ public class GameControllerImpl implements GameController, GameEventListener {
         this.lobby = (Lobby) registry.lookup("Lobby");
     }
 
+    /**
+     * {@inheritDoc}
+     * Contacts the Lobby to register a new Game room.
+     *
+     * @param gameName the unique name of the game room to create
+     * @throws Exception if game room creation fails or RMI error occurs
+     */
     @Override
     public void createGame(String gameName) throws Exception {
         if (lobby == null) {
@@ -41,6 +66,13 @@ public class GameControllerImpl implements GameController, GameEventListener {
         this.currentGame = lobby.createGame(gameName, playerName, clientStub);
     }
 
+    /**
+     * {@inheritDoc}
+     * Joins an existing game room.
+     *
+     * @param gameName the name of the game room to join
+     * @throws Exception if room is full, not found, or RMI error occurs
+     */
     @Override
     public void joinGame(String gameName) throws Exception {
         if (lobby == null) {
@@ -49,6 +81,13 @@ public class GameControllerImpl implements GameController, GameEventListener {
         this.currentGame = lobby.joinGame(gameName, playerName, clientStub);
     }
 
+    /**
+     * {@inheritDoc}
+     * Fetches list of active rooms in WAITING status.
+     *
+     * @return list of waiting game room names
+     * @throws Exception if remote lookup fails
+     */
     @Override
     public List<String> getWaitingGames() throws Exception {
         if (lobby == null) {
@@ -57,6 +96,14 @@ public class GameControllerImpl implements GameController, GameEventListener {
         return lobby.getWaitingGames();
     }
 
+    /**
+     * {@inheritDoc}
+     * Attempts to place a mark at the specified coordinates.
+     *
+     * @param row zero-indexed row (0, 1, or 2)
+     * @param col zero-indexed column (0, 1, or 2)
+     * @throws Exception if it is not this player's turn, coordinates are invalid, or RMI error occurs
+     */
     @Override
     public void makeMove(int row, int col) throws Exception {
         if (currentGame == null) {
@@ -65,6 +112,12 @@ public class GameControllerImpl implements GameController, GameEventListener {
         currentGame.makeMove(playerName, row, col);
     }
 
+    /**
+     * {@inheritDoc}
+     * Explicitly leaves the active match room.
+     *
+     * @throws Exception if RMI call fails
+     */
     @Override
     public void leaveGame() throws Exception {
         if (currentGame != null) {
@@ -76,6 +129,13 @@ public class GameControllerImpl implements GameController, GameEventListener {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * Registers a local event listener (e.g. GUI or CLI) to receive callbacks.
+     * Synchronizes on the listener collection to support thread-safe additions.
+     *
+     * @param listener the GameEventListener to register
+     */
     @Override
     public void registerEventListener(GameEventListener listener) {
         synchronized (listeners) {
@@ -83,6 +143,10 @@ public class GameControllerImpl implements GameController, GameEventListener {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * Performs clean disconnection by leaving the game and unexporting RMI stubs.
+     */
     @Override
     public void disconnect() {
         try {
@@ -101,6 +165,11 @@ public class GameControllerImpl implements GameController, GameEventListener {
         lobby = null;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return the local player nickname
+     */
     @Override
     public String getPlayerName() {
         return playerName;
@@ -108,6 +177,12 @@ public class GameControllerImpl implements GameController, GameEventListener {
 
     // --- GameEventListener RMI Callback Forwarders ---
 
+    /**
+     * {@inheritDoc}
+     * Forwards the match start callback to all registered local listeners.
+     *
+     * @param initialState the initial board state
+     */
     @Override
     public void onGameStarted(BoardState initialState) {
         synchronized (listeners) {
@@ -117,6 +192,12 @@ public class GameControllerImpl implements GameController, GameEventListener {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * Forwards the match update callback to all registered local listeners.
+     *
+     * @param newState the updated board state
+     */
     @Override
     public void onGameUpdated(BoardState newState) {
         synchronized (listeners) {
@@ -126,6 +207,12 @@ public class GameControllerImpl implements GameController, GameEventListener {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * Forwards the opponent left callback to all registered local listeners.
+     *
+     * @param opponentName the nickname of the opponent who left
+     */
     @Override
     public void onOpponentLeft(String opponentName) {
         synchronized (listeners) {

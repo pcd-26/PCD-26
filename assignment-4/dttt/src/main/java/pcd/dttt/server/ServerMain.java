@@ -8,9 +8,19 @@ import pcd.dttt.common.Lobby;
  * Main entry point for starting the Tic-Tac-Toe RMI Server.
  */
 public class ServerMain {
+    /** The default port on which the RMI registry is started. */
     private static final int DEFAULT_PORT = 1099;
+
+    /** The name under which the Lobby remote object is bound in the registry. */
     private static final String REGISTRY_NAME = "Lobby";
 
+    /**
+     * Entry point to launch the RMI server.
+     * Configures the port, creates and exports the Lobby remote object,
+     * and registers it into the RMI registry.
+     *
+     * @param args command-line arguments: args[0] optionally specifies the registry port
+     */
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
         if (args.length > 0) {
