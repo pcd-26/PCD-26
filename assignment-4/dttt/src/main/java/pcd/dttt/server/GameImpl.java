@@ -2,6 +2,7 @@ package pcd.dttt.server;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.rmi.NoSuchObjectException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import pcd.dttt.common.BoardState;
@@ -59,6 +60,9 @@ public class GameImpl extends UnicastRemoteObject implements Game {
     /** Virtual thread executor service used to perform non-blocking RMI callbacks to the clients. */
     private final transient ExecutorService callbackExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
+    /** True once the game has been explicitly closed and unexported. */
+    private boolean closed;
+
     /**
      * Constructs a new game room created by Player X.
      * Starts in {@link GameStatus#WAITING} state, waiting for Player O to join.
@@ -104,6 +108,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      * @throws IllegalArgumentException if the joiner tries to use the same name as the creator
      */
     public synchronized void join(String joinerName, PlayerClient joinerClient) throws GameFullException {
+        ensureOpen();
         if (status != GameStatus.WAITING) {
             throw new GameFullException("Game is not in WAITING state.");
         }
@@ -137,6 +142,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
         
         BoardState state;
         synchronized (this) {
+            ensureOpen();
             if (status != GameStatus.ACTIVE) {
                 throw new InvalidMoveException("Game is not active (current status: " + status + ").");
             }
@@ -188,6 +194,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
         PlayerClient leavingClient;
 
         synchronized (this) {
+            ensureOpen();
             if (status == GameStatus.WON_X || status == GameStatus.WON_O || 
                 status == GameStatus.DRAW || status == GameStatus.ABANDONED) {
                 return; // Already ended
@@ -241,6 +248,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      */
     @Override
     public synchronized BoardState getBoardState() throws RemoteException {
+        ensureOpen();
         return getBoardStateSnapshot();
     }
 
@@ -378,5 +386,40 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      */
     private void shutdownExecutor() {
         callbackExecutor.shutdown();
+    }
+
+    /**
+     * Closes the game, shuts down the callback executor, and unexports the remote object.
+     * The method is idempotent so callers can use it during cleanup or pruning without
+     * worrying about double close attempts.
+     */
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        shutdownExecutor();
+        try {
+            UnicastRemoteObject.unexportObject(this, true);
+        } catch (NoSuchObjectException e) {
+            // Already unexported; ignore.
+        }
+    }
+
+    /**
+     * Indicates whether the callback executor has been shut down.
+     * Package-private to keep the production API minimal while allowing focused tests.
+     */
+    boolean isCallbackExecutorShutdown() {
+        return callbackExecutor.isShutdown();
+    }
+
+    /**
+     * Fails fast if the game has been closed and unexported.
+     */
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("Game has been closed.");
+        }
     }
 }

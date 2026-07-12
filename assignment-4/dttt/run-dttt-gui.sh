@@ -1,7 +1,7 @@
 #!/bin/bash
 # Wrapper script to run the Distributed Tic-Tac-Toe GUI Client.
 # Usage:
-#   ./run-dttt-gui.sh [host] [port]
+#   ./run-dttt-gui.sh [host] [port] [serviceName]
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 JAR_PATH="$DIR/target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
@@ -29,9 +29,10 @@ if [ "$REBUILD" = true ]; then
     fi
 fi
 
-# Default host and port if not specified
+# Default host, port, and service name if not specified
 HOST="${1:-localhost}"
 PORT="${2:-1099}"
+SERVICE_NAME="${3:-Lobby}"
 
-echo "Starting GUI Client connecting to server at $HOST:$PORT..."
-java -jar "$JAR_PATH" client "$HOST" "$PORT"
+echo "Starting GUI Client connecting to server at $HOST:$PORT (service '$SERVICE_NAME')..."
+java -jar "$JAR_PATH" client "$HOST" "$PORT" "$SERVICE_NAME"

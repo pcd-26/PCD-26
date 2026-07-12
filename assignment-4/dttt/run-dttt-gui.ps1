@@ -1,6 +1,6 @@
 # PowerShell wrapper script to run the Distributed Tic-Tac-Toe GUI Client.
 # Usage:
-#   .\run-dttt-gui.ps1 [host] [port]
+#   .\run-dttt-gui.ps1 [host] [port] [serviceName]
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $jarPath = Join-Path $scriptDir "target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
@@ -34,9 +34,10 @@ if ($rebuild) {
     }
 }
 
-# Default host and port if not specified
+# Default host, port, and service name if not specified
 $hostName = if ($args[0]) { $args[0] } else { "localhost" }
 $port = if ($args[1]) { $args[1] } else { "1099" }
+$serviceName = if ($args[2]) { $args[2] } else { "Lobby" }
 
-Write-Host "Starting GUI Client connecting to server at $hostName:$port..."
-java -jar $jarPath client $hostName $port
+Write-Host "Starting GUI Client connecting to server at $hostName:$port (service '$serviceName')..."
+java -jar $jarPath client $hostName $port $serviceName

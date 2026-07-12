@@ -3,8 +3,18 @@ package pcd.dttt.server;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.rmi.RemoteException;
+import java.rmi.NoSuchObjectException;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import pcd.dttt.common.Game;
 import pcd.dttt.common.PlayerClient;
@@ -24,6 +34,13 @@ public class LobbyImplTest {
         lobby = new LobbyImpl();
         dummyClient1 = new DummyPlayerClient();
         dummyClient2 = new DummyPlayerClient();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        if (lobby != null) {
+            lobby.close();
+        }
     }
 
     @Test
@@ -56,6 +73,16 @@ public class LobbyImplTest {
         // After joining, it should not be in the waiting games list anymore
         List<String> waiting = lobby.getWaitingGames();
         assertTrue(waiting.isEmpty());
+    }
+
+    @Test
+    public void testDuplicateJoinRejectedClearly() throws Exception {
+        lobby.createGame("Room1", "PlayerX", dummyClient1);
+        lobby.joinGame("Room1", "PlayerO", dummyClient2);
+
+        assertThrows(GameFullException.class, () -> {
+            lobby.joinGame("Room1", "PlayerThird", new DummyPlayerClient());
+        });
     }
 
     @Test
@@ -92,6 +119,89 @@ public class LobbyImplTest {
         assertThrows(GameNotFoundException.class, () -> {
             lobby.joinGame("Room1", "AnotherPlayer", dummyClient2);
         });
+    }
+
+    @Test
+    public void testConcurrentCreateWithSameName() throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Exception> failures = Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger successes = new AtomicInteger();
+
+        Runnable createTask = () -> {
+            ready.countDown();
+            try {
+                start.await();
+                lobby.createGame("SharedRoom", "Player-" + Thread.currentThread().getId(), new DummyPlayerClient());
+                successes.incrementAndGet();
+            } catch (Exception e) {
+                failures.add(e);
+            }
+        };
+
+        executor.submit(createTask);
+        executor.submit(createTask);
+        assertTrue(ready.await(5, TimeUnit.SECONDS));
+        start.countDown();
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+
+        assertEquals(1, successes.get());
+        assertEquals(1, failures.size());
+        assertTrue(failures.get(0) instanceof GameAlreadyExistsException);
+    }
+
+    @Test
+    public void testConcurrentJoinsAllowOnlyOneOpponent() throws Exception {
+        lobby.createGame("Room1", "PlayerX", dummyClient1);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger successes = new AtomicInteger();
+        List<Exception> failures = Collections.synchronizedList(new ArrayList<>());
+
+        Runnable joinTaskA = () -> {
+            ready.countDown();
+            try {
+                start.await();
+                lobby.joinGame("Room1", "PlayerO", new DummyPlayerClient());
+                successes.incrementAndGet();
+            } catch (Exception e) {
+                failures.add(e);
+            }
+        };
+
+        Runnable joinTaskB = () -> {
+            ready.countDown();
+            try {
+                start.await();
+                lobby.joinGame("Room1", "PlayerThird", new DummyPlayerClient());
+                successes.incrementAndGet();
+            } catch (Exception e) {
+                failures.add(e);
+            }
+        };
+
+        executor.submit(joinTaskA);
+        executor.submit(joinTaskB);
+        assertTrue(ready.await(5, TimeUnit.SECONDS));
+        start.countDown();
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+
+        assertEquals(1, successes.get());
+        assertEquals(1, failures.size());
+        assertTrue(failures.get(0) instanceof GameFullException);
+    }
+
+    @Test
+    public void testLobbyCloseUnexportsRemoteObject() throws Exception {
+        lobby.createGame("Room1", "PlayerX", dummyClient1);
+        lobby.close();
+
+        assertThrows(NoSuchObjectException.class, () -> UnicastRemoteObject.unexportObject(lobby, false));
     }
 
     private static class DummyPlayerClient implements PlayerClient {

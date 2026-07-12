@@ -3,9 +3,12 @@ package pcd.dttt.server;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.rmi.RemoteException;
+import java.rmi.NoSuchObjectException;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import pcd.dttt.common.BoardState;
 import pcd.dttt.common.GameStatus;
@@ -26,6 +29,13 @@ public class GameImplTest {
         game = new GameImpl("TestRoom", "PlayerX", clientX);
     }
 
+    @AfterEach
+    public void tearDown() {
+        if (game != null) {
+            game.close();
+        }
+    }
+
     @Test
     public void testInitialization() throws Exception {
         BoardState state = game.getBoardState();
@@ -44,6 +54,13 @@ public class GameImplTest {
         assertEquals(GameStatus.ACTIVE, state.getStatus());
         assertEquals("PlayerO", state.getPlayerO());
         assertEquals("PlayerX", state.getTurnOf()); // X starts
+    }
+
+    @Test
+    public void testMoveRejectedBeforeSecondPlayerJoins() {
+        assertThrows(InvalidMoveException.class, () -> {
+            game.makeMove("PlayerX", 0, 0);
+        });
     }
 
     @Test
@@ -132,6 +149,21 @@ public class GameImplTest {
     }
 
     @Test
+    public void testWinConditionVertical() throws Exception {
+        game.join("PlayerO", clientO);
+
+        // X wins in column 1
+        game.makeMove("PlayerX", 0, 1);
+        game.makeMove("PlayerO", 0, 0);
+        game.makeMove("PlayerX", 1, 1);
+        game.makeMove("PlayerO", 1, 0);
+        game.makeMove("PlayerX", 2, 1);
+
+        BoardState state = game.getBoardState();
+        assertEquals(GameStatus.WON_X, state.getStatus());
+    }
+
+    @Test
     public void testDrawCondition() throws Exception {
         game.join("PlayerO", clientO);
 
@@ -165,6 +197,19 @@ public class GameImplTest {
     }
 
     @Test
+    public void testBoardSnapshotIsDefensivelyCopied() throws Exception {
+        game.join("PlayerO", clientO);
+        game.makeMove("PlayerX", 0, 0);
+
+        BoardState snapshot = game.getBoardState();
+        char[][] leaked = snapshot.getGrid();
+        leaked[0][0] = 'O';
+
+        assertEquals('X', snapshot.getMark(0, 0));
+        assertEquals('X', game.getBoardState().getMark(0, 0));
+    }
+
+    @Test
     public void testOpenCallPreventsBlocking() throws Exception {
         PlayerClient blockingClient = new PlayerClient() {
             @Override
@@ -194,22 +239,26 @@ public class GameImplTest {
         };
 
         GameImpl gameWithBlocking = new GameImpl("BlockRoom", "PlayerX", blockingClient);
-        gameWithBlocking.join("PlayerO", fastClient);
+        try {
+            gameWithBlocking.join("PlayerO", fastClient);
 
-        long start = System.currentTimeMillis();
-        // Player X moves, which triggers the blocking callback.
-        // It must NOT block the main thread making the move.
-        gameWithBlocking.makeMove("PlayerX", 0, 0);
-        long duration = System.currentTimeMillis() - start;
+            long start = System.currentTimeMillis();
+            // Player X moves, which triggers the blocking callback.
+            // It must NOT block the main thread making the move.
+            gameWithBlocking.makeMove("PlayerX", 0, 0);
+            long duration = System.currentTimeMillis() - start;
 
-        assertTrue(duration < 1000, "makeMove should return immediately; actual duration: " + duration + "ms");
+            assertTrue(duration < 1000, "makeMove should return immediately; actual duration: " + duration + "ms");
 
-        start = System.currentTimeMillis();
-        // Opponent O should also be able to make their move immediately.
-        gameWithBlocking.makeMove("PlayerO", 1, 1);
-        duration = System.currentTimeMillis() - start;
+            start = System.currentTimeMillis();
+            // Opponent O should also be able to make their move immediately.
+            gameWithBlocking.makeMove("PlayerO", 1, 1);
+            duration = System.currentTimeMillis() - start;
 
-        assertTrue(duration < 1000, "Opponent move should not be blocked; actual duration: " + duration + "ms");
+            assertTrue(duration < 1000, "Opponent move should not be blocked; actual duration: " + duration + "ms");
+        } finally {
+            gameWithBlocking.close();
+        }
     }
 
     @Test
@@ -241,6 +290,17 @@ public class GameImplTest {
         
         assertEquals(1, successXCount.get(), "Only exactly one thread should succeed");
         assertEquals(numThreads - 1, failXCount.get(), "All other threads should fail");
+    }
+
+    @Test
+    public void testCloseUnexportsAndShutsDownExecutor() throws Exception {
+        game.join("PlayerO", clientO);
+        game.leaveGame("PlayerX");
+
+        game.close();
+
+        assertTrue(game.isCallbackExecutorShutdown(), "Callback executor should be shut down after close()");
+        assertThrows(NoSuchObjectException.class, () -> UnicastRemoteObject.unexportObject(game, false));
     }
 
     // Helper class mimicking client callback behavior

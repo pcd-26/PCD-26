@@ -5,4 +5,4 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo "Executing Tic-Tac-Toe test suite..."
-mvn -f "$DIR/pom.xml" test
+mvn -B -f "$DIR/pom.xml" clean verify

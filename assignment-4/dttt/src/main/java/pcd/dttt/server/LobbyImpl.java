@@ -3,7 +3,6 @@ package pcd.dttt.server;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,8 +20,10 @@ import pcd.dttt.common.exceptions.GameNotFoundException;
  * 
  * <p><strong>Thread Safety:</strong></p>
  * <ul>
- *   <li>Uses a {@link ConcurrentHashMap} to store active games, but public methods are marked
- *       {@code synchronized} to ensure atomic operations during room check-and-create or join sequences.</li>
+ *   <li>Uses a {@link ConcurrentHashMap} to store active games and atomic map operations to protect
+ *       room creation from duplicate names without serializing the whole lobby.</li>
+ *   <li>Delegates match-level contention to each {@link GameImpl} instance so concurrent joins for
+ *       different rooms do not block one another.</li>
  *   <li>Prunes terminal rooms (won, drawn, or abandoned) from memory during every list or join lookup
  *       to keep memory utilization bounded without requiring a background sweeper thread.</li>
  * </ul>
@@ -32,6 +33,9 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
 
     /** Map of active game rooms keyed by their unique game name. */
     private final Map<String, GameImpl> games = new ConcurrentHashMap<>();
+
+    /** True once the lobby has been explicitly closed. */
+    private volatile boolean closed;
 
     /**
      * Constructs a new Lobby remote instance and exports it on an anonymous port.
@@ -55,17 +59,18 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
      * @throws GameAlreadyExistsException if a game with the requested name is already registered
      */
     @Override
-    public synchronized Game createGame(String gameName, String playerName, PlayerClient client) 
+    public Game createGame(String gameName, String playerName, PlayerClient client)
             throws RemoteException, GameAlreadyExistsException {
+        ensureOpen();
         
         pruneFinishedGames();
-        
-        if (games.containsKey(gameName)) {
-            throw new GameAlreadyExistsException("A game with the name '" + gameName + "' already exists.");
-        }
 
         GameImpl game = new GameImpl(gameName, playerName, client);
-        games.put(gameName, game);
+        GameImpl existing = games.putIfAbsent(gameName, game);
+        if (existing != null) {
+            game.close();
+            throw new GameAlreadyExistsException("A game with the name '" + gameName + "' already exists.");
+        }
         System.out.println("Game created: '" + gameName + "' by player: " + playerName);
         return game;
     }
@@ -83,8 +88,9 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
      * @throws GameFullException if the game is already in progress or has finished
      */
     @Override
-    public synchronized Game joinGame(String gameName, String playerName, PlayerClient client) 
+    public Game joinGame(String gameName, String playerName, PlayerClient client)
             throws RemoteException, GameNotFoundException, GameFullException {
+        ensureOpen();
         
         pruneFinishedGames();
         
@@ -106,18 +112,18 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
      * @throws RemoteException if an RMI error occurs
      */
     @Override
-    public synchronized List<String> getWaitingGames() throws RemoteException {
+    public List<String> getWaitingGames() throws RemoteException {
+        ensureOpen();
         List<String> waiting = new ArrayList<>();
-        Iterator<Map.Entry<String, GameImpl>> it = games.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, GameImpl> entry = it.next();
+        for (Map.Entry<String, GameImpl> entry : new ArrayList<>(games.entrySet())) {
             GameImpl game = entry.getValue();
             GameStatus status = game.getBoardState().getStatus();
             if (status == GameStatus.WAITING) {
                 waiting.add(entry.getKey());
             } else if (status != GameStatus.ACTIVE) {
                 // Prune completed/abandoned games from the active list
-                it.remove();
+                game.close();
+                games.remove(entry.getKey(), game);
             }
         }
         return waiting;
@@ -130,13 +136,41 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
      * @throws RemoteException if an RMI error occurs while querying game states
      */
     private void pruneFinishedGames() throws RemoteException {
-        Iterator<Map.Entry<String, GameImpl>> it = games.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, GameImpl> entry = it.next();
+        for (Map.Entry<String, GameImpl> entry : new ArrayList<>(games.entrySet())) {
             GameStatus status = entry.getValue().getBoardState().getStatus();
             if (status != GameStatus.WAITING && status != GameStatus.ACTIVE) {
-                it.remove();
+                entry.getValue().close();
+                games.remove(entry.getKey(), entry.getValue());
             }
+        }
+    }
+
+    /**
+     * Closes the lobby and every game it still owns.
+     * This is used for test cleanup and server shutdown hooks.
+     */
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        for (GameImpl game : games.values()) {
+            game.close();
+        }
+        games.clear();
+        try {
+            UnicastRemoteObject.unexportObject(this, true);
+        } catch (Exception e) {
+            // Ignore cleanup failures.
+        }
+    }
+
+    /**
+     * Fails fast if the lobby has been closed.
+     */
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("Lobby has been closed.");
         }
     }
 }

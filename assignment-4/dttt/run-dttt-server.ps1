@@ -1,6 +1,6 @@
 # PowerShell wrapper script to run the Distributed Tic-Tac-Toe Server.
 # Usage:
-#   .\run-dttt-server.ps1 [port]
+#   .\run-dttt-server.ps1 [registryHost] [registryPort] [serviceName]
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $jarPath = Join-Path $scriptDir "target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
@@ -34,8 +34,10 @@ if ($rebuild) {
     }
 }
 
-# Default port to 1099 if not specified
-$port = if ($args[0]) { $args[0] } else { "1099" }
+# Default registry parameters if not specified
+$registryHost = if ($args[0]) { $args[0] } else { "localhost" }
+$registryPort = if ($args[1]) { $args[1] } else { "1099" }
+$serviceName = if ($args[2]) { $args[2] } else { "Lobby" }
 
-Write-Host "Starting Tic-Tac-Toe Server on port $port..."
-java -jar $jarPath server $port
+Write-Host "Starting Tic-Tac-Toe Server binding '$serviceName' at $registryHost:$registryPort..."
+java -jar $jarPath server $registryHost $registryPort $serviceName
