@@ -1,5 +1,7 @@
 package pcd.dcs;
 
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import org.junit.jupiter.api.*;
@@ -49,6 +51,43 @@ public class DistributedCriticalSectionTest {
             // Critical section body
             dcs.exit();
         }
+    }
+
+    @Test
+    public void testConcurrentBootstrapCreatesExactlyOneToken() throws Exception {
+        String csName = "test-bootstrap-" + System.currentTimeMillis();
+        int threadCount = 6;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+        List<Throwable> failures = Collections.synchronizedList(new ArrayList<>());
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startLatch.await();
+                    try (DistributedCriticalSection ignored = new DistributedCriticalSection(host, port, csName)) {
+                        // Constructor bootstrap only; close immediately.
+                    }
+                } catch (Throwable t) {
+                    failures.add(t);
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        assertTrue(readyLatch.await(5, TimeUnit.SECONDS), "Workers did not become ready in time");
+        startLatch.countDown();
+        assertTrue(doneLatch.await(20, TimeUnit.SECONDS), "Bootstrap workers did not finish in time");
+        executor.shutdownNow();
+
+        assertTrue(failures.isEmpty(), "Bootstrap failed in at least one worker: " + failures);
+        QueueStatus status = readQueueStatus(tokenQueueName(csName));
+        assertEquals(1, status.messageCount(), "Concurrent bootstrap must leave exactly one token message");
+        assertEquals(0, status.consumerCount(), "No consumer should remain registered after bootstrap-only construction");
     }
 
     @Test
@@ -107,6 +146,9 @@ public class DistributedCriticalSectionTest {
         // 1. First process acquires the lock
         DistributedCriticalSection dcs1 = new DistributedCriticalSection(host, port, csName);
         dcs1.enter();
+        QueueStatus heldStatus = readQueueStatus(tokenQueueName(csName));
+        assertEquals(0, heldStatus.messageCount(), "The token should be in-flight while the critical section is held");
+        assertEquals(1, heldStatus.consumerCount(), "The holder keeps one consumer registered while in the critical section");
 
         // 2. Second process tries to acquire the lock in a background thread and blocks
         CompletableFuture<Boolean> dcs2Acquired = new CompletableFuture<>();
@@ -130,5 +172,19 @@ public class DistributedCriticalSectionTest {
 
         // 4. Verify that the second process is now able to acquire the lock automatically
         assertTrue(dcs2Acquired.get(5, TimeUnit.SECONDS), "Second process should have acquired the lock after the first crashed.");
+    }
+
+    private String tokenQueueName(String csName) {
+        return "cs_token_" + csName;
+    }
+
+    private QueueStatus readQueueStatus(String queueName) throws Exception {
+        try (Channel statusChannel = connection.createChannel()) {
+            AMQP.Queue.DeclareOk declareOk = statusChannel.queueDeclarePassive(queueName);
+            return new QueueStatus(declareOk.getMessageCount(), declareOk.getConsumerCount());
+        }
+    }
+
+    private record QueueStatus(int messageCount, int consumerCount) {
     }
 }
