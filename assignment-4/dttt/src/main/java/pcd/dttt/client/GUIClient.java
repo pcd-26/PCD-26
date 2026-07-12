@@ -58,6 +58,12 @@ public class GUIClient extends JFrame implements GameEventListener {
     // Game Client Controller & State
     /** The controller abstraction decoupling the UI from the network. */
     private final GameController controller;
+    /** Default host used to prefill the connection form. */
+    private final String defaultHost;
+    /** Default port used to prefill the connection form. */
+    private final int defaultPort;
+    /** Default service name used to prefill the connection form. */
+    private final String defaultServiceName;
     /** The player's assigned game mark ('X' or 'O'). Defaults to empty space. */
     private char myMark = ' '; // 'X' or 'O' or ' '
 
@@ -66,6 +72,8 @@ public class GUIClient extends JFrame implements GameEventListener {
     private JTextField hostField;
     /** Input field for server port number. */
     private JTextField portField;
+    /** Input field for the lobby service binding name. */
+    private JTextField serviceField;
     /** Input field for player nickname. */
     private JTextField nameField;
     /** Button to initiate connection to the server. */
@@ -103,15 +111,21 @@ public class GUIClient extends JFrame implements GameEventListener {
      * Constructs a new GUI client frame.
      *
      * @param controller the game controller interface
+     * @param defaultHost the host used to prefill the connection form
+     * @param defaultPort the port used to prefill the connection form
+     * @param defaultServiceName the service name used to prefill the connection form
      */
-    public GUIClient(GameController controller) {
+    public GUIClient(GameController controller, String defaultHost, int defaultPort, String defaultServiceName) {
         super("Distributed Tic-Tac-Toe");
         this.controller = controller;
+        this.defaultHost = defaultHost;
+        this.defaultPort = defaultPort;
+        this.defaultServiceName = defaultServiceName;
         this.controller.registerEventListener(this);
         
         // Window Setup
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        setSize(550, 600);
+        setSize(550, 650);
         setLocationRelativeTo(null);
 
         // Window Closing Listener to disconnect cleanly
@@ -176,7 +190,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         gbc.gridy = 1;
         panel.add(hostLabel, gbc);
 
-        hostField = createTextField("localhost");
+        hostField = createTextField(defaultHost);
         gbc.gridx = 1;
         gbc.gridy = 1;
         gbc.weightx = 0.7;
@@ -188,28 +202,40 @@ public class GUIClient extends JFrame implements GameEventListener {
         gbc.weightx = 0.3;
         panel.add(portLabel, gbc);
 
-        portField = createTextField("1099");
+        portField = createTextField(String.valueOf(defaultPort));
         gbc.gridx = 1;
         gbc.gridy = 2;
         gbc.weightx = 0.7;
         panel.add(portField, gbc);
 
-        JLabel nameLabel = createLabel("Your Name:");
+        JLabel serviceLabel = createLabel("Service Name:");
         gbc.gridx = 0;
         gbc.gridy = 3;
+        gbc.weightx = 0.3;
+        panel.add(serviceLabel, gbc);
+
+        serviceField = createTextField(defaultServiceName);
+        gbc.gridx = 1;
+        gbc.gridy = 3;
+        gbc.weightx = 0.7;
+        panel.add(serviceField, gbc);
+
+        JLabel nameLabel = createLabel("Your Name:");
+        gbc.gridx = 0;
+        gbc.gridy = 4;
         gbc.weightx = 0.3;
         panel.add(nameLabel, gbc);
 
         nameField = createTextField("");
         gbc.gridx = 1;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.weightx = 0.7;
         panel.add(nameField, gbc);
 
         connectBtn = createStyledButton("Connect to Lobby", COLOR_BTN_PRIMARY);
         connectBtn.addActionListener(this::handleConnect);
         gbc.gridx = 0;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         gbc.gridwidth = 2;
         gbc.insets = new Insets(20, 10, 10, 10);
         panel.add(connectBtn, gbc);
@@ -474,9 +500,10 @@ public class GUIClient extends JFrame implements GameEventListener {
     private void handleConnect(ActionEvent e) {
         String host = hostField.getText().trim();
         String portStr = portField.getText().trim();
+        String serviceName = serviceField.getText().trim();
         String name = nameField.getText().trim();
 
-        if (host.isEmpty() || portStr.isEmpty() || name.isEmpty()) {
+        if (host.isEmpty() || portStr.isEmpty() || serviceName.isEmpty() || name.isEmpty()) {
             JOptionPane.showMessageDialog(this, "All fields are required.", "Input Validation", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -494,7 +521,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         new Thread(() -> {
             try {
-                controller.connect(host, port, name);
+                controller.connect(host, port, serviceName, name);
                 SwingUtilities.invokeLater(() -> {
                     lobbyStatusLbl.setText("Connected as: " + controller.getPlayerName());
                     cardLayout.show(mainPanel, "LOBBY");

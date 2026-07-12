@@ -21,6 +21,9 @@ public class CLIClient implements GameEventListener {
     /** The remote server RMI port. */
     private final int port;
 
+    /** The RMI binding name of the lobby service. */
+    private final String serviceName;
+
     /** The scanner for user command-line input. */
     private final Scanner scanner;
 
@@ -42,11 +45,13 @@ public class CLIClient implements GameEventListener {
      * @param controller the game controller abstraction
      * @param host the remote server hostname
      * @param port the remote server RMI port
+     * @param serviceName the RMI binding name used by the lobby service
      */
-    public CLIClient(GameController controller, String host, int port) {
+    public CLIClient(GameController controller, String host, int port, String serviceName) {
         this.controller = controller;
         this.host = host;
         this.port = port;
+        this.serviceName = serviceName;
         this.scanner = new Scanner(System.in);
     }
 
@@ -68,7 +73,7 @@ public class CLIClient implements GameEventListener {
         // Establish connection via controller
         try {
             System.out.println("Connecting to lobby...");
-            controller.connect(host, port, playerName);
+            controller.connect(host, port, serviceName, playerName);
             controller.registerEventListener(this);
         } catch (Exception e) {
             System.err.println("Connection failed: " + e.getMessage());

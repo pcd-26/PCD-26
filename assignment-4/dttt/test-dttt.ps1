@@ -4,4 +4,4 @@
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Host "Executing Tic-Tac-Toe test suite..."
-mvn -f "$scriptDir/pom.xml" test
+mvn -B -f "$scriptDir/pom.xml" clean verify

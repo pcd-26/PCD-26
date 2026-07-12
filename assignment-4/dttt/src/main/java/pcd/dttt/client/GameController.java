@@ -13,10 +13,11 @@ public interface GameController {
      *
      * @param host the server IP address
      * @param port the server RMI port
+     * @param serviceName the RMI binding name used by the lobby service
      * @param playerName the nickname of the player connecting
      * @throws Exception if connection or stub export fails
      */
-    void connect(String host, int port, String playerName) throws Exception;
+    void connect(String host, int port, String serviceName, String playerName) throws Exception;
 
     /**
      * Creates a new game room with the given name.

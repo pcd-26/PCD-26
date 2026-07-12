@@ -1,20 +1,17 @@
 #!/bin/bash
-# Wrapper script to run the Distributed Tic-Tac-Toe CLI Client.
+# Wrapper script to run a standalone RMI registry for Distributed Tic-Tac-Toe.
 # Usage:
-#   ./run-dttt-cli.sh [host] [port] [serviceName]
+#   ./run-dttt-registry.sh [port]
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 JAR_PATH="$DIR/target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
 
-# Automatically rebuild if JAR doesn't exist or source files are newer than the JAR
 REBUILD=false
 if [ ! -f "$JAR_PATH" ]; then
     REBUILD=true
 else
-    # Check if any file in src/ is newer than the JAR
     if [ $(find "$DIR/src" -newer "$JAR_PATH" 2>/dev/null | wc -l) -gt 0 ]; then
         REBUILD=true
-    # Check if pom.xml is newer than the JAR
     elif [ "$DIR/pom.xml" -nt "$JAR_PATH" ]; then
         REBUILD=true
     fi
@@ -29,10 +26,7 @@ if [ "$REBUILD" = true ]; then
     fi
 fi
 
-# Default host, port, and service name if not specified
-HOST="${1:-localhost}"
-PORT="${2:-1099}"
-SERVICE_NAME="${3:-Lobby}"
+PORT="${1:-1099}"
 
-echo "Starting CLI Client connecting to server at $HOST:$PORT (service '$SERVICE_NAME')..."
-java -jar "$JAR_PATH" client "$HOST" "$PORT" "$SERVICE_NAME" --cli
+echo "Starting RMI registry on port $PORT..."
+java -jar "$JAR_PATH" registry "$PORT"

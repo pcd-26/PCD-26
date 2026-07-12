@@ -12,6 +12,9 @@ import pcd.dttt.common.exceptions.GameNotFoundException;
  * Bound in the RMI Registry under a known name.
  */
 public interface Lobby extends Remote {
+    /** Default RMI binding name used by the distributed TTT service. */
+    String DEFAULT_BINDING_NAME = "Lobby";
+
     /**
      * Creates a new game.
      *

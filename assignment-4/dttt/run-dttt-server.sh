@@ -1,7 +1,7 @@
 #!/bin/bash
 # Wrapper script to run the Distributed Tic-Tac-Toe Server.
 # Usage:
-#   ./run-dttt-server.sh [port]
+#   ./run-dttt-server.sh [registryHost] [registryPort] [serviceName]
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 JAR_PATH="$DIR/target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
@@ -29,8 +29,10 @@ if [ "$REBUILD" = true ]; then
     fi
 fi
 
-# Default port to 1099 if not specified
-PORT="${1:-1099}"
+# Default registry parameters if not specified
+REGISTRY_HOST="${1:-localhost}"
+REGISTRY_PORT="${2:-1099}"
+SERVICE_NAME="${3:-Lobby}"
 
-echo "Starting Tic-Tac-Toe Server on port $PORT..."
-java -jar "$JAR_PATH" server "$PORT"
+echo "Starting Tic-Tac-Toe Server binding '$SERVICE_NAME' at $REGISTRY_HOST:$REGISTRY_PORT..."
+java -jar "$JAR_PATH" server "$REGISTRY_HOST" "$REGISTRY_PORT" "$SERVICE_NAME"
