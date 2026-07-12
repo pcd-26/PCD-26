@@ -6,6 +6,7 @@ v1.0.0-20260504
 
 The assignment is about concurrent programming based on message passing, synchronous message passing based on processes and channels (first exercise, in Go) and asynchronous message passing based on actors (second exercise, using Apache Pekko).
 
+---
 
 ### Exercise #1 - *Smart Home Alarm System* 
 
