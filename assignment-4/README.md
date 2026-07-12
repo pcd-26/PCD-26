@@ -10,6 +10,7 @@ The assignment is about distributed programming.
 
 - [Description](https://github.com/nicolasfara/seminar-pcd-actor-pekko-code/blob/master/assignment_4_smart_home_alarm_cluster.md) by N. Farabegoli
 - [Local description](ex1.md)
+- [Project startup commands](cshas/README.md)
 
 ### Exercise #2 - *Distributed TTT with Java RMI*
 

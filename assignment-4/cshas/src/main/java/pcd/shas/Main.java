@@ -10,31 +10,41 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pcd.shas.common.AlarmState;
-import pcd.shas.common.SensorType;
-import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 import pcd.shas.keypad.KeypadActor;
+import pcd.shas.runtime.NodeStartup;
+import pcd.shas.runtime.NodeStartup.NodeArguments;
 import pcd.shas.sensor.SensorActor;
 import pcd.shas.siren.SirenActor;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.Duration;
-import java.util.Objects;
-import java.util.Scanner;
+import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 /**
  * Main entry point for the clustered Smart Home Alarm System (SHAS).
  *
- * <p>Can run either in automatic simulation mode (default, starts a local cluster
- * and simulates failure and recovery) or in manual role-specific node mode
- * (control-unit, keypad, sensor).</p>
+ * <p>The application can run in two ways:
+ * <ul>
+ *   <li>automatic demo mode, which starts three local nodes inside one JVM; or</li>
+ *   <li>node mode, where each JVM runs one role: control-unit, keypad, or sensor.</li>
+ * </ul>
  */
 public final class Main {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
     private static final String SYSTEM_NAME = "shas-cluster";
+    private static final String LOCAL_HOST = "127.0.0.1";
+    private static final int CONTROL_UNIT_PORT = 2551;
+    private static final int KEYPAD_PORT = 2552;
+    private static final int SENSOR_PORT = 2553;
+    private static final List<String> LOCAL_SEED_NODES = List.of(
+            NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, CONTROL_UNIT_PORT),
+            NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, KEYPAD_PORT),
+            NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, SENSOR_PORT)
+    );
 
     private Main() {
         // Utility class.
@@ -42,131 +52,171 @@ public final class Main {
 
     public static void main(String[] args) {
         if (args.length == 0 || "demo".equalsIgnoreCase(args[0])) {
-            runAutomaticDemo();
-        } else {
-            runManualRole(args);
+            runLocalDemo();
+            return;
+        }
+
+        try {
+            NodeArguments launchArguments = NodeStartup.parseNodeArguments(args);
+            runNode(launchArguments);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Invalid startup arguments: {}", e.getMessage());
         }
     }
 
-    private static void runAutomaticDemo() {
-        LOGGER.info("Starting automatic clustered SHAS demo...");
+    private static void runLocalDemo() {
+        LOGGER.info("Starting local three-node SHAS demo...");
 
         Config baseConfig = ConfigFactory.load();
-
-        // 1. Start Control Unit node on port 2551
-        LOGGER.info("Starting Control Unit Node on port 2551...");
-        Config config1 = ConfigFactory.parseString(
-                "pekko.remote.artery.canonical.port = 2551"
-        ).withFallback(baseConfig);
-        ActorSystem<ControlUnitActor.Command> cuSystem = ActorSystem.create(
-                createControlUnitNodeBehavior(),
+        Config controlUnitConfig = NodeStartup.buildClusterConfig(
                 SYSTEM_NAME,
-                config1
-        );
-
-        // 2. Start Keypad node on port 2552
-        LOGGER.info("Starting Keypad Node on port 2552...");
-        Config config2 = ConfigFactory.parseString(
-                "pekko.remote.artery.canonical.port = 2552"
+                LOCAL_HOST,
+                CONTROL_UNIT_PORT,
+                LOCAL_SEED_NODES
         ).withFallback(baseConfig);
+        Config keypadConfig = NodeStartup.buildClusterConfig(
+                SYSTEM_NAME,
+                LOCAL_HOST,
+                KEYPAD_PORT,
+                LOCAL_SEED_NODES
+        ).withFallback(baseConfig);
+        Config sensorConfig = NodeStartup.buildClusterConfig(
+                SYSTEM_NAME,
+                LOCAL_HOST,
+                SENSOR_PORT,
+                LOCAL_SEED_NODES
+        ).withFallback(baseConfig);
+        AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(controlUnitConfig);
+
+        ActorSystem<ControlUnitActor.Command> controlUnitSystem = ActorSystem.create(
+                createControlUnitNodeBehavior(alarmConfiguration),
+                SYSTEM_NAME,
+                controlUnitConfig
+        );
         ActorSystem<KeypadActor.Command> keypadSystem = ActorSystem.create(
                 KeypadActor.create(),
                 SYSTEM_NAME,
-                config2
+                keypadConfig
         );
-
-        // 3. Start Sensors node on port 2553
-        LOGGER.info("Starting Sensors Node on port 2553...");
-        Config config3 = ConfigFactory.parseString(
-                "pekko.remote.artery.canonical.port = 2553"
-        ).withFallback(baseConfig);
-        ActorSystem<SensorActor.Command> sensorsSystem = ActorSystem.create(
+        ActorSystem<SensorActor.Command> sensorSystem = ActorSystem.create(
                 createSensorsNodeBehavior(),
                 SYSTEM_NAME,
-                config3
+                sensorConfig
         );
+        ActorSystem<ControlUnitActor.Command> restartedControlUnitSystem = null;
 
         try {
-            // Wait for cluster formation
-            LOGGER.info("Waiting for cluster to form...");
+            LOGGER.info("Waiting for cluster formation...");
             Thread.sleep(3000);
 
-            // Fetch Control Unit actor reference from system1
-            // We can query its state
-            LOGGER.info("[DEMO STEP 1] Querying initial state of Control Unit (should be RECOVERY)...");
-            AlarmState state = queryControlUnitState(cuSystem);
-            LOGGER.info("[DEMO RESULT] Control Unit State: {}", state);
-
-            // Submit incorrect PIN
-            LOGGER.info("[DEMO STEP 2] Submitting incorrect PIN '9999' from Keypad on Node 2...");
+            LOGGER.info("[DEMO] Initial state: {}", queryControlUnitState(controlUnitSystem));
             keypadSystem.tell(new KeypadActor.SubmitPin("9999"));
             Thread.sleep(500);
-            LOGGER.info("[DEMO RESULT] Control Unit State: {}", queryControlUnitState(cuSystem));
+            LOGGER.info("[DEMO] After wrong PIN: {}", queryControlUnitState(controlUnitSystem));
 
-            // Trigger Sensor on Node 3 while in RECOVERY
-            LOGGER.info("[DEMO STEP 3] Activating Front Door Sensor on Node 3 (should be ignored in RECOVERY)...");
-            sensorsSystem.tell(new SensorActor.Activate());
+            sensorSystem.tell(new SensorActor.Activate());
             Thread.sleep(500);
 
-            // Submit correct PIN "1234"
-            LOGGER.info("[DEMO STEP 4] Submitting correct PIN '1234' from Keypad...");
             keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
             Thread.sleep(1000);
-            state = queryControlUnitState(cuSystem);
-            LOGGER.info("[DEMO RESULT] Control Unit State: {}", state);
+            LOGGER.info("[DEMO] After correct PIN: {}", queryControlUnitState(controlUnitSystem));
 
-            // Arm system
-            LOGGER.info("[DEMO STEP 5] Arming the system (transition to EXIT_DELAY)...");
-            cuSystem.tell(new ControlUnitActor.ArmAll());
+            controlUnitSystem.tell(new ControlUnitActor.ArmAll());
             keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
             Thread.sleep(500);
-            LOGGER.info("[DEMO RESULT] Control Unit State: {}", queryControlUnitState(cuSystem));
+            LOGGER.info("[DEMO] After arming request: {}", queryControlUnitState(controlUnitSystem));
 
-            // Wait for EXIT_DELAY (configured as 5 seconds in application.conf)
-            LOGGER.info("Waiting for EXIT_DELAY (5s)...");
             Thread.sleep(5500);
-            LOGGER.info("[DEMO RESULT] Control Unit State: {}", queryControlUnitState(cuSystem));
+            LOGGER.info("[DEMO] After exit delay: {}", queryControlUnitState(controlUnitSystem));
 
-            // CRASH / RESTART OF CONTROL UNIT
-            LOGGER.info("[DEMO STEP 6] Simulating Control Unit crash: terminating Node 1...");
-            cuSystem.terminate();
-            cuSystem.getWhenTerminated().toCompletableFuture().join();
-            LOGGER.info("Node 1 terminated.");
-            Thread.sleep(2000);
+            controlUnitSystem.terminate();
+            controlUnitSystem.getWhenTerminated().toCompletableFuture().join();
 
-            // Recreate Control Unit node on port 2551
-            LOGGER.info("[DEMO STEP 7] Restarting Control Unit Node on port 2551...");
-            ActorSystem<ControlUnitActor.Command> restartedCuSystem = ActorSystem.create(
-                    createControlUnitNodeBehavior(),
+            restartedControlUnitSystem = ActorSystem.create(
+                    createControlUnitNodeBehavior(alarmConfiguration),
                     SYSTEM_NAME,
-                    config1
+                    controlUnitConfig
             );
-            Thread.sleep(3000); // Wait for reconnection
+            Thread.sleep(3000);
 
-            LOGGER.info("[DEMO STEP 8] Querying restarted Control Unit state (should enter RECOVERY)...");
-            AlarmState restartedState = queryControlUnitState(restartedCuSystem);
-            LOGGER.info("[DEMO RESULT] Restarted Control Unit State: {}", restartedState);
-
-            // Trigger Sensor again: should be ignored because of RECOVERY
-            LOGGER.info("[DEMO STEP 9] Activating sensor (should be ignored)...");
-            sensorsSystem.tell(new SensorActor.Activate());
+            LOGGER.info("[DEMO] Restarted state: {}", queryControlUnitState(restartedControlUnitSystem));
+            sensorSystem.tell(new SensorActor.Activate());
             Thread.sleep(500);
 
-            // Submit correct PIN on restarted Control Unit to disarm it
-            LOGGER.info("[DEMO STEP 10] Submitting correct PIN '1234' on Keypad (Node 2) to recovery-disarm...");
             keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
             Thread.sleep(1000);
-            LOGGER.info("[DEMO RESULT] Restarted Control Unit State: {}", queryControlUnitState(restartedCuSystem));
-
-            LOGGER.info("Automatic demo completed successfully!");
+            LOGGER.info("[DEMO] Final restarted state: {}", queryControlUnitState(restartedControlUnitSystem));
         } catch (Exception e) {
             LOGGER.error("Demo failed with exception", e);
         } finally {
-            LOGGER.info("Shutting down cluster...");
+            LOGGER.info("Shutting down demo systems...");
             keypadSystem.terminate();
-            sensorsSystem.terminate();
-            cuSystem.terminate();
+            sensorSystem.terminate();
+            controlUnitSystem.terminate();
+            if (restartedControlUnitSystem != null) {
+                restartedControlUnitSystem.terminate();
+            }
         }
+    }
+
+    private static void runNode(NodeArguments launchArguments) {
+        Config nodeConfig = NodeStartup.buildClusterConfig(
+                SYSTEM_NAME,
+                launchArguments.host(),
+                launchArguments.port(),
+                launchArguments.seedNodes()
+        );
+        AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(nodeConfig);
+
+        switch (launchArguments.role()) {
+            case CONTROL_UNIT -> runControlUnitNode(nodeConfig, alarmConfiguration);
+            case KEYPAD -> runKeypadNode(nodeConfig);
+            case SENSOR -> runSensorNode(nodeConfig, launchArguments);
+        }
+    }
+
+    private static void runControlUnitNode(Config config, AlarmConfiguration alarmConfiguration) {
+        ActorSystem<ControlUnitActor.Command> system = ActorSystem.create(
+                createControlUnitNodeBehavior(alarmConfiguration),
+                SYSTEM_NAME,
+                config
+        );
+        LOGGER.info("Control unit node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
+        waitEnter();
+        system.terminate();
+    }
+
+    private static void runKeypadNode(Config config) {
+        ActorSystem<KeypadActor.Command> system = ActorSystem.create(
+                KeypadActor.create(),
+                SYSTEM_NAME,
+                config
+        );
+        LOGGER.info("Keypad node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
+        LOGGER.info("Type digits and press Enter to submit. Type 'exit' to stop the node.");
+        startKeypadConsoleInputReader(system);
+    }
+
+    private static void runSensorNode(Config config, NodeArguments launchArguments) {
+        ActorSystem<SensorActor.Command> system = ActorSystem.create(
+                SensorActor.create(
+                        launchArguments.sensorId(),
+                        launchArguments.sensorType(),
+                        launchArguments.zone()
+                ),
+                SYSTEM_NAME,
+                config
+        );
+        LOGGER.info(
+                "Sensor node running on {}:{} (id={}, type={}, zone={})",
+                config.getString("pekko.remote.artery.canonical.hostname"),
+                config.getInt("pekko.remote.artery.canonical.port"),
+                launchArguments.sensorId(),
+                launchArguments.sensorType(),
+                launchArguments.zone()
+        );
+        LOGGER.info("Press Enter to trigger the sensor. Type 'exit' to stop the node.");
+        startSensorConsoleInputReader(system);
     }
 
     private static AlarmState queryControlUnitState(ActorSystem<ControlUnitActor.Command> system) {
@@ -184,78 +234,20 @@ public final class Main {
         }
     }
 
-    private static void runManualRole(String[] args) {
-        String role = args[0].toLowerCase();
-        int port = 0;
-        if (args.length > 1) {
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                LOGGER.error("Invalid port: {}", args[1]);
-                return;
-            }
-        }
-
-        Config baseConfig = ConfigFactory.load();
-        Config config = ConfigFactory.parseString("pekko.remote.artery.canonical.port = " + port)
-                .withFallback(baseConfig);
-
-        LOGGER.info("Starting role '{}' on port {}...", role, port);
-
-        switch (role) {
-            case "control-unit" -> {
-                ActorSystem<ControlUnitActor.Command> system = ActorSystem.create(
-                        createControlUnitNodeBehavior(),
-                        SYSTEM_NAME,
-                        config
-                );
-                LOGGER.info("Control Unit Node running. Press Enter to shutdown.");
-                waitEnter();
-                system.terminate();
-            }
-            case "keypad" -> {
-                ActorSystem<KeypadActor.Command> system = ActorSystem.create(
-                        KeypadActor.create(),
-                        SYSTEM_NAME,
-                        config
-                );
-                LOGGER.info("Keypad Node running. Type digits to type PIN, '#' to submit, '*' to clear.");
-                startKeypadConsoleInputReader(system);
-            }
-            case "sensor" -> {
-                if (args.length < 5) {
-                    LOGGER.error("Sensor usage: Main sensor <port> <sensorId> <sensorType: MOTION/DOOR_WINDOW> <zone: PERIMETER/GROUND_FLOOR/LIVING_AREA/SLEEPING_AREA>");
-                    return;
-                }
-                String id = args[2];
-                SensorType type = SensorType.valueOf(args[3].toUpperCase());
-                Zone zone = Zone.valueOf(args[4].toUpperCase());
-
-                ActorSystem<SensorActor.Command> system = ActorSystem.create(
-                        SensorActor.create(id, type, zone),
-                        SYSTEM_NAME,
-                        config
-                );
-                LOGGER.info("Sensor Node running (ID={}, Type={}, Zone={}). Press Enter to trigger.", id, type, zone);
-                startSensorConsoleInputReader(system);
-            }
-            default -> LOGGER.error("Unknown role: {}", role);
-        }
-    }
-
-    private static Behavior<ControlUnitActor.Command> createControlUnitNodeBehavior() {
+    private static Behavior<ControlUnitActor.Command> createControlUnitNodeBehavior(AlarmConfiguration alarmConfiguration) {
         return Behaviors.setup(context -> {
-            // Spawn Siren
             context.spawn(SirenActor.create(), "siren");
-            // Spawn Control Unit
-            ActorRef<ControlUnitActor.Command> cu = context.spawn(
-                    ControlUnitActor.create("1234"),
+            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
+                    ControlUnitActor.create(
+                            alarmConfiguration.correctPin(),
+                            alarmConfiguration.exitDelay(),
+                            alarmConfiguration.entryDelay()
+                    ),
                     "control-unit"
             );
-            // Forward commands sent to root system to the control unit
             return Behaviors.receive(ControlUnitActor.Command.class)
-                    .onMessage(ControlUnitActor.Command.class, msg -> {
-                        cu.tell(msg);
+                    .onMessage(ControlUnitActor.Command.class, message -> {
+                        controlUnit.tell(message);
                         return Behaviors.same();
                     })
                     .build();
@@ -264,19 +256,19 @@ public final class Main {
 
     private static Behavior<SensorActor.Command> createSensorsNodeBehavior() {
         return Behaviors.setup(context -> {
-            ActorRef<SensorActor.Command> door = context.spawn(
-                    SensorActor.create("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER),
+            ActorRef<SensorActor.Command> doorSensor = context.spawn(
+                    SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, pcd.shas.common.Zone.PERIMETER),
                     "front-door-sensor"
             );
-            ActorRef<SensorActor.Command> motion = context.spawn(
-                    SensorActor.create("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA),
+            ActorRef<SensorActor.Command> motionSensor = context.spawn(
+                    SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, pcd.shas.common.Zone.LIVING_AREA),
                     "living-room-sensor"
             );
 
             return Behaviors.receive(SensorActor.Command.class)
-                    .onMessage(SensorActor.Activate.class, msg -> {
-                        door.tell(msg);
-                        motion.tell(msg);
+                    .onMessage(SensorActor.Activate.class, message -> {
+                        doorSensor.tell(message);
+                        motionSensor.tell(message);
                         return Behaviors.same();
                     })
                     .build();
@@ -286,8 +278,8 @@ public final class Main {
     private static void waitEnter() {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
             reader.readLine();
-        } catch (Exception e) {
-            // ignore
+        } catch (Exception ignored) {
+            // Ignore shutdown input failures.
         }
     }
 
@@ -305,10 +297,9 @@ public final class Main {
                         system.tell(new KeypadActor.PressKey(c));
                     }
                     system.tell(new KeypadActor.PressKey('#'));
-                    LOGGER.info("Typed PIN sequence processed.");
                 }
-            } catch (Exception e) {
-                // ignore
+            } catch (Exception ignored) {
+                // Ignore console shutdown failures.
             }
         }).start();
     }
@@ -316,12 +307,17 @@ public final class Main {
     private static void startSensorConsoleInputReader(ActorSystem<SensorActor.Command> system) {
         new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
-                while (reader.readLine() != null) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.trim().equalsIgnoreCase("exit")) {
+                        system.terminate();
+                        break;
+                    }
                     system.tell(new SensorActor.Activate());
-                    LOGGER.info("Simulation: Activated sensor.");
+                    LOGGER.info("Sensor activation requested from console.");
                 }
-            } catch (Exception e) {
-                // ignore
+            } catch (Exception ignored) {
+                // Ignore console shutdown failures.
             }
         }).start();
     }
