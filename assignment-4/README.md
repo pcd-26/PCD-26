@@ -14,11 +14,14 @@ The assignment is about distributed programming.
 
 ### Exercise #2 - *Distributed TTT with Java RMI*
 
-We want to implement a distributed system for playing Tic-Tac-Toe: 
+We want to implement a distributed system for playing Tic-Tac-Toe:
 - A player that aims at play a game can create a new game with some name, waiting for opponents
 - A player can join an existing game, given its name
 
 The system should be designed according the distributed object computing and concurrent programming principles discussed in the course, using Java RMI as underlying RPC mechanism.
+
+- [Project startup commands](dttt/README.md)
+- [Report source](dttt/report/README.md)
  
 ### **[Optional]**  Exercise #3 - *Distributed Critical Sections with a Message-Oriented Middleware* 
 
@@ -36,3 +39,7 @@ The deliverable must be a zipped folder `Assignment-04`, to be submitted on the 
 - `cshas/doc` directory with a short report in PDF (`report.pdf`). The report should include:
 	- A brief analsysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
 	- A brief description of the strategy adopted
+
+The `dttt` sub-project follows the same structure locally:
+- `dttt/src` directory with sources
+- `dttt/report` directory with the LaTeX source for its report
