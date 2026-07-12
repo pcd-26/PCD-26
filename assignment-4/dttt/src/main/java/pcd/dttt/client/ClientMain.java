@@ -1,14 +1,12 @@
 package pcd.dttt.client;
 
 import java.awt.GraphicsEnvironment;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
 import javax.swing.UIManager;
-import pcd.dttt.common.Lobby;
 
 /**
  * Main entry point for the Tic-Tac-Toe client.
- * Decides whether to launch in GUI or CLI mode based on flags and headless state.
+ * Decides whether to launch in GUI or CLI mode based on flags and headless state,
+ * instantiating the GameController logic layer and injecting it into the UIs.
  */
 public class ClientMain {
     private static final String DEFAULT_HOST = "localhost";
@@ -51,27 +49,23 @@ public class ClientMain {
         System.out.println("Launching Graphic User Interface...");
         javax.swing.SwingUtilities.invokeLater(() -> {
             try {
-                // Apply a cleaner cross-platform look and feel if available
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception e) {
                 // Fallback to default Swing Look & Feel
             }
-            GUIClient gui = new GUIClient();
+            GameController controller = new GameControllerImpl();
+            GUIClient gui = new GUIClient(controller);
             gui.setVisible(true);
         });
     }
 
     private static void startCliMode(String host, int port) {
-        System.out.println("Attempting to connect to RMI Server at " + host + ":" + port + "...");
         try {
-            Registry registry = LocateRegistry.getRegistry(host, port);
-            Lobby lobby = (Lobby) registry.lookup("Lobby");
-            System.out.println("Connected to Lobby successfully.");
-
-            CLIClient cli = new CLIClient(lobby);
+            GameController controller = new GameControllerImpl();
+            CLIClient cli = new CLIClient(controller, host, port);
             cli.start();
         } catch (Exception e) {
-            System.err.println("Error connecting to server CLI mode failed: " + e.getMessage());
+            System.err.println("CLI mode launch failed: " + e.getMessage());
             e.printStackTrace();
             System.exit(1);
         }

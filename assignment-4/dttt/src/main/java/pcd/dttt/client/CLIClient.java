@@ -1,48 +1,47 @@
 package pcd.dttt.client;
 
-import java.rmi.RemoteException;
 import java.util.List;
 import java.util.Scanner;
 import pcd.dttt.common.BoardState;
-import pcd.dttt.common.Game;
 import pcd.dttt.common.GameStatus;
-import pcd.dttt.common.Lobby;
-import pcd.dttt.common.exceptions.GameAlreadyExistsException;
-import pcd.dttt.common.exceptions.GameFullException;
-import pcd.dttt.common.exceptions.GameNotFoundException;
 import pcd.dttt.common.exceptions.InvalidMoveException;
 import pcd.dttt.common.exceptions.NotYourTurnException;
 
 /**
  * Command Line Interface client for the Distributed Tic-Tac-Toe game.
+ * Communicates with the server strictly via the {@link GameController} abstraction.
  */
 public class CLIClient implements GameEventListener {
-    private final Lobby lobby;
+    private final GameController controller;
+    private final String host;
+    private final int port;
     private final Scanner scanner;
     private final Object gameLock = new Object();
 
     private String playerName;
-    private PlayerClientImpl clientStub;
-    
-    private Game currentGame;
     private BoardState currentBoardState;
     private boolean opponentLeftFlag = false;
 
-    public CLIClient(Lobby lobby) {
-        this.lobby = lobby;
+    /**
+     * Constructs a new CLI client.
+     *
+     * @param controller the game controller abstraction
+     * @param host the remote server hostname
+     * @param port the remote server RMI port
+     */
+    public CLIClient(GameController controller, String host, int port) {
+        this.controller = controller;
+        this.host = host;
+        this.port = port;
         this.scanner = new Scanner(System.in);
     }
 
+    /**
+     * Launches the CLI client setup and main execution loops.
+     */
     public void start() {
         System.out.println("=== Welcome to Distributed Tic-Tac-Toe ===");
         
-        try {
-            this.clientStub = new PlayerClientImpl(this);
-        } catch (RemoteException e) {
-            System.err.println("Failed to export client callback stub: " + e.getMessage());
-            return;
-        }
-
         // Get player name
         while (playerName == null || playerName.isBlank()) {
             System.out.print("Enter your name: ");
@@ -50,6 +49,16 @@ public class CLIClient implements GameEventListener {
             if (playerName.isBlank()) {
                 System.out.println("Name cannot be empty!");
             }
+        }
+
+        // Establish connection via controller
+        try {
+            System.out.println("Connecting to lobby...");
+            controller.connect(host, port, playerName);
+            controller.registerEventListener(this);
+        } catch (Exception e) {
+            System.err.println("Connection failed: " + e.getMessage());
+            return;
         }
 
         boolean exit = false;
@@ -76,12 +85,7 @@ public class CLIClient implements GameEventListener {
             }
         }
         
-        // Clean up client RMI export on exit
-        try {
-            java.rmi.server.UnicastRemoteObject.unexportObject(clientStub, true);
-        } catch (Exception e) {
-            // Ignore
-        }
+        controller.disconnect();
     }
 
     private void showMainMenu() {
@@ -103,22 +107,13 @@ public class CLIClient implements GameEventListener {
         try {
             synchronized (gameLock) {
                 currentBoardState = null;
-                currentGame = null;
                 opponentLeftFlag = false;
             }
             
-            Game game = lobby.createGame(gameName, playerName, clientStub);
-            
-            synchronized (gameLock) {
-                currentGame = game;
-                currentBoardState = game.getBoardState();
-            }
-            
+            controller.createGame(gameName);
             System.out.println("Game '" + gameName + "' created successfully.");
             playGameLoop();
 
-        } catch (GameAlreadyExistsException e) {
-            System.out.println("Error: " + e.getMessage());
         } catch (Exception e) {
             System.out.println("Error creating game: " + e.getMessage());
         }
@@ -135,22 +130,13 @@ public class CLIClient implements GameEventListener {
         try {
             synchronized (gameLock) {
                 currentBoardState = null;
-                currentGame = null;
                 opponentLeftFlag = false;
             }
 
-            Game game = lobby.joinGame(gameName, playerName, clientStub);
-            
-            synchronized (gameLock) {
-                currentGame = game;
-                currentBoardState = game.getBoardState();
-            }
-
+            controller.joinGame(gameName);
             System.out.println("Joined game '" + gameName + "' successfully.");
             playGameLoop();
 
-        } catch (GameNotFoundException | GameFullException e) {
-            System.out.println("Error: " + e.getMessage());
         } catch (Exception e) {
             System.out.println("Error joining game: " + e.getMessage());
         }
@@ -158,7 +144,7 @@ public class CLIClient implements GameEventListener {
 
     private void listWaitingGames() {
         try {
-            List<String> waiting = lobby.getWaitingGames();
+            List<String> waiting = controller.getWaitingGames();
             if (waiting.isEmpty()) {
                 System.out.println("No games are currently waiting for players.");
             } else {
@@ -175,7 +161,7 @@ public class CLIClient implements GameEventListener {
     private void playGameLoop() {
         // Wait for the game to start if waiting
         synchronized (gameLock) {
-            while (currentBoardState != null && currentBoardState.getStatus() == GameStatus.WAITING) {
+            while (currentBoardState == null || currentBoardState.getStatus() == GameStatus.WAITING) {
                 System.out.println("Waiting for an opponent to join...");
                 try {
                     gameLock.wait();
@@ -218,7 +204,7 @@ public class CLIClient implements GameEventListener {
                 
                 if (input.equalsIgnoreCase("leave")) {
                     try {
-                        currentGame.leaveGame(playerName);
+                        controller.leaveGame();
                     } catch (Exception e) {
                         System.out.println("Error leaving game: " + e.getMessage());
                     }
@@ -230,7 +216,7 @@ public class CLIClient implements GameEventListener {
                     try {
                         int r = Integer.parseInt(tokens[0]);
                         int c = Integer.parseInt(tokens[1]);
-                        currentGame.makeMove(playerName, r, c);
+                        controller.makeMove(r, c);
                     } catch (NumberFormatException e) {
                         System.out.println("Invalid input. Use integers between 0 and 2.");
                     } catch (NotYourTurnException e) {
@@ -238,7 +224,7 @@ public class CLIClient implements GameEventListener {
                     } catch (InvalidMoveException e) {
                         System.out.println("Invalid move: " + e.getMessage());
                     } catch (Exception e) {
-                        System.out.println("RMI Error during move: " + e.getMessage());
+                        System.out.println("Error during move submission: " + e.getMessage());
                     }
                 } else {
                     System.out.println("Please input exactly two numbers (row and col) or type 'leave'.");
