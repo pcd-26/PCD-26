@@ -202,7 +202,7 @@ If you need to speed up benchmarks, pass:
 python scripts/run_benchmarks.py --mode speedup
 ```
 
-The GitHub Actions workflow `Assignment 1 Tests CI` runs the Maven build on
+The GitHub Actions workflow `Assignment 01 CI` runs the Maven build on
 assignment-1 changes and also supports a manual `test_selector` input for
 targeted test runs. Benchmark generation is local-only now and is not wired to
 CI.
