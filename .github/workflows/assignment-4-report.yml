@@ -32,9 +32,18 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Install LaTeX tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base
+
       - name: Build and test CSHAS
         working-directory: assignment-4/cshas
         run: mvn -B clean test
+
+      - name: Build CSHAS report
+        working-directory: assignment-4/cshas/report
+        run: make
 
       - name: Upload CSHAS test reports on failure
         if: failure()
@@ -60,9 +69,18 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Install LaTeX tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base
+
       - name: Build and verify DTTT
         working-directory: assignment-4/dttt
         run: mvn -B clean verify
+
+      - name: Build DTTT report
+        working-directory: assignment-4/dttt/report
+        run: make
 
       - name: Upload DTTT test reports on failure
         if: failure()
