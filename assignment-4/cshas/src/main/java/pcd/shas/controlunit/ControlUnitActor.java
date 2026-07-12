@@ -15,22 +15,17 @@ import pcd.shas.siren.SirenActor;
 
 import java.time.Duration;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * Control unit for the smart home alarm system, running as a clustered actor.
+ * Control unit for the smart home alarm system.
  *
- * <p>It registers itself with the Receptionist so sensors and keypads can discover it.
- * It dynamically discovers Sirens in the cluster using receptionist subscription.
- * On startup or restart, it enters the RECOVERY state for security.</p>
+ * <p>The actor keeps its logical state locally and transitions only through
+ * immutable command messages and typed timers.</p>
  */
 public final class ControlUnitActor {
 
-    /**
-     * Service key for receptionist discovery of the control unit.
-     */
     public static final ServiceKey<Command> CONTROL_UNIT_SERVICE_KEY =
             ServiceKey.create(Command.class, "control-unit-service");
 
@@ -90,7 +85,7 @@ public final class ControlUnitActor {
     }
 
     /**
-     * Query for the current alarm state, used by tests and demo scenarios.
+     * Query for the current alarm state.
      *
      * @param replyTo actor that should receive the state snapshot
      */
@@ -111,15 +106,37 @@ public final class ControlUnitActor {
         }
     }
 
-    // Internal commands
+    record ExitDelayTimeout(long generation) implements Command {}
 
-    record ExitDelayTimeout() implements Command {}
-
-    record EntryDelayTimeout() implements Command {}
+    record EntryDelayTimeout(long generation) implements Command {}
 
     record SirensUpdated(Set<ActorRef<SirenActor.Command>> sirens) implements Command {
         public SirensUpdated {
             Objects.requireNonNull(sirens, "sirens");
+            sirens = Set.copyOf(sirens);
+        }
+    }
+
+    private record ControlState(
+            AlarmState state,
+            Set<Zone> armedZones,
+            Set<ActorRef<SirenActor.Command>> sirens,
+            long generation
+    ) {
+        private ControlState {
+            Objects.requireNonNull(state, "state");
+            Objects.requireNonNull(armedZones, "armedZones");
+            Objects.requireNonNull(sirens, "sirens");
+            armedZones = Set.copyOf(armedZones);
+            sirens = Set.copyOf(sirens);
+        }
+
+        private ControlState withState(AlarmState nextState, Set<Zone> nextZones, long nextGeneration) {
+            return new ControlState(nextState, nextZones, sirens, nextGeneration);
+        }
+
+        private ControlState withSirens(Set<ActorRef<SirenActor.Command>> nextSirens) {
+            return new ControlState(state, armedZones, nextSirens, generation);
         }
     }
 
@@ -151,19 +168,24 @@ public final class ControlUnitActor {
         Objects.requireNonNull(entryDelayDuration, "entryDelayDuration");
 
         return Behaviors.setup(context -> {
-            // Register control unit with receptionist for sensor/keypad discovery
             context.getSystem().receptionist().tell(Receptionist.register(CONTROL_UNIT_SERVICE_KEY, context.getSelf()));
             context.getLog().info("ControlUnitActor registered with receptionist");
 
-            // Subscribe to Siren receptionist listings
-            ActorRef<Receptionist.Listing> listingAdapter = context.messageAdapter(
+            ActorRef<Receptionist.Listing> sirenAdapter = context.messageAdapter(
                     Receptionist.Listing.class,
                     listing -> new SirensUpdated(listing.getServiceInstances(SirenActor.SIREN_SERVICE_KEY))
             );
-            context.getSystem().receptionist().tell(Receptionist.subscribe(SirenActor.SIREN_SERVICE_KEY, listingAdapter));
+            context.getSystem().receptionist().tell(Receptionist.subscribe(SirenActor.SIREN_SERVICE_KEY, sirenAdapter));
 
             return Behaviors.withTimers(timers ->
-                    recovery(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, new HashSet<>())
+                    recovery(
+                            context,
+                            timers,
+                            configuredPin,
+                            exitDelayDuration,
+                            entryDelayDuration,
+                            new ControlState(AlarmState.RECOVERY, FULL_ARMS, Set.of(), 0L)
+                    )
             );
         });
     }
@@ -174,18 +196,25 @@ public final class ControlUnitActor {
             String configuredPin,
             Duration exitDelayDuration,
             Duration entryDelayDuration,
-            Set<ActorRef<SirenActor.Command>> sirens
+            ControlState state
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(SirensUpdated.class, message -> {
                     context.getLog().info("Sirens updated in RECOVERY: {}", message.sirens());
-                    return recovery(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, message.sirens());
+                    return recovery(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withSirens(message.sirens()));
                 })
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         context.getLog().info("Transition RECOVERY -> DISARMED");
-                        sirens.forEach(siren -> siren.tell(new SirenActor.Deactivate()));
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, FULL_ARMS);
+                        deactivateAll(state.sirens());
+                        return disarmed(
+                                context,
+                                timers,
+                                configuredPin,
+                                exitDelayDuration,
+                                entryDelayDuration,
+                                state.withState(AlarmState.DISARMED, FULL_ARMS, state.generation() + 1)
+                        );
                     }
                     context.getLog().warn("Incorrect PIN submitted in RECOVERY: {}", message.pin());
                     return Behaviors.same();
@@ -207,8 +236,8 @@ public final class ControlUnitActor {
                     context.getLog().info("Ignoring ArmPartial command while in RECOVERY");
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
-                .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.RECOVERY));
                     return Behaviors.same();
@@ -222,27 +251,34 @@ public final class ControlUnitActor {
             String configuredPin,
             Duration exitDelayDuration,
             Duration entryDelayDuration,
-            Set<ActorRef<SirenActor.Command>> sirens,
-            Set<Zone> selectedZones
+            ControlState state
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(SirensUpdated.class, message -> {
                     context.getLog().info("Sirens updated in DISARMED: {}", message.sirens());
-                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, message.sirens(), selectedZones);
+                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withSirens(message.sirens()));
                 })
                 .onMessage(ArmAll.class, message -> {
                     context.getLog().info("Configuring full arming");
-                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, FULL_ARMS);
+                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withState(AlarmState.DISARMED, FULL_ARMS, state.generation() + 1));
                 })
                 .onMessage(ArmPartial.class, message -> {
                     context.getLog().info("Configuring partial arming for zones {}", message.activeZones());
-                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, message.activeZones());
+                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withState(AlarmState.DISARMED, message.activeZones(), state.generation() + 1));
                 })
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
+                        long nextGeneration = state.generation() + 1;
                         context.getLog().info("Transition DISARMED -> EXIT_DELAY");
-                        timers.startSingleTimer(EXIT_DELAY_TIMER_KEY, new ExitDelayTimeout(), exitDelayDuration);
-                        return exitDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, selectedZones);
+                        timers.startSingleTimer(EXIT_DELAY_TIMER_KEY, new ExitDelayTimeout(nextGeneration), exitDelayDuration);
+                        return exitDelay(
+                                context,
+                                timers,
+                                configuredPin,
+                                exitDelayDuration,
+                                entryDelayDuration,
+                                state.withState(AlarmState.EXIT_DELAY, state.armedZones(), nextGeneration)
+                        );
                     }
                     context.getLog().info("Ignoring PIN submission while DISARMED");
                     return Behaviors.same();
@@ -256,8 +292,8 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
-                .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.DISARMED));
                     return Behaviors.same();
@@ -271,20 +307,26 @@ public final class ControlUnitActor {
             String configuredPin,
             Duration exitDelayDuration,
             Duration entryDelayDuration,
-            Set<ActorRef<SirenActor.Command>> sirens,
-            Set<Zone> selectedZones
+            ControlState state
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(SirensUpdated.class, message -> {
                     context.getLog().info("Sirens updated in EXIT_DELAY: {}", message.sirens());
-                    return exitDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, message.sirens(), selectedZones);
+                    return exitDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withSirens(message.sirens()));
                 })
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
-                        timers.cancel(EXIT_DELAY_TIMER_KEY);
                         context.getLog().info("Transition EXIT_DELAY -> DISARMED");
-                        sirens.forEach(siren -> siren.tell(new SirenActor.Deactivate()));
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, FULL_ARMS);
+                        timers.cancel(EXIT_DELAY_TIMER_KEY);
+                        deactivateAll(state.sirens());
+                        return disarmed(
+                                context,
+                                timers,
+                                configuredPin,
+                                exitDelayDuration,
+                                entryDelayDuration,
+                                state.withState(AlarmState.DISARMED, FULL_ARMS, state.generation() + 1)
+                        );
                     }
                     context.getLog().info("Ignoring PIN submission while EXIT_DELAY is active");
                     return Behaviors.same();
@@ -299,11 +341,21 @@ public final class ControlUnitActor {
                     return Behaviors.same();
                 })
                 .onMessage(ExitDelayTimeout.class, message -> {
+                    if (message.generation() != state.generation()) {
+                        return Behaviors.same();
+                    }
                     timers.cancel(EXIT_DELAY_TIMER_KEY);
                     context.getLog().info("Transition EXIT_DELAY -> ARMED");
-                    return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, selectedZones);
+                    return armed(
+                            context,
+                            timers,
+                            configuredPin,
+                            exitDelayDuration,
+                            entryDelayDuration,
+                            state.withState(AlarmState.ARMED, state.armedZones(), state.generation())
+                    );
                 })
-                .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.EXIT_DELAY));
                     return Behaviors.same();
@@ -317,34 +369,48 @@ public final class ControlUnitActor {
             String configuredPin,
             Duration exitDelayDuration,
             Duration entryDelayDuration,
-            Set<ActorRef<SirenActor.Command>> sirens,
-            Set<Zone> activeZones
+            ControlState state
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(SirensUpdated.class, message -> {
                     context.getLog().info("Sirens updated in ARMED: {}", message.sirens());
-                    return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, message.sirens(), activeZones);
+                    return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withSirens(message.sirens()));
                 })
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         context.getLog().info("Transition ARMED -> DISARMED");
                         timers.cancel(ENTRY_DELAY_TIMER_KEY);
-                        sirens.forEach(siren -> siren.tell(new SirenActor.Deactivate()));
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, FULL_ARMS);
+                        deactivateAll(state.sirens());
+                        return disarmed(
+                                context,
+                                timers,
+                                configuredPin,
+                                exitDelayDuration,
+                                entryDelayDuration,
+                                state.withState(AlarmState.DISARMED, FULL_ARMS, state.generation() + 1)
+                        );
                     }
                     context.getLog().info("Ignoring PIN submission while ARMED");
                     return Behaviors.same();
                 })
                 .onMessage(SensorActivated.class, message -> {
-                    if (activeZones.contains(message.sensorInfo().zone())) {
+                    if (state.armedZones().contains(message.sensorInfo().zone())) {
+                        long nextGeneration = state.generation() + 1;
                         context.getLog().info(
                                 "Transition ARMED -> ENTRY_DELAY due to sensor activation: sensor={}, type={}, zone={}",
                                 message.sensorInfo().id(),
                                 message.sensorInfo().type(),
                                 message.sensorInfo().zone()
                         );
-                        timers.startSingleTimer(ENTRY_DELAY_TIMER_KEY, new EntryDelayTimeout(), entryDelayDuration);
-                        return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, activeZones);
+                        timers.startSingleTimer(ENTRY_DELAY_TIMER_KEY, new EntryDelayTimeout(nextGeneration), entryDelayDuration);
+                        return entryDelay(
+                                context,
+                                timers,
+                                configuredPin,
+                                exitDelayDuration,
+                                entryDelayDuration,
+                                state.withState(AlarmState.ENTRY_DELAY, state.armedZones(), nextGeneration)
+                        );
                     }
                     context.getLog().info(
                             "Ignoring sensor activation while ARMED because zone {} is inactive: sensor={}, type={}",
@@ -354,8 +420,8 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
-                .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.ARMED));
                     return Behaviors.same();
@@ -369,20 +435,26 @@ public final class ControlUnitActor {
             String configuredPin,
             Duration exitDelayDuration,
             Duration entryDelayDuration,
-            Set<ActorRef<SirenActor.Command>> sirens,
-            Set<Zone> activeZones
+            ControlState state
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(SirensUpdated.class, message -> {
                     context.getLog().info("Sirens updated in ENTRY_DELAY: {}", message.sirens());
-                    return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, message.sirens(), activeZones);
+                    return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withSirens(message.sirens()));
                 })
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
-                        timers.cancel(ENTRY_DELAY_TIMER_KEY);
                         context.getLog().info("Transition ENTRY_DELAY -> DISARMED");
-                        sirens.forEach(siren -> siren.tell(new SirenActor.Deactivate()));
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, FULL_ARMS);
+                        timers.cancel(ENTRY_DELAY_TIMER_KEY);
+                        deactivateAll(state.sirens());
+                        return disarmed(
+                                context,
+                                timers,
+                                configuredPin,
+                                exitDelayDuration,
+                                entryDelayDuration,
+                                state.withState(AlarmState.DISARMED, FULL_ARMS, state.generation() + 1)
+                        );
                     }
                     context.getLog().info("Ignoring PIN submission while ENTRY_DELAY is active");
                     return Behaviors.same();
@@ -397,12 +469,22 @@ public final class ControlUnitActor {
                     return Behaviors.same();
                 })
                 .onMessage(EntryDelayTimeout.class, message -> {
+                    if (message.generation() != state.generation()) {
+                        return Behaviors.same();
+                    }
                     timers.cancel(ENTRY_DELAY_TIMER_KEY);
                     context.getLog().info("Transition ENTRY_DELAY -> ALARM");
-                    sirens.forEach(siren -> siren.tell(new SirenActor.Activate()));
-                    return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, activeZones);
+                    activateAll(state.sirens());
+                    return alarm(
+                            context,
+                            timers,
+                            configuredPin,
+                            exitDelayDuration,
+                            entryDelayDuration,
+                            state.withState(AlarmState.ALARM, state.armedZones(), state.generation())
+                    );
                 })
-                .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.ENTRY_DELAY));
                     return Behaviors.same();
@@ -416,19 +498,25 @@ public final class ControlUnitActor {
             String configuredPin,
             Duration exitDelayDuration,
             Duration entryDelayDuration,
-            Set<ActorRef<SirenActor.Command>> sirens,
-            Set<Zone> activeZones
+            ControlState state
     ) {
         return Behaviors.receive(Command.class)
                 .onMessage(SirensUpdated.class, message -> {
                     context.getLog().info("Sirens updated in ALARM: {}", message.sirens());
-                    return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, message.sirens(), activeZones);
+                    return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, state.withSirens(message.sirens()));
                 })
                 .onMessage(PinSubmitted.class, message -> {
                     if (configuredPin.equals(message.pin())) {
                         context.getLog().info("Transition ALARM -> DISARMED");
-                        sirens.forEach(siren -> siren.tell(new SirenActor.Deactivate()));
-                        return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, sirens, FULL_ARMS);
+                        deactivateAll(state.sirens());
+                        return disarmed(
+                                context,
+                                timers,
+                                configuredPin,
+                                exitDelayDuration,
+                                entryDelayDuration,
+                                state.withState(AlarmState.DISARMED, FULL_ARMS, state.generation() + 1)
+                        );
                     }
                     context.getLog().info("Ignoring PIN submission while ALARM is active");
                     return Behaviors.same();
@@ -442,13 +530,25 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
-                .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.ALARM));
                     return Behaviors.same();
                 })
                 .build();
+    }
+
+    private static Behavior<Command> ignoreStaleTimeout(long timeoutGeneration, long currentGeneration) {
+        return timeoutGeneration == currentGeneration ? Behaviors.same() : Behaviors.same();
+    }
+
+    private static void deactivateAll(Set<ActorRef<SirenActor.Command>> sirens) {
+        sirens.forEach(siren -> siren.tell(new SirenActor.Deactivate()));
+    }
+
+    private static void activateAll(Set<ActorRef<SirenActor.Command>> sirens) {
+        sirens.forEach(siren -> siren.tell(new SirenActor.Activate()));
     }
 
     private static void validateConfiguredPin(String configuredPin) {
