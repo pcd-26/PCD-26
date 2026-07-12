@@ -7,7 +7,7 @@ This directory contains the implementation of **Exercise #3** of Assignment 4: a
 The distributed critical section is implemented as a token-based mutual exclusion protocol:
 
 1. **Mutex Token Queue (`cs_token_<csName>`)**:
-   - The critical section is represented by a persistent RabbitMQ queue containing exactly one "token" message.
+   - The critical section is represented by a durable RabbitMQ queue containing exactly one persistent "token" message.
    - To acquire the lock, a process consumes the message from this queue (manual acknowledgment mode: `autoAck = false`).
    - Only one process can successfully receive the message at any time, enforcing mutual exclusion.
 
@@ -16,16 +16,15 @@ The distributed critical section is implemented as a token-based mutual exclusio
    - Because the token message was consumed with `autoAck = false`, RabbitMQ automatically detects the closed channel and **requeues** the message.
    - This ensures that if a process holding the lock crashes, the lock is automatically released without causing deadlock.
 
-3. **Race-Free Seeding/Initialization**:
-   - To avoid multiple processes initializing multiple token messages, we use a helper queue `cs_init_flag_<csName>` declared with `x-max-length = 1` and `x-overflow = reject-publish` parameters.
-   - When a process starts, it attempts to publish a marker message to this queue.
-   - Using RabbitMQ **Publisher Confirms**, the process checks if the publish succeeded.
-   - Only the first process succeeds (receiving a positive acknowledgment). Subsequent publishes are rejected and nacked.
-   - The process that succeeds is designated as the initializer and seeds the single token message in `cs_token_<csName>`. All others skip initialization.
+3. **Crash-Safe Bootstrap**:
+   - Bootstrap is serialized with a temporary exclusive broker lock queue `cs_bootstrap_lock_<csName>`.
+   - While holding that lock, a process passively inspects `cs_token_<csName>`.
+   - The token is published only if the queue has no messages and no registered consumers.
+   - This means a process holding the critical section cannot be mistaken for an uninitialized system, and a crash during bootstrap is recoverable by another process.
 
-4. **Atomic Lock Release**:
-   - Inside the `exit()` method, releasing the lock requires two operations: publishing the token back to the queue, and acknowledging the original delivery tag.
-   - To prevent token loss or duplication in case of a crash during release, these two operations are wrapped in an AMQP **Transaction** (`txSelect`, `txCommit`, `txRollback`), ensuring they are applied atomically on the broker.
+4. **Safe Lock Release**:
+   - Inside the `exit()` method, releasing the lock first cancels the local consumer and then requeues the same delivery with `basicNack(..., requeue = true)`.
+   - The temporary bootstrap lock is held while this transition happens, so a concurrent bootstrapper cannot observe an intermediate state.
 
 ---
 
@@ -52,6 +51,7 @@ A comprehensive JUnit 5 test suite is included in `DistributedCriticalSectionTes
 - Basic acquisition and release of locks.
 - Mutual exclusion enforcement under concurrent access.
 - Non-reentrant behavior (throwing `IllegalStateException` on re-entry).
+- Concurrent bootstrap creating exactly one token.
 - Connection crash recovery (automatic requeueing of tokens).
 
 - **Bash**:
