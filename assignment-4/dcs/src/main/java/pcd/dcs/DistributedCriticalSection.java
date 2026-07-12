@@ -188,7 +188,8 @@ public class DistributedCriticalSection implements AutoCloseable {
             long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(BOOTSTRAP_LOCK_TIMEOUT_MILLIS);
 
             while (true) {
-                try (Channel lockChannel = connection.createChannel()) {
+                Channel lockChannel = connection.createChannel();
+                try {
                     try {
                         lockChannel.queueDeclare(bootstrapLockQueue, false, true, false, null);
                     } catch (IOException lockFailure) {
@@ -211,6 +212,14 @@ public class DistributedCriticalSection implements AutoCloseable {
                         }
                     }
                     return;
+                } finally {
+                    try {
+                        if (lockChannel.isOpen()) {
+                            lockChannel.close();
+                        }
+                    } catch (IOException | TimeoutException cleanupFailure) {
+                        logger.warn("Failed to close bootstrap lock channel for '{}'", csName, cleanupFailure);
+                    }
                 }
             }
         }
