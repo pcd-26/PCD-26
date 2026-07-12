@@ -7,18 +7,20 @@ import org.apache.pekko.actor.typed.receptionist.Receptionist;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import pcd.shas.common.SensorInfo;
 import pcd.shas.common.SensorType;
 import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Unit tests for SensorActor.
  */
 public class SensorActorTest {
 
+    private static final java.time.Duration TIMEOUT = java.time.Duration.ofSeconds(1);
     private static ActorTestKit testKit;
 
     @BeforeAll
@@ -32,29 +34,47 @@ public class SensorActorTest {
     }
 
     @Test
-    public void testSensorActivationForwardsToControlUnit() throws Exception {
+    public void motionSensorPreservesIdentityAndTypeInDeliveredEvent() {
+        assertDeliveredEvent("motion-1", SensorType.MOTION, Zone.LIVING_AREA);
+    }
+
+    @Test
+    public void doorWindowSensorPreservesIdentityAndTypeInDeliveredEvent() {
+        assertDeliveredEvent("door-7", SensorType.DOOR_WINDOW, Zone.PERIMETER);
+    }
+
+    private void assertDeliveredEvent(String sensorId, SensorType sensorType, Zone zone) {
         TestProbe<ControlUnitActor.Command> probe = testKit.createTestProbe(ControlUnitActor.Command.class);
-        
-        // Register the probe with the receptionist
         testKit.system().receptionist().tell(
                 Receptionist.register(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, probe.getRef())
         );
 
         ActorRef<SensorActor.Command> sensor = testKit.spawn(
-                SensorActor.create("s1", SensorType.MOTION, Zone.LIVING_AREA)
+                SensorActor.create(sensorId, sensorType, zone)
         );
 
-        Thread.sleep(500);
+        ControlUnitActor.Command command = awaitForwardedCommand(probe, sensor::tell, new SensorActor.Activate());
+        ControlUnitActor.SensorActivated event = assertInstanceOf(ControlUnitActor.SensorActivated.class, command);
+        assertEquals(sensorId, event.sensorInfo().id());
+        assertEquals(sensorType, event.sensorInfo().type());
+        assertEquals(zone, event.sensorInfo().zone());
+    }
 
-        // Activate sensor
-        sensor.tell(new SensorActor.Activate());
-
-        // Expect control unit to receive SensorActivated
-        ControlUnitActor.Command received = probe.receiveMessage();
-        assert(received instanceof ControlUnitActor.SensorActivated);
-        ControlUnitActor.SensorActivated event = (ControlUnitActor.SensorActivated) received;
-        assertEquals("s1", event.sensorInfo().id());
-        assertEquals(SensorType.MOTION, event.sensorInfo().type());
-        assertEquals(Zone.LIVING_AREA, event.sensorInfo().zone());
+    private ControlUnitActor.Command awaitForwardedCommand(
+            TestProbe<ControlUnitActor.Command> probe,
+            java.util.function.Consumer<SensorActor.Command> trigger,
+            SensorActor.Command command
+    ) {
+        long deadline = System.nanoTime() + TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            trigger.accept(command);
+            try {
+                return probe.receiveMessage(java.time.Duration.ofMillis(100));
+            } catch (AssertionError ignored) {
+                // Keep retrying until receptionist discovery completes.
+            }
+        }
+        fail("Timed out waiting for sensor command to reach the control unit");
+        return null;
     }
 }
