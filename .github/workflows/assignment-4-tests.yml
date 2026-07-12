@@ -1,0 +1,216 @@
+name: Assignment 04 CI
+
+on:
+  push:
+    paths:
+      - "assignment-4/**"
+      - ".github/workflows/assignment-4-tests.yml"
+  pull_request:
+    paths:
+      - "assignment-4/**"
+      - ".github/workflows/assignment-4-tests.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: assignment-04-ci-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  cshas:
+    name: Test assignment-04 CSHAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run CSHAS validation
+        working-directory: assignment-4/cshas
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload CSHAS test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-4-cshas-test-reports
+          path: assignment-4/cshas/target/surefire-reports
+          if-no-files-found: ignore
+
+  dttt:
+    name: Test assignment-04 DTTT
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run DTTT validation
+        working-directory: assignment-4/dttt
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload DTTT test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-4-dttt-test-reports
+          path: assignment-4/dttt/target/surefire-reports
+          if-no-files-found: ignore
+
+  dcs:
+    name: Test assignment-04 DCS
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Wait for RabbitMQ readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in {1..60}; do
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/5672' >/dev/null 2>&1; then
+              echo "RabbitMQ is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "RabbitMQ did not become ready in time"
+          exit 1
+
+      - name: Run DCS validation
+        working-directory: assignment-4/dcs
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload DCS test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-4-dcs-test-reports
+          path: assignment-4/dcs/target/surefire-reports
+          if-no-files-found: ignore
+
+  package:
+    name: Build Assignment-04 zip
+    runs-on: ubuntu-latest
+    needs:
+      - cshas
+      - dttt
+      - dcs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended zip unzip
+
+      - name: Build CSHAS report
+        working-directory: assignment-4/cshas/report
+        run: make
+
+      - name: Build DTTT report
+        working-directory: assignment-4/dttt/report
+        run: make
+
+      - name: Prepare delivery metadata
+        id: delivery_meta
+        shell: bash
+        run: echo "zip_name=Assignment-04.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create delivery package
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          rm -rf package "$DELIVERY_ZIP"
+          mkdir -p package/Assignment-04/cshas/doc
+          mkdir -p package/Assignment-04/dttt/doc
+
+          cp assignment-4/cshas/pom.xml package/Assignment-04/cshas/pom.xml
+          cp -R assignment-4/cshas/src package/Assignment-04/cshas/src
+          cp assignment-4/cshas/report/report.pdf package/Assignment-04/cshas/doc/report.pdf
+          cp assignment-4/dttt/pom.xml package/Assignment-04/dttt/pom.xml
+          cp -R assignment-4/dttt/src package/Assignment-04/dttt/src
+          cp assignment-4/dttt/report/report.pdf package/Assignment-04/dttt/doc/report.pdf
+
+          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-04)
+
+      - name: Check package contents
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          unzip -l "$DELIVERY_ZIP"
+          test -f package/Assignment-04/cshas/pom.xml
+          test -d package/Assignment-04/cshas/src/main
+          test -d package/Assignment-04/cshas/src/test
+          test -f package/Assignment-04/cshas/doc/report.pdf
+          test -f package/Assignment-04/dttt/pom.xml
+          test -d package/Assignment-04/dttt/src/main
+          test -d package/Assignment-04/dttt/src/test
+          test -f package/Assignment-04/dttt/doc/report.pdf
+          test ! -e package/Assignment-04/report
+          test ! -e package/Assignment-04/docs
+          test ! -e package/Assignment-04/target
+          test ! -e package/Assignment-04/cshas/target
+          test ! -e package/Assignment-04/dttt/target
+
+      - name: Upload delivery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-04-package
+          path: ${{ steps.delivery_meta.outputs.zip_name }}
