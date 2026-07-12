@@ -2,26 +2,19 @@ package pcd.dttt.client;
 
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
 import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import pcd.dttt.common.BoardState;
-import pcd.dttt.common.Game;
 import pcd.dttt.common.GameStatus;
-import pcd.dttt.common.Lobby;
-import pcd.dttt.common.exceptions.GameAlreadyExistsException;
-import pcd.dttt.common.exceptions.GameFullException;
-import pcd.dttt.common.exceptions.GameNotFoundException;
 import pcd.dttt.common.exceptions.InvalidMoveException;
 import pcd.dttt.common.exceptions.NotYourTurnException;
 
 /**
- * Graphical User Interface client for Distributed Tic-Tac-Toe.
- * Implements GameEventListener to handle RMI callbacks.
+ * Swing Graphical User Interface client for Distributed Tic-Tac-Toe.
+ * Decoupled from direct RMI network references by communicating via the {@link GameController} abstraction.
+ * Implements {@link GameEventListener} to receive state notifications and safely updates components on the EDT.
  */
 public class GUIClient extends JFrame implements GameEventListener {
     private static final long serialVersionUID = 1L;
@@ -32,19 +25,23 @@ public class GUIClient extends JFrame implements GameEventListener {
     private static final Color COLOR_BTN_BG = new Color(17, 17, 27);      // Deep button background
     private static final Color COLOR_FG = new Color(205, 214, 244);      // Off-white text
     private static final Color COLOR_ACCENT = new Color(137, 180, 250);  // Pastel blue
-    private static final Color COLOR_X = new Color(243, 139, 168);       // Pastel pink/red for X
-    private static final Color COLOR_O = new Color(137, 180, 250);       // Pastel blue for O
     private static final Color COLOR_STATUS = new Color(166, 227, 161);  // Pastel green for status
     private static final Color COLOR_WARN = new Color(249, 226, 175);    // Pastel yellow for warnings
+
+    // High-Contrast Button Colors (for maximum readability)
+    private static final Color COLOR_BTN_PRIMARY = new Color(58, 122, 237);   // Rich blue for Connect/Create
+    private static final Color COLOR_BTN_SUCCESS = new Color(46, 154, 72);    // Rich green for Join
+    private static final Color COLOR_BTN_DANGER = new Color(211, 47, 47);     // Rich red for Leave
+    private static final Color COLOR_BTN_SECONDARY = new Color(69, 71, 90);   // Rich grey for Refresh
+
+    private static final Color COLOR_X = new Color(255, 85, 120);       // High-contrast vibrant coral for X
+    private static final Color COLOR_O = new Color(85, 170, 255);       // High-contrast vibrant blue for O
 
     private final CardLayout cardLayout;
     private final JPanel mainPanel;
 
-    // RMI & Client State
-    private Lobby lobby;
-    private Game currentGame;
-    private PlayerClientImpl clientStub;
-    private String playerName;
+    // Game Client Controller & State
+    private final GameController controller;
     private char myMark = ' '; // 'X' or 'O' or ' '
 
     // Connection Screen Components
@@ -69,24 +66,22 @@ public class GUIClient extends JFrame implements GameEventListener {
     private JButton leaveGameBtn;
     private JPanel boardPanel;
 
-    public GUIClient() {
+    /**
+     * Constructs a new GUI client frame.
+     *
+     * @param controller the game controller interface
+     */
+    public GUIClient(GameController controller) {
         super("Distributed Tic-Tac-Toe");
+        this.controller = controller;
+        this.controller.registerEventListener(this);
         
         // Window Setup
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setSize(550, 600);
         setLocationRelativeTo(null);
 
-        // Export Client RMI Stub
-        try {
-            this.clientStub = new PlayerClientImpl(this);
-        } catch (RemoteException e) {
-            JOptionPane.showMessageDialog(this, "Failed to initialize RMI Client Stub:\n" + e.getMessage(),
-                    "RMI Error", JOptionPane.ERROR_MESSAGE);
-            System.exit(1);
-        }
-
-        // Window Closing Listener to leave current game cleanly
+        // Window Closing Listener to disconnect cleanly
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent windowEvent) {
@@ -108,32 +103,10 @@ public class GUIClient extends JFrame implements GameEventListener {
     }
 
     private void cleanupAndExit() {
-        if (currentGame != null) {
-            try {
-                // Non-blocking call or in background to not freeze UI shutdown
-                new Thread(() -> {
-                    try {
-                        currentGame.leaveGame(playerName);
-                    } catch (Exception e) {
-                        // Ignore
-                    }
-                    unexportAndExit();
-                }).start();
-                return;
-            } catch (Exception e) {
-                // Ignore
-            }
-        }
-        unexportAndExit();
-    }
-
-    private void unexportAndExit() {
-        try {
-            java.rmi.server.UnicastRemoteObject.unexportObject(clientStub, true);
-        } catch (Exception e) {
-            // Ignore
-        }
-        System.exit(0);
+        new Thread(() -> {
+            controller.disconnect();
+            System.exit(0);
+        }).start();
     }
 
     // --- Screen Builders ---
@@ -149,7 +122,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         JLabel title = new JLabel("Distributed Tic-Tac-Toe", JLabel.CENTER);
         title.setFont(new Font("SansSerif", Font.BOLD, 28));
-        title.setForeground(COLOR_FG);
+        title.setForeground(Color.WHITE);
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.gridwidth = 2;
@@ -193,7 +166,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         gbc.weightx = 0.7;
         panel.add(nameField, gbc);
 
-        connectBtn = createStyledButton("Connect to Lobby", COLOR_ACCENT);
+        connectBtn = createStyledButton("Connect to Lobby", COLOR_BTN_PRIMARY);
         connectBtn.addActionListener(this::handleConnect);
         gbc.gridx = 0;
         gbc.gridy = 4;
@@ -214,7 +187,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         topPanel.setBackground(COLOR_BG);
         JLabel title = new JLabel("Game Lobby", JLabel.CENTER);
         title.setFont(new Font("SansSerif", Font.BOLD, 22));
-        title.setForeground(COLOR_FG);
+        title.setForeground(Color.WHITE);
         lobbyStatusLbl = new JLabel("Welcome!", JLabel.CENTER);
         lobbyStatusLbl.setForeground(COLOR_STATUS);
         lobbyStatusLbl.setFont(new Font("SansSerif", Font.PLAIN, 14));
@@ -226,14 +199,16 @@ public class GUIClient extends JFrame implements GameEventListener {
         JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
         centerPanel.setBackground(COLOR_PANEL_BG);
         centerPanel.setBorder(BorderFactory.createTitledBorder(
-                new LineBorder(COLOR_ACCENT, 1, true), "Available Games", 
-                0, 0, new Font("SansSerif", Font.BOLD, 14), COLOR_FG
+                new LineBorder(new Color(69, 71, 90), 1, true), "Available Games", 
+                0, 0, new Font("SansSerif", Font.BOLD, 14), Color.WHITE
         ));
         
         listModel = new DefaultListModel<>();
         waitingGamesList = new JList<>(listModel);
         waitingGamesList.setBackground(COLOR_BTN_BG);
-        waitingGamesList.setForeground(COLOR_FG);
+        waitingGamesList.setForeground(Color.WHITE);
+        waitingGamesList.setSelectionBackground(COLOR_BTN_PRIMARY);
+        waitingGamesList.setSelectionForeground(Color.WHITE);
         waitingGamesList.setFont(new Font("SansSerif", Font.PLAIN, 15));
         waitingGamesList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         JScrollPane scrollPane = new JScrollPane(waitingGamesList);
@@ -241,7 +216,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         centerPanel.add(scrollPane, BorderLayout.CENTER);
 
         // Refresh Button
-        refreshBtn = createStyledButton("Refresh Game List", COLOR_PANEL_BG);
+        refreshBtn = createStyledButton("Refresh Game List", COLOR_BTN_SECONDARY);
         refreshBtn.addActionListener(e -> refreshWaitingGames());
         centerPanel.add(refreshBtn, BorderLayout.SOUTH);
 
@@ -266,7 +241,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         gbc.gridy = 1;
         eastPanel.add(newGameField, gbc);
 
-        createGameBtn = createStyledButton("Create Game", COLOR_ACCENT);
+        createGameBtn = createStyledButton("Create Game", COLOR_BTN_PRIMARY);
         createGameBtn.addActionListener(this::handleCreateGame);
         gbc.gridy = 2;
         eastPanel.add(createGameBtn, gbc);
@@ -278,7 +253,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         gbc.insets = new Insets(10, 5, 10, 5);
 
         // Join Section
-        joinGameBtn = createStyledButton("Join Selected", COLOR_STATUS);
+        joinGameBtn = createStyledButton("Join Selected", COLOR_BTN_SUCCESS);
         joinGameBtn.addActionListener(this::handleJoinGame);
         gbc.gridy = 4;
         eastPanel.add(joinGameBtn, gbc);
@@ -303,7 +278,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         gameOpponentLbl = new JLabel("Opponent: -", JLabel.CENTER);
         gameOpponentLbl.setFont(new Font("SansSerif", Font.PLAIN, 14));
-        gameOpponentLbl.setForeground(COLOR_FG);
+        gameOpponentLbl.setForeground(Color.WHITE);
 
         infoPanel.add(gameStatusLbl);
         infoPanel.add(gameOpponentLbl);
@@ -321,12 +296,30 @@ public class GUIClient extends JFrame implements GameEventListener {
                 final int col = c;
                 JButton btn = new JButton("");
                 btn.setBackground(COLOR_BTN_BG);
-                btn.setForeground(COLOR_FG);
+                btn.setForeground(Color.WHITE);
                 btn.setFont(new Font("SansSerif", Font.BOLD, 54));
                 btn.setFocusPainted(false);
-                btn.setBorder(new LineBorder(COLOR_BG, 2));
+                btn.setBorder(new LineBorder(new Color(69, 71, 90), 2));
                 btn.addActionListener(e -> handleBoardClick(row, col));
                 btn.setEnabled(false); // Disabled until match starts
+                
+                // Highlight Empty Cell Hover Effects
+                btn.addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override
+                    public void mouseEntered(java.awt.event.MouseEvent evt) {
+                        if (btn.isEnabled() && btn.getText().isEmpty()) {
+                            btn.setBackground(COLOR_PANEL_BG);
+                        }
+                    }
+
+                    @Override
+                    public void mouseExited(java.awt.event.MouseEvent evt) {
+                        if (btn.getText().isEmpty()) {
+                            btn.setBackground(COLOR_BTN_BG);
+                        }
+                    }
+                });
+                
                 boardButtons[r][c] = btn;
                 boardPanel.add(btn);
             }
@@ -334,7 +327,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         panel.add(boardPanel, BorderLayout.CENTER);
 
         // Bottom - Leave button
-        leaveGameBtn = createStyledButton("Leave Match", COLOR_X);
+        leaveGameBtn = createStyledButton("Leave Match", COLOR_BTN_DANGER);
         leaveGameBtn.addActionListener(this::handleLeaveGame);
         panel.add(leaveGameBtn, BorderLayout.SOUTH);
 
@@ -346,15 +339,15 @@ public class GUIClient extends JFrame implements GameEventListener {
     private JLabel createLabel(String text) {
         JLabel lbl = new JLabel(text);
         lbl.setFont(new Font("SansSerif", Font.PLAIN, 15));
-        lbl.setForeground(COLOR_FG);
+        lbl.setForeground(Color.WHITE);
         return lbl;
     }
 
     private JTextField createTextField(String text) {
         JTextField tf = new JTextField(text);
         tf.setBackground(COLOR_BTN_BG);
-        tf.setForeground(COLOR_FG);
-        tf.setCaretColor(COLOR_FG);
+        tf.setForeground(Color.WHITE);
+        tf.setCaretColor(Color.WHITE);
         tf.setFont(new Font("SansSerif", Font.PLAIN, 15));
         tf.setBorder(BorderFactory.createCompoundBorder(
                 new LineBorder(COLOR_PANEL_BG, 1, true),
@@ -366,7 +359,8 @@ public class GUIClient extends JFrame implements GameEventListener {
     private JButton createStyledButton(String text, Color baseColor) {
         JButton btn = new JButton(text);
         btn.setBackground(baseColor);
-        btn.setForeground(COLOR_FG);
+        btn.setForeground(Color.WHITE); // Force crisp white text for maximum readability
+        
         btn.setFocusPainted(false);
         btn.setFont(new Font("SansSerif", Font.BOLD, 15));
         btn.setBorder(BorderFactory.createCompoundBorder(
@@ -374,11 +368,14 @@ public class GUIClient extends JFrame implements GameEventListener {
                 BorderFactory.createEmptyBorder(8, 15, 8, 15)
         ));
         
+        // Compute high-contrast hover color
+        Color hoverColor = getHoverColor(baseColor);
+        
         // Subtle hover effects
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                btn.setBackground(baseColor.brighter());
+                btn.setBackground(hoverColor);
             }
 
             @Override
@@ -389,14 +386,22 @@ public class GUIClient extends JFrame implements GameEventListener {
         return btn;
     }
 
+    private Color getHoverColor(Color color) {
+        // Blend 80% original color and 20% white for a clean, non-washout highlight glow
+        int r = Math.min(255, (int)(color.getRed() * 0.8 + 255 * 0.2));
+        int g = Math.min(255, (int)(color.getGreen() * 0.8 + 255 * 0.2));
+        int b = Math.min(255, (int)(color.getBlue() * 0.8 + 255 * 0.2));
+        return new Color(r, g, b);
+    }
+
     // --- Event Handlers ---
 
     private void handleConnect(ActionEvent e) {
         String host = hostField.getText().trim();
         String portStr = portField.getText().trim();
-        playerName = nameField.getText().trim();
+        String name = nameField.getText().trim();
 
-        if (host.isEmpty() || portStr.isEmpty() || playerName.isEmpty()) {
+        if (host.isEmpty() || portStr.isEmpty() || name.isEmpty()) {
             JOptionPane.showMessageDialog(this, "All fields are required.", "Input Validation", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -412,14 +417,11 @@ public class GUIClient extends JFrame implements GameEventListener {
         connectBtn.setEnabled(false);
         connectBtn.setText("Connecting...");
 
-        // Perform connection in a separate thread so as not to freeze the EDT
         new Thread(() -> {
             try {
-                Registry registry = LocateRegistry.getRegistry(host, port);
-                lobby = (Lobby) registry.lookup("Lobby");
-
+                controller.connect(host, port, name);
                 SwingUtilities.invokeLater(() -> {
-                    lobbyStatusLbl.setText("Connected as: " + playerName);
+                    lobbyStatusLbl.setText("Connected as: " + controller.getPlayerName());
                     cardLayout.show(mainPanel, "LOBBY");
                     refreshWaitingGames();
                 });
@@ -439,7 +441,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         refreshBtn.setText("Refreshing...");
         new Thread(() -> {
             try {
-                List<String> gamesList = lobby.getWaitingGames();
+                List<String> gamesList = controller.getWaitingGames();
                 SwingUtilities.invokeLater(() -> {
                     listModel.clear();
                     for (String g : gamesList) {
@@ -472,21 +474,14 @@ public class GUIClient extends JFrame implements GameEventListener {
         new Thread(() -> {
             try {
                 myMark = 'X'; // Creator is X
-                Game game = lobby.createGame(gameName, playerName, clientStub);
+                controller.createGame(gameName);
                 SwingUtilities.invokeLater(() -> {
-                    currentGame = game;
                     setupGameUIForWait(gameName);
                     cardLayout.show(mainPanel, "GAME");
                 });
-            } catch (GameAlreadyExistsException ex) {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.WARNING_MESSAGE);
-                    createGameBtn.setEnabled(true);
-                    joinGameBtn.setEnabled(true);
-                });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "Failed to create game:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Failed to create game:\n" + ex.getMessage(), "Error", JOptionPane.WARNING_MESSAGE);
                     createGameBtn.setEnabled(true);
                     joinGameBtn.setEnabled(true);
                 });
@@ -507,21 +502,14 @@ public class GUIClient extends JFrame implements GameEventListener {
         new Thread(() -> {
             try {
                 myMark = 'O'; // Joiner is O
-                Game game = lobby.joinGame(gameName, playerName, clientStub);
+                controller.joinGame(gameName);
                 SwingUtilities.invokeLater(() -> {
-                    currentGame = game;
                     setupGameUIForWait(gameName);
                     cardLayout.show(mainPanel, "GAME");
                 });
-            } catch (GameNotFoundException | GameFullException ex) {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.WARNING_MESSAGE);
-                    createGameBtn.setEnabled(true);
-                    joinGameBtn.setEnabled(true);
-                });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "Failed to join game:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Failed to join game:\n" + ex.getMessage(), "Error", JOptionPane.WARNING_MESSAGE);
                     createGameBtn.setEnabled(true);
                     joinGameBtn.setEnabled(true);
                 });
@@ -532,14 +520,11 @@ public class GUIClient extends JFrame implements GameEventListener {
     private void handleLeaveGame(ActionEvent e) {
         new Thread(() -> {
             try {
-                if (currentGame != null) {
-                    currentGame.leaveGame(playerName);
-                }
+                controller.leaveGame();
             } catch (Exception ex) {
                 // Ignore
             } finally {
                 SwingUtilities.invokeLater(() -> {
-                    currentGame = null;
                     myMark = ' ';
                     createGameBtn.setEnabled(true);
                     joinGameBtn.setEnabled(true);
@@ -556,7 +541,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         
         new Thread(() -> {
             try {
-                currentGame.makeMove(playerName, r, c);
+                controller.makeMove(r, c);
             } catch (NotYourTurnException ex) {
                 SwingUtilities.invokeLater(() -> {
                     JOptionPane.showMessageDialog(this, "It's not your turn!", "Move Rejected", JOptionPane.WARNING_MESSAGE);
@@ -567,7 +552,7 @@ public class GUIClient extends JFrame implements GameEventListener {
                 });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "RMI Error during move:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Error during move submission:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 });
             }
         }).start();
@@ -604,9 +589,9 @@ public class GUIClient extends JFrame implements GameEventListener {
         GameStatus status = state.getStatus();
         if (status == GameStatus.ACTIVE) {
             String opponentName = myMark == 'X' ? state.getPlayerO() : state.getPlayerX();
-            gameOpponentLbl.setText("Opponent: " + opponentName + " (" + (myMark == 'X' ? 'O' : 'X') + ") | You: " + playerName + " (" + myMark + ")");
+            gameOpponentLbl.setText("Opponent: " + opponentName + " (" + (myMark == 'X' ? 'O' : 'X') + ") | You: " + controller.getPlayerName() + " (" + myMark + ")");
 
-            if (state.getTurnOf().equals(playerName)) {
+            if (state.getTurnOf().equals(controller.getPlayerName())) {
                 gameStatusLbl.setText("Your turn!");
                 gameStatusLbl.setForeground(COLOR_STATUS);
                 setBoardEnabled(true);
@@ -625,11 +610,14 @@ public class GUIClient extends JFrame implements GameEventListener {
     private void setBoardEnabled(boolean enabled) {
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
-                // Only enable cells that are empty
-                if (enabled) {
-                    boardButtons[r][c].setEnabled(boardButtons[r][c].getText().isEmpty());
+                JButton btn = boardButtons[r][c];
+                if (!btn.getText().isEmpty()) {
+                    // Always keep occupied cells enabled so the 'X' and 'O' markings
+                    // remain in high-contrast pink/blue rather than disabled gray!
+                    btn.setEnabled(true);
                 } else {
-                    boardButtons[r][c].setEnabled(false);
+                    // Empty cells are only enabled when it's our turn
+                    btn.setEnabled(enabled);
                 }
             }
         }
@@ -650,7 +638,7 @@ public class GUIClient extends JFrame implements GameEventListener {
             gameStatusLbl.setForeground(COLOR_X);
         } else {
             String winner = status == GameStatus.WON_X ? state.getPlayerX() : state.getPlayerO();
-            if (winner.equals(playerName)) {
+            if (winner.equals(controller.getPlayerName())) {
                 message = "Congratulations, you won!";
                 gameStatusLbl.setText("Result: YOU WON!");
                 gameStatusLbl.setForeground(COLOR_STATUS);
@@ -664,7 +652,6 @@ public class GUIClient extends JFrame implements GameEventListener {
         JOptionPane.showMessageDialog(this, message, title, JOptionPane.INFORMATION_MESSAGE);
 
         // Reset and go back to Lobby
-        currentGame = null;
         myMark = ' ';
         createGameBtn.setEnabled(true);
         joinGameBtn.setEnabled(true);
@@ -691,7 +678,6 @@ public class GUIClient extends JFrame implements GameEventListener {
     @Override
     public void onOpponentLeft(String opponentName) {
         SwingUtilities.invokeLater(() -> {
-            // Can show a warning dialog or status message
             JOptionPane.showMessageDialog(this, "Opponent '" + opponentName + "' has left the match.",
                     "Match Abandoned", JOptionPane.WARNING_MESSAGE);
         });
