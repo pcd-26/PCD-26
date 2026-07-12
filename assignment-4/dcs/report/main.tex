@@ -1,0 +1,93 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\title{Report PCD 2025-2026 \\ Distributed Critical Sections with a Message-Oriented Middleware (Assignment 4 - Exercise 3)}
+\author{Francesco}
+\date{\today}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  stringstyle=\color{red},
+  commentstyle=\color{green!60!black},
+  numbers=left,
+  numberstyle=\tiny,
+  frame=single,
+  breaklines=true
+}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+This project implements a high-level middleware for distributed critical sections using Java and RabbitMQ.
+The goal is to let independent processes coordinate access to a shared critical section without knowing
+anything about each other beyond the critical-section name.
+
+\section{Analysis}
+The problem is a distributed mutual exclusion problem with crash recovery constraints:
+\begin{itemize}
+    \item \textbf{Mutual exclusion}: at most one process may enter the critical section at a time.
+    \item \textbf{Crash recovery}: if the holder crashes while inside the critical section, the token must be
+    returned automatically by the broker.
+    \item \textbf{Bootstrap safety}: initialization must never leave the system in a state where the critical
+    section is marked initialized but the token does not exist.
+    \item \textbf{Independence}: processes must not coordinate through local static state, shared files, or any
+    direct inter-process channel.
+    \item \textbf{Broker semantics}: the solution must rely on RabbitMQ message passing and broker-provided
+    primitives only.
+\end{itemize}
+
+\section{Design}
+The middleware is implemented as a token queue protocol:
+\begin{itemize}
+    \item \textbf{Token queue}: each critical section is mapped to a durable queue named
+    \texttt{cs\_token\_<csName>}.
+    \item \textbf{Token message}: the queue contains exactly one persistent token when the critical section is
+    available.
+    \item \textbf{Acquire}: \texttt{enter()} creates a consumer with manual acknowledgement and blocks until the
+    token delivery arrives.
+    \item \textbf{Release}: \texttt{exit()} requeues the same delivery using \texttt{basicNack(..., requeue = true)}
+    after the local consumer has been canceled.
+    \item \textbf{Crash-safe bootstrap}: a temporary exclusive queue \texttt{cs\_bootstrap\_lock\_<csName>} serializes
+    initialization. The broker is queried passively, and the token is published only when the queue is empty and
+    has no consumers.
+\end{itemize}
+
+This design keeps the token itself as the only durable state that matters. The bootstrap lock queue exists only
+while a process is deciding whether the token must be created, so no initialization marker can outlive the token.
+If a process crashes while holding the token, RabbitMQ requeues the unacknowledged delivery when the connection
+or channel closes.
+
+The implementation also preserves lifecycle clarity:
+\begin{itemize}
+    \item the middleware may be created from an existing connection or by creating its own connection;
+    \item \texttt{close()} closes the channel and, when appropriate, the connection;
+    \item the public API is intentionally small: \texttt{enter()}, \texttt{exit()}, and \texttt{close()}.
+\end{itemize}
+
+\section{Validation}
+Validation is covered by JUnit tests that exercise the full protocol:
+\begin{enumerate}
+    \item concurrent initialization by multiple middleware instances;
+    \item exactly one token created for a critical section;
+    \item interrupted bootstrap and later recovery by another process;
+    \item crash while holding the token and automatic requeueing by RabbitMQ;
+    \item mutual exclusion with multiple concurrent processes;
+    \item repeated acquire/release cycles;
+    \item rejection of release without ownership and of double release;
+    \item independence of different critical-section names;
+    \item shutdown cleanup without losing the token.
+\end{enumerate}
+
+\section{Conclusions}
+The resulting middleware provides a simple and robust distributed critical-section service built entirely on
+RabbitMQ message passing. The token queue acts as the single source of truth, the bootstrap lock queue prevents
+duplicate initialization, and manual acknowledgements ensure the token returns automatically after failures.
+This keeps the solution easy to reason about while still handling the main distributed-systems concerns of
+coordination, crash recovery, and resource cleanup.
+
+\end{document}
