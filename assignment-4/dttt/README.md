@@ -89,6 +89,11 @@ mvn -B clean verify
 
 The `test-dttt.sh` and `test-dttt.ps1` helpers run the same command.
 
+## Report
+
+The report source lives in `report/`.
+Use `make -C report` to build `report.pdf`.
+
 ## Startup Examples
 
 ### Registry
