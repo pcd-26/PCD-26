@@ -203,7 +203,7 @@ jobs:
       - name: Install LaTeX tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base zip unzip
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
       - name: Build report
         working-directory: assignment-3/shas/report
