@@ -1,0 +1,96 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\title{Report PCD 2025-2026 \\ Distributed Tic-Tac-Toe with Java RMI (Assignment 4 - Exercise 2)}
+\author{Francesco}
+\date{\today}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  stringstyle=\color{red},
+  commentstyle=\color{green!60!black},
+  numbers=left,
+  numberstyle=\tiny,
+  frame=single,
+  breaklines=true
+}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+This project implements a distributed Tic-Tac-Toe system using Java RMI.
+The goal is to let a player create a named game, wait for an opponent, and
+let another player join the same game from a different JVM process.
+
+\section{Analysis}
+The application has a small domain model, but the distributed setting adds
+important constraints:
+\begin{itemize}
+    \item \textbf{Shared state must stay on the server}: the game board, turn
+    order, and match status must have a single authoritative owner.
+    \item \textbf{Remote access must stay explicit}: clients should only see
+    remote interfaces and serializable snapshots, never concrete server
+    objects or mutable board instances.
+    \item \textbf{Concurrency must be controlled per game}: multiple clients may
+    connect at the same time, so game creation, joining, and moves must remain
+    race-free under concurrent remote calls.
+    \item \textbf{Callbacks and waiting must not block the whole server}: a
+    player can wait for an opponent without preventing other games from being
+    created or joined.
+\end{itemize}
+
+\section{Design}
+The implementation follows a classical RMI split:
+\begin{itemize}
+    \item \textbf{Registry process}: a dedicated JVM hosts the RMI registry.
+    \item \textbf{Server process}: the lobby is bound in the registry and owns
+    all game state.
+    \item \textbf{Client processes}: each client exports its own callback object
+    and communicates with the server through remote interfaces.
+\end{itemize}
+
+The main domain objects are:
+\begin{itemize}
+    \item \texttt{Lobby}, the matchmaking entry point;
+    \item \texttt{Game}, the remote match controller;
+    \item \texttt{BoardState}, an immutable snapshot of the board;
+    \item \texttt{PlayerClient}, the client-side callback interface.
+\end{itemize}
+
+The server creates a game atomically, rejects duplicate names, and allows at
+most two players per match. Each game synchronizes its own mutations so that
+concurrent moves cannot overwrite a cell or advance the turn incorrectly.
+
+Finished matches are kept on the server long enough to deliver final callbacks
+and are then pruned by the lobby. Remote cleanup closes exported objects and
+shuts down per-game executors.
+
+\section{Validation}
+Validation is covered by unit tests, concurrency tests, and an isolated RMI
+integration test:
+\begin{enumerate}
+    \item \textbf{Creation and joining}: verifies that a game can be created
+    and that exactly one opponent can join it.
+    \item \textbf{Failure cases}: checks duplicate game names, missing games,
+    third-player rejection, invalid moves, and turn violations.
+    \item \textbf{Game rules}: exercises horizontal, vertical, diagonal, and
+    draw conditions.
+    \item \textbf{Concurrency}: stresses concurrent creation, concurrent joins,
+    and simultaneous moves to confirm that invariants hold.
+    \item \textbf{RMI integration}: uses a local registry and real remote stubs
+    to validate the full distributed path.
+\end{enumerate}
+
+\section{Conclusions}
+The project demonstrates a clean RMI-based design in which the server owns the
+state, clients interact only through remote interfaces, and concurrency remains
+safe at the granularity of individual games. The resulting structure is simple
+enough for teaching purposes while still covering the main distributed systems
+concerns of naming, lookup, synchronization, and cleanup.
+
+\end{document}
