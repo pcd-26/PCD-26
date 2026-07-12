@@ -1,0 +1,40 @@
+\documentclass[11pt,a4paper]{article}
+
+\title{Assignment 3 - HOTC Report}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This report summarizes the Heads-or-Tails Championship implementation in Go.
+The project models a single-elimination tournament where each round is fully
+deterministic once the coin toss outcomes are fixed.
+
+\section{Analysis}
+
+If the championship starts with $N = 2^m$ players, then it always completes in
+$m$ rounds. Each round contains independent matches, while the next round can
+start only after all matches in the current round have completed.
+
+\section{Design}
+
+The implementation uses goroutines for matches and channels for coordination.
+Each match sends exactly one result back to the round coordinator, which builds
+the next player list and acts as the synchronization barrier between rounds.
+
+\section{Validation}
+
+The test suite covers the parsing logic, the tournament engine, and the output
+format. Additional concurrency-oriented tests use deterministic tossers so the
+round progression remains reproducible.
+
+\section{Conclusions}
+
+The final design keeps shared state out of worker goroutines and relies on
+message passing to compose the full tournament.
+
+\end{document}

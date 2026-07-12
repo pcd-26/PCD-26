@@ -1,0 +1,57 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\title{Report PCD 2025-2026 \\ Clustered Smart Home Alarm System (Assignment 4 - Exercise 1)}
+\author{Francesco}
+\date{\today}
+
+\lstset{
+  language=Java,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  stringstyle=\color{red},
+  commentstyle=\color{green!60!black},
+  numbers=left,
+  numberstyle=\tiny,
+  frame=single,
+  breaklines=true
+}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+The objective of this assignment is to extend the \textit{Smart Home Alarm System} (SHAS) from Assignment 3 into a distributed system running on an \textbf{Apache Pekko Cluster}. The cluster architecture decouples physical deployment from application logic: sensors, keypads, sirens, and the control unit can reside on different cluster nodes, communicating transparently via message passing.
+
+\section{Analysis}
+Transitioning to a clustered environment introduces major concurrency and distribution challenges:
+\begin{itemize}
+    \item \textbf{Location Transparency}: Actors (sensors, keypads, control units) cannot rely on local reference passing. They must discover each other dynamically across the cluster.
+    \item \textbf{Partial Failures and Recovery}: If the Control Unit node crashes or restarts, its state is lost. From a security standpoint, the restarted node must not make assumptions about the system's previous state (neither armed nor disarmed), and it must enter a safe \textbf{RECOVERY} state where events are logged/ignored until a correct PIN is supplied.
+    \item \textbf{Serialization}: Message objects are transmitted over network sockets, requiring a robust serialization mechanism instead of standard Java serialization.
+\end{itemize}
+
+\section{Design}
+The system is built on Apache Pekko Typed Cluster using the following design strategies:
+\begin{itemize}
+    \item \textbf{Dynamic Discovery via Receptionist}: Both the Control Unit and Siren register themselves with the Pekko \texttt{Receptionist} using dedicated \texttt{ServiceKey} instances. Sensors and Keypads subscribe to the Control Unit service key to dynamically track available references and broadcast commands.
+    \item \textbf{Safe Recovery State}: The \texttt{ControlUnitActor} is structured as a typed state machine. On startup or restart, it enters the \texttt{RECOVERY} state. While in recovery, sensor activations are logged and discarded, and arming commands are rejected. A correct \texttt{PinSubmitted} command transitions the system back to \texttt{DISARMED}.
+    \item \textbf{Jackson Serialization}: All cluster-transmissible messages implement the empty marker interface \texttt{MySerializable}. Pekko is configured via \texttt{application.conf} to bind this interface to the \texttt{jackson-json} serializer.
+    \item \textbf{Optimized Cluster Join Configuration}: The seed nodes timeout (\texttt{seed-node-timeout}) is tuned to \texttt{1s} and \texttt{retry-unsuccessful-join-after} is set to \texttt{1s} to ensure fast cluster formation and reduce integration test delays.
+\end{itemize}
+
+\section{Validation}
+Validation comprises unit tests, integration tests, and a self-contained automatic simulation:
+\begin{enumerate}
+    \item \textbf{Unit Tests (\texttt{ControlUnitActorTest})}: Exercises the state machine in isolation, verifying that the initial state is \texttt{RECOVERY}, sensor events are ignored, and recovery completes only upon receiving the correct PIN.
+    \item \textbf{Integration Tests (\texttt{ClusteredSystemTest})}: Programmatically spawns three local \texttt{ActorSystem} nodes on different ports, forms a cluster, and simulates a full alarm arming, sensor activation (entry delay), and disarming workflow over the loopback network.
+    \item \textbf{Simulation Demo (\texttt{Main})}: Automatically initializes three nodes representing different physical components, demonstrates correct PIN disarming from recovery, arms the system, terminates the Control Unit node, spawns a new one to demonstrate recovery state activation, and verifies that sensors are ignored until the system is disarmed again.
+\end{enumerate}
+
+\section{Conclusions}
+The Pekko Cluster model enables building robust, secure, and location-transparent distributed applications. By pairing the Receptionist discovery mechanism with a secure recovery protocol, the system safely handles partial node failures and restarts without exposing the smart home to unauthorized access or false alarms.
+
+\end{document}
