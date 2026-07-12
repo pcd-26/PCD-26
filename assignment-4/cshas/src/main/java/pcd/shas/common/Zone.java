@@ -1,7 +1,8 @@
 package pcd.shas.common;
 
 /**
- * Logical zone where a sensor is installed.
+ * Physical zone used by the alarm state machine to decide which sensors are
+ * active while the system is armed.
  */
 public enum Zone {
     /**

@@ -19,10 +19,18 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Control unit for the smart home alarm system.
+ * Clustered control unit for the smart home alarm system.
  *
- * <p>The actor keeps its logical state locally and transitions only through
- * immutable command messages and typed timers.</p>
+ * <p>This actor owns the logical alarm state, the active arming zones, the
+ * discovered siren targets, and a generation counter used to ignore stale
+ * timeout messages. It accepts PIN submissions, sensor activations, arming
+ * commands, receptionist updates, and timeout messages. It emits state
+ * snapshots for tests, registers itself with the receptionist, and forwards
+ * siren commands to the discovered siren actors.</p>
+ *
+ * <p>The state machine starts in {@link AlarmState#RECOVERY} after creation or
+ * recreation and only moves to {@link AlarmState#DISARMED} after the correct
+ * PIN is submitted.</p>
  */
 public final class ControlUnitActor {
 
@@ -54,7 +62,7 @@ public final class ControlUnitActor {
     }
 
     /**
-     * Sensor activation event.
+     * Sensor activation event received from a distributed sensor actor.
      *
      * @param sensorInfo the activated sensor information
      */
@@ -85,7 +93,7 @@ public final class ControlUnitActor {
     }
 
     /**
-     * Query for the current alarm state.
+     * Query for the current logical alarm state.
      *
      * @param replyTo actor that should receive the state snapshot
      */
@@ -96,7 +104,7 @@ public final class ControlUnitActor {
     }
 
     /**
-     * Snapshot of the current alarm state.
+     * Immutable snapshot of the current alarm state.
      *
      * @param state the current alarm state
      */
@@ -106,10 +114,25 @@ public final class ControlUnitActor {
         }
     }
 
+    /**
+     * Internal timeout message for the exit-delay timer.
+     *
+     * @param generation state generation captured when the timer was started
+     */
     record ExitDelayTimeout(long generation) implements Command {}
 
+    /**
+     * Internal timeout message for the entry-delay timer.
+     *
+     * @param generation state generation captured when the timer was started
+     */
     record EntryDelayTimeout(long generation) implements Command {}
 
+    /**
+     * Internal receptionist update carrying the currently discovered sirens.
+     *
+     * @param sirens the discovered siren actor references
+     */
     record SirensUpdated(Set<ActorRef<SirenActor.Command>> sirens) implements Command {
         public SirensUpdated {
             Objects.requireNonNull(sirens, "sirens");
@@ -141,7 +164,7 @@ public final class ControlUnitActor {
     }
 
     /**
-     * Creates the control unit with default delay durations.
+     * Creates the control unit with the default exit and entry delays.
      *
      * @param configuredPin the alarm PIN
      * @return the typed behavior

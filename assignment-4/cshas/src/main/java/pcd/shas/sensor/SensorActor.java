@@ -18,8 +18,12 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Typed reusable sensor actor that discovers the control units via Receptionist
- * and forwards sensor activation events to them.
+ * Cluster-aware sensor actor.
+ *
+ * <p>The sensor owns its immutable identity metadata and the currently
+ * discovered control units. It accepts activation commands, emits
+ * {@link ControlUnitActor.SensorActivated} messages, and discovers control
+ * units through the receptionist rather than hard-coded actor references.</p>
  */
 public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
@@ -33,7 +37,12 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
      */
     public record Activate() implements Command {}
 
-    // Internal receptionist notification adapter command
+    /**
+     * Internal receptionist update carrying the currently discovered control
+     * unit actor references.
+     *
+     * @param controlUnits discovered control units
+     */
     private record ControlUnitsUpdated(Set<ActorRef<ControlUnitActor.Command>> controlUnits) implements Command {}
 
     private final String sensorId;
@@ -79,6 +88,11 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         );
     }
 
+    /**
+     * Returns the sensor command handlers.
+     *
+     * @return the receive builder for sensor commands
+     */
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()

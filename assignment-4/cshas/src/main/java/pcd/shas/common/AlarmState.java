@@ -1,7 +1,10 @@
 package pcd.shas.common;
 
 /**
- * High-level states of the smart home alarm system, extended with a RECOVERY state for clustered operation.
+ * Logical states of the alarm state machine.
+ *
+ * <p>{@link #RECOVERY} is used after startup or recreation, before the control
+ * unit has accepted a correct PIN.</p>
  */
 public enum AlarmState {
     /**

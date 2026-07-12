@@ -11,7 +11,11 @@ import pcd.shas.common.MySerializable;
 import java.util.Objects;
 
 /**
- * Typed siren actor for the alarm system, discovered via Receptionist.
+ * Cluster-discovered siren actor.
+ *
+ * <p>The siren owns a single boolean state: active or inactive. It accepts
+ * activation, deactivation, and state-query messages, and it registers itself
+ * with the receptionist so the control unit can discover it dynamically.</p>
  */
 public final class SirenActor {
 
@@ -52,14 +56,14 @@ public final class SirenActor {
     }
 
     /**
-     * Snapshot of the current siren state.
+     * Immutable snapshot of the current siren state.
      *
      * @param active whether the siren is currently on
      */
     public record StateSnapshot(boolean active) implements MySerializable {}
 
     /**
-     * Creates the typed siren behavior and registers it with the Receptionist.
+     * Creates the typed siren behavior and registers it with the receptionist.
      *
      * @return the siren behavior
      */

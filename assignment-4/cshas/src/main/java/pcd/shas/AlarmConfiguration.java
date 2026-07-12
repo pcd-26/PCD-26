@@ -6,11 +6,11 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * Application-level configuration for the smart home alarm.
+ * Immutable application configuration for the clustered smart home alarm.
  *
- * <p>The configuration is loaded through the standard Typesafe Config mechanism
- * and kept separate from actor logic so tests can provide custom values without
- * changing production defaults.</p>
+ * <p>The values are loaded from {@code application.conf} and kept outside the
+ * actor logic so tests can inject shorter timings without changing the
+ * production defaults.</p>
  *
  * @param correctPin the configured alarm PIN
  * @param exitDelay the exit-delay duration
@@ -21,7 +21,7 @@ public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration
     private static final String ROOT_PATH = "shas";
 
     /**
-     * Builds the configuration from the standard application config tree.
+     * Loads the alarm configuration from the {@code shas} config subtree.
      *
      * @param config the loaded application config
      * @return the parsed alarm configuration

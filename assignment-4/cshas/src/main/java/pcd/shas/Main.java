@@ -24,13 +24,10 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 /**
- * Main entry point for the clustered Smart Home Alarm System (SHAS).
+ * Command-line entry point for the clustered smart home alarm system.
  *
- * <p>The application can run in two ways:
- * <ul>
- *   <li>automatic demo mode, which starts three local nodes inside one JVM; or</li>
- *   <li>node mode, where each JVM runs one role: control-unit, keypad, or sensor.</li>
- * </ul>
+ * <p>The application supports one JVM per role for the distributed setup and a
+ * local demo mode that launches three roles on {@code 127.0.0.1}.</p>
  */
 public final class Main {
 
@@ -50,6 +47,11 @@ public final class Main {
         // Utility class.
     }
 
+    /**
+     * Starts the requested node role or the local demo.
+     *
+     * @param args command-line arguments
+     */
     public static void main(String[] args) {
         if (args.length == 0 || "demo".equalsIgnoreCase(args[0])) {
             runLocalDemo();

@@ -1,7 +1,7 @@
 package pcd.shas.common;
 
 /**
- * Enumerates the types of peripheral sensors supported by the smart home alarm system.
+ * Sensor families supported by the alarm system.
  */
 public enum SensorType {
     /**

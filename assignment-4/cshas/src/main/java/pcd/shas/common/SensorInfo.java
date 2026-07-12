@@ -1,15 +1,15 @@
 package pcd.shas.common;
 
 /**
- * An immutable record representing the configuration and metadata of a sensor.
+ * Immutable sensor metadata exchanged between distributed actors.
  *
- * @param id   the unique identifier of the sensor
- * @param type the type of the sensor (e.g., MOTION, DOOR_WINDOW)
- * @param zone the zone where the sensor is installed
+ * @param id   the stable sensor identifier
+ * @param type the sensor type
+ * @param zone the installation zone
  */
 public record SensorInfo(String id, SensorType type, Zone zone) implements MySerializable {
     /**
-     * Compact constructor validating that the sensor information parameters are not null or empty.
+     * Validates the sensor metadata used in remote messages.
      */
     public SensorInfo {
         if (id == null || id.isBlank()) {
