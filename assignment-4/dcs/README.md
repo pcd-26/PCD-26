@@ -147,6 +147,10 @@ Or start the demo script:
 
 The scripts attempt to start a temporary RabbitMQ container automatically if no broker is available on port `5672`.
 
+## CI Publication
+
+The GitHub Actions workflow `Assignment 04 DCS CI` validates the middleware with RabbitMQ and, on push to `main`, publishes an `Assignment-04-DCS.zip` artifact with the `pom.xml`, scripts, sources, and report source tree.
+
 ## Limitations
 
 - The middleware is intentionally minimal and models a single critical section as a single token queue.

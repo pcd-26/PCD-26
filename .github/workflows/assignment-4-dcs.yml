@@ -1,0 +1,142 @@
+name: Assignment 04 DCS CI
+
+on:
+  push:
+    paths:
+      - "assignment-4/dcs/**"
+      - ".github/workflows/assignment-4-dcs.yml"
+  pull_request:
+    paths:
+      - "assignment-4/dcs/**"
+      - ".github/workflows/assignment-4-dcs.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: assignment-04-dcs-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test assignment-04 DCS
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Wait for RabbitMQ readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in {1..60}; do
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/5672' >/dev/null 2>&1; then
+              echo "RabbitMQ is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "RabbitMQ did not become ready in time"
+          exit 1
+
+      - name: Run DCS validation
+        working-directory: assignment-4/dcs
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload DCS test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-4-dcs-test-reports
+          path: assignment-4/dcs/target/surefire-reports
+          if-no-files-found: ignore
+
+  package:
+    name: Build Assignment-04-DCS zip
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Prepare delivery metadata
+        id: delivery_meta
+        shell: bash
+        run: echo "zip_name=Assignment-04-DCS.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create delivery package
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          rm -rf package "$DELIVERY_ZIP"
+          mkdir -p package/Assignment-04-DCS
+
+          cp assignment-4/dcs/pom.xml package/Assignment-04-DCS/pom.xml
+          cp assignment-4/dcs/README.md package/Assignment-04-DCS/README.md
+          cp assignment-4/dcs/run-dcs.sh package/Assignment-04-DCS/run-dcs.sh
+          cp assignment-4/dcs/run-dcs.ps1 package/Assignment-04-DCS/run-dcs.ps1
+          cp assignment-4/dcs/test-dcs.sh package/Assignment-04-DCS/test-dcs.sh
+          cp assignment-4/dcs/test-dcs.ps1 package/Assignment-04-DCS/test-dcs.ps1
+          cp -R assignment-4/dcs/src package/Assignment-04-DCS/src
+          cp -R assignment-4/dcs/report package/Assignment-04-DCS/report
+
+          (cd package && zip -r "../$DELIVERY_ZIP" Assignment-04-DCS)
+
+      - name: Check package contents
+        shell: bash
+        env:
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          unzip -l "$DELIVERY_ZIP"
+          test -f package/Assignment-04-DCS/pom.xml
+          test -f package/Assignment-04-DCS/README.md
+          test -f package/Assignment-04-DCS/run-dcs.sh
+          test -f package/Assignment-04-DCS/run-dcs.ps1
+          test -f package/Assignment-04-DCS/test-dcs.sh
+          test -f package/Assignment-04-DCS/test-dcs.ps1
+          test -d package/Assignment-04-DCS/src/main
+          test -d package/Assignment-04-DCS/src/test
+          test -d package/Assignment-04-DCS/report
+          test ! -e package/Assignment-04-DCS/target
+
+      - name: Upload delivery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-04-dcs-package
+          path: ${{ steps.delivery_meta.outputs.zip_name }}
