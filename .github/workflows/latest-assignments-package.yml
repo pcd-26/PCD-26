@@ -225,16 +225,14 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-03/doc/shas
-          mkdir -p package/Assignment-03/doc/hotc
-          mkdir -p package/Assignment-03/src/shas
-          mkdir -p package/Assignment-03/src/hotc
+          mkdir -p package/Assignment-03/shas/doc
+          mkdir -p package/Assignment-03/hotc/doc
 
-          cp assignment-3/shas/report/report.pdf package/Assignment-03/doc/shas/report.pdf
-          cp assignment-3/hotc/report/report.pdf package/Assignment-03/doc/hotc/report.pdf
-          cp assignment-3/shas/pom.xml package/Assignment-03/src/shas/pom.xml
-          cp -R assignment-3/shas/src package/Assignment-03/src/shas/src
-          cp -R assignment-3/hotc/src package/Assignment-03/src/hotc/src
+          cp assignment-3/shas/pom.xml package/Assignment-03/shas/pom.xml
+          cp -R assignment-3/shas/src package/Assignment-03/shas/src
+          cp assignment-3/shas/report/report.pdf package/Assignment-03/shas/doc/report.pdf
+          cp assignment-3/hotc/report/report.pdf package/Assignment-03/hotc/doc/report.pdf
+          cp -R assignment-3/hotc/src package/Assignment-03/hotc/src
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-03)
 
@@ -246,20 +244,18 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
-          test -f package/Assignment-03/doc/shas/report.pdf
-          test -f package/Assignment-03/doc/hotc/report.pdf
-          test -d package/Assignment-03/doc/shas
-          test -d package/Assignment-03/doc/hotc
-          test -f package/Assignment-03/src/shas/pom.xml
-          test -d package/Assignment-03/src/shas/src/main
-          test -d package/Assignment-03/src/shas/src/test
-          test -f package/Assignment-03/src/hotc/src/main.go
-          test -f package/Assignment-03/src/hotc/src/go.mod
-          test ! -e package/Assignment-03/doc/report.pdf
+          test -f package/Assignment-03/shas/doc/report.pdf
+          test -f package/Assignment-03/hotc/doc/report.pdf
+          test -f package/Assignment-03/shas/pom.xml
+          test -d package/Assignment-03/shas/src/main
+          test -d package/Assignment-03/shas/src/test
+          test -f package/Assignment-03/hotc/src/main.go
+          test -f package/Assignment-03/hotc/src/go.mod
+          test ! -e package/Assignment-03/doc
           test ! -e package/Assignment-03/report
           test ! -e package/Assignment-03/docs
           test ! -e package/Assignment-03/target
-          test ! -e package/Assignment-03/src/shas/target
+          test ! -e package/Assignment-03/shas/target
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
@@ -403,18 +399,6 @@ jobs:
           name: assignment-04-package
           path: bundle
 
-      - name: Build source archives and final bundle
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          bundle_root="bundle"
-          target_sha="${GITHUB_SHA}"
-
-          mkdir -p "$bundle_root"
-          git archive --format=zip --prefix=PCD-26/ -o "$bundle_root/source-code.zip" "$target_sha"
-          git archive --format=tar --prefix=PCD-26/ "$target_sha" | gzip -n > "$bundle_root/source-code.tar.gz"
-
       - name: Publish release
         shell: bash
         env:
@@ -431,12 +415,12 @@ jobs:
             gh release edit "$RELEASE_TAG" \
               --target "$TARGET_SHA" \
               --title "Latest Assignments Package" \
-              --notes "Unified package with all assignment delivery zips and repository source archives."
+              --notes "Unified package with all assignment delivery zips."
           else
             gh release create "$RELEASE_TAG" \
               --target "$TARGET_SHA" \
               --title "Latest Assignments Package" \
-              --notes "Unified package with all assignment delivery zips and repository source archives."
+              --notes "Unified package with all assignment delivery zips."
           fi
 
           while IFS= read -r asset_name; do
@@ -449,5 +433,3 @@ jobs:
           gh release upload "$RELEASE_TAG" bundle/Assignment-02.zip --clobber
           gh release upload "$RELEASE_TAG" bundle/Assignment-03.zip --clobber
           gh release upload "$RELEASE_TAG" bundle/Assignment-04.zip --clobber
-          gh release upload "$RELEASE_TAG" bundle/source-code.zip --clobber
-          gh release upload "$RELEASE_TAG" bundle/source-code.tar.gz --clobber
