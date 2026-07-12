@@ -285,7 +285,7 @@ jobs:
       - name: Install LaTeX tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base zip unzip
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended zip unzip
 
       - name: Build CSHAS report
         working-directory: assignment-4/cshas/report
