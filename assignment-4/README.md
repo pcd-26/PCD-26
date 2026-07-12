@@ -47,3 +47,6 @@ The `dttt` sub-project follows the same structure locally:
 The optional `dcs` sub-project is bundled into the same Assignment 4 zip when present:
 - `dcs/src` directory with sources
 - `dcs/report` directory with the LaTeX source for its report
+
+In the delivered zip, each bundled project should appear with a `src/`
+directory and a `doc/` directory containing the compiled report PDF.
