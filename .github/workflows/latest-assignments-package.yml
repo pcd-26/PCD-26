@@ -205,8 +205,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y texlive-latex-base zip unzip
 
-      - name: Build report
+      - name: Build SHAS report
         working-directory: assignment-3/shas/report
+        run: make
+
+      - name: Build HOTC report
+        working-directory: assignment-3/hotc/report
         run: make
 
       - name: Prepare delivery metadata
@@ -221,11 +225,13 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-03/doc
+          mkdir -p package/Assignment-03/doc/shas
+          mkdir -p package/Assignment-03/doc/hotc
           mkdir -p package/Assignment-03/src/shas
           mkdir -p package/Assignment-03/src/hotc
 
-          cp assignment-3/shas/report/report.pdf package/Assignment-03/doc/report.pdf
+          cp assignment-3/shas/report/report.pdf package/Assignment-03/doc/shas/report.pdf
+          cp assignment-3/hotc/report/report.pdf package/Assignment-03/doc/hotc/report.pdf
           cp assignment-3/shas/pom.xml package/Assignment-03/src/shas/pom.xml
           cp -R assignment-3/shas/src package/Assignment-03/src/shas/src
           cp -R assignment-3/hotc/src package/Assignment-03/src/hotc/src
@@ -240,12 +246,16 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
-          test -f package/Assignment-03/doc/report.pdf
+          test -f package/Assignment-03/doc/shas/report.pdf
+          test -f package/Assignment-03/doc/hotc/report.pdf
+          test -d package/Assignment-03/doc/shas
+          test -d package/Assignment-03/doc/hotc
           test -f package/Assignment-03/src/shas/pom.xml
           test -d package/Assignment-03/src/shas/src/main
           test -d package/Assignment-03/src/shas/src/test
           test -f package/Assignment-03/src/hotc/src/main.go
           test -f package/Assignment-03/src/hotc/src/go.mod
+          test ! -e package/Assignment-03/doc/report.pdf
           test ! -e package/Assignment-03/report
           test ! -e package/Assignment-03/docs
           test ! -e package/Assignment-03/target
