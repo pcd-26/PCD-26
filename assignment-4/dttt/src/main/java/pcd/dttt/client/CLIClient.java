@@ -12,14 +12,28 @@ import pcd.dttt.common.exceptions.NotYourTurnException;
  * Communicates with the server strictly via the {@link GameController} abstraction.
  */
 public class CLIClient implements GameEventListener {
+    /** The controller abstraction decoupling CLI from RMI. */
     private final GameController controller;
+
+    /** The remote server host IP/name. */
     private final String host;
+
+    /** The remote server RMI port. */
     private final int port;
+
+    /** The scanner for user command-line input. */
     private final Scanner scanner;
+
+    /** Lock for synchronizing game-related RMI callback events. */
     private final Object gameLock = new Object();
 
+    /** Nickname of the local player. */
     private String playerName;
+
+    /** Current board state snapshot. */
     private BoardState currentBoardState;
+
+    /** Flag indicating if the opponent left or disconnected. */
     private boolean opponentLeftFlag = false;
 
     /**
@@ -88,6 +102,9 @@ public class CLIClient implements GameEventListener {
         controller.disconnect();
     }
 
+    /**
+     * Prints the primary user actions to standard output.
+     */
     private void showMainMenu() {
         System.out.println("\n--- Main Menu ---");
         System.out.println("1. Create a new game");
@@ -96,6 +113,10 @@ public class CLIClient implements GameEventListener {
         System.out.println("4. Exit");
     }
 
+    /**
+     * Prompts the user for a game name, requests the controller to create a room,
+     * and runs the game loop once the room is created.
+     */
     private void createNewGame() {
         System.out.print("Enter game name: ");
         String gameName = scanner.nextLine().trim();
@@ -119,6 +140,10 @@ public class CLIClient implements GameEventListener {
         }
     }
 
+    /**
+     * Prompts the user for a game name, requests the controller to join it,
+     * and transitions to the game loop.
+     */
     private void joinExistingGame() {
         System.out.print("Enter game name to join: ");
         String gameName = scanner.nextLine().trim();
@@ -142,6 +167,9 @@ public class CLIClient implements GameEventListener {
         }
     }
 
+    /**
+     * Requests the list of waiting games from the controller and prints it.
+     */
     private void listWaitingGames() {
         try {
             List<String> waiting = controller.getWaitingGames();
@@ -158,6 +186,10 @@ public class CLIClient implements GameEventListener {
         }
     }
 
+    /**
+     * Primary gameplay execution loop. Handles drawing the board, prompting for moves,
+     * communicating moves via the controller, and waiting on turn notifications.
+     */
     private void playGameLoop() {
         // Wait for the game to start if waiting
         synchronized (gameLock) {
@@ -247,10 +279,21 @@ public class CLIClient implements GameEventListener {
         }
     }
 
+    /**
+     * Prints the board state visualization to stdout.
+     *
+     * @param state the board state to render
+     */
     private void printBoard(BoardState state) {
         System.out.println(state.toString());
     }
 
+    /**
+     * Evaluates the final board state and prints the corresponding result summary.
+     *
+     * @param state the final board state
+     * @param leftFlag true if the opponent left before completion
+     */
     private void showGameEndResult(BoardState state, boolean leftFlag) {
         GameStatus status = state.getStatus();
         System.out.println("=================================");
@@ -276,6 +319,11 @@ public class CLIClient implements GameEventListener {
 
     // --- GameEventListener Callbacks ---
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param initialState the initial board state snapshot when the game starts
+     */
     @Override
     public void onGameStarted(BoardState initialState) {
         synchronized (gameLock) {
@@ -284,6 +332,11 @@ public class CLIClient implements GameEventListener {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param newState the updated board state snapshot
+     */
     @Override
     public void onGameUpdated(BoardState newState) {
         synchronized (gameLock) {
@@ -292,6 +345,11 @@ public class CLIClient implements GameEventListener {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param opponentName the nickname of the opponent who left
+     */
     @Override
     public void onOpponentLeft(String opponentName) {
         synchronized (gameLock) {

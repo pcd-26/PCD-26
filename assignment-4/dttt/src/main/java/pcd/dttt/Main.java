@@ -9,6 +9,13 @@ import pcd.dttt.server.ServerMain;
  * Routes execution to ServerMain or ClientMain.
  */
 public class Main {
+    /**
+     * Unified entry point. Delegates execution depending on the first argument.
+     *
+     * @param args command-line arguments. If the first argument is "server", runs the RMI server.
+     *             If the first argument is "client", runs the RMI client.
+     *             Otherwise, defaults to client mode and prints usage.
+     */
     public static void main(String[] args) {
         if (args.length > 0) {
             String command = args[0].toLowerCase();
@@ -29,6 +36,9 @@ public class Main {
         ClientMain.main(args);
     }
 
+    /**
+     * Prints CLI command usage information to standard output.
+     */
     private static void printUsage() {
         System.out.println("Distributed Tic-Tac-Toe RMI Application");
         System.out.println("Usage:");

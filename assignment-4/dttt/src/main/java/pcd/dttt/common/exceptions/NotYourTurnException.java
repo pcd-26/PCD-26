@@ -6,6 +6,11 @@ package pcd.dttt.common.exceptions;
 public class NotYourTurnException extends Exception {
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Constructs a new NotYourTurnException with the specified detail message.
+     *
+     * @param message the detail message
+     */
     public NotYourTurnException(String message) {
         super(message);
     }
