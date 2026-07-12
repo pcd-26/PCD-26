@@ -43,3 +43,7 @@ The deliverable must be a zipped folder `Assignment-04`, to be submitted on the 
 The `dttt` sub-project follows the same structure locally:
 - `dttt/src` directory with sources
 - `dttt/report` directory with the LaTeX source for its report
+
+The optional `dcs` sub-project is bundled into the same Assignment 4 zip when present:
+- `dcs/src` directory with sources
+- `dcs/report` directory with the LaTeX source for its report
