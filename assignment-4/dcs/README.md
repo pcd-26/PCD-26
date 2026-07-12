@@ -2,6 +2,13 @@
 
 This directory contains the implementation of **Exercise #3** of Assignment 4: a high-level middleware providing support for realizing critical sections for processes running in a distributed system, using Java and RabbitMQ.
 
+## Requirements
+
+- Java 21
+- Maven 3.9+ or compatible
+- RabbitMQ 3.x or compatible with AMQP 0-9-1
+- Docker, if you want the helper scripts to start RabbitMQ automatically
+
 ## Design and Concurrency Strategy
 
 The distributed critical section is implemented as a token-based mutual exclusion protocol:
@@ -21,10 +28,67 @@ The distributed critical section is implemented as a token-based mutual exclusio
    - While holding that lock, a process passively inspects `cs_token_<csName>`.
    - The token is published only if the queue has no messages and no registered consumers.
    - This means a process holding the critical section cannot be mistaken for an uninitialized system, and a crash during bootstrap is recoverable by another process.
+   - There is no persistent initialization marker, so no bootstrap artifact can outlive the token.
 
 4. **Safe Lock Release**:
    - Inside the `exit()` method, releasing the lock first cancels the local consumer and then requeues the same delivery with `basicNack(..., requeue = true)`.
    - The temporary bootstrap lock is held while this transition happens, so a concurrent bootstrapper cannot observe an intermediate state.
+
+## Queue Topology
+
+For each critical-section name `csName`, the middleware uses two broker queues:
+
+- `cs_token_<csName>`:
+  - durable
+  - non-exclusive
+  - non-auto-delete
+  - contains exactly one persistent token message when the critical section is idle
+- `cs_bootstrap_lock_<csName>`:
+  - non-durable
+  - exclusive to the connection that created it
+  - auto-deleted by the broker when the connection closes
+  - exists only while a process decides whether the token must be seeded
+
+The bootstrap lock queue is not part of the steady-state protocol. It is only a broker-side mutex for initialization and release transitions.
+
+## API and Lifecycle
+
+Typical lifecycle:
+
+1. Construct `DistributedCriticalSection` for a given `csName`.
+2. Call `enter()` to block until the token is delivered.
+3. Execute the critical section body.
+4. Call `exit()` to requeue the token.
+5. Call `close()` when the middleware instance is no longer needed.
+
+Important delivery guarantees:
+
+- `enter()` uses manual acknowledgements.
+- A successful `enter()` means the caller owns one unacknowledged delivery tag.
+- `exit()` requeues that same delivery tag back to the token queue.
+- If the process crashes before `exit()`, RabbitMQ requeues the token automatically when the channel closes.
+- If the process shuts down cleanly while holding the token, the token is also preserved.
+
+Known failure assumptions:
+
+- RabbitMQ must be reachable when constructing the middleware.
+- If RabbitMQ itself loses its queue metadata or messages, the middleware cannot recover state that the broker has already destroyed.
+- The protocol assumes a single RabbitMQ broker namespace for the critical section name.
+
+Example usage:
+
+```java
+public static void main(String[] args) throws Exception {
+    try (DistributedCriticalSection dcs = new DistributedCriticalSection("localhost", 5672, "demo-cs")) {
+        dcs.enter();
+        try {
+            // critical section body
+        } finally {
+            dcs.exit();
+        }
+    }
+}
+```
 
 ---
 
@@ -48,11 +112,16 @@ The demo runs two concurrent processes (`Process-A` and `Process-B`) that compet
 ### Running the Tests
 
 A comprehensive JUnit 5 test suite is included in `DistributedCriticalSectionTest.java`, covering:
-- Basic acquisition and release of locks.
-- Mutual exclusion enforcement under concurrent access.
-- Non-reentrant behavior (throwing `IllegalStateException` on re-entry).
-- Concurrent bootstrap creating exactly one token.
-- Connection crash recovery (automatic requeueing of tokens).
+- Concurrent initialization by multiple middleware instances.
+- Exactly one token being created.
+- Interrupted bootstrap and later recovery.
+- Crash while holding the token and RabbitMQ requeue behavior.
+- Mutual exclusion with multiple concurrent processes.
+- Repeated acquire and release cycles.
+- Rejection of release without ownership.
+- Rejection of double release.
+- Independence of different critical-section names.
+- Shutdown cleanup without losing the token.
 
 - **Bash**:
   ```bash
@@ -63,4 +132,23 @@ A comprehensive JUnit 5 test suite is included in `DistributedCriticalSectionTes
   .\test-dcs.ps1
   ```
 
-*Note: The run and test scripts will automatically attempt to spin up a temporary RabbitMQ container using Docker if no local RabbitMQ instance is detected on port 5672.*
+### Running Manually
+
+You can also run a single process directly:
+
+```bash
+mvn -f assignment-4/dcs/pom.xml exec:java -Dexec.args="Process-A localhost 5672"
+```
+
+Or start the demo script:
+
+- **Bash**: `./run-dcs.sh`
+- **PowerShell**: `.\run-dcs.ps1`
+
+The scripts attempt to start a temporary RabbitMQ container automatically if no broker is available on port `5672`.
+
+## Limitations
+
+- The middleware is intentionally minimal and models a single critical section as a single token queue.
+- It does not include broker clustering, replication, or persistence beyond what RabbitMQ provides for the queue and message durability settings used here.
+- If the broker loses the queue or its durable messages, recovery is outside the scope of the middleware.
