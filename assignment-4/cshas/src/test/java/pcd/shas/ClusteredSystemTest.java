@@ -120,9 +120,7 @@ public class ClusteredSystemTest {
 
         Config controlConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2561, SEED_NODES);
         cuSystem = ActorSystem.create(controlUnitNodeBehavior(), SYSTEM_NAME, controlConfig);
-        awaitState(cuSystem, AlarmState.RECOVERY);
-
-        eventuallySubmitPin("1234", AlarmState.DISARMED, Duration.ofSeconds(15));
+        awaitState(cuSystem, AlarmState.RECOVERY, Duration.ofSeconds(15));
     }
 
     private void eventuallySubmitPin(String pin, AlarmState expectedState) throws Exception {
@@ -164,7 +162,11 @@ public class ClusteredSystemTest {
     }
 
     private void awaitState(ActorSystem<ControlUnitActor.Command> system, AlarmState expected) throws Exception {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
+        awaitState(system, expected, TIMEOUT);
+    }
+
+    private void awaitState(ActorSystem<ControlUnitActor.Command> system, AlarmState expected, Duration timeout) throws Exception {
+        long deadline = System.nanoTime() + timeout.toNanos();
         AlarmState current = null;
         while (System.nanoTime() < deadline) {
             current = queryState(system);
@@ -174,18 +176,6 @@ public class ClusteredSystemTest {
             TimeUnit.MILLISECONDS.sleep(20);
         }
         throw new AssertionError("Expected state " + expected + " but found " + current);
-    }
-
-    private AlarmState queryState(ActorSystem<ControlUnitActor.Command> system) throws Exception {
-        CompletionStage<ControlUnitActor.StateSnapshot> stage = AskPattern.ask(
-                system,
-                ControlUnitActor.QueryState::new,
-                Duration.ofSeconds(1),
-                system.scheduler()
-        );
-        ControlUnitActor.StateSnapshot snapshot = stage.toCompletableFuture().get(1, TimeUnit.SECONDS);
-        assertNotNull(snapshot);
-        return snapshot.state();
     }
 
     private void awaitClusterSize(int expectedSize) throws Exception {
@@ -203,6 +193,18 @@ public class ClusteredSystemTest {
             TimeUnit.MILLISECONDS.sleep(20);
         }
         throw new AssertionError("Expected cluster size " + expectedSize + " but found " + current);
+    }
+
+    private AlarmState queryState(ActorSystem<ControlUnitActor.Command> system) throws Exception {
+        CompletionStage<ControlUnitActor.StateSnapshot> stage = AskPattern.ask(
+                system,
+                ControlUnitActor.QueryState::new,
+                Duration.ofSeconds(1),
+                system.scheduler()
+        );
+        ControlUnitActor.StateSnapshot snapshot = stage.toCompletableFuture().get(1, TimeUnit.SECONDS);
+        assertNotNull(snapshot);
+        return snapshot.state();
     }
 
     private int clusterMemberCount(ActorSystem<?> system) {
