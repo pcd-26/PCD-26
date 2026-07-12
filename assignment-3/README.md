@@ -26,6 +26,15 @@ The goal of the exercise is to design and implement in Go language a championshi
 
 The deliverable must be a zipped folder `Assignment-03`, to be submitted on the course web site, including:  
 - `src` directory with sources
-- `doc` directory with a short report in PDF (`report.pdf`). The report should include:
+- `doc` directory with one short report in PDF per sub-project:
+  - `doc/shas/report.pdf`
+  - `doc/hotc/report.pdf`
+
+Each report should include:
 	- A brief analsysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
 	- A brief description of the strategy adopted
+
+The report sources live under:
+
+- `shas/report`
+- `hotc/report`
