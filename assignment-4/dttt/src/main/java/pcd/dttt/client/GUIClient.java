@@ -28,11 +28,11 @@ public class GUIClient extends JFrame implements GameEventListener {
     private static final Color COLOR_STATUS = new Color(166, 227, 161);  // Pastel green for status
     private static final Color COLOR_WARN = new Color(249, 226, 175);    // Pastel yellow for warnings
 
-    // High-Contrast Button Colors (for maximum readability)
-    private static final Color COLOR_BTN_PRIMARY = new Color(58, 122, 237);   // Rich blue for Connect/Create
-    private static final Color COLOR_BTN_SUCCESS = new Color(46, 154, 72);    // Rich green for Join
-    private static final Color COLOR_BTN_DANGER = new Color(211, 47, 47);     // Rich red for Leave
-    private static final Color COLOR_BTN_SECONDARY = new Color(69, 71, 90);   // Rich grey for Refresh
+    // High-Contrast Button Colors (harmonized with Catppuccin Mocha dark theme)
+    private static final Color COLOR_BTN_PRIMARY = new Color(45, 79, 124);     // Steel Blue for Connect/Create
+    private static final Color COLOR_BTN_SUCCESS = new Color(45, 94, 64);      // Forest Green for Join
+    private static final Color COLOR_BTN_DANGER = new Color(124, 53, 67);      // Rose Red for Leave
+    private static final Color COLOR_BTN_SECONDARY = new Color(69, 71, 90);    // Slate Grey for Refresh
 
     private static final Color COLOR_X = new Color(255, 85, 120);       // High-contrast vibrant coral for X
     private static final Color COLOR_O = new Color(85, 170, 255);       // High-contrast vibrant blue for O
@@ -387,10 +387,10 @@ public class GUIClient extends JFrame implements GameEventListener {
     }
 
     private Color getHoverColor(Color color) {
-        // Blend 80% original color and 20% white for a clean, non-washout highlight glow
-        int r = Math.min(255, (int)(color.getRed() * 0.8 + 255 * 0.2));
-        int g = Math.min(255, (int)(color.getGreen() * 0.8 + 255 * 0.2));
-        int b = Math.min(255, (int)(color.getBlue() * 0.8 + 255 * 0.2));
+        // Blend 85% original color and 15% black for a clean, high-contrast dark hover state
+        int r = (int)(color.getRed() * 0.85);
+        int g = (int)(color.getGreen() * 0.85);
+        int b = (int)(color.getBlue() * 0.85);
         return new Color(r, g, b);
     }
 
