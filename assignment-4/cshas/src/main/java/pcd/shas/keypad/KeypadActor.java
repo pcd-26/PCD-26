@@ -15,7 +15,12 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Typed keypad actor that collects local PIN input and forwards submissions to all discovered control units.
+ * Cluster-aware keypad actor.
+ *
+ * <p>The keypad owns a local PIN buffer and the set of discovered control
+ * units. It accepts key presses and direct PIN submissions, and it emits
+ * {@link ControlUnitActor.PinSubmitted} messages to every discovered control
+ * unit through the receptionist-backed discovery list.</p>
  */
 public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
 
@@ -42,14 +47,19 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         }
     }
 
-    // Internal receptionist notification adapter command
+    /**
+     * Internal receptionist update carrying the currently discovered control
+     * unit actor references.
+     *
+     * @param controlUnits discovered control units
+     */
     private record ControlUnitsUpdated(Set<ActorRef<ControlUnitActor.Command>> controlUnits) implements Command {}
 
     private final Set<ActorRef<ControlUnitActor.Command>> controlUnits = new HashSet<>();
     private final StringBuilder pinBuffer = new StringBuilder();
 
     /**
-     * Creates a keypad actor that dynamically discovers the control units via receptionist.
+     * Creates a keypad actor that dynamically discovers control units via the receptionist.
      *
      * @return the keypad behavior
      */
@@ -69,6 +79,11 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         );
     }
 
+    /**
+     * Returns the keypad command handlers.
+     *
+     * @return the receive builder for keypad commands
+     */
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()

@@ -15,6 +15,9 @@ import java.util.stream.Collectors;
 
 /**
  * Parses node startup arguments and builds the clustered Pekko configuration.
+ *
+ * <p>The helper centralizes the distributed startup contract: role, host,
+ * port, seed nodes, and sensor metadata for sensor nodes.</p>
  */
 public final class NodeStartup {
 
@@ -75,6 +78,12 @@ public final class NodeStartup {
         }
     }
 
+    /**
+     * Parses the command-line contract used by {@link pcd.shas.Main}.
+     *
+     * @param args command-line arguments
+     * @return the parsed launch arguments
+     */
     public static NodeArguments parseNodeArguments(String[] args) {
         Objects.requireNonNull(args, "args");
         if (args.length == 0) {
@@ -106,6 +115,15 @@ public final class NodeStartup {
         };
     }
 
+    /**
+     * Builds the Pekko Cluster configuration for a single node.
+     *
+     * @param systemName logical actor system name
+     * @param host bind host for Artery and cluster discovery
+     * @param port canonical port for the node
+     * @param seedNodes cluster seed nodes in {@code host:port} form
+     * @return the parsed configuration
+     */
     public static Config buildClusterConfig(String systemName, String host, int port, List<String> seedNodes) {
         Objects.requireNonNull(systemName, "systemName");
         Objects.requireNonNull(host, "host");
@@ -134,6 +152,13 @@ public final class NodeStartup {
         return ConfigFactory.parseString(configText).withFallback(ConfigFactory.load());
     }
 
+    /**
+     * Converts a {@code host:port} pair to a Pekko seed-node URI.
+     *
+     * @param systemName logical actor system name
+     * @param hostPort seed node address in {@code host:port} form
+     * @return the Pekko URI used in cluster seed-node configuration
+     */
     public static String toSeedNodeUri(String systemName, String hostPort) {
         Objects.requireNonNull(systemName, "systemName");
         Objects.requireNonNull(hostPort, "hostPort");
@@ -144,6 +169,14 @@ public final class NodeStartup {
         return toSeedNodeUri(systemName, parts[0].trim(), parsePort(parts[1].trim(), Role.CONTROL_UNIT));
     }
 
+    /**
+     * Converts host and port to a Pekko seed-node URI.
+     *
+     * @param systemName logical actor system name
+     * @param host host name or IP address
+     * @param port TCP port
+     * @return the Pekko URI used in cluster seed-node configuration
+     */
     public static String toSeedNodeUri(String systemName, String host, int port) {
         Objects.requireNonNull(systemName, "systemName");
         Objects.requireNonNull(host, "host");

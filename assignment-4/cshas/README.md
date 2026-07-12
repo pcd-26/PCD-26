@@ -1,8 +1,77 @@
 # Clustered Smart Home Alarm System
 
-This module can run as separate Pekko Cluster node processes or as a local demo.
+This module implements the smart home alarm system from the previous assignment
+as a small Apache Pekko Typed cluster.
 
-## Control unit node
+## Architecture
+
+The runtime is split into three roles:
+
+- `control-unit`: owns the alarm state machine and siren control;
+- `keypad`: collects local PIN input and forwards PIN submissions;
+- `sensor`: represents one distributed sensor and forwards activations.
+
+Actors communicate only through immutable typed messages. Remote messages use
+the `pcd.shas.common.MySerializable` marker and are serialized with Jackson
+JSON.
+
+## Package Organization
+
+- `pcd.shas`: command-line entry point and application configuration loader;
+- `pcd.shas.common`: shared value objects, enums, and serialization marker;
+- `pcd.shas.controlunit`: clustered control-unit actor and state machine;
+- `pcd.shas.keypad`: keypad actor and local PIN input protocol;
+- `pcd.shas.sensor`: sensor actor and activation protocol;
+- `pcd.shas.siren`: siren actor discovered through the receptionist;
+- `pcd.shas.runtime`: startup parsing and Pekko Cluster configuration.
+
+## Actor Responsibilities
+
+- Control unit: starts in `RECOVERY`, accepts PIN submissions and sensor
+  activations, manages exit-delay and entry-delay timers, and updates sirens.
+- Keypad: stores local keystrokes, builds PINs, and submits them to all
+  discovered control units.
+- Sensor: owns a stable `sensorId`, a `SensorType`, and a `Zone`; forwards
+  activations to the control unit as `SensorInfo`.
+- Siren: accepts activate/deactivate commands and exposes its state for tests.
+
+The control unit uses a generation counter together with typed timers so stale
+timeout messages from previous states are ignored safely.
+
+## Cluster Topology
+
+The project expects at least three independently configurable nodes:
+
+1. control-unit node
+2. keypad node
+3. sensor node
+
+Discovery uses the Pekko receptionist, so the keypad and sensor do not need
+hard-coded `ActorRef`s for the control unit. The local demo starts the same
+three roles on localhost using ports `2551`, `2552`, and `2553`.
+
+## Configuration Files
+
+- `src/main/resources/application.conf`: Pekko Cluster, serialization bindings,
+  and alarm timings loaded by `AlarmConfiguration`.
+- `src/main/resources/logback.xml`: console logging configuration for the
+  application and tests.
+
+Important configuration entries:
+
+- `shas.correctPin`: PIN required to leave `RECOVERY` or disarm the system;
+- `shas.exitDelay`: delay between arming and the `ARMED` state;
+- `shas.entryDelay`: delay between intrusion detection and the `ALARM` state;
+- `pekko.actor.provider`: set to `cluster`;
+- `pekko.cluster.seed-nodes`: seed nodes used for cluster formation;
+- `pekko.remote.artery.canonical.hostname` and `.port`: node identity for each
+  JVM process;
+- `pekko.actor.serialization-bindings`: enables JSON serialization for remote
+  messages.
+
+## Startup Instructions
+
+### Control unit node
 
 ```bash
 ./run-cshas.sh control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
@@ -14,7 +83,7 @@ PowerShell:
 .\run-cshas.ps1 control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
 ```
 
-## Keypad node
+### Keypad node
 
 ```bash
 ./run-cshas.sh keypad --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
@@ -26,7 +95,7 @@ PowerShell:
 .\run-cshas.ps1 keypad --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
 ```
 
-## Sensor node
+### Sensor node
 
 ```bash
 ./run-cshas.sh sensor --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
@@ -38,7 +107,7 @@ PowerShell:
 .\run-cshas.ps1 sensor --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
 ```
 
-## Local demo
+### Local three-node demo
 
 ```bash
 ./run-cshas.sh demo
@@ -50,4 +119,33 @@ PowerShell:
 .\run-cshas.ps1 demo
 ```
 
-The local demo starts three local nodes on `127.0.0.1` using ports `2551`, `2552`, and `2553`.
+## Testing
+
+Run the full project verification from this module:
+
+```bash
+mvn --batch-mode --no-transfer-progress clean verify
+```
+
+Useful focused checks:
+
+- `mvn --batch-mode --no-transfer-progress test`
+- `mvn --batch-mode --no-transfer-progress -Dtest=pcd.shas.ClusteredSystemTest test`
+
+The test suite covers:
+
+- the control-unit state machine;
+- keypad and sensor message delivery;
+- clustered discovery and remote message serialization;
+- recreation of the control unit in `RECOVERY`.
+
+## Assumptions and Limitations
+
+- The distributed setup assumes three local ports by default: `2551`, `2552`,
+  and `2553`.
+- The local demo is intended for quick inspection and uses fixed localhost
+  ports.
+- The control unit is intentionally stateless across recreation; no persistence
+  layer is used.
+- Cluster discovery depends on the receptionist and seed nodes being available
+  during startup.

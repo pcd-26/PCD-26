@@ -1,8 +1,11 @@
 package pcd.shas.common;
 
 /**
- * Marker interface for Pekko serialization.
- * Classes implementing this interface will be serialized using Jackson JSON serializer in the cluster.
+ * Marker interface for message types that must cross Pekko Cluster boundaries.
+ *
+ * <p>The project maps this marker to the Jackson JSON serializer in
+ * {@code application.conf} so remote actor messages remain explicitly
+ * serializable.</p>
  */
 public interface MySerializable {
 }
