@@ -1,0 +1,129 @@
+name: Assignment 4 Validation CI
+
+on:
+  push:
+    paths:
+      - "assignment-4/**"
+      - ".github/workflows/assignment-4-tests.yml"
+  pull_request:
+    paths:
+      - "assignment-4/**"
+      - ".github/workflows/assignment-4-tests.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: assignment-4-validation-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  cshas:
+    name: Validate assignment-4/cshas
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run CSHAS validation
+        working-directory: assignment-4/cshas
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload CSHAS test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-4-cshas-test-reports
+          path: assignment-4/cshas/target/surefire-reports
+          if-no-files-found: ignore
+
+  dttt:
+    name: Validate assignment-4/dttt
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run DTTT validation
+        working-directory: assignment-4/dttt
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload DTTT test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-4-dttt-test-reports
+          path: assignment-4/dttt/target/surefire-reports
+          if-no-files-found: ignore
+
+  dcs:
+    name: Validate assignment-4/dcs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Wait for RabbitMQ readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in {1..60}; do
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/5672' >/dev/null 2>&1; then
+              echo "RabbitMQ is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "RabbitMQ did not become ready in time"
+          exit 1
+
+      - name: Run DCS validation
+        working-directory: assignment-4/dcs
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload DCS test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assignment-4-dcs-test-reports
+          path: assignment-4/dcs/target/surefire-reports
+          if-no-files-found: ignore

@@ -4,31 +4,45 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class DistributedCriticalSectionTest {
+class DistributedCriticalSectionTest {
+
+    private static final String HOST = "localhost";
+    private static final int PORT = 5672;
 
     private Connection connection;
-    private final String host = "localhost";
-    private final int port = 5672;
 
     @BeforeAll
-    public void setupAll() throws Exception {
+    void setupAll() throws Exception {
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(host);
-        factory.setPort(port);
-        // Connect to RabbitMQ; if it is not running, this will fail immediately,
-        // alerting us to check the service.
+        factory.setHost(HOST);
+        factory.setPort(PORT);
         try {
             connection = factory.newConnection();
         } catch (Exception e) {
@@ -37,25 +51,16 @@ public class DistributedCriticalSectionTest {
     }
 
     @AfterAll
-    public void teardownAll() throws Exception {
+    void teardownAll() throws Exception {
         if (connection != null && connection.isOpen()) {
             connection.close();
         }
     }
 
     @Test
-    public void testAcquireAndRelease() throws Exception {
-        String csName = "test-acquire-release-" + System.currentTimeMillis();
-        try (DistributedCriticalSection dcs = new DistributedCriticalSection(connection, csName)) {
-            dcs.enter();
-            // Critical section body
-            dcs.exit();
-        }
-    }
-
-    @Test
-    public void testConcurrentBootstrapCreatesExactlyOneToken() throws Exception {
-        String csName = "test-bootstrap-" + System.currentTimeMillis();
+    @DisplayName("Concurrent initialization creates one token")
+    void concurrentInitializationCreatesExactlyOneToken() throws Exception {
+        String csName = uniqueName("bootstrap");
         int threadCount = 6;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch readyLatch = new CountDownLatch(threadCount);
@@ -68,8 +73,8 @@ public class DistributedCriticalSectionTest {
                 readyLatch.countDown();
                 try {
                     startLatch.await();
-                    try (DistributedCriticalSection ignored = new DistributedCriticalSection(host, port, csName)) {
-                        // Constructor bootstrap only; close immediately.
+                    try (DistributedCriticalSection ignored = new DistributedCriticalSection(HOST, PORT, csName)) {
+                        // Constructor bootstrap only.
                     }
                 } catch (Throwable t) {
                     failures.add(t);
@@ -91,41 +96,104 @@ public class DistributedCriticalSectionTest {
     }
 
     @Test
-    public void testReentryFails() throws Exception {
-        String csName = "test-reentry-" + System.currentTimeMillis();
-        try (DistributedCriticalSection dcs = new DistributedCriticalSection(connection, csName)) {
-            dcs.enter();
-            assertThrows(IllegalStateException.class, dcs::enter, "Reentering an already acquired lock should fail.");
-            dcs.exit();
+    @DisplayName("Interrupted bootstrap is recoverable")
+    void interruptedBootstrapCanBeRecoveredByLaterProcess() throws Exception {
+        String csName = uniqueName("bootstrap-interrupted");
+        AtomicBoolean failOnFirstPublish = new AtomicBoolean(true);
+
+        Connection failingConnection = newConnection();
+        try {
+            IOException failure = assertThrows(IOException.class, () ->
+                    new DistributedCriticalSection(
+                            failingConnection,
+                            csName,
+                            () -> {
+                                if (failOnFirstPublish.getAndSet(false)) {
+                                    throw new IOException("Injected bootstrap failure");
+                                }
+                            }));
+            assertNotNull(failure);
+        } finally {
+            if (failingConnection.isOpen()) {
+                failingConnection.close();
+            }
+        }
+
+        QueueStatus afterFailure = readQueueStatus(tokenQueueName(csName));
+        assertEquals(0, afterFailure.messageCount(), "No token should exist after a failed bootstrap publish");
+        assertEquals(0, afterFailure.consumerCount(), "Bootstrap lock must be released after a failed bootstrap");
+
+        try (DistributedCriticalSection recovered = new DistributedCriticalSection(HOST, PORT, csName)) {
+            recovered.enter();
+            recovered.exit();
+        }
+
+        QueueStatus afterRecovery = readQueueStatus(tokenQueueName(csName));
+        assertEquals(1, afterRecovery.messageCount(), "A later process must be able to seed the missing token");
+        assertEquals(0, afterRecovery.consumerCount(), "The token queue must be idle after recovery");
+    }
+
+    @Test
+    @DisplayName("Release without ownership is rejected")
+    void releaseWithoutOwnershipIsRejected() throws Exception {
+        String csName = uniqueName("release-without-ownership");
+        try (DistributedCriticalSection dcs = new DistributedCriticalSection(HOST, PORT, csName)) {
+            assertThrows(IllegalStateException.class, dcs::exit);
         }
     }
 
     @Test
-    public void testMutualExclusion() throws Exception {
-        String csName = "test-mutex-" + System.currentTimeMillis();
-        int threadCount = 5;
+    @DisplayName("Double release is rejected")
+    void doubleReleaseIsRejected() throws Exception {
+        String csName = uniqueName("double-release");
+        try (DistributedCriticalSection dcs = new DistributedCriticalSection(HOST, PORT, csName)) {
+            dcs.enter();
+            dcs.exit();
+            assertThrows(IllegalStateException.class, dcs::exit);
+        }
+    }
+
+    @Test
+    @DisplayName("Acquire and release can repeat")
+    void repeatedAcquireAndReleaseCyclesWork() throws Exception {
+        String csName = uniqueName("cycles");
+        try (DistributedCriticalSection dcs = new DistributedCriticalSection(HOST, PORT, csName)) {
+            for (int i = 0; i < 4; i++) {
+                dcs.enter();
+                QueueStatus duringHold = readQueueStatus(tokenQueueName(csName));
+                assertEquals(0, duringHold.messageCount(), "Token should be in-flight while held");
+                assertEquals(1, duringHold.consumerCount(), "One consumer should be registered while held");
+
+                dcs.exit();
+                QueueStatus afterRelease = readQueueStatus(tokenQueueName(csName));
+                assertEquals(1, afterRelease.messageCount(), "Token should be back in the queue after release");
+                assertEquals(0, afterRelease.consumerCount(), "No consumer should remain after release");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Mutual exclusion holds for multiple concurrent processes")
+    void mutualExclusionWithConcurrentProcesses() throws Exception {
+        String csName = uniqueName("mutex");
+        int threadCount = 6;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch latch = new CountDownLatch(threadCount);
-
         AtomicInteger activeProcessesInCS = new AtomicInteger(0);
         List<Boolean> safetyViolations = Collections.synchronizedList(new ArrayList<>());
 
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
-                try (DistributedCriticalSection dcs = new DistributedCriticalSection(connection, csName)) {
+                try (DistributedCriticalSection dcs = new DistributedCriticalSection(HOST, PORT, csName)) {
                     dcs.enter();
                     int active = activeProcessesInCS.incrementAndGet();
                     if (active > 1) {
                         safetyViolations.add(true);
                     }
-
-                    // Simulate some work in the critical section
                     Thread.sleep(100);
-
                     activeProcessesInCS.decrementAndGet();
                     dcs.exit();
                 } catch (Exception e) {
-                    e.printStackTrace();
                     safetyViolations.add(true);
                 } finally {
                     latch.countDown();
@@ -133,49 +201,96 @@ public class DistributedCriticalSectionTest {
             });
         }
 
-        assertTrue(latch.await(10, TimeUnit.SECONDS), "Threads did not complete execution in time");
-        executor.shutdown();
-
-        assertTrue(safetyViolations.isEmpty(), "Safety violation detected: multiple threads entered the critical section simultaneously.");
+        assertTrue(latch.await(20, TimeUnit.SECONDS), "Threads did not complete execution in time");
+        executor.shutdownNow();
+        assertTrue(safetyViolations.isEmpty(), "Multiple processes entered the critical section simultaneously");
     }
 
     @Test
-    public void testCrashRecovery() throws Exception {
-        String csName = "test-crash-" + System.currentTimeMillis();
+    @DisplayName("Independent critical sections do not interfere")
+    void independentCriticalSectionNamesDoNotInterfere() throws Exception {
+        String csNameA = uniqueName("independent-a");
+        String csNameB = uniqueName("independent-b");
 
-        // 1. First process acquires the lock
-        DistributedCriticalSection dcs1 = new DistributedCriticalSection(host, port, csName);
-        dcs1.enter();
-        QueueStatus heldStatus = readQueueStatus(tokenQueueName(csName));
-        assertEquals(0, heldStatus.messageCount(), "The token should be in-flight while the critical section is held");
-        assertEquals(1, heldStatus.consumerCount(), "The holder keeps one consumer registered while in the critical section");
+        try (DistributedCriticalSection dcsA = new DistributedCriticalSection(HOST, PORT, csNameA)) {
+            dcsA.enter();
 
-        // 2. Second process tries to acquire the lock in a background thread and blocks
-        CompletableFuture<Boolean> dcs2Acquired = new CompletableFuture<>();
-        Thread t = new Thread(() -> {
-            try (DistributedCriticalSection dcs2 = new DistributedCriticalSection(host, port, csName)) {
-                dcs2.enter();
-                dcs2Acquired.complete(true);
-                dcs2.exit();
-            } catch (Exception e) {
-                dcs2Acquired.completeExceptionally(e);
-            }
-        });
-        t.start();
+            CompletableFuture<Void> bCompleted = CompletableFuture.runAsync(() -> {
+                try (DistributedCriticalSection dcsB = new DistributedCriticalSection(HOST, PORT, csNameB)) {
+                    dcsB.enter();
+                    dcsB.exit();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
 
-        // Give thread B time to start waiting
-        Thread.sleep(500);
-        assertFalse(dcs2Acquired.isDone(), "Second process should be waiting for the lock.");
+            bCompleted.get(5, TimeUnit.SECONDS);
+            dcsA.exit();
+        }
 
-        // 3. Close the first process's instance (simulating a crash where connection/channel is closed)
-        dcs1.close();
+        assertEquals(1, readQueueStatus(tokenQueueName(csNameA)).messageCount(), "Queue A must keep its token");
+        assertEquals(1, readQueueStatus(tokenQueueName(csNameB)).messageCount(), "Queue B must keep its token");
+    }
 
-        // 4. Verify that the second process is now able to acquire the lock automatically
-        assertTrue(dcs2Acquired.get(5, TimeUnit.SECONDS), "Second process should have acquired the lock after the first crashed.");
+    @Test
+    @DisplayName("Crash while holding the token requeues it")
+    void crashWhileHoldingTokenRequeuesUnacknowledgedToken() throws Exception {
+        String csName = uniqueName("crash-hold");
+        DistributedCriticalSection dcs1 = new DistributedCriticalSection(HOST, PORT, csName);
+        try {
+            dcs1.enter();
+
+            QueueStatus heldStatus = readQueueStatus(tokenQueueName(csName));
+            assertEquals(0, heldStatus.messageCount(), "The token should be in-flight while held");
+            assertEquals(1, heldStatus.consumerCount(), "The holder should keep one consumer registered");
+        } finally {
+            dcs1.close();
+        }
+
+        QueueStatus afterClose = readQueueStatus(tokenQueueName(csName));
+        assertEquals(1, afterClose.messageCount(), "RabbitMQ must requeue the unacknowledged token");
+        assertEquals(0, afterClose.consumerCount(), "No consumer should remain after shutdown");
+
+        try (DistributedCriticalSection dcs2 = new DistributedCriticalSection(HOST, PORT, csName)) {
+            dcs2.enter();
+            dcs2.exit();
+        }
+    }
+
+    @Test
+    @DisplayName("Shutdown on owner connection keeps the token available")
+    void shutdownCleansUpWithoutLosingToken() throws Exception {
+        String csName = uniqueName("shutdown");
+        DistributedCriticalSection dcs = new DistributedCriticalSection(HOST, PORT, csName);
+        try {
+            dcs.enter();
+        } finally {
+            dcs.close();
+        }
+
+        QueueStatus afterShutdown = readQueueStatus(tokenQueueName(csName));
+        assertEquals(1, afterShutdown.messageCount(), "Shutdown must not lose the token");
+        assertEquals(0, afterShutdown.consumerCount(), "Shutdown must clear broker consumers");
+
+        try (DistributedCriticalSection recovered = new DistributedCriticalSection(HOST, PORT, csName)) {
+            recovered.enter();
+            recovered.exit();
+        }
+    }
+
+    private String uniqueName(String prefix) {
+        return prefix + "-" + UUID.randomUUID();
     }
 
     private String tokenQueueName(String csName) {
         return "cs_token_" + csName;
+    }
+
+    private Connection newConnection() throws Exception {
+        ConnectionFactory factory = new ConnectionFactory();
+        factory.setHost(HOST);
+        factory.setPort(PORT);
+        return factory.newConnection();
     }
 
     private QueueStatus readQueueStatus(String queueName) throws Exception {

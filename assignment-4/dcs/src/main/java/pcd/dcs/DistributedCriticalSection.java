@@ -31,7 +31,7 @@ import java.util.concurrent.TimeoutException;
  * The bootstrap protocol is crash-safe: a temporary exclusive queue on the broker serializes the
  * decision to seed the token, and the token is published only after a passive queue inspection shows
  * that no token message exists and no consumer is holding one. Because the lock queue is deleted at
- * the end of the transition, no initialization marker can outlive the token.
+ * the end of the transition, no bootstrap artifact can outlive the token.
  * </p>
  * <p>
  * The token is consumed with manual acknowledgment ({@code autoAck = false}). While a process holds
@@ -49,12 +49,22 @@ public class DistributedCriticalSection implements AutoCloseable {
     private static final long BOOTSTRAP_LOCK_TIMEOUT_MILLIS = 10_000L;
     private static final byte[] EMPTY_BODY = new byte[0];
 
+    /**
+     * Test seam that runs only while the bootstrap lock is held and before the first token publish.
+     * Production code uses the no-op default.
+     */
+    @FunctionalInterface
+    interface BootstrapHook {
+        void beforeTokenPublish() throws IOException, InterruptedException;
+    }
+
     private final Connection connection;
     private final Channel channel;
     private final String csName;
     private final String queueName;
     private final String bootstrapLockQueue;
     private final boolean ownConnection;
+    private final BootstrapHook bootstrapHook;
 
     private String consumerTag;
     private Long currentDeliveryTag;
@@ -70,6 +80,11 @@ public class DistributedCriticalSection implements AutoCloseable {
      * @throws InterruptedException if bootstrap lock acquisition is interrupted
      */
     public DistributedCriticalSection(Connection connection, String csName) throws IOException, InterruptedException {
+        this(connection, csName, () -> { });
+    }
+
+    DistributedCriticalSection(Connection connection, String csName, BootstrapHook bootstrapHook)
+            throws IOException, InterruptedException {
         if (connection == null) {
             throw new IllegalArgumentException("Connection cannot be null");
         }
@@ -81,6 +96,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         this.queueName = TOKEN_QUEUE_PREFIX + csName;
         this.bootstrapLockQueue = BOOTSTRAP_LOCK_QUEUE_PREFIX + csName;
         this.ownConnection = false;
+        this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
         this.channel = connection.createChannel();
         this.channel.basicQos(1);
         initializeToken();
@@ -99,6 +115,11 @@ public class DistributedCriticalSection implements AutoCloseable {
      */
     public DistributedCriticalSection(String host, int port, String csName)
             throws IOException, TimeoutException, InterruptedException {
+        this(host, port, csName, () -> { });
+    }
+
+    DistributedCriticalSection(String host, int port, String csName, BootstrapHook bootstrapHook)
+            throws IOException, TimeoutException, InterruptedException {
         if (csName == null || csName.trim().isEmpty()) {
             throw new IllegalArgumentException("Critical section name cannot be empty");
         }
@@ -110,6 +131,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         this.queueName = TOKEN_QUEUE_PREFIX + csName;
         this.bootstrapLockQueue = BOOTSTRAP_LOCK_QUEUE_PREFIX + csName;
         this.ownConnection = true;
+        this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
         this.channel = connection.createChannel();
         this.channel.basicQos(1);
         initializeToken();
@@ -121,7 +143,8 @@ public class DistributedCriticalSection implements AutoCloseable {
      * The lock queue is exclusive to the connection that is currently deciding whether a token must
      * be created. The token is published only if a passive inspection shows that the queue has no
      * messages and no active consumer. That combination means the critical section has never been
-     * initialized yet.
+     * initialized yet. The lock queue is deleted in a {@code finally} block, so no bootstrap
+     * artifact can survive the token itself.
      * </p>
      */
     private void initializeToken() throws IOException, InterruptedException {
@@ -132,6 +155,7 @@ public class DistributedCriticalSection implements AutoCloseable {
                 AMQP.Queue.DeclareOk state = lockChannel.queueDeclarePassive(queueName);
                 if (state.getMessageCount() == 0 && state.getConsumerCount() == 0) {
                     lockChannel.confirmSelect();
+                    bootstrapHook.beforeTokenPublish();
                     lockChannel.basicPublish("", queueName, MessageProperties.PERSISTENT_TEXT_PLAIN, EMPTY_BODY);
                     try {
                         if (!lockChannel.waitForConfirms(2000)) {
@@ -197,7 +221,7 @@ public class DistributedCriticalSection implements AutoCloseable {
      * <p>
      * Acquisition is achieved by consuming the token message from the queue. The consumer remains
      * registered while the critical section is held so the bootstrap logic can observe that the token
-     * already exists.
+     * already exists. The delivery is intentionally left unacknowledged until {@link #exit()}.
      * </p>
      *
      * @throws IOException          if a communication error occurs
@@ -244,6 +268,8 @@ public class DistributedCriticalSection implements AutoCloseable {
      * <p>
      * The temporary bootstrap lock is held while the local consumer is canceled and the token is
      * requeued, which prevents a concurrent bootstrapper from observing an intermediate state.
+     * The same delivery tag is requeued on the broker and remains owned by this instance until the
+     * release succeeds.
      * </p>
      *
      * @throws IOException          if a communication error occurs
@@ -262,7 +288,6 @@ public class DistributedCriticalSection implements AutoCloseable {
         });
 
         currentDeliveryTag = null;
-        consumerTag = null;
         logger.debug("Successfully exited critical section '{}'", csName);
     }
 
