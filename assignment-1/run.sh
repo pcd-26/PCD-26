@@ -1,10 +1,2 @@
-#!/bin/bash
-
-# Find the directory where this script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
-# Change directory to the script's folder
-cd "$SCRIPT_DIR"
-
-# Build and run if compilation succeeds
-mvn compile && java -cp target/classes pcd.poool.SequentialPoool
+mvn -f assignment-1/pom.xml compile
+java -cp assignment-1/target/classes pcd.poool.SequentialPoool
