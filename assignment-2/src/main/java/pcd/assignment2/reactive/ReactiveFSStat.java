@@ -4,12 +4,12 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import pcd.assignment2.common.FSReport;
+import pcd.assignment2.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
 import java.util.Set;
 import java.util.HashSet;
-import java.io.IOException;
 
 /**
  * Computes directory file statistics reactively using RxJava 3.
@@ -21,7 +21,7 @@ import java.io.IOException;
  *       as files flow through the stream using the {@link Observable#scan} operator.</li>
  *   <li>The directory traversal runs concurrently on {@link Schedulers#io()}.</li>
  *   <li>Cancellation is handled natively via subscription disposal (the subscription's {@code dispose()} method).
- *       The directory walking loop monitors {@link ObservableEmitter#isDisposed()} and halts immediately if cancelled.</li>
+ *       The directory walking loop monitors {@link ObservableEmitter#isDisposed()} and halts immediately if canceled.</li>
  *   <li>To avoid saturating the UI consumer (e.g. Swing thread), updates are throttled using {@code sample()},
  *       while guaranteeing that the final accumulated report is always delivered upon completion.</li>
  * </ul>
@@ -159,16 +159,7 @@ public class ReactiveFSStat {
             return;
         }
 
-        try {
-            String canonicalPath = dir.getCanonicalPath();
-            if (!visitedPaths.add(canonicalPath)) {
-                return; // Cycle detected: skip this directory
-            }
-        } catch (IOException e) {
-            return; // Skip on access/resolution failure
-        }
-
-        File[] files = dir.listFiles();
+        File[] files = FSUtils.listFilesSafely(dir, visitedPaths);
         if (files == null) {
             return;
         }

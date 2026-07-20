@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.FSUtils;
 import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
 import pcd.assignment2.reactive.ReactiveFSStat;
@@ -62,6 +63,19 @@ public class FSStatTest {
 
         String labelOverflow = FSReport.formatBandLabel(2, 100, 2, SizeUnit.BYTES);
         assertEquals("> 100 B", labelOverflow);
+    }
+
+    @Test
+    public void testListFilesSafelyDetectsCycles(@TempDir Path tempDir) throws IOException {
+        createDummyFiles(tempDir);
+        java.util.Set<String> visited = new java.util.HashSet<>();
+
+        File[] files = FSUtils.listFilesSafely(tempDir.toFile(), visited);
+        assertNotNull(files);
+
+        // Second call with same visited set should return null due to cycle check
+        File[] cycleFiles = FSUtils.listFilesSafely(tempDir.toFile(), visited);
+        assertNull(cycleFiles);
     }
 
     private void createDummyFiles(Path tempDir) throws IOException {

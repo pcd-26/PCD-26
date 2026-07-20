@@ -3,16 +3,18 @@ package pcd.assignment2.virtualthreads;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.io.IOException;
 
 /**
  * Computes directory file statistics asynchronously using Java Virtual Threads.
@@ -20,7 +22,7 @@ import java.io.IOException;
  * <p><strong>Shared State & Synchronization Strategy:</strong>
  * <ul>
  *   <li>The shared counters (total files count, and size bands distribution) are owned by the coordinator task
- *       and mutated concurrently by recursively spawned sub-directory scanning tasks.</li>
+ *       and mutated concurrently by recursively spawned subdirectory scanning tasks.</li>
  *   <li>To avoid lock contention, we use lock-free {@link LongAdder} objects to aggregate the statistics.</li>
  *   <li>Task completion is coordinated via a combination of a thread-safe {@link AtomicInteger} (tracking active tasks)
  *       and a {@link CountDownLatch} (enabling the coordinator to block-wait for completion).</li>
@@ -37,7 +39,7 @@ public class VirtualThreadsFSStat {
         /**
          * Volatile boolean checked by all scanning threads to abort processing quickly upon cancellation.
          */
-        volatile boolean cancelled = false;
+        volatile boolean isCanceled = false;
     }
 
     /**
@@ -63,35 +65,20 @@ public class VirtualThreadsFSStat {
         long startTime = System.currentTimeMillis();
         Set<String> visitedPaths = ConcurrentHashMap.newKeySet();
 
-        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-
-        // Updater thread for periodic updates
-        Thread updaterThread = Thread.ofVirtual().start(() -> {
-            try {
-                while (!state.cancelled && !Thread.currentThread().isInterrupted()) {
-                    Thread.sleep(100);
-                    long[] currentBands = new long[nb + 1];
-                    for (int i = 0; i <= nb; i++) {
-                        currentBands[i] = bandsCount[i].sum();
-                    }
-                    FSReport partialReport = new FSReport(
-                        directory,
-                        maxFS,
-                        nb,
-                        currentBands,
-                        totalFiles.sum(),
-                        System.currentTimeMillis() - startTime
-                    );
-                    listener.onUpdate(partialReport);
-                }
-            } catch (InterruptedException e) {
-                // Terminate updater loop
-            }
-        });
-
-        // Coordinator thread that launches and awaits the scan
+        // Coordinator thread that manages resources and awaits the scan
         Thread.ofVirtual().start(() -> {
-            try {
+            try (
+                ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor()
+            ) {
+                // Schedule periodic progress updates
+                scheduler.scheduleAtFixedRate(() -> {
+                    if (!state.isCanceled) {
+                        FSReport partialReport = createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
+                        listener.onUpdate(partialReport);
+                    }
+                }, 100, 100, TimeUnit.MILLISECONDS);
+
                 File rootDir = new File(directory);
                 if (!rootDir.exists() || !rootDir.isDirectory()) {
                     throw new IllegalArgumentException("Target is not a valid directory: " + directory);
@@ -103,59 +90,62 @@ public class VirtualThreadsFSStat {
                         scanDirectory(rootDir, maxFS, nb, executor, activeTasks, totalFiles, bandsCount, state, completionLatch, visitedPaths);
                     } catch (Exception e) {
                         listener.onError(e);
-                        updaterThread.interrupt();
-                        executor.shutdownNow();
                         completionLatch.countDown();
                     } finally {
                         decrementAndCheck(activeTasks, completionLatch);
                     }
                 });
 
-                // Wait for all tasks to complete or job to be cancelled
+                // Wait for all tasks to complete or job to be canceled
                 completionLatch.await();
-                updaterThread.interrupt();
-                executor.shutdown();
 
-                if (!state.cancelled) {
-                    long[] finalBands = new long[nb + 1];
-                    for (int i = 0; i <= nb; i++) {
-                        finalBands[i] = bandsCount[i].sum();
-                    }
-                    FSReport finalReport = new FSReport(
-                        directory,
-                        maxFS,
-                        nb,
-                        finalBands,
-                        totalFiles.sum(),
-                        System.currentTimeMillis() - startTime
-                    );
+                if (!state.isCanceled) {
+                    FSReport finalReport = createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
                     listener.onCompleted(finalReport);
                 }
             } catch (Throwable t) {
                 listener.onError(t);
-                updaterThread.interrupt();
-                executor.shutdownNow();
             }
         });
 
         return new FSReportJob() {
             @Override
             public void cancel() {
-                state.cancelled = true;
-                updaterThread.interrupt();
-                executor.shutdownNow();
+                state.isCanceled = true;
                 completionLatch.countDown();
             }
 
             @Override
             public boolean isCanceled() {
-                return state.cancelled;
+                return state.isCanceled;
             }
         };
     }
 
+    private static FSReport createReportSnapshot(
+        String directory,
+        long maxFS,
+        int nb,
+        LongAdder[] bandsCount,
+        LongAdder totalFiles,
+        long startTime
+    ) {
+        long[] bands = new long[nb + 1];
+        for (int i = 0; i <= nb; i++) {
+            bands[i] = bandsCount[i].sum();
+        }
+        return new FSReport(
+            directory,
+            maxFS,
+            nb,
+            bands,
+            totalFiles.sum(),
+            System.currentTimeMillis() - startTime
+        );
+    }
+
     /**
-     * Recursively walks a directory, submitting sub-directory scanning tasks to the virtual executor,
+     * Recursively walks a directory, submitting subdirectory scanning tasks to the virtual executor,
      * and incrementing the size distribution counters for any regular files found.
      *
      * @param dir          The directory to scan.
@@ -181,26 +171,17 @@ public class VirtualThreadsFSStat {
         CountDownLatch latch,
         Set<String> visitedPaths
     ) {
-        if (state.cancelled) {
+        if (state.isCanceled) {
             return;
         }
 
-        try {
-            String canonicalPath = dir.getCanonicalPath();
-            if (!visitedPaths.add(canonicalPath)) {
-                return; // Cycle detected: skip this directory
-            }
-        } catch (IOException e) {
-            return; // Skip on access/resolution failure
-        }
-
-        File[] files = dir.listFiles();
+        File[] files = FSUtils.listFilesSafely(dir, visitedPaths);
         if (files == null) {
             return;
         }
 
         for (File file : files) {
-            if (state.cancelled) {
+            if (state.isCanceled) {
                 return;
             }
             if (file.isDirectory()) {
@@ -224,7 +205,7 @@ public class VirtualThreadsFSStat {
     }
 
     /**
-     * Decrements the active tasks counter and count downs the latch if no tasks remain active.
+     * Decrements the active tasks counter and count-downs the latch if no tasks remain active.
      *
      * @param activeTasks Counter of active scanning tasks.
      * @param latch       The completion synchronization latch.

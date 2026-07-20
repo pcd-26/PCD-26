@@ -85,18 +85,7 @@ public class EventLoopFSStat {
             if (state.isCanceled) {
                 return;
             }
-            long[] currentBands = new long[nb + 1];
-            for (int i = 0; i <= nb; i++) {
-                currentBands[i] = state.bandsCount[i].get();
-            }
-            FSReport report = new FSReport(
-                directory,
-                maxFS,
-                nb,
-                currentBands,
-                state.totalFiles.get(),
-                System.currentTimeMillis() - startTime
-            );
+            FSReport report = createReportSnapshot(directory, maxFS, nb, state, startTime);
             listener.onUpdate(report);
         });
 
@@ -105,18 +94,7 @@ public class EventLoopFSStat {
                 if (state.timerId != -1) {
                     vertx.cancelTimer(state.timerId);
                 }
-                long[] finalBands = new long[nb + 1];
-                for (int i = 0; i <= nb; i++) {
-                    finalBands[i] = state.bandsCount[i].get();
-                }
-                FSReport report = new FSReport(
-                    directory,
-                    maxFS,
-                    nb,
-                    finalBands,
-                    state.totalFiles.get(),
-                    System.currentTimeMillis() - startTime
-                );
+                FSReport report = createReportSnapshot(directory, maxFS, nb, state, startTime);
                 listener.onCompleted(report);
                 vertx.close();
             }
@@ -124,9 +102,7 @@ public class EventLoopFSStat {
 
         // Start traversing
         state.pendingOps.incrementAndGet(); // for the initial read
-        vertx.runOnContext(v -> {
-            scanDirAsync(directory, maxFS, nb, fs, state, checkCompletion, vertx, listener);
-        });
+        vertx.runOnContext(v -> scanDirAsync(directory, maxFS, nb, fs, state, checkCompletion, vertx, listener));
 
         return new FSReportJob() {
             @Override
@@ -143,6 +119,27 @@ public class EventLoopFSStat {
                 return state.isCanceled;
             }
         };
+    }
+
+    private static FSReport createReportSnapshot(
+        String directory,
+        long maxFS,
+        int nb,
+        JobState state,
+        long startTime
+    ) {
+        long[] bands = new long[nb + 1];
+        for (int i = 0; i <= nb; i++) {
+            bands[i] = state.bandsCount[i].get();
+        }
+        return new FSReport(
+            directory,
+            maxFS,
+            nb,
+            bands,
+            state.totalFiles.get(),
+            System.currentTimeMillis() - startTime
+        );
     }
 
     /**
