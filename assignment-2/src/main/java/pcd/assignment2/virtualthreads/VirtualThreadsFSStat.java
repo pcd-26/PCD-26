@@ -36,14 +36,14 @@ public class VirtualThreadsFSStat {
      * Holds the shared job execution state, including cancellation flags.
      */
     private static class JobState {
-        private volatile boolean canceled = false;
+        private volatile boolean isCanceled = false;
 
         void cancel() {
-            this.canceled = true;
+            this.isCanceled = true;
         }
 
         boolean isCanceled() {
-            return canceled;
+            return isCanceled;
         }
     }
 
