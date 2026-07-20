@@ -30,27 +30,9 @@ public enum SizeUnit {
         this.bytesFactor = bytesFactor;
     }
 
-    /**
-     * Gets the symbol representing the size unit.
-     *
-     * @return The unit symbol.
-     */
-    public String symbol() {
-        return symbol;
-    }
-
     @Override
     public String toString() {
         return symbol;
-    }
-
-    /**
-     * Gets the bytes conversion factor of this unit.
-     *
-     * @return The conversion factor.
-     */
-    public long bytesFactor() {
-        return bytesFactor;
     }
 
     /**

@@ -29,7 +29,7 @@ public record FSReport(
      * Formats the elapsed time as seconds plus milliseconds.
      *
      * @param durationMs duration in milliseconds
-     * @return a human readable duration such as {@code 1.234 s (1234 ms)}
+     * @return a human-readable duration such as {@code 1.234 s (1234 ms)}
      */
     public static String formatDuration(long durationMs) {
         return String.format(Locale.US, "%.3f s (%d ms)", durationMs / 1000.0, durationMs);
@@ -38,7 +38,7 @@ public record FSReport(
     /**
      * Formats the elapsed time for this report.
      *
-     * @return a human readable duration string
+     * @return a human-readable duration string
      */
     public String formatDuration() {
         return formatDuration(durationMs);
@@ -89,13 +89,15 @@ public record FSReport(
     }
 
     /**
-     * Gets a human-readable text label describing a specific size band's range.
+     * Formats a size band range label given the index, maxFS threshold, total number of bands, and unit.
      *
-     * @param index The band index.
-     * @param unit  the display unit to use for the formatted range
-     * @return A formatted String representing the size range.
+     * @param index the band index (0 to nb)
+     * @param maxFS the maximum file size threshold in bytes
+     * @param nb    the total number of size bands
+     * @param unit  the display size unit
+     * @return formatted String representing the band range
      */
-    public String getBandLabel(int index, SizeUnit unit) {
+    public static String formatBandLabel(int index, long maxFS, int nb, SizeUnit unit) {
         if (index < 0 || index > nb) {
             throw new IllegalArgumentException("Index out of bounds: " + index);
         }
@@ -109,5 +111,16 @@ public record FSReport(
             max = maxFS;
         }
         return String.format("[%s - %s]", unit.format(min), unit.format(max));
+    }
+
+    /**
+     * Gets a human-readable text label describing a specific size band's range.
+     *
+     * @param index The band index.
+     * @param unit  the display unit to use for the formatted range
+     * @return A formatted String representing the size range.
+     */
+    public String getBandLabel(int index, SizeUnit unit) {
+        return formatBandLabel(index, maxFS, nb, unit);
     }
 }

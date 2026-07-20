@@ -30,7 +30,6 @@ public class FSStatGUI extends JFrame {
     private final JLabel totalFilesVal;
     private final JLabel durationVal;
     private final JProgressBar progressBar;
-    private final JTable resultsTable;
     private final DefaultTableModel tableModel;
     private final JLabel statusLabel;
 
@@ -139,7 +138,7 @@ public class FSStatGUI extends JFrame {
                 return false;
             }
         };
-        resultsTable = new JTable(tableModel);
+        JTable resultsTable = new JTable(tableModel);
         resultsTable.setFillsViewportHeight(true);
         centerPanel.add(new JScrollPane(resultsTable), BorderLayout.CENTER);
 
@@ -186,7 +185,8 @@ public class FSStatGUI extends JFrame {
         }
 
         double maxFSInput = ((Number) maxFsSpinner.getValue()).doubleValue();
-        SizeUnit sizeUnit = (SizeUnit) maxFsUnitCombo.getSelectedItem();
+        SizeUnit selectedUnit = (SizeUnit) maxFsUnitCombo.getSelectedItem();
+        SizeUnit sizeUnit = (selectedUnit != null) ? selectedUnit : SizeUnit.BYTES;
         int nb = (Integer) nbSpinner.getValue();
         String paradigm = (String) paradigmCombo.getSelectedItem();
         long maxFS = sizeUnit.toBytes(maxFSInput);
@@ -202,46 +202,12 @@ public class FSStatGUI extends JFrame {
         statusLabel.setText(" Scanning using " + paradigm + "...");
         setRunningState(true);
 
+        FSReportListener listener = createGuiReportListener(sizeUnit);
+
         if ("Virtual Threads".equals(paradigm)) {
-            currentJob = VirtualThreadsFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
-                @Override
-                public void onUpdate(FSReport report) {
-                    SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
-                }
-
-                @Override
-                public void onCompleted(FSReport report) {
-                    SwingUtilities.invokeLater(() -> {
-                        updateUI(report, sizeUnit);
-                        scanFinished("Scan completed in " + report.formatDuration() + ".");
-                    });
-                }
-
-                @Override
-                public void onError(Throwable error) {
-                    SwingUtilities.invokeLater(() -> scanFailed(error.getMessage()));
-                }
-            });
+            currentJob = VirtualThreadsFSStat.getFSReport(path, maxFS, nb, listener);
         } else if ("Event-Loop (Vert.x)".equals(paradigm)) {
-            currentJob = EventLoopFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
-                @Override
-                public void onUpdate(FSReport report) {
-                    SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
-                }
-
-                @Override
-                public void onCompleted(FSReport report) {
-                    SwingUtilities.invokeLater(() -> {
-                        updateUI(report, sizeUnit);
-                        scanFinished("Scan completed in " + report.formatDuration() + ".");
-                    });
-                }
-
-                @Override
-                public void onError(Throwable error) {
-                    SwingUtilities.invokeLater(() -> scanFailed(error.getMessage()));
-                }
-            });
+            currentJob = EventLoopFSStat.getFSReport(path, maxFS, nb, listener);
         } else if ("Reactive Programming (Rx)".equals(paradigm)) {
             final FSReport[] lastReport = new FSReport[1];
             rxDisposable = ReactiveFSStat.getFSReport(path, maxFS, nb)
@@ -260,6 +226,28 @@ public class FSStatGUI extends JFrame {
                     })
                 );
         }
+    }
+
+    private FSReportListener createGuiReportListener(SizeUnit sizeUnit) {
+        return new FSReportListener() {
+            @Override
+            public void onUpdate(FSReport report) {
+                SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
+            }
+
+            @Override
+            public void onCompleted(FSReport report) {
+                SwingUtilities.invokeLater(() -> {
+                    updateUI(report, sizeUnit);
+                    scanFinished("Scan completed in " + report.formatDuration() + ".");
+                });
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                SwingUtilities.invokeLater(() -> scanFailed(error.getMessage()));
+            }
+        };
     }
 
     private void cancelScan() {
@@ -321,16 +309,7 @@ public class FSStatGUI extends JFrame {
     }
 
     private String getBandRangeLabel(int index, long maxFS, int nb, SizeUnit unit) {
-        if (index == nb) {
-            return String.format("> %s", unit.format(maxFS));
-        }
-        double bandWidth = (double) maxFS / nb;
-        long min = Math.round(index * bandWidth);
-        long max = Math.round((index + 1) * bandWidth) - 1;
-        if (index == nb - 1) {
-            max = maxFS;
-        }
-        return String.format("[%s - %s]", unit.format(min), unit.format(max));
+        return FSReport.formatBandLabel(index, maxFS, nb, unit);
     }
 
     /**

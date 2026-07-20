@@ -12,9 +12,9 @@ public interface FSReportJob {
     void cancel();
 
     /**
-     * Checks if the directory scanning task has been cancelled.
+     * Checks if the directory scanning task has been canceled.
      *
-     * @return true if the job was cancelled, false otherwise.
+     * @return true if the job was canceled, false otherwise.
      */
-    boolean isCancelled();
+    boolean isCanceled();
 }

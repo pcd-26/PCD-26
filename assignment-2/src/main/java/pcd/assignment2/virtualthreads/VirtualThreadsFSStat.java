@@ -148,7 +148,7 @@ public class VirtualThreadsFSStat {
             }
 
             @Override
-            public boolean isCancelled() {
+            public boolean isCanceled() {
                 return state.cancelled;
             }
         };

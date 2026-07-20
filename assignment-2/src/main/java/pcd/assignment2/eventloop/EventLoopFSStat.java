@@ -40,7 +40,7 @@ public class EventLoopFSStat {
      */
     private static class JobState {
         /** Volatile boolean checked to abort processing quickly upon cancellation. */
-        volatile boolean cancelled = false;
+        volatile boolean isCanceled = false;
         /** Counter of active asynchronous filesystem operations. */
         final AtomicInteger pendingOps = new AtomicInteger(0);
         /** Total files successfully scanned. */
@@ -82,7 +82,7 @@ public class EventLoopFSStat {
 
         // Setup periodic updater
         state.timerId = vertx.setPeriodic(100, id -> {
-            if (state.cancelled) {
+            if (state.isCanceled) {
                 return;
             }
             long[] currentBands = new long[nb + 1];
@@ -101,7 +101,7 @@ public class EventLoopFSStat {
         });
 
         Runnable checkCompletion = () -> {
-            if (state.pendingOps.get() == 0 && !state.cancelled) {
+            if (state.pendingOps.get() == 0 && !state.isCanceled) {
                 if (state.timerId != -1) {
                     vertx.cancelTimer(state.timerId);
                 }
@@ -131,7 +131,7 @@ public class EventLoopFSStat {
         return new FSReportJob() {
             @Override
             public void cancel() {
-                state.cancelled = true;
+                state.isCanceled = true;
                 if (state.timerId != -1) {
                     vertx.cancelTimer(state.timerId);
                 }
@@ -139,8 +139,8 @@ public class EventLoopFSStat {
             }
 
             @Override
-            public boolean isCancelled() {
-                return state.cancelled;
+            public boolean isCanceled() {
+                return state.isCanceled;
             }
         };
     }
@@ -168,7 +168,7 @@ public class EventLoopFSStat {
         Vertx vertx,
         FSReportListener listener
     ) {
-        if (state.cancelled) {
+        if (state.isCanceled) {
             if (state.pendingOps.decrementAndGet() == 0) {
                 checkCompletion.run();
             }
@@ -192,7 +192,7 @@ public class EventLoopFSStat {
         }
 
         fs.readDir(path, res -> {
-            if (state.cancelled) {
+            if (state.isCanceled) {
                 if (state.pendingOps.decrementAndGet() == 0) {
                     checkCompletion.run();
                 }
@@ -203,7 +203,7 @@ public class EventLoopFSStat {
                 for (String childPath : res.result()) {
                     state.pendingOps.incrementAndGet();
                     fs.props(childPath, propsRes -> {
-                        if (state.cancelled) {
+                        if (state.isCanceled) {
                             if (state.pendingOps.decrementAndGet() == 0) {
                                 checkCompletion.run();
                             }
@@ -231,7 +231,7 @@ public class EventLoopFSStat {
             } else {
                 if (state.pendingOps.get() == 1) { // Root directory read failed
                     listener.onError(res.cause());
-                    state.cancelled = true;
+                    state.isCanceled = true;
                     if (state.timerId != -1) {
                         vertx.cancelTimer(state.timerId);
                     }

@@ -1,6 +1,7 @@
 package pcd.assignment2.cli;
 
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.junit.jupiter.api.Test;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportListener;
@@ -26,7 +27,7 @@ public class FSStatCLITest {
             return Observable.just(new FSReport("tmp", 100, 2, new long[] {1, 0, 0}, 1, 12));
         });
 
-        FSStatCLI.subscribeReactiveScan(stream, new FSReportListener() {
+        Disposable disposable = FSStatCLI.subscribeReactiveScan(stream, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {
                 // ignore
@@ -44,6 +45,8 @@ public class FSStatCLITest {
             }
         }, latch);
 
+        assertNotNull(disposable);
+
         assertTrue(latch.await(5, TimeUnit.SECONDS));
         assertEquals(1, subscriptions.get());
         assertNotNull(completedReport.get());
@@ -55,11 +58,11 @@ public class FSStatCLITest {
         var parsed = FSStatCLI.parseArguments(new String[] {".", "10", "5"});
 
         assertNotNull(parsed);
-        assertEquals(".", parsed.directory);
-        assertEquals(10.0, parsed.maxFSInput);
-        assertEquals(5, parsed.nb);
-        assertEquals(SizeUnit.BYTES, parsed.sizeUnit);
-        assertEquals("vt", parsed.paradigm);
+        assertEquals(".", parsed.directory());
+        assertEquals(10.0, parsed.maxFSInput());
+        assertEquals(5, parsed.nb());
+        assertEquals(SizeUnit.BYTES, parsed.sizeUnit());
+        assertEquals("vt", parsed.paradigm());
     }
 
     @Test
@@ -67,8 +70,8 @@ public class FSStatCLITest {
         var parsed = FSStatCLI.parseArguments(new String[] {".", "10", "5", "MiB", "rx"});
 
         assertNotNull(parsed);
-        assertEquals(SizeUnit.MEGABYTES, parsed.sizeUnit);
-        assertEquals("rx", parsed.paradigm);
+        assertEquals(SizeUnit.MEGABYTES, parsed.sizeUnit());
+        assertEquals("rx", parsed.paradigm());
     }
 
     @Test

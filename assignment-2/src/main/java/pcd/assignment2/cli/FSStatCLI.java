@@ -10,6 +10,7 @@ import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
+import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 /**
@@ -18,21 +19,13 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
  */
 public class FSStatCLI {
 
-    static final class ParsedArguments {
-        final String directory;
-        final double maxFSInput;
-        final int nb;
-        final SizeUnit sizeUnit;
-        final String paradigm;
-
-        ParsedArguments(String directory, double maxFSInput, int nb, SizeUnit sizeUnit, String paradigm) {
-            this.directory = directory;
-            this.maxFSInput = maxFSInput;
-            this.nb = nb;
-            this.sizeUnit = sizeUnit;
-            this.paradigm = paradigm;
-        }
-    }
+    record ParsedArguments(
+        String directory,
+        double maxFSInput,
+        int nb,
+        SizeUnit sizeUnit,
+        String paradigm
+    ) { }
 
     /**
      * Entry point to launch the CLI directory scan.
@@ -66,13 +59,13 @@ public class FSStatCLI {
         FSReportListener listener = new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {
-                System.out.print(String.format("\rProgress: %d files scanned...", report.totalFiles()));
+                System.out.printf("\rProgress: %d files scanned...", report.totalFiles());
                 System.out.flush();
             }
 
             @Override
             public void onCompleted(FSReport report) {
-                System.out.print(String.format("\rProgress: %d files scanned... Done!%n", report.totalFiles()));
+                System.out.printf("\rProgress: %d files scanned... Done!%n", report.totalFiles());
                 printFinalReport(report, displayUnit);
                 completionLatch.countDown();
             }
@@ -129,13 +122,13 @@ public class FSStatCLI {
         return new ParsedArguments(directory, maxFSInput, nb, sizeUnit, paradigm);
     }
 
-    static void subscribeReactiveScan(
+    static Disposable subscribeReactiveScan(
         Observable<FSReport> reportStream,
         FSReportListener listener,
         CountDownLatch completionLatch
     ) {
         final FSReport[] lastReport = new FSReport[1];
-        reportStream.subscribe(
+        return reportStream.subscribe(
             report -> {
                 lastReport[0] = report;
                 listener.onUpdate(report);
@@ -152,10 +145,6 @@ public class FSStatCLI {
                 }
             }
         );
-    }
-
-    private static void printFinalReport(FSReport report) {
-        printFinalReport(report, SizeUnit.BYTES);
     }
 
     private static void printFinalReport(FSReport report, SizeUnit displayUnit) {

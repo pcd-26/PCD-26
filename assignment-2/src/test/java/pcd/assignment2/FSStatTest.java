@@ -55,6 +55,15 @@ public class FSStatTest {
         assertTrue(report.getBandLabel(4, SizeUnit.MEGABYTES).startsWith("> "));
     }
 
+    @Test
+    public void testFormatBandLabelDirectly() {
+        String label0 = FSReport.formatBandLabel(0, 100, 2, SizeUnit.BYTES);
+        assertEquals("[0 B - 49 B]", label0);
+
+        String labelOverflow = FSReport.formatBandLabel(2, 100, 2, SizeUnit.BYTES);
+        assertEquals("> 100 B", labelOverflow);
+    }
+
     private void createDummyFiles(Path tempDir) throws IOException {
         File file1 = tempDir.resolve("file1.txt").toFile();
         writeDummyContent(file1, 10);
