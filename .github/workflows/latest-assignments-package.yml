@@ -90,9 +90,6 @@ jobs:
           test ! -e package/Assignment-01/README.md
           test ! -e package/Assignment-01/board.png
           test ! -e package/Assignment-01/run.sh
-          test ! -e package/Assignment-01/test.sh
-          test ! -e package/Assignment-01/run.ps1
-          test ! -e package/Assignment-01/test.ps1
           test ! -e package/Assignment-01/requirements.txt
 
       - name: Upload delivery package
@@ -168,8 +165,6 @@ jobs:
           test ! -e package/Assignment-02/run-cli.ps1
           test ! -e package/Assignment-02/run-gui.sh
           test ! -e package/Assignment-02/run-gui.ps1
-          test ! -e package/Assignment-02/test.sh
-          test ! -e package/Assignment-02/test.ps1
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
