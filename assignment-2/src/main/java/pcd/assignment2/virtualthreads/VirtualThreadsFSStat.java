@@ -74,7 +74,7 @@ public class VirtualThreadsFSStat {
                 // Schedule periodic progress updates
                 scheduler.scheduleAtFixedRate(() -> {
                     if (!state.isCanceled) {
-                        FSReport partialReport = createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
+                        FSReport partialReport = FSUtils.createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
                         listener.onUpdate(partialReport);
                     }
                 }, 100, 100, TimeUnit.MILLISECONDS);
@@ -100,7 +100,7 @@ public class VirtualThreadsFSStat {
                 completionLatch.await();
 
                 if (!state.isCanceled) {
-                    FSReport finalReport = createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
+                    FSReport finalReport = FSUtils.createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
                     listener.onCompleted(finalReport);
                 }
             } catch (Throwable t) {
@@ -120,28 +120,6 @@ public class VirtualThreadsFSStat {
                 return state.isCanceled;
             }
         };
-    }
-
-    private static FSReport createReportSnapshot(
-        String directory,
-        long maxFS,
-        int nb,
-        LongAdder[] bandsCount,
-        LongAdder totalFiles,
-        long startTime
-    ) {
-        long[] bands = new long[nb + 1];
-        for (int i = 0; i <= nb; i++) {
-            bands[i] = bandsCount[i].sum();
-        }
-        return new FSReport(
-            directory,
-            maxFS,
-            nb,
-            bands,
-            totalFiles.sum(),
-            System.currentTimeMillis() - startTime
-        );
     }
 
     /**

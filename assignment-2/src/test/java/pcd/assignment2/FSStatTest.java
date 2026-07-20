@@ -78,6 +78,38 @@ public class FSStatTest {
         assertNull(cycleFiles);
     }
 
+    @Test
+    public void testCreateReportSnapshotInFSUtils() {
+        java.util.concurrent.atomic.AtomicLong[] atomicBands = new java.util.concurrent.atomic.AtomicLong[] {
+            new java.util.concurrent.atomic.AtomicLong(5),
+            new java.util.concurrent.atomic.AtomicLong(3)
+        };
+        java.util.concurrent.atomic.AtomicLong atomicTotal = new java.util.concurrent.atomic.AtomicLong(8);
+        FSReport atomicReport = FSUtils.createReportSnapshot("dir", 1000, 1, atomicBands, atomicTotal, System.currentTimeMillis() - 100);
+
+        assertEquals("dir", atomicReport.directory());
+        assertEquals(8, atomicReport.totalFiles());
+        assertEquals(5, atomicReport.bandsCount()[0]);
+        assertEquals(3, atomicReport.bandsCount()[1]);
+
+        java.util.concurrent.atomic.LongAdder[] adderBands = new java.util.concurrent.atomic.LongAdder[] {
+            new java.util.concurrent.atomic.LongAdder(),
+            new java.util.concurrent.atomic.LongAdder()
+        };
+        adderBands[0].add(10);
+        adderBands[1].add(2);
+        java.util.concurrent.atomic.LongAdder adderTotal = new java.util.concurrent.atomic.LongAdder();
+        adderTotal.add(12);
+        FSReport adderReport = FSUtils.createReportSnapshot("dir2", 500, 1, adderBands, adderTotal, System.currentTimeMillis() - 50);
+
+        assertEquals("dir2", adderReport.directory());
+        assertEquals(12, adderReport.totalFiles());
+        assertEquals(10, adderReport.bandsCount()[0]);
+        assertEquals(2, adderReport.bandsCount()[1]);
+
+        assertEquals("[0 B - 500 B]", FSUtils.formatBandLabel(0, 500, 1, SizeUnit.BYTES));
+    }
+
     private void createDummyFiles(Path tempDir) throws IOException {
         File file1 = tempDir.resolve("file1.txt").toFile();
         writeDummyContent(file1, 10);
@@ -151,7 +183,7 @@ public class FSStatTest {
 
         ReactiveFSStat.getFSReport(tempDir.toString(), 100, 4)
             .blockingSubscribe(
-                report -> finalReport.set(report),
+                    finalReport::set,
                 error -> fail(error.getMessage())
             );
 

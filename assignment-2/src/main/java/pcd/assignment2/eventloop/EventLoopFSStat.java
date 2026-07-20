@@ -6,6 +6,7 @@ import io.vertx.core.file.FileProps;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.FSUtils;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -85,7 +86,7 @@ public class EventLoopFSStat {
             if (state.isCanceled) {
                 return;
             }
-            FSReport report = createReportSnapshot(directory, maxFS, nb, state, startTime);
+            FSReport report = FSUtils.createReportSnapshot(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime);
             listener.onUpdate(report);
         });
 
@@ -94,7 +95,7 @@ public class EventLoopFSStat {
                 if (state.timerId != -1) {
                     vertx.cancelTimer(state.timerId);
                 }
-                FSReport report = createReportSnapshot(directory, maxFS, nb, state, startTime);
+                FSReport report = FSUtils.createReportSnapshot(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime);
                 listener.onCompleted(report);
                 vertx.close();
             }
@@ -119,27 +120,6 @@ public class EventLoopFSStat {
                 return state.isCanceled;
             }
         };
-    }
-
-    private static FSReport createReportSnapshot(
-        String directory,
-        long maxFS,
-        int nb,
-        JobState state,
-        long startTime
-    ) {
-        long[] bands = new long[nb + 1];
-        for (int i = 0; i <= nb; i++) {
-            bands[i] = state.bandsCount[i].get();
-        }
-        return new FSReport(
-            directory,
-            maxFS,
-            nb,
-            bands,
-            state.totalFiles.get(),
-            System.currentTimeMillis() - startTime
-        );
     }
 
     /**
