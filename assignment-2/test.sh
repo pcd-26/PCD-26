@@ -6,5 +6,5 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Change directory to the script's folder
 cd "$SCRIPT_DIR"
 
-# Build and run if compilation succeeds
-mvn compile && java -cp target/classes pcd.poool.SequentialPoool
+# Run tests
+mvn test

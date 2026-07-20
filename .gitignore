@@ -28,6 +28,7 @@ benchmarks/results/
 Thumbs.db
 *.log
 
+*/report.pdf
 # Go build artifacts
 assignment-3/hotc/src/hotc
 assignment-3/hotc/src/hotc.exe
