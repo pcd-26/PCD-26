@@ -10,6 +10,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.io.IOException;
 
 /**
  * Computes directory file statistics asynchronously using Java Virtual Threads.
@@ -58,7 +61,7 @@ public class VirtualThreadsFSStat {
         }
 
         long startTime = System.currentTimeMillis();
-        java.util.Set<String> visitedPaths = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        Set<String> visitedPaths = ConcurrentHashMap.newKeySet();
 
         ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -176,7 +179,7 @@ public class VirtualThreadsFSStat {
         LongAdder[] bandsCount,
         JobState state,
         CountDownLatch latch,
-        java.util.Set<String> visitedPaths
+        Set<String> visitedPaths
     ) {
         if (state.cancelled) {
             return;
@@ -187,7 +190,7 @@ public class VirtualThreadsFSStat {
             if (!visitedPaths.add(canonicalPath)) {
                 return; // Cycle detected: skip this directory
             }
-        } catch (java.io.IOException e) {
+        } catch (IOException e) {
             return; // Skip on access/resolution failure
         }
 

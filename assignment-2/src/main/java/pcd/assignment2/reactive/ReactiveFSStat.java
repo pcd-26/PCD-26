@@ -7,6 +7,9 @@ import pcd.assignment2.common.FSReport;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
+import java.util.Set;
+import java.util.HashSet;
+import java.io.IOException;
 
 /**
  * Computes directory file statistics reactively using RxJava 3.
@@ -130,7 +133,7 @@ public class ReactiveFSStat {
     private static Observable<File> walk(File rootDir) {
         return Observable.create(emitter -> {
             try {
-                java.util.Set<String> visitedPaths = new java.util.HashSet<>();
+                Set<String> visitedPaths = new HashSet<>();
                 walkRecursive(rootDir, emitter, visitedPaths);
                 if (!emitter.isDisposed()) {
                     emitter.onComplete();
@@ -151,7 +154,7 @@ public class ReactiveFSStat {
      * @param emitter      The Observable emitter to push files to.
      * @param visitedPaths Set tracking already visited canonical directory paths to prevent symlink loops.
      */
-    private static void walkRecursive(File dir, ObservableEmitter<File> emitter, java.util.Set<String> visitedPaths) {
+    private static void walkRecursive(File dir, ObservableEmitter<File> emitter, Set<String> visitedPaths) {
         if (emitter.isDisposed()) {
             return;
         }
@@ -161,7 +164,7 @@ public class ReactiveFSStat {
             if (!visitedPaths.add(canonicalPath)) {
                 return; // Cycle detected: skip this directory
             }
-        } catch (java.io.IOException e) {
+        } catch (IOException e) {
             return; // Skip on access/resolution failure
         }
 

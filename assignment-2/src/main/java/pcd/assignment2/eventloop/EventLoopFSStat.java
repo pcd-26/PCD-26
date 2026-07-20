@@ -10,6 +10,12 @@ import pcd.assignment2.common.FSReportListener;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+
 /**
  * Computes directory file statistics asynchronously using Eclipse Vert.x non-blocking Event-Loop APIs.
  *
@@ -42,7 +48,7 @@ public class EventLoopFSStat {
         /** Array tracking the file count distribution per size band. */
         final AtomicLong[] bandsCount;
         /** Thread-safe set tracking already visited directory paths to avoid symlink loops. */
-        final java.util.Set<String> visitedPaths = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        final Set<String> visitedPaths = ConcurrentHashMap.newKeySet();
         /** Vert.x periodic timer ID for publishing updates. */
         long timerId = -1;
 
@@ -170,7 +176,7 @@ public class EventLoopFSStat {
         }
 
         try {
-            java.io.File fileObj = new java.io.File(path);
+            File fileObj = new File(path);
             String canonicalPath = fileObj.getCanonicalPath();
             if (!state.visitedPaths.add(canonicalPath)) {
                 if (state.pendingOps.decrementAndGet() == 0) {
@@ -178,7 +184,7 @@ public class EventLoopFSStat {
                 }
                 return; // Cycle detected: skip this directory
             }
-        } catch (java.io.IOException e) {
+        } catch (IOException e) {
             if (state.pendingOps.decrementAndGet() == 0) {
                 checkCompletion.run();
             }

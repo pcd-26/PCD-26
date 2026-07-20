@@ -84,15 +84,14 @@ public class FSStatCLI {
             }
         };
 
-        if ("vt".equals(parsed.paradigm)) {
-            VirtualThreadsFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
-        } else if ("loop".equals(parsed.paradigm)) {
-            EventLoopFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
-        } else if ("rx".equals(parsed.paradigm)) {
-            subscribeReactiveScan(ReactiveFSStat.getFSReport(parsed.directory, maxFS, parsed.nb), listener, completionLatch);
-        } else {
-            System.err.println("Unknown paradigm: " + parsed.paradigm + ". Use: vt, loop, or rx.");
-            System.exit(1);
+        switch (parsed.paradigm) {
+            case "vt" -> VirtualThreadsFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
+            case "loop" -> EventLoopFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
+            case "rx" -> subscribeReactiveScan(ReactiveFSStat.getFSReport(parsed.directory, maxFS, parsed.nb), listener, completionLatch);
+            default -> {
+                System.err.println("Unknown paradigm: " + parsed.paradigm + ". Use: vt, loop, or rx.");
+                System.exit(1);
+            }
         }
 
         try {
