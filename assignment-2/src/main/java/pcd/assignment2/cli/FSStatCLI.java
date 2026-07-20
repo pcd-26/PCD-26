@@ -10,6 +10,7 @@ import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 /**
  * Command-line interface runner for the FSStat library.
@@ -101,7 +102,7 @@ public class FSStatCLI {
         }
 
         // Force shutdown RxJava schedulers if any were active
-        io.reactivex.rxjava3.schedulers.Schedulers.shutdown();
+        Schedulers.shutdown();
         System.exit(0);
     }
 
@@ -120,10 +121,9 @@ public class FSStatCLI {
 
         for (int i = 3; i < args.length; i++) {
             String value = args[i].toLowerCase();
-            if ("vt".equals(value) || "rx".equals(value) || "loop".equals(value)) {
-                paradigm = value;
-            } else {
-                sizeUnit = SizeUnit.parse(value);
+            switch (value) {
+                case "vt", "rx", "loop" -> paradigm = value;
+                default -> sizeUnit = SizeUnit.parse(value);
             }
         }
 
