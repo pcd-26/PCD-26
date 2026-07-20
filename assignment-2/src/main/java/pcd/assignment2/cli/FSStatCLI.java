@@ -3,6 +3,7 @@ package pcd.assignment2.cli;
 import io.reactivex.rxjava3.core.Observable;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.FSUtils;
 import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
 import pcd.assignment2.reactive.ReactiveFSStat;
@@ -19,6 +20,15 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
  */
 public class FSStatCLI {
 
+    /**
+     * Record holding parsed command-line parameters.
+     *
+     * @param directory   The directory path to scan.
+     * @param maxFSInput  The user-specified maximum file size threshold.
+     * @param nb          The number of size distribution bands.
+     * @param sizeUnit    The parsed size unit (e.g. BYTES, KILOBYTES, MEGABYTES).
+     * @param paradigm    The selected execution paradigm ("vt", "rx", "loop").
+     */
     record ParsedArguments(
         String directory,
         double maxFSInput,
@@ -29,6 +39,8 @@ public class FSStatCLI {
 
     /**
      * Entry point to launch the CLI directory scan.
+     * Parses arguments, validates directory, instantiates appropriate paradigm runner,
+     * and prints progress and final report.
      *
      * @param args Command-line arguments: [directory] [maxFS] [nb] [sizeUnit?] [paradigm?]
      */
@@ -42,10 +54,13 @@ public class FSStatCLI {
         final SizeUnit displayUnit = parsed.sizeUnit;
         long maxFS = parsed.sizeUnit.toBytes(parsed.maxFSInput);
 
-        File dir = new File(parsed.directory);
-        if (!dir.exists() || !dir.isDirectory()) {
-            System.err.println("Error: Target path is not a valid directory: " + parsed.directory);
+        File dir;
+        try {
+            dir = FSUtils.validateDirectory(parsed.directory);
+        } catch (IllegalArgumentException e) {
+            System.err.println("Error: " + e.getMessage());
             System.exit(1);
+            return;
         }
 
         System.out.println("Starting CLI scan using paradigm: " + parsed.paradigm.toUpperCase());
@@ -98,6 +113,12 @@ public class FSStatCLI {
         System.exit(0);
     }
 
+    /**
+     * Parses raw command-line argument strings into a validated {@link ParsedArguments} object.
+     *
+     * @param args Raw string arguments passed to main.
+     * @return ParsedArguments object or null if mandatory arguments are missing.
+     */
     static ParsedArguments parseArguments(String[] args) {
         if (args == null || args.length < 3) {
             System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
@@ -122,6 +143,14 @@ public class FSStatCLI {
         return new ParsedArguments(directory, maxFSInput, nb, sizeUnit, paradigm);
     }
 
+    /**
+     * Subscribes an {@link FSReportListener} to an RxJava {@link Observable} stream of report snapshots.
+     *
+     * @param reportStream    The reactive stream emitting report updates.
+     * @param listener        The listener callback to receive updates.
+     * @param completionLatch CountDownLatch released when the stream completes or encounters an error.
+     * @return Disposable handle to manage subscription lifecycle.
+     */
     static Disposable subscribeReactiveScan(
         Observable<FSReport> reportStream,
         FSReportListener listener,
@@ -147,6 +176,12 @@ public class FSStatCLI {
         );
     }
 
+    /**
+     * Prints the formatted summary table of file size band counts to standard output.
+     *
+     * @param report      The final FSReport instance containing scan metrics.
+     * @param displayUnit The SizeUnit used to format band boundary labels.
+     */
     private static void printFinalReport(FSReport report, SizeUnit displayUnit) {
         System.out.println("\n==============================================");
         System.out.println("FINAL FILE SIZE DISTRIBUTION REPORT");

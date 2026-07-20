@@ -4,6 +4,7 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.FSUtils;
 import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
 import pcd.assignment2.reactive.ReactiveFSStat;
@@ -171,16 +172,15 @@ public class FSStatGUI extends JFrame {
         stopBtn.addActionListener(e -> cancelScan());
     }
 
+    /**
+     * Reads form fields, validates parameters, and launches directory scanning using the selected paradigm.
+     */
     private void startScan() {
         String path = dirField.getText().trim();
-        if (path.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please enter a valid directory path.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        File dir = new File(path);
-        if (!dir.exists() || !dir.isDirectory()) {
-            JOptionPane.showMessageDialog(this, "The specified path is not a directory.", "Error", JOptionPane.ERROR_MESSAGE);
+        try {
+            FSUtils.validateDirectory(path);
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -194,7 +194,7 @@ public class FSStatGUI extends JFrame {
         // UI Reset
         tableModel.setRowCount(0);
         for (int i = 0; i <= nb; i++) {
-            tableModel.addRow(new Object[]{getBandRangeLabel(i, maxFS, nb, sizeUnit), 0L});
+            tableModel.addRow(new Object[]{FSReport.formatBandLabel(i, maxFS, nb, sizeUnit), 0L});
         }
         totalFilesVal.setText("0");
         durationVal.setText(FSReport.formatDuration(0));
@@ -214,20 +214,26 @@ public class FSStatGUI extends JFrame {
                 .subscribe(
                     report -> {
                         lastReport[0] = report;
-                        SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
+                        listener.onUpdate(report);
                     },
-                    error -> SwingUtilities.invokeLater(() -> scanFailed(error.getMessage())),
-                    () -> SwingUtilities.invokeLater(() -> {
+                    listener::onError,
+                    () -> {
                         if (lastReport[0] != null) {
-                            scanFinished("Scan completed in " + lastReport[0].formatDuration() + ".");
+                            listener.onCompleted(lastReport[0]);
                         } else {
-                            scanFinished("Scan completed.");
+                            SwingUtilities.invokeLater(() -> scanFinished("Scan completed."));
                         }
-                    })
+                    }
                 );
         }
     }
 
+    /**
+     * Creates an {@link FSReportListener} that safely dispatches scan updates to the Swing Event Dispatch Thread (EDT).
+     *
+     * @param sizeUnit The unit used to format range labels.
+     * @return A thread-safe FSReportListener.
+     */
     private FSReportListener createGuiReportListener(SizeUnit sizeUnit) {
         return new FSReportListener() {
             @Override
@@ -250,6 +256,9 @@ public class FSStatGUI extends JFrame {
         };
     }
 
+    /**
+     * Cancels an active scan job and resets progress indicators.
+     */
     private void cancelScan() {
         if (!isRunning) return;
 
@@ -267,6 +276,12 @@ public class FSStatGUI extends JFrame {
         setRunningState(false);
     }
 
+    /**
+     * Updates statistics labels and table counts on the Swing UI.
+     *
+     * @param report      The current FSReport snapshot.
+     * @param displayUnit The display unit for range labels.
+     */
     private void updateUI(FSReport report, SizeUnit displayUnit) {
         totalFilesVal.setText(String.format("%,d", report.totalFiles()));
         durationVal.setText(report.formatDuration());
@@ -275,11 +290,16 @@ public class FSStatGUI extends JFrame {
         for (int i = 0; i < bands.length; i++) {
             if (i < tableModel.getRowCount()) {
                 tableModel.setValueAt(bands[i], i, 1);
-                tableModel.setValueAt(getBandRangeLabel(i, report.maxFS(), report.nb(), displayUnit), i, 0);
+                tableModel.setValueAt(report.getBandLabel(i, displayUnit), i, 0);
             }
         }
     }
 
+    /**
+     * Helper called when scanning successfully finishes to update status label and buttons.
+     *
+     * @param msg The completion status message to display.
+     */
     private void scanFinished(String msg) {
         progressBar.setIndeterminate(false);
         statusLabel.setText(" " + msg);
@@ -288,6 +308,11 @@ public class FSStatGUI extends JFrame {
         rxDisposable = null;
     }
 
+    /**
+     * Helper called when scanning encounters an error to display an alert dialog.
+     *
+     * @param errorMsg Description of the error.
+     */
     private void scanFailed(String errorMsg) {
         progressBar.setIndeterminate(false);
         statusLabel.setText(" Error: " + errorMsg);
@@ -297,6 +322,11 @@ public class FSStatGUI extends JFrame {
         JOptionPane.showMessageDialog(this, errorMsg, "Scan Error", JOptionPane.ERROR_MESSAGE);
     }
 
+    /**
+     * Enables or disables form controls based on whether a scan is currently executing.
+     *
+     * @param running true if scanning is active, false otherwise.
+     */
     private void setRunningState(boolean running) {
         this.isRunning = running;
         startBtn.setEnabled(!running);
@@ -306,10 +336,6 @@ public class FSStatGUI extends JFrame {
         maxFsUnitCombo.setEnabled(!running);
         nbSpinner.setEnabled(!running);
         paradigmCombo.setEnabled(!running);
-    }
-
-    private String getBandRangeLabel(int index, long maxFS, int nb, SizeUnit unit) {
-        return FSReport.formatBandLabel(index, maxFS, nb, unit);
     }
 
     /**

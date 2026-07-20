@@ -36,10 +36,15 @@ public class VirtualThreadsFSStat {
      * Holds the shared job execution state, including cancellation flags.
      */
     private static class JobState {
-        /**
-         * Volatile boolean checked by all scanning threads to abort processing quickly upon cancellation.
-         */
-        volatile boolean isCanceled = false;
+        private volatile boolean canceled = false;
+
+        void cancel() {
+            this.canceled = true;
+        }
+
+        boolean isCanceled() {
+            return canceled;
+        }
     }
 
     /**
@@ -57,10 +62,7 @@ public class VirtualThreadsFSStat {
         AtomicInteger activeTasks = new AtomicInteger(0);
 
         LongAdder totalFiles = new LongAdder();
-        LongAdder[] bandsCount = new LongAdder[nb + 1];
-        for (int i = 0; i <= nb; i++) {
-            bandsCount[i] = new LongAdder();
-        }
+        LongAdder[] bandsCount = FSUtils.initLongAdders(nb + 1);
 
         long startTime = System.currentTimeMillis();
         Set<String> visitedPaths = ConcurrentHashMap.newKeySet();
@@ -73,16 +75,13 @@ public class VirtualThreadsFSStat {
             ) {
                 // Schedule periodic progress updates
                 scheduler.scheduleAtFixedRate(() -> {
-                    if (!state.isCanceled) {
+                    if (!state.isCanceled()) {
                         FSReport partialReport = FSUtils.createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
                         listener.onUpdate(partialReport);
                     }
                 }, 100, 100, TimeUnit.MILLISECONDS);
 
-                File rootDir = new File(directory);
-                if (!rootDir.exists() || !rootDir.isDirectory()) {
-                    throw new IllegalArgumentException("Target is not a valid directory: " + directory);
-                }
+                File rootDir = FSUtils.validateDirectory(directory);
 
                 activeTasks.incrementAndGet();
                 executor.submit(() -> {
@@ -99,7 +98,7 @@ public class VirtualThreadsFSStat {
                 // Wait for all tasks to complete or job to be canceled
                 completionLatch.await();
 
-                if (!state.isCanceled) {
+                if (!state.isCanceled()) {
                     FSReport finalReport = FSUtils.createReportSnapshot(directory, maxFS, nb, bandsCount, totalFiles, startTime);
                     listener.onCompleted(finalReport);
                 }
@@ -111,13 +110,13 @@ public class VirtualThreadsFSStat {
         return new FSReportJob() {
             @Override
             public void cancel() {
-                state.isCanceled = true;
+                state.cancel();
                 completionLatch.countDown();
             }
 
             @Override
             public boolean isCanceled() {
-                return state.isCanceled;
+                return state.isCanceled();
             }
         };
     }
@@ -149,7 +148,7 @@ public class VirtualThreadsFSStat {
         CountDownLatch latch,
         Set<String> visitedPaths
     ) {
-        if (state.isCanceled) {
+        if (state.isCanceled()) {
             return;
         }
 
@@ -159,7 +158,7 @@ public class VirtualThreadsFSStat {
         }
 
         for (File file : files) {
-            if (state.isCanceled) {
+            if (state.isCanceled()) {
                 return;
             }
             if (file.isDirectory()) {

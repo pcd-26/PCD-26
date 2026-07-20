@@ -3,6 +3,7 @@ package pcd.assignment2;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pcd.assignment2.common.FSReport;
+import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
 import pcd.assignment2.common.FSUtils;
 import pcd.assignment2.common.SizeUnit;
@@ -54,6 +55,19 @@ public class FSStatTest {
         FSReport report = new FSReport("root", 10 * 1024 * 1024L, 4, new long[] {0, 0, 0, 0, 0}, 0, 0);
         assertTrue(report.getBandLabel(0, SizeUnit.MEGABYTES).contains("MiB"));
         assertTrue(report.getBandLabel(4, SizeUnit.MEGABYTES).startsWith("> "));
+        assertEquals("[0 B - 2,621,439 B]", report.getBandLabel(0));
+    }
+
+    @Test
+    public void testJobIsCanceledFlag(@TempDir Path tempDir) {
+        FSReportJob job = VirtualThreadsFSStat.getFSReport(tempDir.toString(), 1000, 2, new FSReportListener() {
+            @Override public void onUpdate(FSReport report) {}
+            @Override public void onCompleted(FSReport report) {}
+            @Override public void onError(Throwable error) {}
+        });
+        assertFalse(job.isCanceled());
+        job.cancel();
+        assertTrue(job.isCanceled());
     }
 
     @Test
@@ -108,6 +122,14 @@ public class FSStatTest {
         assertEquals(2, adderReport.bandsCount()[1]);
 
         assertEquals("[0 B - 500 B]", FSUtils.formatBandLabel(0, 500, 1, SizeUnit.BYTES));
+    }
+
+    @Test
+    public void testValidateDirectory(@TempDir Path tempDir) {
+        assertNotNull(FSUtils.validateDirectory(tempDir.toString()));
+        assertThrows(IllegalArgumentException.class, () -> FSUtils.validateDirectory(null));
+        assertThrows(IllegalArgumentException.class, () -> FSUtils.validateDirectory(""));
+        assertThrows(IllegalArgumentException.class, () -> FSUtils.validateDirectory(tempDir.resolve("non_existent").toString()));
     }
 
     private void createDummyFiles(Path tempDir) throws IOException {

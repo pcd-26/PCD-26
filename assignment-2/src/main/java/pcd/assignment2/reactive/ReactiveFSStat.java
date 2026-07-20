@@ -107,9 +107,11 @@ public class ReactiveFSStat {
      */
     public static Observable<FSReport> getFSReport(String directory, long maxFS, int nb) {
         return Observable.defer(() -> {
-            File rootDir = new File(directory);
-            if (!rootDir.exists() || !rootDir.isDirectory()) {
-                return Observable.error(new IllegalArgumentException("Target is not a valid directory: " + directory));
+            File rootDir;
+            try {
+                rootDir = FSUtils.validateDirectory(directory);
+            } catch (Exception e) {
+                return Observable.error(e);
             }
             long startTime = System.currentTimeMillis();
             Accumulator initial = new Accumulator(directory, maxFS, nb, startTime);

@@ -35,6 +35,81 @@ public final class FSUtils {
     }
 
     /**
+     * Validates if a target string path points to an existing directory on the filesystem.
+     *
+     * @param path Directory path string to validate.
+     * @return Validated {@link File} object.
+     * @throws IllegalArgumentException if path is null, empty, does not exist, or is not a directory.
+     */
+    public static File validateDirectory(String path) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("Target directory path cannot be null or empty.");
+        }
+        File dir = new File(path);
+        if (!dir.exists() || !dir.isDirectory()) {
+            throw new IllegalArgumentException("Target path is not a valid directory: " + path);
+        }
+        return dir;
+    }
+
+    /**
+     * Initializes an array of {@link LongAdder} objects of the specified size.
+     *
+     * @param size The number of elements in the array.
+     * @return An array populated with non-null LongAdder instances.
+     */
+    public static LongAdder[] initLongAdders(int size) {
+        LongAdder[] adders = new LongAdder[size];
+        for (int i = 0; i < size; i++) {
+            adders[i] = new LongAdder();
+        }
+        return adders;
+    }
+
+    /**
+     * Initializes an array of {@link AtomicLong} objects of the specified size.
+     *
+     * @param size The number of elements in the array.
+     * @return An array populated with non-null AtomicLong instances initialized to 0.
+     */
+    public static AtomicLong[] initAtomicLongs(int size) {
+        AtomicLong[] atomics = new AtomicLong[size];
+        for (int i = 0; i < size; i++) {
+            atomics[i] = new AtomicLong(0);
+        }
+        return atomics;
+    }
+
+    /**
+     * Creates an immutable FSReport snapshot given extracted band array and total file count.
+     *
+     * @param directory  the scanned directory
+     * @param maxFS      maximum size threshold
+     * @param nb         number of bands
+     * @param bandsCount array of file counts per band
+     * @param totalFiles total files count
+     * @param startTime  scan start timestamp in ms
+     * @return a new FSReport instance representing the current snapshot
+     */
+    public static FSReport createReportSnapshot(
+        String directory,
+        long maxFS,
+        int nb,
+        long[] bandsCount,
+        long totalFiles,
+        long startTime
+    ) {
+        return new FSReport(
+            directory,
+            maxFS,
+            nb,
+            bandsCount,
+            totalFiles,
+            System.currentTimeMillis() - startTime
+        );
+    }
+
+    /**
      * Creates an immutable FSReport snapshot from AtomicLong counters.
      *
      * @param directory  the scanned directory
@@ -57,14 +132,7 @@ public final class FSUtils {
         for (int i = 0; i <= nb; i++) {
             bands[i] = bandsCount[i].get();
         }
-        return new FSReport(
-            directory,
-            maxFS,
-            nb,
-            bands,
-            totalFiles.get(),
-            System.currentTimeMillis() - startTime
-        );
+        return createReportSnapshot(directory, maxFS, nb, bands, totalFiles.get(), startTime);
     }
 
     /**
@@ -90,14 +158,7 @@ public final class FSUtils {
         for (int i = 0; i <= nb; i++) {
             bands[i] = bandsCount[i].sum();
         }
-        return new FSReport(
-            directory,
-            maxFS,
-            nb,
-            bands,
-            totalFiles.sum(),
-            System.currentTimeMillis() - startTime
-        );
+        return createReportSnapshot(directory, maxFS, nb, bands, totalFiles.sum(), startTime);
     }
 
     /**

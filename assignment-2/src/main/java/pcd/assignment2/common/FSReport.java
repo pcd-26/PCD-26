@@ -69,13 +69,7 @@ public record FSReport(
             return 0;
         }
         int idx = (int) (size / bandWidth);
-        if (idx >= nb) {
-            idx = nb - 1;
-        }
-        if (idx < 0) {
-            idx = 0;
-        }
-        return idx;
+        return Math.clamp(idx, 0, nb - 1);
     }
 
     /**
