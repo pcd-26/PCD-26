@@ -41,7 +41,7 @@ public class EventLoopFSStat {
      */
     private static class JobState {
         /** Volatile boolean checked to abort processing quickly upon cancellation. */
-        private volatile boolean canceled = false;
+        private volatile boolean isCanceled = false;
         /** Counter of active asynchronous filesystem operations. */
         final AtomicInteger pendingOps = new AtomicInteger(0);
         /** Total files successfully scanned. */
@@ -63,11 +63,11 @@ public class EventLoopFSStat {
         }
 
         void cancel() {
-            this.canceled = true;
+            this.isCanceled = true;
         }
 
         boolean isCanceled() {
-            return canceled;
+            return isCanceled;
         }
     }
 
