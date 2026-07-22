@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>pcd</groupId>
-  <artifactId>dcs</artifactId>
+  <artifactId>ex3-distributed-critical-sections</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>pcd-assignment-04-dcs</name>
