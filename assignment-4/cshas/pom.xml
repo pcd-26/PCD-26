@@ -16,7 +16,7 @@
     <pekko.version>1.0.2</pekko.version>
     <scala.binary.version>2.13</scala.binary.version>
     <slf4j.version>2.0.12</slf4j.version>
-    <logback.version>1.5.3</logback.version>
+    <logback.version>1.5.13</logback.version>
     <junit.version>5.11.0</junit.version>
   </properties>
 
