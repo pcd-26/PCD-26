@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>pcd</groupId>
-  <artifactId>FSStat</artifactId>
+  <artifactId>file-system-stats</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>pcd-assignment-02</name>
@@ -27,7 +27,7 @@
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-core</artifactId>
-      <version>4.5.3</version>
+      <version>5.0.9</version>
     </dependency>
 
     <!-- JUnit 5 -->
