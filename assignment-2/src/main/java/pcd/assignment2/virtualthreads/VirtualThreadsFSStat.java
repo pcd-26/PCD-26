@@ -3,6 +3,7 @@ package pcd.assignment2.virtualthreads;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
@@ -67,19 +68,7 @@ public class VirtualThreadsFSStat {
             try {
                 while (!state.cancelled && !Thread.currentThread().isInterrupted()) {
                     Thread.sleep(100);
-                    long[] currentBands = new long[nb + 1];
-                    for (int i = 0; i <= nb; i++) {
-                        currentBands[i] = bandsCount[i].sum();
-                    }
-                    FSReport partialReport = new FSReport(
-                        directory,
-                        maxFS,
-                        nb,
-                        currentBands,
-                        totalFiles.sum(),
-                        System.currentTimeMillis() - startTime
-                    );
-                    listener.onUpdate(partialReport);
+                    listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, bandsCount, totalFiles, startTime));
                 }
             } catch (InterruptedException e) {
                 // Terminate updater loop
@@ -114,19 +103,7 @@ public class VirtualThreadsFSStat {
                 executor.shutdown();
 
                 if (!state.cancelled) {
-                    long[] finalBands = new long[nb + 1];
-                    for (int i = 0; i <= nb; i++) {
-                        finalBands[i] = bandsCount[i].sum();
-                    }
-                    FSReport finalReport = new FSReport(
-                        directory,
-                        maxFS,
-                        nb,
-                        finalBands,
-                        totalFiles.sum(),
-                        System.currentTimeMillis() - startTime
-                    );
-                    listener.onCompleted(finalReport);
+                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, bandsCount, totalFiles, startTime));
                 }
             } catch (Throwable t) {
                 listener.onError(t);

@@ -4,6 +4,7 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import pcd.assignment2.common.FSReport;
+import pcd.assignment2.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
@@ -83,14 +84,7 @@ public class ReactiveFSStat {
          * @return A new FSReport instance representing the current state.
          */
         FSReport toReport() {
-            return new FSReport(
-                directory,
-                maxFS,
-                nb,
-                bandsCount,
-                totalFiles,
-                System.currentTimeMillis() - startTime
-            );
+            return FSUtils.createReport(directory, maxFS, nb, bandsCount, totalFiles, startTime);
         }
     }
 

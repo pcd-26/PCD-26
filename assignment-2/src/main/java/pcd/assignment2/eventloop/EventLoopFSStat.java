@@ -7,6 +7,7 @@ import io.vertx.core.file.FileSystem;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
+import pcd.assignment2.common.FSUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -67,7 +68,7 @@ public class EventLoopFSStat {
          * @param nb The number of size bands.
          */
         JobState(int nb) {
-            bandsCount = initAtomicLongs(nb + 1);
+            bandsCount = FSUtils.initAtomicLongs(nb + 1);
         }
 
         void cancel() {
@@ -98,8 +99,7 @@ public class EventLoopFSStat {
             if (state.isCancelled() || state.terminated.get()) {
                 return;
             }
-            FSReport report = createReportSnapshot(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime);
-            listener.onUpdate(report);
+            listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime));
         });
 
         Runnable checkCompletion = () -> {
@@ -108,8 +108,7 @@ public class EventLoopFSStat {
                     vertx.cancelTimer(state.timerId);
                 }
                 if (!state.isCancelled()) {
-                    FSReport report = createReportSnapshot(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime);
-                    listener.onCompleted(report);
+                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime));
                 }
                 vertx.close();
             }
@@ -261,29 +260,6 @@ public class EventLoopFSStat {
             }
             return new ValidationResult(ValidationStatus.VALID);
         });
-    }
-
-    private static AtomicLong[] initAtomicLongs(int size) {
-        AtomicLong[] counters = new AtomicLong[size];
-        for (int i = 0; i < size; i++) {
-            counters[i] = new AtomicLong(0);
-        }
-        return counters;
-    }
-
-    private static FSReport createReportSnapshot(
-        String directory,
-        long maxFS,
-        int nb,
-        AtomicLong[] bandsCount,
-        AtomicLong totalFiles,
-        long startTime
-    ) {
-        long[] counts = new long[bandsCount.length];
-        for (int i = 0; i < bandsCount.length; i++) {
-            counts[i] = bandsCount[i].get();
-        }
-        return new FSReport(directory, maxFS, nb, counts, totalFiles.get(), System.currentTimeMillis() - startTime);
     }
 
     /**
