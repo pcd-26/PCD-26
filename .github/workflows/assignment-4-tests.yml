@@ -2,13 +2,7 @@ name: Assignment 04 CI
 
 on:
   push:
-    paths:
-      - "assignment-4/**"
-      - ".github/workflows/assignment-4-tests.yml"
   pull_request:
-    paths:
-      - "assignment-4/**"
-      - ".github/workflows/assignment-4-tests.yml"
   workflow_dispatch:
 
 concurrency:
