@@ -3,9 +3,7 @@ package pcd.assignment2.common;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
-/**
- * Small shared helpers used by the three FSStat implementations.
- */
+/** Shared helpers used by the three FSStat implementations. */
 public final class FSUtils {
     private FSUtils() {
     }
