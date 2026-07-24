@@ -167,7 +167,7 @@ public class EventLoopFSStat {
             return; // Skip on path resolution failure
         }
 
-        fs.readDir(path, res -> {
+        fs.readDir(path).onComplete(res -> {
             if (state.isCanceled()) {
                 decrementAndCheckCompletion(state, checkCompletion);
                 return;
@@ -176,7 +176,7 @@ public class EventLoopFSStat {
             if (res.succeeded()) {
                 for (String childPath : res.result()) {
                     state.pendingOps.incrementAndGet();
-                    fs.props(childPath, propsRes -> {
+                    fs.props(childPath).onComplete(propsRes -> {
                         if (state.isCanceled()) {
                             decrementAndCheckCompletion(state, checkCompletion);
                             return;
