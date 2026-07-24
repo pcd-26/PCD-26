@@ -1,12 +1,18 @@
 package pcd.assignment2.eventloop;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
-import io.vertx.core.file.FileSystem;
 import io.vertx.core.file.FileProps;
+import io.vertx.core.file.FileSystem;
 import pcd.assignment2.common.FSReport;
 import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -15,34 +21,43 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p><strong>Shared State & Synchronization Strategy:</strong>
  * <ul>
- *   <li>The Event-Loop model operates on the principle that code executing on a specific context is single-threaded,
- *       avoiding traditional synchronization blockages.</li>
- *   <li>However, since updates and cancel triggers can cross different Vert.x or caller thread contexts,
- *       we store the intermediate counts in {@link AtomicLong} and {@link AtomicInteger} wrappers to ensure thread safety
- *       between the reader callbacks, updater timer callbacks, and user cancel actions.</li>
- *   <li>Traversals are tracked using a pending operations counter ({@code pendingOps}).
- *       Every async operation ({@code readDir}, {@code props}) increments {@code pendingOps}.
- *       Upon callback receipt, the counter is decremented. When it reaches 0, the scan completes.</li>
- *   <li>Cancellation is handled by checking a {@code volatile boolean} flag before launching subsequent operations
- *       and immediately closing the {@link Vertx} instance to shut down underlying threads.</li>
+ *   <li>The event-loop handlers use Vert.x async filesystem APIs for directory reads and file properties.</li>
+ *   <li>Potentially blocking checks based on {@link File} are executed via {@link Vertx#executeBlocking(java.util.concurrent.Callable)}
+ *       so the event-loop thread remains responsive.</li>
+ *   <li>Intermediate counts are stored in {@link AtomicLong} and {@link AtomicInteger} wrappers because callbacks may
+ *       cross event-loop and worker contexts.</li>
+ *   <li>Traversals are tracked using a pending operations counter ({@code pendingOps}). Every async operation increments
+ *       the counter and decrements it on completion. When it reaches 0, the scan completes.</li>
+ *   <li>Cancellation is cooperative: a flag stops new work, while Vert.x is closed only after in-flight callbacks drain.</li>
  * </ul>
  */
 public class EventLoopFSStat {
+
+    private enum ValidationStatus {
+        VALID,
+        DUPLICATE,
+        NOT_DIRECTORY,
+        NOT_READABLE
+    }
+
+    private record ValidationResult(ValidationStatus status) { }
 
     /**
      * Holds the shared job execution and progress tracking state.
      */
     private static class JobState {
         /** Volatile boolean checked to abort processing quickly upon cancellation. */
-        volatile boolean cancelled = false;
+        private volatile boolean cancelled = false;
         /** Counter of active asynchronous filesystem operations. */
         final AtomicInteger pendingOps = new AtomicInteger(0);
+        /** Ensures Vert.x is closed at most once, after completion or cancellation drains. */
+        final AtomicBoolean terminated = new AtomicBoolean(false);
         /** Total files successfully scanned. */
         final AtomicLong totalFiles = new AtomicLong(0);
         /** Array tracking the file count distribution per size band. */
         final AtomicLong[] bandsCount;
         /** Thread-safe set tracking already visited directory paths to avoid symlink loops. */
-        final java.util.Set<String> visitedPaths = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        final Set<String> visitedPaths = ConcurrentHashMap.newKeySet();
         /** Vert.x periodic timer ID for publishing updates. */
         long timerId = -1;
 
@@ -52,10 +67,15 @@ public class EventLoopFSStat {
          * @param nb The number of size bands.
          */
         JobState(int nb) {
-            bandsCount = new AtomicLong[nb + 1];
-            for (int i = 0; i <= nb; i++) {
-                bandsCount[i] = new AtomicLong(0);
-            }
+            bandsCount = initAtomicLongs(nb + 1);
+        }
+
+        void cancel() {
+            this.cancelled = true;
+        }
+
+        boolean isCancelled() {
+            return cancelled;
         }
     }
 
@@ -74,67 +94,45 @@ public class EventLoopFSStat {
         JobState state = new JobState(nb);
         long startTime = System.currentTimeMillis();
 
-        // Setup periodic updater
         state.timerId = vertx.setPeriodic(100, id -> {
-            if (state.cancelled) {
+            if (state.isCancelled() || state.terminated.get()) {
                 return;
             }
-            long[] currentBands = new long[nb + 1];
-            for (int i = 0; i <= nb; i++) {
-                currentBands[i] = state.bandsCount[i].get();
-            }
-            FSReport report = new FSReport(
-                directory,
-                maxFS,
-                nb,
-                currentBands,
-                state.totalFiles.get(),
-                System.currentTimeMillis() - startTime
-            );
+            FSReport report = createReportSnapshot(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime);
             listener.onUpdate(report);
         });
 
         Runnable checkCompletion = () -> {
-            if (state.pendingOps.get() == 0 && !state.cancelled) {
+            if (state.pendingOps.get() == 0 && state.terminated.compareAndSet(false, true)) {
                 if (state.timerId != -1) {
                     vertx.cancelTimer(state.timerId);
                 }
-                long[] finalBands = new long[nb + 1];
-                for (int i = 0; i <= nb; i++) {
-                    finalBands[i] = state.bandsCount[i].get();
+                if (!state.isCancelled()) {
+                    FSReport report = createReportSnapshot(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime);
+                    listener.onCompleted(report);
                 }
-                FSReport report = new FSReport(
-                    directory,
-                    maxFS,
-                    nb,
-                    finalBands,
-                    state.totalFiles.get(),
-                    System.currentTimeMillis() - startTime
-                );
-                listener.onCompleted(report);
                 vertx.close();
             }
         };
 
-        // Start traversing
-        state.pendingOps.incrementAndGet(); // for the initial read
-        vertx.runOnContext(v -> {
-            scanDirAsync(directory, maxFS, nb, fs, state, checkCompletion, vertx, listener);
-        });
+        state.pendingOps.incrementAndGet();
+        vertx.runOnContext(v -> scanDirAsync(directory, maxFS, nb, fs, state, checkCompletion, vertx, listener));
 
         return new FSReportJob() {
             @Override
             public void cancel() {
-                state.cancelled = true;
+                state.cancel();
                 if (state.timerId != -1) {
                     vertx.cancelTimer(state.timerId);
                 }
-                vertx.close();
+                if (state.pendingOps.get() == 0 && state.terminated.compareAndSet(false, true)) {
+                    vertx.close();
+                }
             }
 
             @Override
             public boolean isCancelled() {
-                return state.cancelled;
+                return state.isCancelled();
             }
         };
     }
@@ -162,81 +160,141 @@ public class EventLoopFSStat {
         Vertx vertx,
         FSReportListener listener
     ) {
-        if (state.cancelled) {
-            if (state.pendingOps.decrementAndGet() == 0) {
-                checkCompletion.run();
-            }
+        if (state.isCancelled()) {
+            decrementAndCheckCompletion(state, checkCompletion);
             return;
         }
 
-        try {
-            java.io.File fileObj = new java.io.File(path);
-            String canonicalPath = fileObj.getCanonicalPath();
-            if (!state.visitedPaths.add(canonicalPath)) {
-                if (state.pendingOps.decrementAndGet() == 0) {
-                    checkCompletion.run();
-                }
-                return; // Cycle detected: skip this directory
-            }
-        } catch (java.io.IOException e) {
-            if (state.pendingOps.decrementAndGet() == 0) {
-                checkCompletion.run();
-            }
-            return; // Skip on path resolution failure
-        }
-
-        fs.readDir(path, res -> {
-            if (state.cancelled) {
-                if (state.pendingOps.decrementAndGet() == 0) {
-                    checkCompletion.run();
-                }
+        validatePathAsync(vertx, path, state).onComplete(validationRes -> {
+            if (state.isCancelled()) {
+                decrementAndCheckCompletion(state, checkCompletion);
                 return;
             }
 
-            if (res.succeeded()) {
-                for (String childPath : res.result()) {
-                    state.pendingOps.incrementAndGet();
-                    fs.props(childPath, propsRes -> {
-                        if (state.cancelled) {
-                            if (state.pendingOps.decrementAndGet() == 0) {
-                                checkCompletion.run();
-                            }
-                            return;
-                        }
-
-                        if (propsRes.succeeded()) {
-                            FileProps props = propsRes.result();
-                            if (props.isDirectory()) {
-                                state.pendingOps.incrementAndGet();
-                                scanDirAsync(childPath, maxFS, nb, fs, state, checkCompletion, vertx, listener);
-                            } else if (props.isRegularFile()) {
-                                state.totalFiles.incrementAndGet();
-                                long size = props.size();
-                                int idx = FSReport.getBandIndex(size, maxFS, nb);
-                                state.bandsCount[idx].incrementAndGet();
-                            }
-                        }
-
-                        if (state.pendingOps.decrementAndGet() == 0) {
-                            checkCompletion.run();
-                        }
-                    });
-                }
-            } else {
-                if (state.pendingOps.get() == 1) { // Root directory read failed
-                    listener.onError(res.cause());
-                    state.cancelled = true;
+            if (validationRes.failed()) {
+                if (state.pendingOps.get() == 1) {
+                    listener.onError(validationRes.cause());
+                    state.cancel();
                     if (state.timerId != -1) {
                         vertx.cancelTimer(state.timerId);
                     }
-                    vertx.close();
-                    return;
                 }
+                decrementAndCheckCompletion(state, checkCompletion);
+                return;
             }
 
-            if (state.pendingOps.decrementAndGet() == 0) {
-                checkCompletion.run();
+            ValidationResult validation = validationRes.result();
+            if (validation.status() == ValidationStatus.DUPLICATE) {
+                decrementAndCheckCompletion(state, checkCompletion);
+                return;
             }
+            if (validation.status() == ValidationStatus.NOT_DIRECTORY || validation.status() == ValidationStatus.NOT_READABLE) {
+                if (state.pendingOps.get() == 1) {
+                    listener.onError(new IllegalArgumentException("Target directory is not a readable directory: " + path));
+                    state.cancel();
+                    if (state.timerId != -1) {
+                        vertx.cancelTimer(state.timerId);
+                    }
+                }
+                decrementAndCheckCompletion(state, checkCompletion);
+                return;
+            }
+
+            fs.readDir(path).onComplete(res -> {
+                if (state.isCancelled()) {
+                    decrementAndCheckCompletion(state, checkCompletion);
+                    return;
+                }
+
+                if (res.succeeded()) {
+                    for (String childPath : res.result()) {
+                        state.pendingOps.incrementAndGet();
+                        fs.props(childPath).onComplete(propsRes -> {
+                            if (state.isCancelled()) {
+                                decrementAndCheckCompletion(state, checkCompletion);
+                                return;
+                            }
+
+                            if (propsRes.succeeded()) {
+                                FileProps props = propsRes.result();
+                                if (props.isDirectory()) {
+                                    state.pendingOps.incrementAndGet();
+                                    scanDirAsync(childPath, maxFS, nb, fs, state, checkCompletion, vertx, listener);
+                                } else if (props.isRegularFile()) {
+                                    state.totalFiles.incrementAndGet();
+                                    long size = props.size();
+                                    int idx = FSReport.getBandIndex(size, maxFS, nb);
+                                    state.bandsCount[idx].incrementAndGet();
+                                }
+                            }
+
+                            decrementAndCheckCompletion(state, checkCompletion);
+                        });
+                    }
+                } else {
+                    if (state.pendingOps.get() == 1) {
+                        listener.onError(res.cause());
+                        state.cancel();
+                        if (state.timerId != -1) {
+                            vertx.cancelTimer(state.timerId);
+                        }
+                    }
+                }
+
+                decrementAndCheckCompletion(state, checkCompletion);
+            });
         });
+    }
+
+    private static Future<ValidationResult> validatePathAsync(Vertx vertx, String path, JobState state) {
+        return vertx.executeBlocking(() -> {
+            File fileObj = new File(path);
+            String canonicalPath = fileObj.getCanonicalPath();
+            if (!fileObj.exists() || !fileObj.isDirectory()) {
+                return new ValidationResult(ValidationStatus.NOT_DIRECTORY);
+            }
+            if (!state.visitedPaths.add(canonicalPath)) {
+                return new ValidationResult(ValidationStatus.DUPLICATE);
+            }
+            if (!fileObj.canRead()) {
+                return new ValidationResult(ValidationStatus.NOT_READABLE);
+            }
+            return new ValidationResult(ValidationStatus.VALID);
+        });
+    }
+
+    private static AtomicLong[] initAtomicLongs(int size) {
+        AtomicLong[] counters = new AtomicLong[size];
+        for (int i = 0; i < size; i++) {
+            counters[i] = new AtomicLong(0);
+        }
+        return counters;
+    }
+
+    private static FSReport createReportSnapshot(
+        String directory,
+        long maxFS,
+        int nb,
+        AtomicLong[] bandsCount,
+        AtomicLong totalFiles,
+        long startTime
+    ) {
+        long[] counts = new long[bandsCount.length];
+        for (int i = 0; i < bandsCount.length; i++) {
+            counts[i] = bandsCount[i].get();
+        }
+        return new FSReport(directory, maxFS, nb, counts, totalFiles.get(), System.currentTimeMillis() - startTime);
+    }
+
+    /**
+     * Decrements pending operation count and triggers completion check if no active operations remain.
+     *
+     * @param state           The job execution state.
+     * @param checkCompletion Completion callback to trigger when operations reach zero.
+     */
+    private static void decrementAndCheckCompletion(JobState state, Runnable checkCompletion) {
+        if (state.pendingOps.decrementAndGet() == 0) {
+            checkCompletion.run();
+        }
     }
 }

@@ -16,14 +16,14 @@ Each paradigm handles shared state differently to avoid data races and minimize 
 | :--- | :--- | :--- |
 | **Virtual Threads** | Thread-safe shared accumulators (`LongAdder` array & `LongAdder` total count). | Lock-free thread-safe atomic additions (extremely low CPU cache contention). Coordinate task termination using `AtomicInteger` tracker and `CountDownLatch`. |
 | **Reactive (RxJava)** | None (Functional Immutable state). | State is held within an immutable `Accumulator` object that is passed along the stream using the `.scan()` operator. No shared mutable state exists. |
-| **Event-Loop (Vert.x)** | Contained within the Event Loop context. | Since Vert.x executes handlers on the event loop sequentially, standard thread synchronization is not strictly needed. However, `AtomicLong` and `AtomicInteger` are used for safe lock-free cross-context progress tracking. |
+| **Event-Loop (Vert.x)** | Event-loop callbacks own the traversal flow, while blocking filesystem checks are offloaded to Vert.x worker threads. | Directory reads and file property queries stay async (`readDir`, `props`). Path validation and canonicalization are wrapped in `executeBlocking` so the event loop does not block. `AtomicLong` and `AtomicInteger` are still used for safe lock-free cross-context progress tracking. |
 
 ### 1.2. Cancellation Strategy
 
 Halting a long-running scan promptly avoids wasting disk and CPU resources:
 - **Virtual Threads**: Checks a `volatile boolean` cancellation flag inside the recursive directory walk loop. On cancellation, it terminates the `ExecutorService` thread pool.
 - **Reactive**: Cancelling the stream is naturally done by disposing the subscription handle. The internal generator checks `emitter.isDisposed()` at each file and directory boundary, terminating immediately.
-- **Event-Loop**: Sets a `volatile boolean` cancellation flag that blocks subsequent asynchronous NIO operations from starting, then calls `vertx.close()` to release the worker threads.
+- **Event-Loop**: Sets a `volatile boolean` cancellation flag that blocks subsequent asynchronous NIO operations from starting, then closes Vert.x only after in-flight callbacks have drained. Blocking path validation still happens, but it runs in the worker pool rather than on the event loop.
 
 ### 1.3. UI Responsiveness & Backpressure
 
@@ -76,9 +76,17 @@ mvn -f assignment-2/pom.xml clean compile
 ```
 
 ### Execution
-Run the GUI application using the following command:
+Run the GUI application using one of the helper scripts, which now always perform a clean build before launching:
 ```bash
-mvn -f assignment-2/pom.xml exec:java -Dexec.mainClass="pcd.assignment2.gui.FSStatGUI"
+./assignment-2/run-gui.sh
+```
+```powershell
+.\assignment-2\run-gui.ps1
+```
+
+If you prefer to call Maven directly, use:
+```bash
+mvn -f assignment-2/pom.xml clean compile exec:java -Dexec.mainClass="pcd.assignment2.gui.FSStatGUI"
 ```
 
 ## 4. CLI Examples
@@ -93,3 +101,12 @@ The CLI accepts an optional size unit and an optional paradigm:
 ```
 
 If the unit is omitted, bytes are assumed. If the paradigm is omitted, `vt` is used.
+
+The helper scripts also perform a clean build before launching:
+
+```bash
+./assignment-2/run-cli.sh . 10 5 MB vt
+```
+```powershell
+.\assignment-2\run-cli.ps1 . 10 5 MB vt
+```
