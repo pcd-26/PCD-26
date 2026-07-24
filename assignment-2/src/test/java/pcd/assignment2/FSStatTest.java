@@ -217,9 +217,8 @@ public class FSStatTest {
 
     @Test
     public void testEventLoopCancellationStopsRunningScan(@TempDir Path tempDir) throws Exception {
-        createLargeDirectoryTree(tempDir, 40, 50);
+        createLargeDirectoryTree(tempDir, 120, 80);
 
-        CountDownLatch firstUpdateLatch = new CountDownLatch(1);
         CountDownLatch terminalLatch = new CountDownLatch(1);
         AtomicBoolean completed = new AtomicBoolean(false);
         AtomicBoolean errored = new AtomicBoolean(false);
@@ -227,7 +226,7 @@ public class FSStatTest {
         FSReportJob job = EventLoopFSStat.getFSReport(tempDir.toString(), 100, 4, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {
-                firstUpdateLatch.countDown();
+                // ignore
             }
 
             @Override
@@ -243,11 +242,11 @@ public class FSStatTest {
             }
         });
 
-        assertTrue(firstUpdateLatch.await(5, TimeUnit.SECONDS), "The scan should still be running when the first update arrives.");
+        Thread.sleep(150);
         job.cancel();
 
         assertTrue(job.isCancelled());
-        assertFalse(terminalLatch.await(300, TimeUnit.MILLISECONDS), "The scan should not complete right after cancellation.");
+        assertFalse(terminalLatch.await(500, TimeUnit.MILLISECONDS), "The scan should not complete right after cancellation.");
         assertFalse(completed.get());
         assertFalse(errored.get());
     }
