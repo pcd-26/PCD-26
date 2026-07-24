@@ -162,6 +162,19 @@ public class EventLoopFSStat {
                 decrementAndCheckCompletion(state, checkCompletion);
                 return; // Cycle detected: skip this directory
             }
+            if (!fileObj.canRead()) {
+                if (state.pendingOps.get() == 1) {
+                    listener.onError(new IllegalArgumentException("Target directory is not readable: " + path));
+                    state.cancel();
+                    if (state.timerId != -1) {
+                        vertx.cancelTimer(state.timerId);
+                    }
+                    vertx.close();
+                } else {
+                    decrementAndCheckCompletion(state, checkCompletion);
+                }
+                return;
+            }
         } catch (IOException e) {
             decrementAndCheckCompletion(state, checkCompletion);
             return; // Skip on path resolution failure
