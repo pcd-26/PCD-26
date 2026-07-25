@@ -76,6 +76,12 @@ public final class SirenActor {
         });
     }
 
+    /**
+     * Behavior handling the silent (off) state of the siren actor.
+     *
+     * @param context actor context
+     * @return typed behavior
+     */
     private static Behavior<Command> silent(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
                 .onMessage(Activate.class, message -> {
@@ -90,6 +96,12 @@ public final class SirenActor {
                 .build();
     }
 
+    /**
+     * Behavior handling the active (on) sounding state of the siren actor.
+     *
+     * @param context actor context
+     * @return typed behavior
+     */
     private static Behavior<Command> active(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
                 .onMessage(Activate.class, message -> Behaviors.same())

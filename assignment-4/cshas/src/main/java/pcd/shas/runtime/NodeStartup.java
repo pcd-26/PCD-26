@@ -188,6 +188,12 @@ public final class NodeStartup {
         return "pekko://%s@%s:%d".formatted(systemName, host, port);
     }
 
+    /**
+     * Parses the string role into a {@link Role} enum.
+     *
+     * @param rawRole string representation of the role
+     * @return matching {@link Role}
+     */
     private static Role parseRole(String rawRole) {
         Objects.requireNonNull(rawRole, "rawRole");
         return switch (rawRole.toLowerCase(Locale.ROOT)) {
@@ -198,6 +204,12 @@ public final class NodeStartup {
         };
     }
 
+    /**
+     * Parses key-value command-line options starting with {@code --}.
+     *
+     * @param args array of flag tokens
+     * @return map of flag names to values
+     */
     private static Map<String, String> parseFlags(String[] args) {
         List<String> items = new ArrayList<>(Arrays.asList(args));
         java.util.LinkedHashMap<String, String> flags = new java.util.LinkedHashMap<>();
@@ -218,6 +230,13 @@ public final class NodeStartup {
         return flags;
     }
 
+    /**
+     * Retrieves a mandatory command-line flag value from the flags map.
+     *
+     * @param flags parsed flags map
+     * @param key requested flag name
+     * @return the flag value
+     */
     private static String require(Map<String, String> flags, String key) {
         String value = flags.get(key);
         if (value == null || value.isBlank()) {
@@ -226,6 +245,13 @@ public final class NodeStartup {
         return value;
     }
 
+    /**
+     * Parses the network port string or returns the default port for the given role.
+     *
+     * @param rawPort raw port string
+     * @param role node role
+     * @return TCP port number
+     */
     private static int parsePort(String rawPort, Role role) {
         if (rawPort == null || rawPort.isBlank()) {
             return switch (role) {
@@ -241,6 +267,12 @@ public final class NodeStartup {
         }
     }
 
+    /**
+     * Parses comma-separated seed node host:port strings into a list.
+     *
+     * @param rawSeedNodes comma-separated seed node addresses
+     * @return list of seed node address strings
+     */
     private static List<String> parseSeedNodes(String rawSeedNodes) {
         if (rawSeedNodes == null || rawSeedNodes.isBlank()) {
             return List.of();
@@ -251,6 +283,12 @@ public final class NodeStartup {
                 .toList();
     }
 
+    /**
+     * Parses the string representation of a sensor type into a {@link SensorType} enum.
+     *
+     * @param rawSensorType raw string value
+     * @return parsed {@link SensorType}
+     */
     private static SensorType parseSensorType(String rawSensorType) {
         try {
             return SensorType.valueOf(rawSensorType.toUpperCase(Locale.ROOT));
@@ -259,6 +297,12 @@ public final class NodeStartup {
         }
     }
 
+    /**
+     * Parses the string representation of a zone into a {@link Zone} enum.
+     *
+     * @param rawZone raw string value
+     * @return parsed {@link Zone}
+     */
     private static Zone parseZone(String rawZone) {
         try {
             return Zone.valueOf(rawZone.toUpperCase(Locale.ROOT));
