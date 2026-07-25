@@ -3,6 +3,7 @@ package pcd.poool.model.physics.common;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,21 @@ class BoardPhysicsStepperTest {
     @Test
     void boardRejectsNullPhysicsStepper() {
         assertThrows(IllegalArgumentException.class, () -> new Board(null));
+    }
+
+    @Test
+    void fillCollisionBallsReusesTheProvidedBuffer() {
+        var board = new Board((target, elapsedMillis) -> {});
+        board.init(new EmptyBoardConf());
+
+        var target = new ArrayList<Ball>();
+        target.add(new Ball(new P2d(99, 99), 1.0, 1.0, new V2d(0, 0)));
+
+        board.fillCollisionBalls(target);
+
+        assertEquals(2, target.size());
+        assertEquals(board.getPlayerBallEntity(), target.get(0));
+        assertEquals(board.getBotBallEntity(), target.get(1));
     }
 
     private static class EmptyBoardConf implements BoardConf {

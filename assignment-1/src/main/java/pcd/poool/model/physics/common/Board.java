@@ -273,15 +273,29 @@ public class Board {
         return balls;
     }
 
-    public synchronized List<Ball> getCollisionBalls() {
-        var allBalls = new ArrayList<Ball>();
+    /**
+     * Copies the active balls that participate in collision detection into a
+     * caller-provided list.
+     *
+     * <p>The target list is cleared first, so callers can keep and reuse a
+     * scratch buffer across physics ticks.
+     *
+     * @param target reusable list that receives the active balls
+     */
+    public synchronized void fillCollisionBalls(List<Ball> target) {
+        target.clear();
         if (playerBall != null && !playerBallPocketed) {
-            allBalls.add(playerBall);
+            target.add(playerBall);
         }
         if (botBall != null && !botBallPocketed) {
-            allBalls.add(botBall);
+            target.add(botBall);
         }
-        allBalls.addAll(balls);
+        target.addAll(balls);
+    }
+
+    public synchronized List<Ball> getCollisionBalls() {
+        var allBalls = new ArrayList<Ball>();
+        fillCollisionBalls(allBalls);
         return allBalls;
     }
 
