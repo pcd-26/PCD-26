@@ -38,14 +38,12 @@ public final class Main {
     private static final int KEYPAD_PORT = 2552;
     private static final int SENSOR_PORT = 2553;
     private static final List<String> LOCAL_SEED_NODES = List.of(
-            NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, CONTROL_UNIT_PORT),
-            NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, KEYPAD_PORT),
-            NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, SENSOR_PORT)
+        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, CONTROL_UNIT_PORT),
+        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, KEYPAD_PORT),
+        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, SENSOR_PORT)
     );
 
-    private Main() {
-        // Utility class.
-    }
+    private Main() {}   // Utility class
 
     /**
      * Starts the requested node role or the local demo.
@@ -75,39 +73,39 @@ public final class Main {
 
         Config baseConfig = ConfigFactory.load();
         Config controlUnitConfig = NodeStartup.buildClusterConfig(
-                SYSTEM_NAME,
-                LOCAL_HOST,
-                CONTROL_UNIT_PORT,
-                LOCAL_SEED_NODES
+            SYSTEM_NAME,
+            LOCAL_HOST,
+            CONTROL_UNIT_PORT,
+            LOCAL_SEED_NODES
         ).withFallback(baseConfig);
         Config keypadConfig = NodeStartup.buildClusterConfig(
-                SYSTEM_NAME,
-                LOCAL_HOST,
-                KEYPAD_PORT,
-                LOCAL_SEED_NODES
+            SYSTEM_NAME,
+            LOCAL_HOST,
+            KEYPAD_PORT,
+            LOCAL_SEED_NODES
         ).withFallback(baseConfig);
         Config sensorConfig = NodeStartup.buildClusterConfig(
-                SYSTEM_NAME,
-                LOCAL_HOST,
-                SENSOR_PORT,
-                LOCAL_SEED_NODES
+            SYSTEM_NAME,
+            LOCAL_HOST,
+            SENSOR_PORT,
+            LOCAL_SEED_NODES
         ).withFallback(baseConfig);
         AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(controlUnitConfig);
 
         ActorSystem<ControlUnitActor.Command> controlUnitSystem = ActorSystem.create(
-                createControlUnitNodeBehavior(alarmConfiguration),
-                SYSTEM_NAME,
-                controlUnitConfig
+            createControlUnitNodeBehavior(alarmConfiguration),
+            SYSTEM_NAME,
+            controlUnitConfig
         );
         ActorSystem<KeypadActor.Command> keypadSystem = ActorSystem.create(
-                KeypadActor.create(),
-                SYSTEM_NAME,
-                keypadConfig
+            KeypadActor.create(),
+            SYSTEM_NAME,
+            keypadConfig
         );
         ActorSystem<SensorActor.Command> sensorSystem = ActorSystem.create(
-                createSensorsNodeBehavior(),
-                SYSTEM_NAME,
-                sensorConfig
+            createSensorsNodeBehavior(),
+            SYSTEM_NAME,
+            sensorConfig
         );
         ActorSystem<ControlUnitActor.Command> restartedControlUnitSystem = null;
 
@@ -139,9 +137,9 @@ public final class Main {
             controlUnitSystem.getWhenTerminated().toCompletableFuture().join();
 
             restartedControlUnitSystem = ActorSystem.create(
-                    createControlUnitNodeBehavior(alarmConfiguration),
-                    SYSTEM_NAME,
-                    controlUnitConfig
+                createControlUnitNodeBehavior(alarmConfiguration),
+                SYSTEM_NAME,
+                controlUnitConfig
             );
             Thread.sleep(3000);
 
@@ -172,10 +170,10 @@ public final class Main {
      */
     private static void runNode(NodeArguments launchArguments) {
         Config nodeConfig = NodeStartup.buildClusterConfig(
-                SYSTEM_NAME,
-                launchArguments.host(),
-                launchArguments.port(),
-                launchArguments.seedNodes()
+            SYSTEM_NAME,
+            launchArguments.host(),
+            launchArguments.port(),
+            launchArguments.seedNodes()
         );
         AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(nodeConfig);
 
@@ -194,9 +192,9 @@ public final class Main {
      */
     private static void runControlUnitNode(Config config, AlarmConfiguration alarmConfiguration) {
         ActorSystem<ControlUnitActor.Command> system = ActorSystem.create(
-                createControlUnitNodeBehavior(alarmConfiguration),
-                SYSTEM_NAME,
-                config
+            createControlUnitNodeBehavior(alarmConfiguration),
+            SYSTEM_NAME,
+            config
         );
         LOGGER.info("Control unit node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
         waitEnter();
@@ -210,9 +208,9 @@ public final class Main {
      */
     private static void runKeypadNode(Config config) {
         ActorSystem<KeypadActor.Command> system = ActorSystem.create(
-                KeypadActor.create(),
-                SYSTEM_NAME,
-                config
+            KeypadActor.create(),
+            SYSTEM_NAME,
+            config
         );
         LOGGER.info("Keypad node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
         LOGGER.info("Type digits and press Enter to submit. Type 'exit' to stop the node.");
@@ -227,21 +225,21 @@ public final class Main {
      */
     private static void runSensorNode(Config config, NodeArguments launchArguments) {
         ActorSystem<SensorActor.Command> system = ActorSystem.create(
-                SensorActor.create(
-                        launchArguments.sensorId(),
-                        launchArguments.sensorType(),
-                        launchArguments.zone()
-                ),
-                SYSTEM_NAME,
-                config
-        );
-        LOGGER.info(
-                "Sensor node running on {}:{} (id={}, type={}, zone={})",
-                config.getString("pekko.remote.artery.canonical.hostname"),
-                config.getInt("pekko.remote.artery.canonical.port"),
+            SensorActor.create(
                 launchArguments.sensorId(),
                 launchArguments.sensorType(),
                 launchArguments.zone()
+            ),
+            SYSTEM_NAME,
+            config
+        );
+        LOGGER.info(
+            "Sensor node running on {}:{} (id={}, type={}, zone={})",
+            config.getString("pekko.remote.artery.canonical.hostname"),
+            config.getInt("pekko.remote.artery.canonical.port"),
+            launchArguments.sensorId(),
+            launchArguments.sensorType(),
+            launchArguments.zone()
         );
         LOGGER.info("Press Enter to trigger the sensor. Type 'exit' to stop the node.");
         startSensorConsoleInputReader(system);
@@ -256,10 +254,10 @@ public final class Main {
     private static AlarmState queryControlUnitState(ActorSystem<ControlUnitActor.Command> system) {
         try {
             CompletionStage<ControlUnitActor.StateSnapshot> stage = AskPattern.ask(
-                    system,
-                    ControlUnitActor.QueryState::new,
-                    Duration.ofSeconds(2),
-                    system.scheduler()
+                system,
+                ControlUnitActor.QueryState::new,
+                Duration.ofSeconds(2),
+                system.scheduler()
             );
             return stage.toCompletableFuture().get().state();
         } catch (Exception e) {
@@ -278,19 +276,19 @@ public final class Main {
         return Behaviors.setup(context -> {
             context.spawn(SirenActor.create(), "siren");
             ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
-                    ControlUnitActor.create(
-                            alarmConfiguration.correctPin(),
-                            alarmConfiguration.exitDelay(),
-                            alarmConfiguration.entryDelay()
-                    ),
-                    "control-unit"
+                ControlUnitActor.create(
+                    alarmConfiguration.correctPin(),
+                    alarmConfiguration.exitDelay(),
+                    alarmConfiguration.entryDelay()
+                ),
+                "control-unit"
             );
             return Behaviors.receive(ControlUnitActor.Command.class)
-                    .onMessage(ControlUnitActor.Command.class, message -> {
-                        controlUnit.tell(message);
-                        return Behaviors.same();
-                    })
-                    .build();
+                .onMessage(ControlUnitActor.Command.class, message -> {
+                    controlUnit.tell(message);
+                    return Behaviors.same();
+                })
+                .build();
         });
     }
 
@@ -302,21 +300,21 @@ public final class Main {
     private static Behavior<SensorActor.Command> createSensorsNodeBehavior() {
         return Behaviors.setup(context -> {
             ActorRef<SensorActor.Command> doorSensor = context.spawn(
-                    SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, pcd.shas.common.Zone.PERIMETER),
-                    "front-door-sensor"
+                SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, pcd.shas.common.Zone.PERIMETER),
+                "front-door-sensor"
             );
             ActorRef<SensorActor.Command> motionSensor = context.spawn(
-                    SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, pcd.shas.common.Zone.LIVING_AREA),
-                    "living-room-sensor"
+                SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, pcd.shas.common.Zone.LIVING_AREA),
+                "living-room-sensor"
             );
 
             return Behaviors.receive(SensorActor.Command.class)
-                    .onMessage(SensorActor.Activate.class, message -> {
-                        doorSensor.tell(message);
-                        motionSensor.tell(message);
-                        return Behaviors.same();
-                    })
-                    .build();
+                .onMessage(SensorActor.Activate.class, message -> {
+                    doorSensor.tell(message);
+                    motionSensor.tell(message);
+                    return Behaviors.same();
+                })
+                .build();
         });
     }
 
