@@ -10,15 +10,15 @@ The current `speedup-results.csv` shows the best overall speedup for:
 
 - implementation: `threads`
 - balls: `2500`
-- workers: `12`
+- workers: `13`
 - steps: `600`
 - seed: `42`
 
 This row has the highest speedup in the available stabilized snapshot:
 
-- sequential median: `532.361700 ms`
-- threaded median: `336.011599 ms`
-- speedup: `1.584355`
+- sequential median: `893.343600 ms`
+- threaded median: `368.742700 ms`
+- speedup: `2.422675`
 
 That makes it the best single number to cite when we want to show the
 platform-thread engine at its strongest point on the current stabilized run.
@@ -29,7 +29,7 @@ The saved benchmark snapshot was generated on:
 
 - JVM: `Java HotSpot(TM) 64-Bit Server VM 21.0.11+10-LTS`
 - OS: `Windows 11 10.0 amd64`
-- available processors reported by the benchmark suite: `16`
+- available processors reported by the benchmark suite: `12`
 
 ## Files to reuse in the report
 

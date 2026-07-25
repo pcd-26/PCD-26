@@ -41,6 +41,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private final long maxStepMillis;
     private final PhysicsWorker[] workers;
+    private final ThreadLocal<ArrayList<Ball>> activeBallsBuffer = ThreadLocal.withInitial(ArrayList::new);
     private boolean closed;
 
     /**
@@ -166,7 +167,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long collisionStateReadStart = profile == null ? 0 : System.nanoTime();
-        var collisionBalls = board.getCollisionBalls();
+        var collisionBalls = activeBallsBuffer.get();
+        board.fillCollisionBalls(collisionBalls);
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - collisionStateReadStart;
         }
@@ -498,14 +500,8 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
      * @return the list of active balls
      */
     private List<Ball> activeBalls(Board board) {
-        var activeBalls = new ArrayList<Ball>();
-        if (board.getPlayerBallEntity() != null) {
-            activeBalls.add(board.getPlayerBallEntity());
-        }
-        if (board.getBotBallEntity() != null) {
-            activeBalls.add(board.getBotBallEntity());
-        }
-        activeBalls.addAll(board.getSmallBallEntities());
+        var activeBalls = activeBallsBuffer.get();
+        board.fillCollisionBalls(activeBalls);
         return activeBalls;
     }
 
@@ -529,10 +525,13 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
      * @return the computed cell size
      */
     private double computeOwnershipCellSize(List<Ball> balls) {
-        double maxRadius = balls.stream()
-                .mapToDouble(Ball::getRadius)
-                .max()
-                .orElse(PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
+        double maxRadius = Double.NEGATIVE_INFINITY;
+        for (var ball : balls) {
+            maxRadius = Math.max(maxRadius, ball.getRadius());
+        }
+        if (maxRadius == Double.NEGATIVE_INFINITY) {
+            maxRadius = PhysicsDefaults.MIN_SPATIAL_CELL_SIZE;
+        }
         return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
@@ -551,6 +550,14 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return;
         }
         int workerCount = Math.min(workers.length, itemCount);
+        if (workerCount == 1) {
+            long partitionStart = profile == null ? 0 : System.nanoTime();
+            if (profile != null) {
+                profile.partitionNanos += System.nanoTime() - partitionStart;
+            }
+            rangeTask.run(0, itemCount, 0);
+            return;
+        }
         var completion = new WorkerCompletionMonitor(workerCount);
         long partitionStart = profile == null ? 0 : System.nanoTime();
         int baseChunk = itemCount / workerCount;

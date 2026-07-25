@@ -48,7 +48,7 @@ import pcd.poool.model.common.math.V2d;
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
-    private static final int MIN_ITEMS_PER_PARALLEL_TASK = 64;
+    private static final int MIN_ITEMS_FOR_PARALLEL_RANGES = 256;
     private static final int MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY = 256;
     private static final int MIN_PAIRS_FOR_ACCUMULATED_SOLVER = 512;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
@@ -56,6 +56,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private final ExecutorService executor;
     private final long maxStepMillis;
     private final int poolSize;
+    private final ThreadLocal<ArrayList<Ball>> activeBallsBuffer = ThreadLocal.withInitial(ArrayList::new);
     private boolean closed;
 
     /**
@@ -188,7 +189,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long collisionReadStart = profile == null ? 0 : System.nanoTime();
-        var collisionBalls = board.getCollisionBalls();
+        var collisionBalls = activeBallsBuffer.get();
+        board.fillCollisionBalls(collisionBalls);
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - collisionReadStart;
             profile.collisionBalls += collisionBalls.size();
@@ -200,16 +202,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private List<Ball> activeBalls(Board board) {
-        var activeBalls = new ArrayList<Ball>();
-        var playerBall = board.getPlayerBallEntity();
-        if (playerBall != null) {
-            activeBalls.add(playerBall);
-        }
-        var botBall = board.getBotBallEntity();
-        if (botBall != null) {
-            activeBalls.add(botBall);
-        }
-        activeBalls.addAll(board.getSmallBallEntities());
+        var activeBalls = activeBallsBuffer.get();
+        board.fillCollisionBalls(activeBalls);
         return activeBalls;
     }
 
@@ -693,10 +687,13 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private double computeOwnershipCellSize(List<Ball> balls) {
-        double maxRadius = balls.stream()
-                .mapToDouble(Ball::getRadius)
-                .max()
-                .orElse(PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
+        double maxRadius = Double.NEGATIVE_INFINITY;
+        for (var ball : balls) {
+            maxRadius = Math.max(maxRadius, ball.getRadius());
+        }
+        if (maxRadius == Double.NEGATIVE_INFINITY) {
+            maxRadius = PhysicsDefaults.MIN_SPATIAL_CELL_SIZE;
+        }
         return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
@@ -754,10 +751,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private List<RangeChunk> buildRangeChunks(int itemCount) {
-        int taskCountByWorkSize = Math.max(1, itemCount / MIN_ITEMS_PER_PARALLEL_TASK);
-        int workerCount = Math.min(Math.min(poolSize, itemCount), taskCountByWorkSize);
-        // Cap task count so the scheduler does not pay more overhead than the
-        // work it is asked to parallelize.
+        int workerCount = itemCount < MIN_ITEMS_FOR_PARALLEL_RANGES ? 1 : Math.min(poolSize, itemCount);
         int baseChunk = itemCount / workerCount;
         int remainder = itemCount % workerCount;
         var chunks = new ArrayList<RangeChunk>(workerCount);
