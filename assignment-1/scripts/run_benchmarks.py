@@ -186,7 +186,7 @@ def resolve_java_command() -> str:
         if resolved is not None:
             return resolved
 
-    raise RuntimeError("Java executable not found. Install Java 17 and expose `java` in PATH.")
+    raise RuntimeError("Java executable not found. Install Java 17 or newer and expose `java` in PATH.")
 
 
 def run_command(command: list[str]) -> None:

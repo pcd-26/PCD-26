@@ -135,9 +135,10 @@ mode:
 python scripts/run_benchmarks.py --mode speedup
 ```
 
-That mode runs only the headless benchmark, uses the six canonical workload
-sizes, pins the worker count to `availableProcessors + 1`, and keeps the suite
-fast enough to run before and after a change.
+That mode runs only the headless benchmark, focuses on the larger workload
+sizes where the parallel engines are more likely to show stable speedup, keeps
+the standard warmup/measured window, and uses the current machine's resolved
+worker count without oversubscribing it.
 It also regenerates the `speedup-vs-balls` chart. Compare the resulting
 `aggregated-results.csv` and `speedup-results.csv` against the previous run or
 baseline commit to decide whether the change is an actual improvement.
