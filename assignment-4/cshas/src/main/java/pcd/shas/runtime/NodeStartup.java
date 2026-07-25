@@ -101,13 +101,9 @@ public final class NodeStartup {
         }
 
         return switch (role) {
-            case CONTROL_UNIT -> new NodeArguments(role, host, port, seedNodes, null, null, null);
-            case KEYPAD -> new NodeArguments(role, host, port, seedNodes, null, null, null);
+            case CONTROL_UNIT, KEYPAD -> new NodeArguments(role, host, port, seedNodes, null, null, null);
             case SENSOR -> new NodeArguments(
-                    role,
-                    host,
-                    port,
-                    seedNodes,
+                    role, host, port, seedNodes,
                     require(flags, "--sensor-id"),
                     parseSensorType(require(flags, "--sensor-type")),
                     parseZone(require(flags, "--zone"))

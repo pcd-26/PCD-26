@@ -82,7 +82,7 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
     /**
      * Returns the keypad command handlers.
      *
-     * @return the receive builder for keypad commands
+     * @return the Receive builder for keypad commands
      */
     @Override
     public Receive<Command> createReceive() {

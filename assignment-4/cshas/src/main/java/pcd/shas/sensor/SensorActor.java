@@ -91,7 +91,7 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
     /**
      * Returns the sensor command handlers.
      *
-     * @return the receive builder for sensor commands
+     * @return the Receive builder for sensor commands
      */
     @Override
     public Receive<Command> createReceive() {
