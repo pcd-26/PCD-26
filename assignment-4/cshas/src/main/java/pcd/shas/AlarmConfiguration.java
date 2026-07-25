@@ -31,9 +31,9 @@ public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration
 
         Config shasConfig = config.getConfig(ROOT_PATH);
         return new AlarmConfiguration(
-                shasConfig.getString("correctPin"),
-                shasConfig.getDuration("exitDelay"),
-                shasConfig.getDuration("entryDelay")
+            shasConfig.getString("correctPin"),
+            shasConfig.getDuration("exitDelay"),
+            shasConfig.getDuration("entryDelay")
         );
     }
 

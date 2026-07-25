@@ -71,11 +71,11 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         super(context);
         // Subscribe to control unit updates from receptionist
         ActorRef<Receptionist.Listing> listingAdapter = context.messageAdapter(
-                Receptionist.Listing.class,
-                listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
+            Receptionist.Listing.class,
+            listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
         );
         context.getSystem().receptionist().tell(
-                Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
+            Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
         );
     }
 
@@ -87,10 +87,10 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
-                .onMessage(PressKey.class, this::onPressKey)
-                .onMessage(SubmitPin.class, this::onSubmitPin)
-                .build();
+            .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
+            .onMessage(PressKey.class, this::onPressKey)
+            .onMessage(SubmitPin.class, this::onSubmitPin)
+            .build();
     }
 
     /**

@@ -7,5 +7,4 @@ package pcd.shas.common;
  * {@code application.conf} so remote actor messages remain explicitly
  * serializable.</p>
  */
-public interface MySerializable {
-}
+public interface MySerializable {}

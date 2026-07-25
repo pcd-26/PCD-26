@@ -23,11 +23,9 @@ public final class SirenActor {
      * Service key for receptionist discovery.
      */
     public static final ServiceKey<Command> SIREN_SERVICE_KEY =
-            ServiceKey.create(Command.class, "siren-service");
+        ServiceKey.create(Command.class, "siren-service");
 
-    private SirenActor() {
-        // Utility class.
-    }
+    private SirenActor() {} // Utility class
 
     /**
      * Root protocol for the siren.
@@ -84,16 +82,16 @@ public final class SirenActor {
      */
     private static Behavior<Command> silent(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
-                .onMessage(Activate.class, message -> {
-                    context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
-                    return active(context);
-                })
-                .onMessage(Deactivate.class, message -> Behaviors.same())
-                .onMessage(QueryState.class, message -> {
-                    message.replyTo().tell(new StateSnapshot(false));
-                    return Behaviors.same();
-                })
-                .build();
+            .onMessage(Activate.class, message -> {
+                context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
+                return active(context);
+            })
+            .onMessage(Deactivate.class, message -> Behaviors.same())
+            .onMessage(QueryState.class, message -> {
+                message.replyTo().tell(new StateSnapshot(false));
+                return Behaviors.same();
+            })
+            .build();
     }
 
     /**
@@ -104,15 +102,15 @@ public final class SirenActor {
      */
     private static Behavior<Command> active(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
-                .onMessage(Activate.class, message -> Behaviors.same())
-                .onMessage(Deactivate.class, message -> {
-                    context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
-                    return silent(context);
-                })
-                .onMessage(QueryState.class, message -> {
-                    message.replyTo().tell(new StateSnapshot(true));
-                    return Behaviors.same();
-                })
-                .build();
+            .onMessage(Activate.class, message -> Behaviors.same())
+            .onMessage(Deactivate.class, message -> {
+                context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
+                return silent(context);
+            })
+            .onMessage(QueryState.class, message -> {
+                message.replyTo().tell(new StateSnapshot(true));
+                return Behaviors.same();
+            })
+            .build();
     }
 }

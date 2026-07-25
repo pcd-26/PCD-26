@@ -26,9 +26,7 @@ public final class NodeStartup {
     public static final int DEFAULT_KEYPAD_PORT = 2552;
     public static final int DEFAULT_SENSOR_PORT = 2553;
 
-    private NodeStartup() {
-        // Utility class.
-    }
+    private NodeStartup() {}    // Utility class
 
     /**
      * Launch roles supported by the assignment.
@@ -51,13 +49,13 @@ public final class NodeStartup {
      * @param zone the sensor zone, if this is a sensor node
      */
     public record NodeArguments(
-            Role role,
-            String host,
-            int port,
-            List<String> seedNodes,
-            String sensorId,
-            SensorType sensorType,
-            Zone zone
+        Role role,
+        String host,
+        int port,
+        List<String> seedNodes,
+        String sensorId,
+        SensorType sensorType,
+        Zone zone
     ) {
         public NodeArguments {
             Objects.requireNonNull(role, "role");
@@ -103,10 +101,10 @@ public final class NodeStartup {
         return switch (role) {
             case CONTROL_UNIT, KEYPAD -> new NodeArguments(role, host, port, seedNodes, null, null, null);
             case SENSOR -> new NodeArguments(
-                    role, host, port, seedNodes,
-                    require(flags, "--sensor-id"),
-                    parseSensorType(require(flags, "--sensor-type")),
-                    parseZone(require(flags, "--zone"))
+                role, host, port, seedNodes,
+                require(flags, "--sensor-id"),
+                parseSensorType(require(flags, "--sensor-type")),
+                parseZone(require(flags, "--zone"))
             );
         };
     }
@@ -135,16 +133,16 @@ public final class NodeStartup {
         }
 
         List<String> resolvedSeedNodes = seedNodes.isEmpty()
-                ? List.of(host + ":" + port)
-                : List.copyOf(seedNodes);
+            ? List.of(host + ":" + port)
+            : List.copyOf(seedNodes);
         String seedNodeList = resolvedSeedNodes.stream()
-                .map(seedNode -> "\"" + toSeedNodeUri(systemName, seedNode) + "\"")
-                .collect(Collectors.joining(", "));
+            .map(seedNode -> "\"" + toSeedNodeUri(systemName, seedNode) + "\"")
+            .collect(Collectors.joining(", "));
         String configText = """
-                pekko.remote.artery.canonical.hostname = "%s"
-                pekko.remote.artery.canonical.port = %d
-                pekko.cluster.seed-nodes = [%s]
-                """.formatted(host, port, seedNodeList);
+            pekko.remote.artery.canonical.hostname = "%s"
+            pekko.remote.artery.canonical.port = %d
+            pekko.cluster.seed-nodes = [%s]
+            """.formatted(host, port, seedNodeList);
         return ConfigFactory.parseString(configText).withFallback(ConfigFactory.load());
     }
 
@@ -278,9 +276,9 @@ public final class NodeStartup {
             return List.of();
         }
         return Arrays.stream(rawSeedNodes.split(","))
-                .map(String::trim)
-                .filter(seed -> !seed.isEmpty())
-                .toList();
+            .map(String::trim)
+            .filter(seed -> !seed.isEmpty())
+            .toList();
     }
 
     /**

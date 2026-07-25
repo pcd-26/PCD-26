@@ -59,19 +59,19 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
      * @return the sensor behavior
      */
     public static Behavior<Command> create(
-            String sensorId,
-            SensorType sensorType,
-            Zone zone
+        String sensorId,
+        SensorType sensorType,
+        Zone zone
     ) {
         validate(sensorId, sensorType, zone);
         return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, zone));
     }
 
     private SensorActor(
-            ActorContext<Command> context,
-            String sensorId,
-            SensorType sensorType,
-            Zone zone
+        ActorContext<Command> context,
+        String sensorId,
+        SensorType sensorType,
+        Zone zone
     ) {
         super(context);
         this.sensorId = sensorId;
@@ -80,11 +80,11 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
         // Subscribe to control unit updates from receptionist
         ActorRef<Receptionist.Listing> listingAdapter = context.messageAdapter(
-                Receptionist.Listing.class,
-                listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
+            Receptionist.Listing.class,
+            listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
         );
         context.getSystem().receptionist().tell(
-                Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
+            Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
         );
     }
 
@@ -96,9 +96,9 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
-                .onMessage(Activate.class, this::onActivate)
-                .build();
+            .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
+            .onMessage(Activate.class, this::onActivate)
+            .build();
     }
 
     /**
@@ -123,10 +123,10 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
      */
     private Behavior<Command> onActivate(Activate command) {
         getContext().getLog().info(
-                "Sensor activated: id={}, type={}, zone={}",
-                sensorId,
-                sensorType,
-                zone
+            "Sensor activated: id={}, type={}, zone={}",
+            sensorId,
+            sensorType,
+            zone
         );
 
         if (controlUnits.isEmpty()) {
