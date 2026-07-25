@@ -164,9 +164,9 @@ These runs are the primary source for comparing `sequential`, `threads`, and
 
 The scalability benchmark family also emits a sequential baseline alongside
 the threaded and executor rows so the report can compute worker-count speedup
-directly from the exported tables. The speedup benchmark mode now includes
-that scalability data too, so the fast gate still covers the sequential
-speedup charts while keeping the chart set compact.
+directly from the exported tables. The speedup benchmark mode now uses the
+larger workload subset and the standard warmup/measured window, so the gate is
+still compact but the reported median speedup is less sensitive to noise.
 
 In the `speedup` profile, the worker-count charts still show both `threads`
 and `executor` against the sequential baseline; what stays out is the
