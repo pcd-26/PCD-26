@@ -101,6 +101,12 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
                 .build();
     }
 
+    /**
+     * Handles dynamic updates from the receptionist containing active control unit references.
+     *
+     * @param command update containing the set of discovered control unit actors
+     * @return updated behavior
+     */
     private Behavior<Command> onControlUnitsUpdated(ControlUnitsUpdated command) {
         getContext().getLog().info("Sensor {} discovered control units: {}", sensorId, command.controlUnits());
         this.controlUnits.clear();
@@ -108,6 +114,13 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         return this;
     }
 
+    /**
+     * Handles sensor activation events, broadcasting a {@link ControlUnitActor.SensorActivated}
+     * message containing metadata to all discovered control units.
+     *
+     * @param command activation command
+     * @return updated behavior
+     */
     private Behavior<Command> onActivate(Activate command) {
         getContext().getLog().info(
                 "Sensor activated: id={}, type={}, zone={}",
@@ -128,6 +141,13 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         return this;
     }
 
+    /**
+     * Validates sensor construction parameters.
+     *
+     * @param sensorId unique sensor ID
+     * @param sensorType sensor type
+     * @param zone installation zone
+     */
     private static void validate(String sensorId, SensorType sensorType, Zone zone) {
         Objects.requireNonNull(sensorId, "sensorId");
         Objects.requireNonNull(sensorType, "sensorType");

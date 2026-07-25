@@ -140,6 +140,15 @@ public final class ControlUnitActor {
         }
     }
 
+    /**
+     * Internal state object encapsulating current alarm state, active arming zones,
+     * discovered sirens, and timer generation counter.
+     *
+     * @param state the current logical alarm state
+     * @param armedZones active zones that trigger entry delay/alarm when activated
+     * @param sirens set of discovered siren actor references in the Pekko cluster
+     * @param generation monotonically increasing counter used to invalidate stale delay timers
+     */
     private record ControlState(
             AlarmState state,
             Set<Zone> armedZones,
@@ -213,6 +222,13 @@ public final class ControlUnitActor {
         });
     }
 
+    /**
+     * Behavior handling the {@link AlarmState#RECOVERY} state.
+     *
+     * <p>In RECOVERY (e.g. after startup or restart), arming commands and sensor
+     * activations are ignored. The control unit transitions to {@link AlarmState#DISARMED}
+     * only when the correct PIN is submitted.</p>
+     */
     private static Behavior<Command> recovery(
             ActorContext<Command> context,
             TimerScheduler<Command> timers,
@@ -268,6 +284,13 @@ public final class ControlUnitActor {
                 .build();
     }
 
+    /**
+     * Behavior handling the {@link AlarmState#DISARMED} state.
+     *
+     * <p>In DISARMED state, sensor activations are ignored. Submitting the correct PIN
+     * triggers the exit-delay timer and moves to {@link AlarmState#EXIT_DELAY}.
+     * {@link ArmAll} or {@link ArmPartial} configure active zones for the next arming cycle.</p>
+     */
     private static Behavior<Command> disarmed(
             ActorContext<Command> context,
             TimerScheduler<Command> timers,
@@ -324,6 +347,13 @@ public final class ControlUnitActor {
                 .build();
     }
 
+    /**
+     * Behavior handling the {@link AlarmState#EXIT_DELAY} state.
+     *
+     * <p>A timer is running allowing occupants to exit. When the timer expires, the system
+     * moves to {@link AlarmState#ARMED}. If the correct PIN is entered before expiry, the timer
+     * is cancelled and the system returns to {@link AlarmState#DISARMED}.</p>
+     */
     private static Behavior<Command> exitDelay(
             ActorContext<Command> context,
             TimerScheduler<Command> timers,
@@ -386,6 +416,13 @@ public final class ControlUnitActor {
                 .build();
     }
 
+    /**
+     * Behavior handling the {@link AlarmState#ARMED} state.
+     *
+     * <p>In ARMED state, activations from sensors belonging to active zones transition
+     * the system to {@link AlarmState#ENTRY_DELAY} and start the entry delay timer.
+     * Submitting the correct PIN disarms the system.</p>
+     */
     private static Behavior<Command> armed(
             ActorContext<Command> context,
             TimerScheduler<Command> timers,
@@ -452,6 +489,14 @@ public final class ControlUnitActor {
                 .build();
     }
 
+    /**
+     * Behavior handling the {@link AlarmState#ENTRY_DELAY} state.
+     *
+     * <p>An entry-delay timer is active giving occupants time to disarm the system.
+     * If the correct PIN is submitted, the timer is cancelled and the system returns to
+     * {@link AlarmState#DISARMED}. If the timer expires, sirens are activated and the system
+     * enters {@link AlarmState#ALARM}.</p>
+     */
     private static Behavior<Command> entryDelay(
             ActorContext<Command> context,
             TimerScheduler<Command> timers,
@@ -515,6 +560,12 @@ public final class ControlUnitActor {
                 .build();
     }
 
+    /**
+     * Behavior handling the {@link AlarmState#ALARM} state.
+     *
+     * <p>Sirens are sounding. Only submitting the correct PIN stops the sirens
+     * and transitions the system back to {@link AlarmState#DISARMED}.</p>
+     */
     private static Behavior<Command> alarm(
             ActorContext<Command> context,
             TimerScheduler<Command> timers,
@@ -562,18 +613,38 @@ public final class ControlUnitActor {
                 .build();
     }
 
+    /**
+     * Helper returning {@link Behaviors#same()} for stale or unhandled timer messages.
+     *
+     * @return unchanged behavior
+     */
     private static Behavior<Command> ignoreStaleTimeout() {
         return Behaviors.same();
     }
 
+    /**
+     * Sends deactivation commands to all currently discovered siren actors.
+     *
+     * @param sirens set of siren actor references
+     */
     private static void deactivateAll(Set<ActorRef<SirenActor.Command>> sirens) {
         sirens.forEach(siren -> siren.tell(new SirenActor.Deactivate()));
     }
 
+    /**
+     * Sends activation commands to all currently discovered siren actors.
+     *
+     * @param sirens set of siren actor references
+     */
     private static void activateAll(Set<ActorRef<SirenActor.Command>> sirens) {
         sirens.forEach(siren -> siren.tell(new SirenActor.Activate()));
     }
 
+    /**
+     * Validates that the configured PIN is non-null and non-blank.
+     *
+     * @param configuredPin the PIN to validate
+     */
     private static void validateConfiguredPin(String configuredPin) {
         Objects.requireNonNull(configuredPin, "configuredPin");
         if (configuredPin.isBlank()) {

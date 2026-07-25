@@ -66,6 +66,10 @@ public final class Main {
         }
     }
 
+    /**
+     * Executes the local demo mode, spinning up ControlUnit, Keypad, and Sensor
+     * nodes in the same JVM to demonstrate state transitions and cluster recovery.
+     */
     private static void runLocalDemo() {
         LOGGER.info("Starting local three-node SHAS demo...");
 
@@ -161,6 +165,11 @@ public final class Main {
         }
     }
 
+    /**
+     * Launches a single node process according to parsed command-line arguments.
+     *
+     * @param launchArguments the parsed node role and network parameters
+     */
     private static void runNode(NodeArguments launchArguments) {
         Config nodeConfig = NodeStartup.buildClusterConfig(
                 SYSTEM_NAME,
@@ -177,6 +186,12 @@ public final class Main {
         }
     }
 
+    /**
+     * Initializes and runs the Control Unit node and its local Siren actor.
+     *
+     * @param config application configuration for Pekko Cluster Artery binding
+     * @param alarmConfiguration loaded alarm timeouts and PIN configuration
+     */
     private static void runControlUnitNode(Config config, AlarmConfiguration alarmConfiguration) {
         ActorSystem<ControlUnitActor.Command> system = ActorSystem.create(
                 createControlUnitNodeBehavior(alarmConfiguration),
@@ -188,6 +203,11 @@ public final class Main {
         system.terminate();
     }
 
+    /**
+     * Initializes and runs a standalone Keypad node with console input parsing.
+     *
+     * @param config application configuration for Pekko Cluster Artery binding
+     */
     private static void runKeypadNode(Config config) {
         ActorSystem<KeypadActor.Command> system = ActorSystem.create(
                 KeypadActor.create(),
@@ -199,6 +219,12 @@ public final class Main {
         startKeypadConsoleInputReader(system);
     }
 
+    /**
+     * Initializes and runs a standalone Sensor node.
+     *
+     * @param config application configuration for Pekko Cluster Artery binding
+     * @param launchArguments metadata specifying sensor ID, type, and zone
+     */
     private static void runSensorNode(Config config, NodeArguments launchArguments) {
         ActorSystem<SensorActor.Command> system = ActorSystem.create(
                 SensorActor.create(
@@ -221,6 +247,12 @@ public final class Main {
         startSensorConsoleInputReader(system);
     }
 
+    /**
+     * Asynchronously queries the control unit's current logical alarm state.
+     *
+     * @param system the ControlUnit ActorSystem instance
+     * @return current {@link AlarmState}, or {@code null} if query fails
+     */
     private static AlarmState queryControlUnitState(ActorSystem<ControlUnitActor.Command> system) {
         try {
             CompletionStage<ControlUnitActor.StateSnapshot> stage = AskPattern.ask(
@@ -236,6 +268,12 @@ public final class Main {
         }
     }
 
+    /**
+     * Creates the root behavior for a Control Unit node, spawning the Siren actor and ControlUnit actor.
+     *
+     * @param alarmConfiguration configured PIN and timing settings
+     * @return typed behavior forwarding commands to the ControlUnit actor
+     */
     private static Behavior<ControlUnitActor.Command> createControlUnitNodeBehavior(AlarmConfiguration alarmConfiguration) {
         return Behaviors.setup(context -> {
             context.spawn(SirenActor.create(), "siren");
@@ -256,6 +294,11 @@ public final class Main {
         });
     }
 
+    /**
+     * Creates a demo behavior managing multiple simulated sensors (door and motion).
+     *
+     * @return typed behavior routing activation messages to child sensors
+     */
     private static Behavior<SensorActor.Command> createSensorsNodeBehavior() {
         return Behaviors.setup(context -> {
             ActorRef<SensorActor.Command> doorSensor = context.spawn(
@@ -277,6 +320,9 @@ public final class Main {
         });
     }
 
+    /**
+     * Blocks the main thread until the user presses Enter in standard input.
+     */
     private static void waitEnter() {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
             reader.readLine();
@@ -285,6 +331,11 @@ public final class Main {
         }
     }
 
+    /**
+     * Starts a daemon thread reading keypad entries from console input.
+     *
+     * @param system target Keypad ActorSystem
+     */
     private static void startKeypadConsoleInputReader(ActorSystem<KeypadActor.Command> system) {
         new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
@@ -306,6 +357,11 @@ public final class Main {
         }).start();
     }
 
+    /**
+     * Starts a daemon thread reading sensor activation triggers from console input.
+     *
+     * @param system target Sensor ActorSystem
+     */
     private static void startSensorConsoleInputReader(ActorSystem<SensorActor.Command> system) {
         new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
