@@ -19,7 +19,7 @@ import pcd.poool.model.physics.common.Board;
 public final class HeadlessBenchmarkRunner {
 
     private static final List<Integer> DEFAULT_BALLS = List.of(100, 500, 1_000, 1_500, 2_000, 2_500);
-    private static final List<Integer> SPEEDUP_GATE_BALLS = DEFAULT_BALLS;
+    private static final List<Integer> SPEEDUP_GATE_BALLS = List.of(1_000, 1_500, 2_000, 2_500);
     private static final List<BenchmarkConfig.ImplementationType> DEFAULT_IMPLEMENTATIONS =
             List.of(BenchmarkConfig.ImplementationType.SEQUENTIAL,
                     BenchmarkConfig.ImplementationType.THREADS,
@@ -30,8 +30,8 @@ public final class HeadlessBenchmarkRunner {
     private static final long SPEEDUP_GATE_SEED = DEFAULT_SEED;
     private static final int DEFAULT_WARMUP_RUNS = 2;
     private static final int DEFAULT_MEASURED_RUNS = 5;
-    private static final int SPEEDUP_GATE_WARMUP_RUNS = 1;
-    private static final int SPEEDUP_GATE_MEASURED_RUNS = 3;
+    private static final int SPEEDUP_GATE_WARMUP_RUNS = DEFAULT_WARMUP_RUNS;
+    private static final int SPEEDUP_GATE_MEASURED_RUNS = DEFAULT_MEASURED_RUNS;
     private static final Path DEFAULT_OUTPUT_FILE = defaultAssignmentPath("benchmarks", "results", "raw-results.csv");
     private static Integer cachedWorkerCount;
     private static volatile long blackhole;
@@ -155,10 +155,11 @@ public final class HeadlessBenchmarkRunner {
      * Creates the compact benchmark request used as the performance gate.
      *
      * <p>The compact matrix is intentionally small so it can be executed often
-     * while still covering the six canonical workload sizes used to compare
-     * engine speedup before and after a change. It fixes the worker count to
-     * the largest configured value so the comparison stays comparable across
-     * ball sizes.
+     * while still covering the larger workload sizes used to compare engine
+     * speedup before and after a change. It keeps the same resolved default
+     * worker count as the main headless runner so the comparison stays
+     * comparable across ball sizes and across repeated runs on the same
+     * machine.
      *
      * @return compact speedup-gate request
      */
@@ -168,7 +169,7 @@ public final class HeadlessBenchmarkRunner {
                 SPEEDUP_GATE_BALLS,
                 SPEEDUP_GATE_STEPS,
                 SPEEDUP_GATE_SEED,
-                workerCount() + 1,
+                workerCount(),
                 SPEEDUP_GATE_WARMUP_RUNS,
                 SPEEDUP_GATE_MEASURED_RUNS,
                 DEFAULT_OUTPUT_FILE);
