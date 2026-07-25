@@ -259,8 +259,8 @@ public final class ControlUnitActor {
                     context.getLog().info("Ignoring ArmPartial command while in RECOVERY");
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
-                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout())
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout())
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.RECOVERY));
                     return Behaviors.same();
@@ -315,8 +315,8 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
-                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout())
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout())
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.DISARMED));
                     return Behaviors.same();
@@ -378,7 +378,7 @@ public final class ControlUnitActor {
                             state.withState(AlarmState.ARMED, state.armedZones(), state.generation())
                     );
                 })
-                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout())
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.EXIT_DELAY));
                     return Behaviors.same();
@@ -443,8 +443,8 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
-                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout())
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout())
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.ARMED));
                     return Behaviors.same();
@@ -507,7 +507,7 @@ public final class ControlUnitActor {
                             state.withState(AlarmState.ALARM, state.armedZones(), state.generation())
                     );
                 })
-                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout())
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.ENTRY_DELAY));
                     return Behaviors.same();
@@ -553,8 +553,8 @@ public final class ControlUnitActor {
                     );
                     return Behaviors.same();
                 })
-                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
-                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout(message.generation(), state.generation()))
+                .onMessage(ExitDelayTimeout.class, message -> ignoreStaleTimeout())
+                .onMessage(EntryDelayTimeout.class, message -> ignoreStaleTimeout())
                 .onMessage(QueryState.class, message -> {
                     message.replyTo().tell(new StateSnapshot(AlarmState.ALARM));
                     return Behaviors.same();
@@ -562,8 +562,8 @@ public final class ControlUnitActor {
                 .build();
     }
 
-    private static Behavior<Command> ignoreStaleTimeout(long timeoutGeneration, long currentGeneration) {
-        return timeoutGeneration == currentGeneration ? Behaviors.same() : Behaviors.same();
+    private static Behavior<Command> ignoreStaleTimeout() {
+        return Behaviors.same();
     }
 
     private static void deactivateAll(Set<ActorRef<SirenActor.Command>> sirens) {
