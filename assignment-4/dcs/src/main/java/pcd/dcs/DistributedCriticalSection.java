@@ -37,7 +37,7 @@ import java.util.concurrent.TimeoutException;
  * The token is consumed with manual acknowledgment ({@code autoAck = false}). While a process holds
  * the critical section, its consumer stays registered so a passive bootstrap check can distinguish an
  * initialized system from a non-initialized one. If the process crashes or its connection to RabbitMQ
- * is closed, RabbitMQ automatically requeues the unacknowledged token message.
+ * is closed, RabbitMQ automatically re-queues the unacknowledged token message.
  * </p>
  */
 public class DistributedCriticalSection implements AutoCloseable {
@@ -59,7 +59,7 @@ public class DistributedCriticalSection implements AutoCloseable {
     }
 
     private final Connection connection;
-    private final Channel channel;
+    private Channel channel;
     private final String csName;
     private final String queueName;
     private final String bootstrapLockQueue;
@@ -149,7 +149,7 @@ public class DistributedCriticalSection implements AutoCloseable {
      */
     private void initializeToken() throws IOException, InterruptedException {
         synchronized (connection) {
-            channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
+            declareTokenQueueWithRecovery();
 
             withBootstrapLock(lockChannel -> {
                 AMQP.Queue.DeclareOk state = lockChannel.queueDeclarePassive(queueName);
@@ -176,13 +176,115 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
     }
 
-    private Map<String, Object> tokenQueueArguments() {
-        Map<String, Object> args = new HashMap<>();
-        args.put("x-max-length", 1);
-        args.put("x-overflow", "reject-publish");
-        return args;
+    /**
+     * Declares the token queue on the RabbitMQ broker.
+     * <p>
+     * If the queue already exists on the broker with inequivalent arguments (e.g., from an older
+     * version of the middleware or an external producer), RabbitMQ closes the channel with a
+     * {@code 406 PRECONDITION_FAILED} error. This method catches that condition and initiates
+     * automatic queue recreation.
+     * </p>
+     *
+     * @throws IOException if queue declaration fails for reasons other than argument mismatch
+     */
+    private void declareTokenQueueWithRecovery() throws IOException {
+        try {
+            channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
+        } catch (IOException e) {
+            if (isPreconditionFailed(e)) {
+                logger.warn("Queue '{}' on broker has inequivalent arguments. Re-creating queue...", queueName);
+                recreateTokenQueue();
+            } else {
+                throw e;
+            }
+        }
     }
 
+    /**
+     * Re-creates the token queue after an argument mismatch error.
+     * <p>
+     * Opens a temporary repair channel to delete the stale queue, re-opens the main AMQP channel,
+     * and re-declares the queue with the expected middleware arguments.
+     * </p>
+     *
+     * @throws IOException if channel re-opening or queue declaration fails
+     */
+    private void recreateTokenQueue() throws IOException {
+        try (Channel repairChannel = connection.createChannel()) {
+            repairChannel.queueDelete(queueName);
+        } catch (TimeoutException e) {
+            throw new IOException("Failed to close repair channel during queue recreation", e);
+        }
+        reopenChannel();
+        channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
+    }
+
+    /**
+     * Re-opens the main AMQP channel associated with this instance and resets QoS settings.
+     * <p>
+     * This is required because AMQP 0-9-1 channel errors (such as 406 PRECONDITION_FAILED)
+     * cause the broker to close the active channel.
+     * </p>
+     *
+     * @throws IOException if opening a new channel fails
+     */
+    private void reopenChannel() throws IOException {
+        if (channel != null && channel.isOpen()) {
+            try {
+                channel.close();
+            } catch (IOException | TimeoutException ignored) { }
+        }
+        channel = connection.createChannel();
+        channel.basicQos(1);
+    }
+
+    /**
+     * Returns the queue arguments used when declaring the token queue.
+     *
+     * @return {@code null} to request standard durable queue configuration without extra x-arguments
+     */
+    private Map<String, Object> tokenQueueArguments() {
+        return null;
+    }
+
+    /**
+     * Inspects an exception hierarchy to determine whether it was caused by a RabbitMQ
+     * {@code 406 PRECONDITION_FAILED} channel shutdown.
+     *
+     * @param e the root IOException caught during channel operations
+     * @return {@code true} if the exception chain contains a 406 PRECONDITION_FAILED error
+     */
+    private static boolean isPreconditionFailed(IOException e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof com.rabbitmq.client.ShutdownSignalException sse) {
+                if (sse.getReason() instanceof AMQP.Channel.Close close) {
+                    if (close.getReplyCode() == 406) {
+                        return true;
+                    }
+                }
+                if (sse.getMessage() != null && (sse.getMessage().contains("PRECONDITION_FAILED") || sse.getMessage().contains("inequivalent arg"))) {
+                    return true;
+                }
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    /**
+     * Executes an action while holding a temporary broker-side bootstrap lock.
+     * <p>
+     * The lock is materialized as an exclusive, auto-deleted queue {@code cs_bootstrap_lock_<csName>}.
+     * Concurrent instances attempt to declare this queue. Exactly one instance succeeds at a time;
+     * others receive an {@link IOException} and retry with exponential/polling delay until the deadline
+     * is reached. The lock queue is deleted in a {@code finally} block upon completion.
+     * </p>
+     *
+     * @param action the callback to execute while holding the broker lock
+     * @throws IOException          if lock acquisition or action execution fails
+     * @throws InterruptedException if thread sleep during lock polling is interrupted
+     */
     private void withBootstrapLock(BootstrapAction action) throws IOException, InterruptedException {
         synchronized (connection) {
             long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(BOOTSTRAP_LOCK_TIMEOUT_MILLIS);
@@ -300,12 +402,18 @@ public class DistributedCriticalSection implements AutoCloseable {
         logger.debug("Successfully exited critical section '{}'", csName);
     }
 
+    /**
+     * Cancels the active RabbitMQ consumer quietly without propagating channel errors.
+     * <p>
+     * Resets {@code consumerTag} to {@code null} regardless of whether cancellation succeeds.
+     * </p>
+     */
     private void cancelConsumerQuietly() {
         if (consumerTag == null) {
             return;
         }
         try {
-            if (channel.isOpen()) {
+            if (channel != null && channel.isOpen()) {
                 channel.basicCancel(consumerTag);
             }
         } catch (IOException e) {
@@ -342,8 +450,18 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
     }
 
+    /**
+     * Functional callback interface executed while holding the temporary bootstrap broker lock.
+     */
     @FunctionalInterface
     private interface BootstrapAction {
+        /**
+         * Executes an operation using the channel that holds the bootstrap lock.
+         *
+         * @param lockChannel the AMQP channel holding the exclusive lock queue
+         * @throws IOException          if an AMQP operation fails
+         * @throws InterruptedException if thread execution is interrupted
+         */
         void run(Channel lockChannel) throws IOException, InterruptedException;
     }
 }

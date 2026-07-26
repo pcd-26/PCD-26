@@ -278,6 +278,29 @@ class DistributedCriticalSectionTest {
         }
     }
 
+    @Test
+    @DisplayName("Pre-existing queue with inequivalent arguments is recovered")
+    void preExistingQueueWithInequivalentArgumentsIsRecovered() throws Exception {
+        String csName = uniqueName("inequivalent-args");
+        String queueName = tokenQueueName(csName);
+
+        // Pre-create the queue with conflicting arguments (e.g. x-max-length = 999)
+        try (Channel ch = connection.createChannel()) {
+            java.util.Map<String, Object> args = new java.util.HashMap<>();
+            args.put("x-max-length", 999);
+            ch.queueDeclare(queueName, true, false, false, args);
+        }
+
+        // Construction should detect PRECONDITION_FAILED, recreate the queue, and succeed.
+        try (DistributedCriticalSection dcs = new DistributedCriticalSection(HOST, PORT, csName)) {
+            dcs.enter();
+            dcs.exit();
+        }
+
+        QueueStatus status = readQueueStatus(queueName);
+        assertEquals(1, status.messageCount(), "Queue should have exactly one token after recovery and release");
+    }
+
     private String uniqueName(String prefix) {
         return prefix + "-" + UUID.randomUUID();
     }
