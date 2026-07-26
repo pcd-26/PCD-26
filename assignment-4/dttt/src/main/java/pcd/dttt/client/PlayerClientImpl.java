@@ -1,5 +1,6 @@
 package pcd.dttt.client;
 
+import java.io.Serial;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import pcd.dttt.common.BoardState;
@@ -10,6 +11,7 @@ import pcd.dttt.common.PlayerClient;
  * Receives remote calls from the server and forwards them to a local listener.
  */
 public class PlayerClientImpl extends UnicastRemoteObject implements PlayerClient {
+    @Serial
     private static final long serialVersionUID = 1L;
     
     private final GameEventListener listener;
