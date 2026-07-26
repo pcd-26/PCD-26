@@ -12,6 +12,9 @@ import pcd.dttt.common.Lobby;
 public class ServerMain {
     private static final Logger LOGGER = Logger.getLogger(ServerMain.class.getName());
 
+    /** Private constructor to prevent instantiation of utility class. */
+    private ServerMain() {}
+
     /** The default RMI registry host. */
     private static final String DEFAULT_REGISTRY_HOST = "localhost";
 

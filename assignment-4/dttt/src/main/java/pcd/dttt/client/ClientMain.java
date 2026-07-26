@@ -15,6 +15,9 @@ public class ClientMain {
 
     private static final Logger LOGGER = Logger.getLogger(ClientMain.class.getName());
 
+    /** Private constructor to prevent instantiation of utility class. */
+    private ClientMain() {}
+
     /**
      * Entry point for the Client application.
      * Parses arguments to determine connection target and whether CLI mode is forced.

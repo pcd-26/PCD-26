@@ -44,6 +44,9 @@ public interface Lobby extends Remote {
 
     /**
      * Gets a list of names of games that are waiting for an opponent.
+     *
+     * @return a List of room names currently in WAITING status
+     * @throws RemoteException if an RMI communication error occurs
      */
     List<String> getWaitingGames() throws RemoteException;
 }
