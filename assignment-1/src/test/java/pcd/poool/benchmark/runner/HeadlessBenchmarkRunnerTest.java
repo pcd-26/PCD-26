@@ -34,15 +34,17 @@ class HeadlessBenchmarkRunnerTest {
     }
 
     @Test
-    void speedupGateDefaultsUseOneMoreThanTheDefaultWorkerCount() {
+    void speedupGateDefaultsUseTheDefaultWorkerCountAndSamplingWindow() {
         var request = HeadlessBenchmarkRunner.speedupGateDefaults();
 
-        assertEquals(HeadlessBenchmarkRunner.defaults().workers() + 1, request.workers());
+        assertEquals(HeadlessBenchmarkRunner.defaults().workers(), request.workers());
         assertEquals(List.of(
                 BenchmarkConfig.ImplementationType.SEQUENTIAL,
                 BenchmarkConfig.ImplementationType.THREADS,
                 BenchmarkConfig.ImplementationType.EXECUTOR), request.implementations());
-        assertEquals(List.of(100, 500, 1_000, 1_500, 2_000, 2_500), request.balls());
+        assertEquals(List.of(1_000, 1_500, 2_000, 2_500), request.balls());
+        assertEquals(BenchmarkConfig.DEFAULT_WARMUP_RUNS, request.warmupRuns());
+        assertEquals(BenchmarkConfig.DEFAULT_MEASURED_RUNS, request.measuredRuns());
     }
 
     @Test
