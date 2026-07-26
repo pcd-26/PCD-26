@@ -11,6 +11,8 @@ import pcd.dttt.server.ServerMain;
  * Routes execution to RegistryMain, ServerMain, or ClientMain.
  */
 public class Main {
+    /** Private constructor to prevent instantiation of utility class. */
+    private Main() {}
     /**
      * Unified entry point. Delegates execution depending on the first argument.
      *
