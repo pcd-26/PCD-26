@@ -43,7 +43,7 @@ To systematically validate correctness, correctness consistency, and error resil
 
 ## 2. Test Execution & Outputs Consistency
 
-All tests compile and pass under Maven. Here is the execution summary:
+The standard validation flow starts from a clean build before execution (`clean compile`), so stale classes do not affect the result. Under that workflow, all tests compile and pass under Maven. Here is the execution summary:
 
 - **Total Tests Run**: 19 (including happy-path unit tests and the robustness/correctness suite)
 - **Status**: 19 Passed, 0 Failed, 0 Skipped

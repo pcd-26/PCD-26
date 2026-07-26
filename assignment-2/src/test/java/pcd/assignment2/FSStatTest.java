@@ -3,6 +3,7 @@ package pcd.assignment2;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pcd.assignment2.common.FSReport;
+import pcd.assignment2.common.FSReportJob;
 import pcd.assignment2.common.FSReportListener;
 import pcd.assignment2.common.SizeUnit;
 import pcd.assignment2.eventloop.EventLoopFSStat;
@@ -15,6 +16,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -76,6 +78,17 @@ public class FSStatTest {
         try (FileWriter fw = new FileWriter(file)) {
             for (int i = 0; i < size; i++) {
                 fw.write('A');
+            }
+        }
+    }
+
+    private void createLargeDirectoryTree(Path root, int subdirectories, int filesPerDirectory) throws IOException {
+        for (int dirIndex = 0; dirIndex < subdirectories; dirIndex++) {
+            Path subdir = root.resolve("subdir_" + dirIndex);
+            assertTrue(subdir.toFile().mkdir());
+            for (int fileIndex = 0; fileIndex < filesPerDirectory; fileIndex++) {
+                File file = subdir.resolve("file_" + fileIndex + ".txt").toFile();
+                writeDummyContent(file, 16);
             }
         }
     }
@@ -200,5 +213,41 @@ public class FSStatTest {
         assertEquals(0, bands[2]);
         assertEquals(1, bands[3]);
         assertEquals(1, bands[4]);
+    }
+
+    @Test
+    public void testEventLoopCancellationStopsRunningScan(@TempDir Path tempDir) throws Exception {
+        createLargeDirectoryTree(tempDir, 120, 80);
+
+        CountDownLatch terminalLatch = new CountDownLatch(1);
+        AtomicBoolean completed = new AtomicBoolean(false);
+        AtomicBoolean errored = new AtomicBoolean(false);
+
+        FSReportJob job = EventLoopFSStat.getFSReport(tempDir.toString(), 100, 4, new FSReportListener() {
+            @Override
+            public void onUpdate(FSReport report) {
+                // ignore
+            }
+
+            @Override
+            public void onCompleted(FSReport report) {
+                completed.set(true);
+                terminalLatch.countDown();
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                errored.set(true);
+                terminalLatch.countDown();
+            }
+        });
+
+        Thread.sleep(150);
+        job.cancel();
+
+        assertTrue(job.isCancelled());
+        assertFalse(terminalLatch.await(500, TimeUnit.MILLISECONDS), "The scan should not complete right after cancellation.");
+        assertFalse(completed.get());
+        assertFalse(errored.get());
     }
 }

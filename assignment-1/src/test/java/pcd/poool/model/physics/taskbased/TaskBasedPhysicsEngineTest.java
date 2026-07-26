@@ -330,7 +330,22 @@ class TaskBasedPhysicsEngineTest {
             var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
 
             assertTrue(profile.collisionResolutionMillis() >= 0.0);
+            assertEquals(0L, profile.submittedTasks());
             assertFalse(profile.applyWorkerItems().stream().anyMatch(itemCount -> itemCount > 0));
+        }
+    }
+
+    @Test
+    @Timeout(5)
+    void profileStepSubmitsExecutorTasksForLargeRanges() {
+        try (var engine = new TaskBasedPhysicsEngine(4)) {
+            var board = new Board(engine);
+            board.init(new ThousandBallsBoardConf());
+
+            var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
+
+            assertTrue(profile.submittedTasks() > 0L);
+            assertTrue(profile.integrationWorkerItems().stream().filter(itemCount -> itemCount > 0).count() > 1L);
         }
     }
 
