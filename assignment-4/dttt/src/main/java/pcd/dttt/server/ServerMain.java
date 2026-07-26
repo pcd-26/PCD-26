@@ -1,12 +1,17 @@
 package pcd.dttt.server;
 
+import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import pcd.dttt.common.Lobby;
 
 /**
  * Main entry point for starting the Tic-Tac-Toe RMI Server.
  */
 public class ServerMain {
+    private static final Logger LOGGER = Logger.getLogger(ServerMain.class.getName());
+
     /** The default RMI registry host. */
     private static final String DEFAULT_REGISTRY_HOST = "localhost";
 
@@ -34,7 +39,7 @@ public class ServerMain {
                     try {
                         registryPort = Integer.parseInt(arg);
                     } catch (NumberFormatException e) {
-                        System.err.println("Invalid registry port '" + arg + "', using default " + DEFAULT_PORT + ".");
+                        LOGGER.warning("Invalid registry port '" + arg + "', using default " + DEFAULT_PORT + ".");
                     }
                 } else if (positionalIndex == 2) {
                     serviceName = arg;
@@ -45,7 +50,7 @@ public class ServerMain {
 
         LobbyImpl lobby = null;
         try {
-            Registry registry = java.rmi.registry.LocateRegistry.getRegistry(registryHost, registryPort);
+            Registry registry = LocateRegistry.getRegistry(registryHost, registryPort);
 
             System.out.println("Creating Lobby instance...");
             lobby = new LobbyImpl();
@@ -53,16 +58,16 @@ public class ServerMain {
             System.out.println("Binding Lobby to registry as '" + serviceName + "'...");
             registry.rebind(serviceName, lobby);
 
-            LobbyImpl finalLobby = lobby;
-            Registry finalRegistry = registry;
-            String finalServiceName = serviceName;
+            final Registry targetRegistry = registry;
+            final String boundServiceName = serviceName;
+            LobbyImpl activeLobby = lobby;
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 try {
-                    finalRegistry.unbind(finalServiceName);
+                    targetRegistry.unbind(boundServiceName);
                 } catch (Exception e) {
                     // Ignore registry cleanup failures during shutdown.
                 }
-                finalLobby.close();
+                activeLobby.close();
             }));
 
             System.out.println("\n=============================================");
@@ -73,16 +78,13 @@ public class ServerMain {
             System.out.println("=============================================\n");
             System.out.println("Press Ctrl+C to terminate the server.");
 
-            // Keep main thread alive
-            Object lock = new Object();
-            synchronized (lock) {
-                while (true) {
-                    lock.wait();
-                }
-            }
+            // Keep main thread alive until process is interrupted
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.info("Server main thread interrupted, shutting down.");
         } catch (Exception e) {
-            System.err.println("Server failed to start due to exception:");
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Server failed to start due to exception", e);
             if (lobby != null) {
                 lobby.close();
             }

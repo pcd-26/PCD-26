@@ -15,6 +15,13 @@
     </properties>
 
     <dependencies>
+        <!-- JetBrains annotations for nullability contracts -->
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>24.1.0</version>
+        </dependency>
+
         <!-- JUnit 5 for testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

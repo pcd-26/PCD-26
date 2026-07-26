@@ -40,10 +40,10 @@ public class GameImplTest {
     public void testInitialization() throws Exception {
         BoardState state = game.getBoardState();
         assertEquals("TestRoom", game.getName());
-        assertEquals(GameStatus.WAITING, state.getStatus());
-        assertEquals("PlayerX", state.getPlayerX());
-        assertNull(state.getPlayerO());
-        assertNull(state.getTurnOf());
+        assertEquals(GameStatus.WAITING, state.status());
+        assertEquals("PlayerX", state.playerX());
+        assertNull(state.playerO());
+        assertNull(state.turnOf());
     }
 
     @Test
@@ -51,9 +51,9 @@ public class GameImplTest {
         game.join("PlayerO", clientO);
         BoardState state = game.getBoardState();
 
-        assertEquals(GameStatus.ACTIVE, state.getStatus());
-        assertEquals("PlayerO", state.getPlayerO());
-        assertEquals("PlayerX", state.getTurnOf()); // X starts
+        assertEquals(GameStatus.ACTIVE, state.status());
+        assertEquals("PlayerO", state.playerO());
+        assertEquals("PlayerX", state.turnOf()); // X starts
     }
 
     @Test
@@ -71,13 +71,13 @@ public class GameImplTest {
         game.makeMove("PlayerX", 0, 0);
         BoardState state1 = game.getBoardState();
         assertEquals('X', state1.getMark(0, 0));
-        assertEquals("PlayerO", state1.getTurnOf());
+        assertEquals("PlayerO", state1.turnOf());
 
         // Player O moves
         game.makeMove("PlayerO", 1, 1);
         BoardState state2 = game.getBoardState();
         assertEquals('O', state2.getMark(1, 1));
-        assertEquals("PlayerX", state2.getTurnOf());
+        assertEquals("PlayerX", state2.turnOf());
     }
 
     @Test
@@ -128,8 +128,8 @@ public class GameImplTest {
         game.makeMove("PlayerX", 0, 2); // X (wins)
 
         BoardState state = game.getBoardState();
-        assertEquals(GameStatus.WON_X, state.getStatus());
-        assertNull(state.getTurnOf());
+        assertEquals(GameStatus.WON_X, state.status());
+        assertNull(state.turnOf());
     }
 
     @Test
@@ -145,7 +145,7 @@ public class GameImplTest {
         game.makeMove("PlayerX", 2, 2); // X wins
 
         BoardState state = game.getBoardState();
-        assertEquals(GameStatus.WON_X, state.getStatus());
+        assertEquals(GameStatus.WON_X, state.status());
     }
 
     @Test
@@ -160,7 +160,7 @@ public class GameImplTest {
         game.makeMove("PlayerX", 2, 1);
 
         BoardState state = game.getBoardState();
-        assertEquals(GameStatus.WON_X, state.getStatus());
+        assertEquals(GameStatus.WON_X, state.status());
     }
 
     @Test
@@ -182,7 +182,7 @@ public class GameImplTest {
         game.makeMove("PlayerX", 2, 2); // X (draws since board full and no winner)
 
         BoardState state = game.getBoardState();
-        assertEquals(GameStatus.DRAW, state.getStatus());
+        assertEquals(GameStatus.DRAW, state.status());
     }
 
     @Test
@@ -192,8 +192,8 @@ public class GameImplTest {
         game.leaveGame("PlayerX");
 
         BoardState state = game.getBoardState();
-        assertEquals(GameStatus.ABANDONED, state.getStatus());
-        assertNull(state.getTurnOf());
+        assertEquals(GameStatus.ABANDONED, state.status());
+        assertNull(state.turnOf());
     }
 
     @Test
@@ -202,7 +202,7 @@ public class GameImplTest {
         game.makeMove("PlayerX", 0, 0);
 
         BoardState snapshot = game.getBoardState();
-        char[][] leaked = snapshot.getGrid();
+        char[][] leaked = snapshot.grid();
         leaked[0][0] = 'O';
 
         assertEquals('X', snapshot.getMark(0, 0));

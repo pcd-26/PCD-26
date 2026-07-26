@@ -743,12 +743,12 @@ public class GUIClient extends JFrame implements GameEventListener {
             }
         }
 
-        GameStatus status = state.getStatus();
+        GameStatus status = state.status();
         if (status == GameStatus.ACTIVE) {
-            String opponentName = myMark == 'X' ? state.getPlayerO() : state.getPlayerX();
+            String opponentName = myMark == 'X' ? state.playerO() : state.playerX();
             gameOpponentLbl.setText("Opponent: " + opponentName + " (" + (myMark == 'X' ? 'O' : 'X') + ") | You: " + controller.getPlayerName() + " (" + myMark + ")");
 
-            if (state.getTurnOf().equals(controller.getPlayerName())) {
+            if (state.turnOf().equals(controller.getPlayerName())) {
                 gameStatusLbl.setText("Your turn!");
                 gameStatusLbl.setForeground(COLOR_STATUS);
                 setBoardEnabled(true);
@@ -792,7 +792,7 @@ public class GUIClient extends JFrame implements GameEventListener {
      * @param state the final terminal board state
      */
     private void showEndGameDialog(BoardState state) {
-        GameStatus status = state.getStatus();
+        GameStatus status = state.status();
         String message;
         String title = "Game Over";
 
@@ -805,7 +805,7 @@ public class GUIClient extends JFrame implements GameEventListener {
             gameStatusLbl.setText("Result: ABANDONED");
             gameStatusLbl.setForeground(COLOR_X);
         } else {
-            String winner = status == GameStatus.WON_X ? state.getPlayerX() : state.getPlayerO();
+            String winner = status == GameStatus.WON_X ? state.playerX() : state.playerO();
             if (winner.equals(controller.getPlayerName())) {
                 message = "Congratulations, you won!";
                 gameStatusLbl.setText("Result: YOU WON!");

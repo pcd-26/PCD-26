@@ -345,7 +345,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
             }
         });
 
-        if (state.getStatus() != GameStatus.ACTIVE && state.getStatus() != GameStatus.WAITING) {
+        if (state.status() != GameStatus.ACTIVE && state.status() != GameStatus.WAITING) {
             shutdownExecutor();
         }
     }
