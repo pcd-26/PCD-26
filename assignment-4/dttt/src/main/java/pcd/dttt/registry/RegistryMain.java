@@ -12,9 +12,7 @@ public final class RegistryMain {
     /** Default port for the standalone registry. */
     private static final int DEFAULT_PORT = 1099;
 
-    private RegistryMain() {
-        // Utility class.
-    }
+    private RegistryMain() {}   // Utility class
 
     /**
      * Starts the RMI registry on the requested port and keeps the JVM alive.

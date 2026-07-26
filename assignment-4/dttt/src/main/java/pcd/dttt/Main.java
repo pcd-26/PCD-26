@@ -1,6 +1,7 @@
 package pcd.dttt;
 
 import java.util.Arrays;
+import java.util.Locale;
 import pcd.dttt.client.ClientMain;
 import pcd.dttt.registry.RegistryMain;
 import pcd.dttt.server.ServerMain;
@@ -19,27 +20,26 @@ public class Main {
      *             Otherwise, defaults to client mode and prints usage.
      */
     public static void main(String[] args) {
-        if (args.length > 0) {
-            String command = args[0].toLowerCase();
-            String[] subArgs = Arrays.copyOfRange(args, 1, args.length);
-
-            if (command.equals("registry")) {
-                RegistryMain.main(subArgs);
-                return;
-            }
-            if (command.equals("server")) {
-                ServerMain.main(subArgs);
-                return;
-            } else if (command.equals("client")) {
-                ClientMain.main(subArgs);
-                return;
-            }
+        if (args.length == 0) {
+            printUsage();
+            System.out.println("No command specified. Defaulting to client mode...\n");
+            ClientMain.main(args);
+            return;
         }
 
-        // Default fallback if no valid command is specified
-        printUsage();
-        System.out.println("No command specified or unrecognized command. Defaulting to client mode...\n");
-        ClientMain.main(args);
+        String command = args[0].toLowerCase(Locale.ROOT);
+        String[] subArgs = Arrays.copyOfRange(args, 1, args.length);
+
+        switch (command) {
+            case "registry" -> RegistryMain.main(subArgs);
+            case "server" -> ServerMain.main(subArgs);
+            case "client" -> ClientMain.main(subArgs);
+            default -> {
+                printUsage();
+                System.out.println("Unrecognized command '" + args[0] + "'. Defaulting to client mode...\n");
+                ClientMain.main(args);
+            }
+        }
     }
 
     /**

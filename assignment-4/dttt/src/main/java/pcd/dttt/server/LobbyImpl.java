@@ -117,7 +117,7 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
         List<String> waiting = new ArrayList<>();
         for (Map.Entry<String, GameImpl> entry : new ArrayList<>(games.entrySet())) {
             GameImpl game = entry.getValue();
-            GameStatus status = game.getBoardState().getStatus();
+            GameStatus status = game.getBoardState().status();
             if (status == GameStatus.WAITING) {
                 waiting.add(entry.getKey());
             } else if (status != GameStatus.ACTIVE) {
@@ -137,7 +137,7 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
      */
     private void pruneFinishedGames() throws RemoteException {
         for (Map.Entry<String, GameImpl> entry : new ArrayList<>(games.entrySet())) {
-            GameStatus status = entry.getValue().getBoardState().getStatus();
+            GameStatus status = entry.getValue().getBoardState().status();
             if (status != GameStatus.WAITING && status != GameStatus.ACTIVE) {
                 entry.getValue().close();
                 games.remove(entry.getKey(), entry.getValue());
