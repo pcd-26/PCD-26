@@ -23,6 +23,15 @@ public class ProcessApp {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final String SHARED_LOG_FILE = "dcs_shared.log";
 
+    /**
+     * Entry point for running a process application instance.
+     * <p>
+     * Connects to RabbitMQ, instantiates a {@link DistributedCriticalSection} named {@code "demo-cs"},
+     * and performs 5 iterations of acquiring the lock, logging access, simulating work, and releasing the lock.
+     * </p>
+     *
+     * @param args optional command line arguments: {@code [processId, host, port]}
+     */
     public static void main(String[] args) {
         String processId = args.length > 0 ? args[0] : "Process-" + new Random().nextInt(1000);
         String host = args.length > 1 ? args[1] : "localhost";
@@ -79,6 +88,13 @@ public class ProcessApp {
         }
     }
 
+    /**
+     * Appends a log entry to a shared text file.
+     * Synchronized locally within the JVM to prevent concurrent file write interleaving within the same process.
+     *
+     * @param filename path of the log file
+     * @param message  log text to write
+     */
     private static synchronized void logToFile(String filename, String message) {
         try (FileWriter fw = new FileWriter(filename, true);
              PrintWriter pw = new PrintWriter(fw)) {
