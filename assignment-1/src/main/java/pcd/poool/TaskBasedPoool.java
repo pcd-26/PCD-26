@@ -7,8 +7,8 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.config.MassiveBoardConf;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
+import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.taskbased.TaskBasedGameRunner;
-import pcd.poool.taskbased.TaskBasedGameSnapshot;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
 
@@ -141,7 +141,7 @@ public class TaskBasedPoool {
         return runner.snapshot().game().humanCanShoot();
     }
 
-    private static void updateBotShotPreview(TaskBasedGameSnapshot snapshot, ViewModel viewModel) {
+    private static void updateBotShotPreview(RuntimeGameSnapshot snapshot, ViewModel viewModel) {
         if (!snapshot.game().botCanShoot() || snapshot.botBall() == null) {
             viewModel.clearShotPreview(Player.BOT);
             return;
