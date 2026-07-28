@@ -12,6 +12,7 @@ import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
+import pcd.poool.runtime.BotAgent;
 import pcd.poool.runtime.CommandQueueMonitorSupport;
 import pcd.poool.runtime.CommandReceiptSupport;
 import pcd.poool.runtime.GameCommand;
@@ -95,7 +96,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
         running = true;
         controllerExecutor.scheduleAtFixedRate(this::tick, 0, config.tickMillis(), TimeUnit.MILLISECONDS);
         if (botExecutor != null) {
-            botExecutor.submit(new TaskBasedBotAgent(snapshots, this, config.botThinkTimeMillis()));
+            botExecutor.submit(new BotAgent(snapshots::get, () -> shootBot(), this::isRunning, config.botThinkTimeMillis()));
         }
     }
 

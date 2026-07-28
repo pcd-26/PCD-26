@@ -196,7 +196,7 @@ The platform-thread runtime is centered around:
 
 - `ThreadedGameRunner`;
 - `ThreadedPhysicsEngine`;
-- `ThreadedBotAgent`;
+- `BotAgent`;
 - `CommandQueueMonitorSupport`;
 - `SnapshotStoreSupport`.
 
