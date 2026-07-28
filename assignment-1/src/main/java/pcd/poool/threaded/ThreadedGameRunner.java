@@ -6,6 +6,11 @@ import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
+import pcd.poool.runtime.CommandQueueMonitorSupport;
+import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.GameCommand;
+import pcd.poool.runtime.RuntimeGameSnapshot;
+import pcd.poool.runtime.SnapshotStoreSupport;
 
 /**
  * Platform-thread execution strategy for Poool.
@@ -21,8 +26,8 @@ public class ThreadedGameRunner implements AutoCloseable {
     private final ThreadedPhysicsEngine physicsEngine;
     private final GameModel game;
     private final Config config;
-    private final CommandQueueMonitor commands;
-    private final SnapshotStore snapshots;
+    private final CommandQueueMonitorSupport<GameCommand> commands;
+    private final SnapshotStoreSupport<RuntimeGameSnapshot> snapshots;
     private Thread controllerThread;
     private Thread botThread;
     private volatile boolean running;
@@ -46,8 +51,8 @@ public class ThreadedGameRunner implements AutoCloseable {
         this.config = config;
         physicsEngine = new ThreadedPhysicsEngine(config.physicsWorkerCount(), config.tickMillis());
         game = new GameModel(boardConf, physicsEngine);
-        commands = new CommandQueueMonitor();
-        snapshots = new SnapshotStore(ThreadedGameSnapshot.from(game));
+        commands = new CommandQueueMonitorSupport<>();
+        snapshots = new SnapshotStoreSupport<>(RuntimeGameSnapshot.from(game));
     }
 
     /**
@@ -83,7 +88,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @param velocity shot velocity
      * @return receipt completed when the controller executes the command
      */
-    public CommandReceipt<Boolean> shootHuman(V2d velocity) {
+    public CommandReceiptSupport<Boolean> shootHuman(V2d velocity) {
         return submitShotCommand(game -> game.shootHuman(velocity));
     }
 
@@ -92,7 +97,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      *
      * @return receipt completed when the controller executes the command
      */
-    public CommandReceipt<Boolean> shootBot() {
+    public CommandReceiptSupport<Boolean> shootBot() {
         return submitShotCommand(GameModel::shootBot);
     }
 
@@ -101,7 +106,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      *
      * @return latest immutable state published by the controller
      */
-    public ThreadedGameSnapshot snapshot() {
+    public RuntimeGameSnapshot snapshot() {
         return snapshots.get();
     }
 
@@ -110,7 +115,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      *
      * @return monitor used by tests and views to wait for published snapshots
      */
-    public SnapshotStore snapshots() {
+    public SnapshotStoreSupport<RuntimeGameSnapshot> snapshots() {
         return snapshots;
     }
 
@@ -150,15 +155,15 @@ public class ThreadedGameRunner implements AutoCloseable {
      * Submits a shot operation asynchronously to the queue.
      *
      * <p>Wraps the operation into a {@link GameCommand} object, enqueues it,
-     * and returns an incomplete {@link CommandReceipt}. When the controller thread
+     * and returns an incomplete {@link CommandReceiptSupport}. When the controller thread
      * consumes the command from the queue, it executes the operation, completing
      * the receipt with the result or any failure that occurred.
      *
      * @param operation the shot operation to execute on the game model
      * @return the command receipt representing completion of the request
      */
-    private CommandReceipt<Boolean> submitShotCommand(ShotOperation operation) {
-        var receipt = new CommandReceipt<Boolean>();
+    private CommandReceiptSupport<Boolean> submitShotCommand(ShotOperation operation) {
+        var receipt = new CommandReceiptSupport<Boolean>();
         boolean accepted = commands.put(new GameCommand() {
             @Override
             public void execute(GameModel game) {
@@ -187,7 +192,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      * <ol>
      *   <li>Drains and executes all pending shot commands from external threads (e.g. Swing Event Dispatch Thread, Bot Thread).</li>
      *   <li>Advances the game step and physics simulation by a fixed tick duration.</li>
-     *   <li>Publishes the new immutable snapshot to the SnapshotStore.</li>
+     *   <li>Publishes the new immutable snapshot to the snapshot store.</li>
      *   <li>Sleeps for the fixed tick interval to maintain frame rate.</li>
      * </ol>
      */
@@ -200,13 +205,13 @@ public class ThreadedGameRunner implements AutoCloseable {
                 if (!game.snapshot().isFinished()) {
                     game.step(config.tickMillis());
                 }
-                snapshots.publish(ThreadedGameSnapshot.from(game));
+                snapshots.publish(RuntimeGameSnapshot.from(game));
                 sleepTick();
             }
         } finally {
             running = false;
             commands.close();
-            snapshots.publish(ThreadedGameSnapshot.from(game));
+            snapshots.publish(RuntimeGameSnapshot.from(game));
         }
     }
 

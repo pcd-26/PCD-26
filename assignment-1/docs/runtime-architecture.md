@@ -98,21 +98,24 @@ termination, and winner calculation.
 
 - `ThreadedGameRunner`
   Main multithreaded runtime coordinator.
-- `ThreadedGameSnapshot`
-  Immutable snapshot published by the threaded runtime.
 - `ThreadedBotAgent`
   Active bot component.
-- `CommandQueueMonitor`
-  Monitor for asynchronous command submission.
-- `GameCommand`
-  Controller-thread command abstraction.
-- `CommandReceipt`
-  Completion handle for submitted commands.
-- `SnapshotStore`
-  Monitor that stores and publishes the latest immutable snapshot.
 
 This package contains the concurrency-specific runtime around the shared game
 model.
+
+### `pcd.poool.runtime`
+
+- `GameCommand`
+  Controller-owned command abstraction.
+- `CommandQueueMonitorSupport`
+  Monitor for asynchronous command submission.
+- `CommandReceiptSupport`
+  Completion handle for submitted commands.
+- `SnapshotStoreSupport`
+  Monitor that stores and publishes the latest immutable snapshot.
+- `RuntimeGameSnapshot`
+  Immutable snapshot published by concurrent runners.
 
 ### `pcd.poool.view` and `pcd.poool.view.board`
 
@@ -228,8 +231,8 @@ runtime loop.
 - one `ThreadedPhysicsEngine`;
 - one controller thread;
 - one optional bot thread;
-- one `CommandQueueMonitor`;
-- one `SnapshotStore`.
+- one `CommandQueueMonitorSupport`;
+- one `SnapshotStoreSupport`.
 
 The controller thread is the single writer of `GameModel`.
 
@@ -237,7 +240,7 @@ External threads never mutate the game directly:
 
 - Swing input submits commands through `shootHuman(...)`;
 - the bot thread submits commands through `shootBot(...)`;
-- the GUI reads `ThreadedGameSnapshot` objects from `SnapshotStore`.
+- the GUI reads `RuntimeGameSnapshot` objects from `SnapshotStoreSupport`.
 
 This preserves a clear ownership rule:
 
@@ -266,18 +269,18 @@ This preserves a clear ownership rule:
 ### Threaded runtime
 
 - `ThreadedGameRunner` uses `GameModel`, `ThreadedPhysicsEngine`,
-  `CommandQueueMonitor`, `SnapshotStore`, and `ThreadedBotAgent`.
-- `ThreadedBotAgent` uses `SnapshotStore` and `ThreadedGameRunner`.
-- `CommandQueueMonitor` stores `GameCommand` objects.
+  `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, and `ThreadedBotAgent`.
+- `ThreadedBotAgent` uses `SnapshotStoreSupport` and `ThreadedGameRunner`.
+- `CommandQueueMonitorSupport` stores `GameCommand` objects.
 - `GameCommand` executes against `GameModel`.
-- `ThreadedGameRunner` publishes `ThreadedGameSnapshot` into `SnapshotStore`.
+- `ThreadedGameRunner` publishes `RuntimeGameSnapshot` into `SnapshotStoreSupport`.
 
 ### View
 
 - `View` creates and owns `ViewFrame`.
 - `ViewFrame` reads `ViewModel` and sends callbacks to the runtime.
 - `ViewModel` stores copied rendering data and `GameSnapshot`.
-- `ThreadedPoool` copies `ThreadedGameSnapshot` into `ViewModel`.
+- `ThreadedPoool` copies `RuntimeGameSnapshot` into `ViewModel`.
 - `SequentialPoool` copies `Board` and `GameSnapshot` into `ViewModel`.
 
 ## 6. Data flow
@@ -311,7 +314,7 @@ Sequential mode:
 
 Threaded mode:
 
-1. The controller thread publishes a `ThreadedGameSnapshot`.
+1. The controller thread publishes a `RuntimeGameSnapshot`.
 2. `ThreadedPoool` reads that immutable snapshot.
 3. It copies it into `ViewModel`.
 4. `View.render()` asks the Swing frame to repaint.

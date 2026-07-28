@@ -12,6 +12,11 @@ import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
+import pcd.poool.runtime.CommandQueueMonitorSupport;
+import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.GameCommand;
+import pcd.poool.runtime.RuntimeGameSnapshot;
+import pcd.poool.runtime.SnapshotStoreSupport;
 
 /**
  * Executor-based execution strategy for Poool.
@@ -28,8 +33,8 @@ public class TaskBasedGameRunner implements AutoCloseable {
     private final TaskBasedPhysicsEngine physicsEngine;
     private final GameModel game;
     private final Config config;
-    private final CommandQueueMonitor commands;
-    private final SnapshotStore snapshots;
+    private final CommandQueueMonitorSupport<GameCommand> commands;
+    private final SnapshotStoreSupport<RuntimeGameSnapshot> snapshots;
     private final ScheduledExecutorService controllerExecutor;
     private final ExecutorService botExecutor;
     private final AtomicReference<RuntimeException> failure;
@@ -59,8 +64,8 @@ public class TaskBasedGameRunner implements AutoCloseable {
         this.config = Objects.requireNonNull(config, "config");
         this.physicsEngine = Objects.requireNonNull(physicsEngine, "physicsEngine");
         game = new GameModel(Objects.requireNonNull(boardConf, "boardConf"), physicsEngine);
-        commands = new CommandQueueMonitor();
-        snapshots = new SnapshotStore(TaskBasedGameSnapshot.from(game));
+        commands = new CommandQueueMonitorSupport<>();
+        snapshots = new SnapshotStoreSupport<>(RuntimeGameSnapshot.from(game));
         failure = new AtomicReference<>();
         controllerExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
             var thread = new Thread(runnable, "poool-task-controller");
@@ -109,7 +114,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      * @param velocity shot velocity
      * @return receipt completed when the controller executes the command
      */
-    public CommandReceipt<Boolean> shootHuman(V2d velocity) {
+    public CommandReceiptSupport<Boolean> shootHuman(V2d velocity) {
         ensureHealthy();
         return submitShotCommand(game -> game.shootHuman(velocity));
     }
@@ -119,7 +124,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      *
      * @return receipt completed when the controller executes the command
      */
-    public CommandReceipt<Boolean> shootBot() {
+    public CommandReceiptSupport<Boolean> shootBot() {
         ensureHealthy();
         return submitShotCommand(GameModel::shootBot);
     }
@@ -129,7 +134,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      *
      * @return latest immutable state published by the controller
      */
-    public TaskBasedGameSnapshot snapshot() {
+    public RuntimeGameSnapshot snapshot() {
         ensureHealthy();
         return snapshots.get();
     }
@@ -139,7 +144,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      *
      * @return monitor used by tests and views to wait for published snapshots
      */
-    public SnapshotStore snapshots() {
+    public SnapshotStoreSupport<RuntimeGameSnapshot> snapshots() {
         return snapshots;
     }
 
@@ -198,7 +203,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
             if (!game.snapshot().isFinished()) {
                 game.step(config.tickMillis());
             }
-            snapshots.publish(TaskBasedGameSnapshot.from(game));
+            snapshots.publish(RuntimeGameSnapshot.from(game));
         } catch (RuntimeException ex) {
             failure.compareAndSet(null, ex);
             running = false;
@@ -207,7 +212,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
                 botExecutor.shutdownNow();
             }
             controllerExecutor.shutdownNow();
-            snapshots.publish(TaskBasedGameSnapshot.from(game));
+            snapshots.publish(RuntimeGameSnapshot.from(game));
             throw ex;
         }
     }
@@ -227,8 +232,8 @@ public class TaskBasedGameRunner implements AutoCloseable {
         }
     }
 
-    private CommandReceipt<Boolean> submitShotCommand(ShotOperation operation) {
-        var receipt = new CommandReceipt<Boolean>();
+    private CommandReceiptSupport<Boolean> submitShotCommand(ShotOperation operation) {
+        var receipt = new CommandReceiptSupport<Boolean>();
         boolean accepted = commands.put(new GameCommand() {
             @Override
             public void execute(GameModel game) {

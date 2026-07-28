@@ -1,5 +1,8 @@
 package pcd.poool.threaded;
 
+import pcd.poool.runtime.RuntimeGameSnapshot;
+import pcd.poool.runtime.SnapshotStoreSupport;
+
 /**
  * Active bot component that observes immutable snapshots and submits bot-shot
  * commands asynchronously.
@@ -8,7 +11,7 @@ class ThreadedBotAgent implements Runnable {
 
     private static final long IDLE_SLEEP_MILLIS = 5;
 
-    private final SnapshotStore snapshotStore;
+    private final SnapshotStoreSupport<RuntimeGameSnapshot> snapshotStore;
     private final ThreadedGameRunner runner;
     private final long thinkTimeMillis;
 
@@ -19,7 +22,10 @@ class ThreadedBotAgent implements Runnable {
      * @param runner command submission facade
      * @param thinkTimeMillis delay before submitting a bot shot
      */
-    ThreadedBotAgent(SnapshotStore snapshotStore, ThreadedGameRunner runner, long thinkTimeMillis) {
+    ThreadedBotAgent(
+            SnapshotStoreSupport<RuntimeGameSnapshot> snapshotStore,
+            ThreadedGameRunner runner,
+            long thinkTimeMillis) {
         this.snapshotStore = snapshotStore;
         this.runner = runner;
         this.thinkTimeMillis = thinkTimeMillis;

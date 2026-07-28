@@ -13,7 +13,7 @@ public class CommandQueueMonitorSupport<C extends GameCommand> {
     private final LinkedList<C> commands = new LinkedList<>();
     private boolean closed;
 
-    protected CommandQueueMonitorSupport() {
+    public CommandQueueMonitorSupport() {
     }
 
     /**
