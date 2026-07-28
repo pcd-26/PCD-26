@@ -1,9 +1,6 @@
 name: Latest Assignments Package
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
@@ -62,7 +59,6 @@ jobs:
           rm -rf package "$DELIVERY_ZIP"
           mkdir -p package/Assignment-01/doc
 
-          cp assignment-1/pom.xml package/Assignment-01/pom.xml
           cp -R assignment-1/src package/Assignment-01/src
           cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
 
@@ -77,9 +73,9 @@ jobs:
 
           unzip -l "$DELIVERY_ZIP"
           test -f package/Assignment-01/doc/report.pdf
-          test -f package/Assignment-01/pom.xml
           test -d package/Assignment-01/src/main
           test -d package/Assignment-01/src/test
+          test ! -e package/Assignment-01/pom.xml
           test ! -e package/Assignment-01/docs
           test ! -e package/Assignment-01/report
           test ! -e package/Assignment-01/target
