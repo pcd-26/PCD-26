@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
+import pcd.poool.model.game.GameModel;
 import pcd.poool.model.game.GameStatus;
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
@@ -29,7 +30,7 @@ class TaskBasedGameRunnerTest {
 
     private static final Duration SHORT_TIMEOUT = Duration.ofSeconds(2);
     private static final TaskBasedGameRunner.Config FAST_WITHOUT_BOT =
-            new TaskBasedGameRunner.Config(5, false, 0);
+            new TaskBasedGameRunner.Config(5, false, 0, GameModel.StartupCountdown.disabled());
 
     @Test
     @Timeout(3)
@@ -183,7 +184,7 @@ class TaskBasedGameRunnerTest {
     @Test
     @Timeout(3)
     void botAgentSubmitsShotsFromASeparateTask() throws InterruptedException {
-        var config = new TaskBasedGameRunner.Config(5, true, 0);
+        var config = new TaskBasedGameRunner.Config(5, true, 0, GameModel.StartupCountdown.disabled());
         try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 

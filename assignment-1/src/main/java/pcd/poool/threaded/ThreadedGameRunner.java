@@ -52,7 +52,7 @@ public class ThreadedGameRunner implements AutoCloseable {
     public ThreadedGameRunner(BoardConf boardConf, Config config) {
         this.config = config;
         physicsEngine = new ThreadedPhysicsEngine(config.physicsWorkerCount(), config.tickMillis());
-        game = new GameModel(boardConf, physicsEngine);
+        game = new GameModel(boardConf, physicsEngine, config.startupCountdown());
         commands = new CommandQueueMonitorSupport<>();
         snapshots = new SnapshotStoreSupport<>(RuntimeGameSnapshot.from(game));
     }
@@ -244,8 +244,14 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @param botThinkTimeMillis delay before the bot submits a shot
      * @param physicsWorkerCount number of worker platform threads used inside
      *        each physics step
+     * @param startupCountdown startup countdown configuration for the game model
      */
-    public record Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis, int physicsWorkerCount) {
+    public record Config(
+            long tickMillis,
+            boolean botEnabled,
+            long botThinkTimeMillis,
+            int physicsWorkerCount,
+            GameModel.StartupCountdown startupCountdown) {
 
         /**
          * Creates a configuration using the default physics worker count.
@@ -256,6 +262,40 @@ public class ThreadedGameRunner implements AutoCloseable {
          */
         public Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis) {
             this(tickMillis, botEnabled, botThinkTimeMillis, defaultPhysicsWorkerCount());
+        }
+
+        /**
+         * Creates a configuration using the default gameplay countdown.
+         *
+         * @param tickMillis fixed simulation tick duration
+         * @param botEnabled whether to start the asynchronous bot agent
+         * @param botThinkTimeMillis delay before the bot submits a shot
+         * @param physicsWorkerCount number of physics workers
+         */
+        public Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis, int physicsWorkerCount) {
+            this(
+                    tickMillis,
+                    botEnabled,
+                    botThinkTimeMillis,
+                    physicsWorkerCount,
+                    GameModel.StartupCountdown.enabledDefault());
+        }
+
+        /**
+         * Creates a configuration using the default physics worker count and an
+         * explicit startup countdown policy.
+         *
+         * @param tickMillis fixed simulation tick duration
+         * @param botEnabled whether to start the asynchronous bot agent
+         * @param botThinkTimeMillis delay before the bot submits a shot
+         * @param startupCountdown startup countdown configuration
+         */
+        public Config(
+                long tickMillis,
+                boolean botEnabled,
+                long botThinkTimeMillis,
+                GameModel.StartupCountdown startupCountdown) {
+            this(tickMillis, botEnabled, botThinkTimeMillis, defaultPhysicsWorkerCount(), startupCountdown);
         }
 
         /**
@@ -270,6 +310,9 @@ public class ThreadedGameRunner implements AutoCloseable {
             }
             if (physicsWorkerCount < 1) {
                 throw new IllegalArgumentException("physicsWorkerCount must be >= 1");
+            }
+            if (startupCountdown == null) {
+                throw new IllegalArgumentException("startupCountdown must not be null");
             }
         }
 
@@ -289,7 +332,12 @@ public class ThreadedGameRunner implements AutoCloseable {
          * @return configuration without the asynchronous bot agent
          */
         public static Config withoutBot() {
-            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, false, 0, defaultPhysicsWorkerCount());
+            return new Config(
+                    PhysicsDefaults.FIXED_STEP_MILLIS,
+                    false,
+                    0,
+                    defaultPhysicsWorkerCount(),
+                    GameModel.StartupCountdown.disabled());
         }
 
         private static int defaultPhysicsWorkerCount() {
