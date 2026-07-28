@@ -9,6 +9,7 @@ import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 import pcd.poool.runtime.BotAgent;
 import pcd.poool.runtime.CommandQueueMonitorSupport;
 import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.CommandSubmissionSupport;
 import pcd.poool.runtime.GameCommand;
 import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.runtime.SnapshotStoreSupport;
@@ -90,7 +91,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @return receipt completed when the controller executes the command
      */
     public CommandReceiptSupport<Boolean> shootHuman(V2d velocity) {
-        return submitShotCommand(game -> game.shootHuman(velocity));
+        return CommandSubmissionSupport.submit(commands, game -> game.shootHuman(velocity), false);
     }
 
     /**
@@ -99,7 +100,7 @@ public class ThreadedGameRunner implements AutoCloseable {
      * @return receipt completed when the controller executes the command
      */
     public CommandReceiptSupport<Boolean> shootBot() {
-        return submitShotCommand(GameModel::shootBot);
+        return CommandSubmissionSupport.submit(commands, GameModel::shootBot, false);
     }
 
     /**
@@ -150,40 +151,6 @@ public class ThreadedGameRunner implements AutoCloseable {
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         }
-    }
-
-    /**
-     * Submits a shot operation asynchronously to the queue.
-     *
-     * <p>Wraps the operation into a {@link GameCommand} object, enqueues it,
-     * and returns an incomplete {@link CommandReceiptSupport}. When the controller thread
-     * consumes the command from the queue, it executes the operation, completing
-     * the receipt with the result or any failure that occurred.
-     *
-     * @param operation the shot operation to execute on the game model
-     * @return the command receipt representing completion of the request
-     */
-    private CommandReceiptSupport<Boolean> submitShotCommand(ShotOperation operation) {
-        var receipt = new CommandReceiptSupport<Boolean>();
-        boolean accepted = commands.put(new GameCommand() {
-            @Override
-            public void execute(GameModel game) {
-                try {
-                    receipt.complete(operation.execute(game));
-                } catch (RuntimeException ex) {
-                    receipt.fail(ex);
-                }
-            }
-
-            @Override
-            public void reject() {
-                receipt.complete(false);
-            }
-        });
-        if (!accepted) {
-            receipt.complete(false);
-        }
-        return receipt;
     }
 
     /**
@@ -267,12 +234,6 @@ public class ThreadedGameRunner implements AutoCloseable {
         if (thread != null) {
             thread.interrupt();
         }
-    }
-
-    @FunctionalInterface
-    private interface ShotOperation {
-
-        boolean execute(GameModel game);
     }
 
     /**

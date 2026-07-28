@@ -110,6 +110,9 @@ model.
   Active bot component that observes snapshots and submits bot shots.
 - `CommandQueueMonitorSupport`
   Monitor for asynchronous command submission.
+- `CommandSubmissionSupport`
+  Shared helper that wraps game-model operations into queued commands and
+  completion receipts.
 - `CommandReceiptSupport`
   Completion handle for submitted commands.
 - `SnapshotStoreSupport`
