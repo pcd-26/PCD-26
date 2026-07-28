@@ -12,13 +12,47 @@
     urlcolor=blue
 }
 
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\renewcommand{\arraystretch}{1.12}
+
 \title{Assignment 1 -- Poool Game\\Concurrent and Task-Based Implementations}
-\author{}
-\date{Academic Year 2025--2026}
+\author{Alex Santini \and Francesco Valentini}
+\date{PCD a.y. 2025--2026}
 
 \begin{document}
 
-\maketitle
+\pagenumbering{gobble}
+\begin{titlepage}
+    \centering
+    \vspace*{2.2cm}
+
+    {\Large PCD -- Concurrent and Distributed Programming\par}
+    \vspace{1.2cm}
+    {\rule{0.82\textwidth}{0.5pt}\par}
+    \vspace{0.9cm}
+    {\huge\bfseries Assignment 1\par}
+    \vspace{0.35cm}
+    {\LARGE Poool Game\par}
+    \vspace{0.45cm}
+    {\Large Concurrent and Task-Based Implementations\par}
+    \vspace{0.9cm}
+    {\rule{0.82\textwidth}{0.5pt}\par}
+
+    \vspace{1.6cm}
+    {\large\textbf{Authors}\par}
+    \vspace{0.25cm}
+    {\large Alex Santini\par}
+    {\large Francesco Valentini\par}
+
+    \vfill
+    {\large Academic Year 2025--2026\par}
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
 
 \begin{abstract}
 This report describes the design and validation of \emph{Poool}, a two-dimensional game with moving balls, elastic collisions, friction, holes, a human player, and an asynchronous bot. The implementation provides three execution strategies over the same domain model: a sequential baseline, a platform-thread version, and an Executor Framework version. The concurrent versions keep the authoritative game state single-writer while parallelizing computationally expensive physics phases. This choice keeps the software modular and explainable, while still showing measurable speedup on large workloads.
@@ -71,7 +105,7 @@ The model publishes immutable snapshots. The GUI, bot, and tests read snapshots 
 
 \subsection{Platform-Thread Version}
 
-The platform-thread version is implemented by \texttt{ThreadedGameRunner} and \texttt{ThreadedPhysicsEngine}. The runner starts a controller platform thread, an optional bot thread, and a set of long-lived physics worker threads.
+The platform-thread version is implemented by two main classes: \texttt{ThreadedGameRunner} and \texttt{ThreadedPhysicsEngine}. The runner starts a controller platform thread, an optional bot thread, and a set of long-lived physics worker threads.
 
 The ownership rule is simple: the controller thread is the only thread that drains commands, invokes \texttt{GameModel}, applies game rules, and publishes snapshots. Human input and bot logic submit commands through a monitor-based queue. Physics workers execute bounded computational phases but do not update scores, decide game-over conditions, or publish state.
 
@@ -293,7 +327,7 @@ Benchmarks can be reproduced with:
 python -m scripts.run_benchmarks --mode speedup
 \end{verbatim}
 
-JPF requires a Java 11 runtime for the local JPF core build. After building \texttt{verification/jpf/.jpf-core}, the minimal models can be run with:
+JPF requires a Java 11 runtime for the local JPF core build. After building the local JPF core checkout, the minimal models can be run with:
 
 \begin{verbatim}
 python verification/jpf/run_jpf.py --model both
