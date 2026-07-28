@@ -17,8 +17,8 @@
 - `pcd.poool.view`: `RenderSynch`
 - `pcd.poool.view.board`: `ViewModel`, `View`, `ViewFrame`
 - `pcd.poool.controller`: `Cmd`, `ActiveController`
-- `pcd.poool.threaded`: `ThreadedGameRunner`, `ThreadedBotAgent`
-- `pcd.poool.runtime`: shared command, receipt, queue, and snapshot supports
+- `pcd.poool.threaded`: `ThreadedGameRunner`
+- `pcd.poool.runtime`: shared bot, command, receipt, queue, and snapshot supports
   used by the threaded and task-based runners
 - `pcd.poool.benchmark`: `BenchmarkConfig`, `PhysicsBenchmark`,
   `SequentialGameBenchmark`, `ThreadedPhysicsBenchmark`,

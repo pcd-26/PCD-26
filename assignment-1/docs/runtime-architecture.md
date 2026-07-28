@@ -98,8 +98,6 @@ termination, and winner calculation.
 
 - `ThreadedGameRunner`
   Main multithreaded runtime coordinator.
-- `ThreadedBotAgent`
-  Active bot component.
 
 This package contains the concurrency-specific runtime around the shared game
 model.
@@ -108,6 +106,8 @@ model.
 
 - `GameCommand`
   Controller-owned command abstraction.
+- `BotAgent`
+  Active bot component that observes snapshots and submits bot shots.
 - `CommandQueueMonitorSupport`
   Monitor for asynchronous command submission.
 - `CommandReceiptSupport`
@@ -269,8 +269,8 @@ This preserves a clear ownership rule:
 ### Threaded runtime
 
 - `ThreadedGameRunner` uses `GameModel`, `ThreadedPhysicsEngine`,
-  `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, and `ThreadedBotAgent`.
-- `ThreadedBotAgent` uses `SnapshotStoreSupport` and `ThreadedGameRunner`.
+  `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, and `BotAgent`.
+- `BotAgent` uses `SnapshotStoreSupport` snapshots and runner callbacks.
 - `CommandQueueMonitorSupport` stores `GameCommand` objects.
 - `GameCommand` executes against `GameModel`.
 - `ThreadedGameRunner` publishes `RuntimeGameSnapshot` into `SnapshotStoreSupport`.

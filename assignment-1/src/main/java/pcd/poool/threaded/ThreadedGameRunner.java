@@ -6,6 +6,7 @@ import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
+import pcd.poool.runtime.BotAgent;
 import pcd.poool.runtime.CommandQueueMonitorSupport;
 import pcd.poool.runtime.CommandReceiptSupport;
 import pcd.poool.runtime.GameCommand;
@@ -67,7 +68,7 @@ public class ThreadedGameRunner implements AutoCloseable {
         controllerThread.start();
         if (config.botEnabled()) {
             botThread = new Thread(
-                    new ThreadedBotAgent(snapshots, this, config.botThinkTimeMillis()),
+                    new BotAgent(snapshots::get, () -> shootBot(), this::isRunning, config.botThinkTimeMillis()),
                     "poool-threaded-bot");
             botThread.start();
         }
