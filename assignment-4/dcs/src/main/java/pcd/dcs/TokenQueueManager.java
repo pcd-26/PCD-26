@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
@@ -61,6 +62,15 @@ record TokenQueueManager(String queueName) {
         return newChannel;
     }
 
+    /**
+     * Re-opens the main AMQP channel associated with this instance and resets QoS settings.
+     * <p>
+     * This is required because AMQP 0-9-1 channel errors (such as 406 PRECONDITION_FAILED)
+     * cause the broker to close the active channel.
+     * </p>
+     *
+     * @throws IOException if opening a new channel fails
+     */
     private Channel reopenChannel(Connection connection, Channel oldChannel) throws IOException {
         if (oldChannel != null && oldChannel.isOpen()) {
             try {
@@ -73,8 +83,17 @@ record TokenQueueManager(String queueName) {
         return newChannel;
     }
 
+    /**
+     * Returns the queue arguments used when declaring the token queue.
+     *
+     * @return {@code null} to request standard durable queue configuration without extra x-arguments
+     */
     private Map<String, Object> tokenQueueArguments() {
-        return null;
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-max-length", 1);
+        args.put("x-overflow", "reject-publish");
+        return args;
+//        return null;
     }
 
     /**
