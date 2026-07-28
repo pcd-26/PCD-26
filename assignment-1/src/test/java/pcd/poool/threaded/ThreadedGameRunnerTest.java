@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
+import pcd.poool.model.game.GameModel;
 import pcd.poool.model.game.GameStatus;
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
@@ -27,7 +28,7 @@ class ThreadedGameRunnerTest {
 
     private static final Duration SHORT_TIMEOUT = Duration.ofSeconds(2);
     private static final ThreadedGameRunner.Config FAST_WITHOUT_BOT =
-            new ThreadedGameRunner.Config(5, false, 0);
+            new ThreadedGameRunner.Config(5, false, 0, GameModel.StartupCountdown.disabled());
 
     /**
      * Verifies that the controller platform thread automatically runs and advances
@@ -125,7 +126,7 @@ class ThreadedGameRunnerTest {
     @Test
     @Timeout(3)
     void botAgentSubmitsShotsFromASeparateActiveComponent() throws InterruptedException {
-        var config = new ThreadedGameRunner.Config(5, true, 0);
+        var config = new ThreadedGameRunner.Config(5, true, 0, GameModel.StartupCountdown.disabled());
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 
