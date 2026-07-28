@@ -15,6 +15,7 @@ import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 import pcd.poool.runtime.BotAgent;
 import pcd.poool.runtime.CommandQueueMonitorSupport;
 import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.CommandSubmissionSupport;
 import pcd.poool.runtime.GameCommand;
 import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.runtime.SnapshotStoreSupport;
@@ -117,7 +118,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      */
     public CommandReceiptSupport<Boolean> shootHuman(V2d velocity) {
         ensureHealthy();
-        return submitShotCommand(game -> game.shootHuman(velocity));
+        return CommandSubmissionSupport.submit(commands, game -> game.shootHuman(velocity), false);
     }
 
     /**
@@ -127,7 +128,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      */
     public CommandReceiptSupport<Boolean> shootBot() {
         ensureHealthy();
-        return submitShotCommand(GameModel::shootBot);
+        return CommandSubmissionSupport.submit(commands, GameModel::shootBot, false);
     }
 
     /**
@@ -231,35 +232,6 @@ public class TaskBasedGameRunner implements AutoCloseable {
         if (observedFailure != null) {
             throw new IllegalStateException("task-based game runner failed", observedFailure);
         }
-    }
-
-    private CommandReceiptSupport<Boolean> submitShotCommand(ShotOperation operation) {
-        var receipt = new CommandReceiptSupport<Boolean>();
-        boolean accepted = commands.put(new GameCommand() {
-            @Override
-            public void execute(GameModel game) {
-                try {
-                    receipt.complete(operation.execute(game));
-                } catch (RuntimeException ex) {
-                    receipt.fail(ex);
-                }
-            }
-
-            @Override
-            public void reject() {
-                receipt.complete(false);
-            }
-        });
-        if (!accepted) {
-            receipt.complete(false);
-        }
-        return receipt;
-    }
-
-    @FunctionalInterface
-    private interface ShotOperation {
-
-        boolean execute(GameModel game);
     }
 
     /**
