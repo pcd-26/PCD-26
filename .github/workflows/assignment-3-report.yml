@@ -2,7 +2,13 @@ name: Assignment 03 CI
 
 on:
   pull_request:
+    paths:
+      - "assignment-3/**"
+      - ".github/workflows/assignment-3-report.yml"
   push:
+    paths:
+      - "assignment-3/**"
+      - ".github/workflows/assignment-3-report.yml"
   workflow_dispatch:
     inputs:
       test_selector:
