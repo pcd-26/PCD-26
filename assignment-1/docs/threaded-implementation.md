@@ -42,7 +42,7 @@ The resulting communication structure is:
 Swing EDT / BotThread
         |
         v
- CommandQueueMonitor
+ CommandQueueMonitorSupport
         |
         v
  Controller platform thread
@@ -54,7 +54,7 @@ Swing EDT / BotThread
  PhysicsWorker[]
         |
         v
- SnapshotStore
+ SnapshotStoreSupport
         |
         v
  GUI render loop / BotThread
@@ -80,11 +80,11 @@ board regions independently.
 ## 4. Command-Based Coordination
 Player input and bot actions are represented as asynchronous commands.
 
-`CommandQueueMonitor` is the monitor used by producer threads. It accepts
+`CommandQueueMonitorSupport` is the monitor used by producer threads. It accepts
 commands from the Swing EDT and the bot thread, while the controller thread
 drains and executes them in FIFO order.
 
-Each submitted shot returns a `CommandReceipt<Boolean>`. The receipt is useful
+Each submitted shot returns a `CommandReceiptSupport<Boolean>`. The receipt is useful
 for tests and for any caller that needs to wait until the controller has either
 accepted or rejected the command.
 
@@ -96,7 +96,7 @@ can no longer be produced.
 Rendering is based on immutable snapshots rather than direct access to mutable
 physics objects.
 
-`SnapshotStore` stores the latest `ThreadedGameSnapshot`. The GUI reads this
+`SnapshotStoreSupport` stores the latest `RuntimeGameSnapshot`. The GUI reads this
 snapshot and copies its contents into `ViewModel`. The snapshot contains:
 
 - logical game state;

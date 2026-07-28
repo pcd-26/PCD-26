@@ -13,7 +13,7 @@ public class SnapshotStoreSupport<S> {
 
     private S snapshot;
 
-    protected SnapshotStoreSupport(S initialSnapshot) {
+    public SnapshotStoreSupport(S initialSnapshot) {
         snapshot = initialSnapshot;
     }
 

@@ -1,5 +1,8 @@
 package pcd.poool.taskbased;
 
+import pcd.poool.runtime.RuntimeGameSnapshot;
+import pcd.poool.runtime.SnapshotStoreSupport;
+
 /**
  * Active bot component that observes immutable snapshots and submits bot-shot
  * commands asynchronously.
@@ -8,11 +11,14 @@ class TaskBasedBotAgent implements Runnable {
 
     private static final long IDLE_SLEEP_MILLIS = 5;
 
-    private final SnapshotStore snapshotStore;
+    private final SnapshotStoreSupport<RuntimeGameSnapshot> snapshotStore;
     private final TaskBasedGameRunner runner;
     private final long thinkTimeMillis;
 
-    TaskBasedBotAgent(SnapshotStore snapshotStore, TaskBasedGameRunner runner, long thinkTimeMillis) {
+    TaskBasedBotAgent(
+            SnapshotStoreSupport<RuntimeGameSnapshot> snapshotStore,
+            TaskBasedGameRunner runner,
+            long thinkTimeMillis) {
         this.snapshotStore = snapshotStore;
         this.runner = runner;
         this.thinkTimeMillis = thinkTimeMillis;

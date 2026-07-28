@@ -21,6 +21,7 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
+import pcd.poool.runtime.CommandReceiptSupport;
 
 class ThreadedGameRunnerTest {
 
@@ -81,7 +82,7 @@ class ThreadedGameRunnerTest {
             int shotsPerProducer = 12;
             var startGate = new CountDownLatch(1);
             var readyGate = new CountDownLatch(producers);
-            var receipts = Collections.synchronizedList(new ArrayList<CommandReceipt<Boolean>>());
+            var receipts = Collections.synchronizedList(new ArrayList<CommandReceiptSupport<Boolean>>());
             ExecutorService executor = Executors.newFixedThreadPool(producers);
 
             try {
@@ -168,7 +169,7 @@ class ThreadedGameRunnerTest {
         int shotsPerProducer = 20;
         var startGate = new CountDownLatch(1);
         var readyGate = new CountDownLatch(producers);
-        var receipts = Collections.synchronizedList(new ArrayList<CommandReceipt<Boolean>>());
+        var receipts = Collections.synchronizedList(new ArrayList<CommandReceiptSupport<Boolean>>());
         ExecutorService executor = Executors.newFixedThreadPool(producers);
 
         try {

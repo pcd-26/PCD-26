@@ -54,7 +54,7 @@ final PDF report.
 | --- | --- | --- |
 | concurrent platform-thread version | `pcd.poool.ThreadedPoool`, `pcd.poool.threaded.*`, `pcd.poool.model.physics.threaded.*` | implemented |
 | concurrent task-based version | `pcd.poool.TaskBasedPoool`, `pcd.poool.taskbased.*`, `pcd.poool.model.physics.taskbased.*` | implemented |
-| use high-level coordination where possible | `CommandQueueMonitor`, `SnapshotStore`, `WorkerCompletionMonitor`, `BoundedBufferImpl` | implemented |
+| use high-level coordination where possible | `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, `WorkerCompletionMonitor`, `BoundedBufferImpl` | implemented |
 | preserve modularity and encapsulation | shared model packages under `pcd.poool.model.*` | implemented |
 | performance comparison against sequential baseline | benchmark package and CSV/chart export flow | implemented |
 | report with problem analysis and design | `docs/concurrent-architecture.md`, `docs/runtime-architecture.md` | documented |
@@ -197,8 +197,8 @@ The platform-thread runtime is centered around:
 - `ThreadedGameRunner`;
 - `ThreadedPhysicsEngine`;
 - `ThreadedBotAgent`;
-- `CommandQueueMonitor`;
-- `SnapshotStore`.
+- `CommandQueueMonitorSupport`;
+- `SnapshotStoreSupport`.
 
 The key design idea is single-writer ownership of the authoritative game
 state. Input and bot actions are queued as commands, the controller thread
@@ -223,7 +223,8 @@ The GUI never reads the mutable model directly.
 Instead, it consumes:
 
 - `GameSnapshot` for logical game state;
-- `ThreadedGameSnapshot` or `TaskBasedGameSnapshot` for runtime-specific data;
+- `RuntimeGameSnapshot` for immutable runner data shared by threaded and
+  task-based modes;
 - `ViewModel` for rendering copies;
 - `RenderSynch` for repaint coordination.
 

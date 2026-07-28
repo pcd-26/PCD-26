@@ -227,7 +227,7 @@ audit, the parallelism that counts is the one reached from that path.
   repeated immutable wrapper allocation.
 - `Board.getBalls()` allocates a fresh snapshot list every time it is called.
 - `Board.getHoles()` allocates a fresh copy every time it is called.
-- `ThreadedGameSnapshot.from` and `TaskBasedGameSnapshot.from` copy those
+- `RuntimeGameSnapshot.from` copies those
   lists again with `List.copyOf`.
 - The threaded engine allocates a `WorkerCompletionMonitor` for every `runRanges`
   call and creates new per-worker accumulator objects per collision phase.
