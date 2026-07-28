@@ -55,7 +55,7 @@
 \pagenumbering{arabic}
 
 \begin{abstract}
-This report describes the design and validation of \emph{Poool}, a two-dimensional game with moving balls, elastic collisions, friction, holes, a human player, and an asynchronous bot. The implementation provides three execution strategies over the same domain model: a sequential baseline, a platform-thread version, and an Executor Framework version. The concurrent versions keep the authoritative game state single-writer while parallelizing computationally expensive physics phases. This choice keeps the software modular and explainable, while still showing measurable speedup on large workloads.
+This report describes the design and validation of \emph{Poool}, a two-dimensional game with moving balls, elastic collisions, friction, holes, a human player, and an asynchronous bot. The implementation provides three execution strategies over the same domain model: a sequential baseline, a platform-thread version, and an Executor Framework version. The concurrent versions keep the authoritative game state single-writer while parallelizing computationally expensive physics phases. This choice preserves modularity and maintainability while still showing measurable speedup on large workloads.
 \end{abstract}
 
 \section{Problem Analysis}
@@ -297,11 +297,11 @@ executor & 17 & 442.41 & 2260.33 & 1.65 \\
 \caption{Speedup as the worker count changes.}
 \end{figure}
 
-The speedup is not perfectly monotonic. For example, the platform-thread version improves strongly up to 4 workers, drops at 8 workers in this snapshot, improves again at 16, and then drops at 17. This is expected in a real concurrent system: work is not perfectly divisible, some phases remain serial, workers contend for memory bandwidth, and extra workers add scheduling and barrier overhead. The result is still presentable because the concurrent versions clearly outperform the sequential baseline on the intended large workloads, while the report explicitly discusses the overhead and scaling limits.
+The speedup is not perfectly monotonic. For example, the platform-thread version improves strongly up to 4 workers, drops at 8 workers in this snapshot, improves again at 16, and then drops at 17. This is expected in a real concurrent system: work is not perfectly divisible, some phases remain serial, workers contend for memory bandwidth, and extra workers add scheduling and barrier overhead. The concurrent versions nevertheless outperform the sequential baseline on the intended large workloads, and the measured data highlights both the benefits and the limits of the adopted parallelization strategy.
 
 \section{Limitations}
 
-The implementation intentionally favors clarity and safe ownership over maximum possible parallelism. Some phases remain serialized: snapshot publication, score updates, candidate merging, and deterministic collision ordering. This limits theoretical speedup but makes the program easier to test and explain.
+The implementation intentionally favors clear ownership and safe synchronization over maximum possible parallelism. Some phases remain serialized: snapshot publication, score updates, candidate merging, and deterministic collision ordering. This limits theoretical speedup but improves testability, maintainability, and correctness reasoning.
 
 The JPF models are abstract. They verify the synchronization protocol, not the full numerical physics engine. Numerical correctness is instead covered by unit tests and deterministic benchmark checks. Benchmark results are also machine-dependent and should be interpreted as evidence of scalability on the tested environment, not as universal constants.
 
@@ -335,6 +335,6 @@ python verification/jpf/run_jpf.py --model both
 
 \section{Conclusion}
 
-The final implementation satisfies the assignment goals: it provides a working Poool game, a sequential baseline, a platform-thread concurrent version, and an Executor Framework task-based version. The architecture keeps the game model and physics contract shared, confines authoritative mutation to a controller path, and uses monitors or executors for coordination. Tests pass, JPF reports no errors on the minimal synchronization models, and the benchmarks show meaningful speedup on large workloads. The solution is therefore both technically useful for concurrent and distributed programming and simple enough to explain in an oral exam.
+The final implementation satisfies the assignment goals: it provides a working Poool game, a sequential baseline, a platform-thread concurrent version, and an Executor Framework task-based version. The architecture keeps the game model and physics contract shared, confines authoritative mutation to a controller path, and uses monitors or executors for coordination. Tests pass, JPF reports no errors on the minimal synchronization models, and the benchmarks show meaningful speedup on large workloads. The solution therefore provides a coherent and validated application of the concurrent programming techniques required by the assignment.
 
 \end{document}
