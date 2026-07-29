@@ -133,7 +133,7 @@ public class DistributedCriticalSection implements AutoCloseable {
      */
     private void initializeToken() throws IOException, InterruptedException {
         synchronized (this) {
-            this.channel = tokenQueueManager.declareQueueWithRecovery(connection, this.channel);
+            this.channel = tokenQueueManager.declareQueue(this.channel);
 
             bootstrapLock.withLock(connection, lockChannel -> {
                 String queueName = tokenQueueManager.queueName();

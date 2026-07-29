@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -65,8 +65,8 @@ class TokenQueueManagerTest {
     }
 
     @Test
-    @DisplayName("Queue declaration recovers automatically from inequivalent broker arguments")
-    void queueDeclarationRecoversFromInequivalentArguments() throws Exception {
+    @DisplayName("Queue declaration fails fast on inequivalent broker arguments without deleting the queue")
+    void queueDeclarationFailsFastOnInequivalentArguments() throws Exception {
         String csName = "queue-mgr-" + UUID.randomUUID();
         TokenQueueManager manager = new TokenQueueManager(csName);
 
@@ -77,14 +77,16 @@ class TokenQueueManagerTest {
             ch.queueDeclare(manager.queueName(), true, false, false, args);
         }
 
-        // TokenQueueManager should detect 406 PRECONDITION_FAILED, recreate the queue, and succeed.
+        // TokenQueueManager should detect 406 PRECONDITION_FAILED and fail without deleting the queue.
         Channel activeChannel = connection.createChannel();
         try {
-            Channel declaredChannel = manager.declareQueueWithRecovery(connection, activeChannel);
-            assertTrue(declaredChannel.isOpen(), "Channel must remain open after recovery");
+            assertThrows(IOException.class, () -> manager.declareQueue(activeChannel),
+                    "Inequivalent broker arguments should fail fast");
 
-            AMQP.Queue.DeclareOk state = declaredChannel.queueDeclarePassive(manager.queueName());
-            assertEquals(0, state.getMessageCount(), "Recreated queue should be empty");
+            try (Channel inspectChannel = connection.createChannel()) {
+                AMQP.Queue.DeclareOk state = inspectChannel.queueDeclarePassive(manager.queueName());
+                assertEquals(0, state.getMessageCount(), "Existing queue should remain intact after fail-fast");
+            }
         } finally {
             if (activeChannel.isOpen()) {
                 activeChannel.close();
