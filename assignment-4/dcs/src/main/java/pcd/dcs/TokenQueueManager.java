@@ -2,7 +2,6 @@ package pcd.dcs;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ShutdownSignalException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Handles RabbitMQ queue declaration, passive queue inspection, and channel recovery
@@ -31,69 +29,38 @@ record TokenQueueManager(String queueName) {
 
     /**
      * Declares the token queue using the active channel.
-     * Re-creates the queue if the broker rejects it due to an argument mismatch (406 PRECONDITION_FAILED).
+     * If the broker rejects the declaration because the queue already exists with incompatible
+     * arguments, the method fails fast rather than deleting broker state.
      *
-     * @param connection active RabbitMQ connection
-     * @param channel    the active channel to declare on; returns a valid channel if re-created
+     * @param channel the active channel to declare on
      * @return the active, valid Channel after declaration
-     * @throws IOException if declaration fails for non-precondition errors
+     * @throws IOException if declaration fails for non-precondition errors or incompatible broker state
      */
-    Channel declareQueueWithRecovery(Connection connection, Channel channel) throws IOException {
+    Channel declareQueue(Channel channel) throws IOException {
         try {
             channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
             return channel;
         } catch (IOException e) {
             if (isPreconditionFailed(e)) {
-                logger.warn("Queue '{}' on broker has inequivalent arguments. Re-creating queue...", queueName);
-                return recreateTokenQueue(connection, channel);
+                throw new IOException(
+                        "Queue '" + queueName + "' already exists with incompatible broker arguments. "
+                                + "Please clean up the queue manually before restarting the node.",
+                        e);
             }
             throw e;
         }
     }
 
-    private Channel recreateTokenQueue(Connection connection, Channel oldChannel) throws IOException {
-        try (Channel repairChannel = connection.createChannel()) {
-            repairChannel.queueDelete(queueName);
-        } catch (TimeoutException e) {
-            throw new IOException("Failed to close repair channel during queue recreation", e);
-        }
-        Channel newChannel = reopenChannel(connection, oldChannel);
-        newChannel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
-        return newChannel;
-    }
-
-    /**
-     * Re-opens the main AMQP channel associated with this instance and resets QoS settings.
-     * <p>
-     * This is required because AMQP 0-9-1 channel errors (such as 406 PRECONDITION_FAILED)
-     * cause the broker to close the active channel.
-     * </p>
-     *
-     * @throws IOException if opening a new channel fails
-     */
-    private Channel reopenChannel(Connection connection, Channel oldChannel) throws IOException {
-        if (oldChannel != null && oldChannel.isOpen()) {
-            try {
-                oldChannel.close();
-            } catch (IOException | TimeoutException ignored) {
-            }
-        }
-        Channel newChannel = connection.createChannel();
-        newChannel.basicQos(1);
-        return newChannel;
-    }
-
     /**
      * Returns the queue arguments used when declaring the token queue.
      *
-     * @return {@code null} to request standard durable queue configuration without extra x-arguments
+     * @return queue arguments that constrain the token queue to a single message
      */
     private Map<String, Object> tokenQueueArguments() {
         Map<String, Object> args = new HashMap<>();
         args.put("x-max-length", 1);
         args.put("x-overflow", "reject-publish");
         return args;
-//        return null;
     }
 
     /**

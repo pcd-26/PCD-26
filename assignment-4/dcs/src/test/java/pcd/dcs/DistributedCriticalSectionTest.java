@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -279,8 +278,8 @@ class DistributedCriticalSectionTest {
     }
 
     @Test
-    @DisplayName("Pre-existing queue with inequivalent arguments is recovered")
-    void preExistingQueueWithInequivalentArgumentsIsRecovered() throws Exception {
+    @DisplayName("Pre-existing queue with inequivalent arguments fails fast without deleting the queue")
+    void preExistingQueueWithInequivalentArgumentsFailsFast() throws Exception {
         String csName = uniqueName("inequivalent-args");
         String queueName = tokenQueueName(csName);
 
@@ -291,14 +290,15 @@ class DistributedCriticalSectionTest {
             ch.queueDeclare(queueName, true, false, false, args);
         }
 
-        // Construction should detect PRECONDITION_FAILED, recreate the queue, and succeed.
-        try (DistributedCriticalSection dcs = new DistributedCriticalSection(HOST, PORT, csName)) {
-            dcs.enter();
-            dcs.exit();
-        }
+        // Construction should detect PRECONDITION_FAILED and fail without deleting the queue.
+        assertThrows(IOException.class, () -> new DistributedCriticalSection(HOST, PORT, csName));
 
         QueueStatus status = readQueueStatus(queueName);
-        assertEquals(1, status.messageCount(), "Queue should have exactly one token after recovery and release");
+        assertEquals(0, status.messageCount(), "Queue should remain present after fail-fast initialization");
+        assertEquals(0, status.consumerCount(), "Fail-fast initialization must not leave consumers behind");
+        try (Channel cleanup = connection.createChannel()) {
+            cleanup.queueDelete(queueName);
+        }
     }
 
     private String uniqueName(String prefix) {
