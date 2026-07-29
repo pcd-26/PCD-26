@@ -50,9 +50,9 @@ public class Main {
     private static void printUsage() {
         System.out.println("Distributed Tic-Tac-Toe RMI Application");
         System.out.println("Usage:");
-        System.out.println("  java -jar target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar registry [port]");
-        System.out.println("  java -jar target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar server [registryHost] [registryPort] [serviceName]");
-        System.out.println("  java -jar target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar client [host] [port] [serviceName] [--cli]");
+        System.out.println("  java -jar target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar registry [port]");
+        System.out.println("  java -jar target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar server [registryHost] [registryPort] [serviceName]");
+        System.out.println("  java -jar target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar client [host] [port] [serviceName] [--cli]");
         System.out.println();
     }
 }

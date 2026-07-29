@@ -3,7 +3,7 @@
 #   .\run-dttt-registry.ps1 [port]
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$jarPath = Join-Path $scriptDir "target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
+$jarPath = Join-Path $scriptDir "target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar"
 
 $rebuild = $false
 if (-not (Test-Path $jarPath)) {

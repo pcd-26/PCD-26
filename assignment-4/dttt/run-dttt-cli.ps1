@@ -3,7 +3,7 @@
 #   .\run-dttt-cli.ps1 [host] [port] [serviceName]
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$jarPath = Join-Path $scriptDir "target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
+$jarPath = Join-Path $scriptDir "target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar"
 
 # Automatically rebuild if JAR doesn't exist or source files are newer than the JAR
 $rebuild = $false
