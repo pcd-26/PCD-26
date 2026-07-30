@@ -1,5 +1,7 @@
 # Run tests for the Distributed Critical Sections (DCS) middleware (Exercise 3 of Assignment 4).
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$composeFile = Join-Path $scriptDir "docker-compose.rabbitmq.yml"
+$composeProject = "pcd-dcs-rabbitmq"
 
 function Check-RabbitMQ {
     $socket = New-Object System.Net.Sockets.TcpClient
@@ -15,7 +17,7 @@ function Check-RabbitMQ {
 $rmqDockerStarted = $false
 if (-not (Check-RabbitMQ)) {
     Write-Host "RabbitMQ is not running on localhost:5672. Attempting to start RabbitMQ via Docker for tests..."
-    docker run -d --name rabbitmq-dcs-test -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+    docker compose -p $composeProject -f $composeFile up -d rabbitmq
     $rmqDockerStarted = $true
     Write-Host "Waiting for RabbitMQ to start..."
     for ($i = 0; $i -lt 30; $i++) {
@@ -39,8 +41,7 @@ $testExitCode = $LASTEXITCODE
 
 if ($rmqDockerStarted) {
     Write-Host "Stopping RabbitMQ Docker container..."
-    docker stop rabbitmq-dcs-test | Out-Null
-    docker rm rabbitmq-dcs-test | Out-Null
+    docker compose -p $composeProject -f $composeFile down --remove-orphans | Out-Null
 }
 
 exit $testExitCode
