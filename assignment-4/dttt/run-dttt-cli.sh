@@ -4,7 +4,7 @@
 #   ./run-dttt-cli.sh [host] [port] [serviceName]
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-JAR_PATH="$DIR/target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
+JAR_PATH="$DIR/target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar"
 
 # Automatically rebuild if JAR doesn't exist or source files are newer than the JAR
 REBUILD=false

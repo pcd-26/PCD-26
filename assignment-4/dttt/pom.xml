@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>pcd</groupId>
-    <artifactId>distributed-ttt</artifactId>
+    <artifactId>ex2-distributed-tic-tac-toe</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
@@ -15,6 +15,13 @@
     </properties>
 
     <dependencies>
+        <!-- JetBrains annotations for nullability contracts -->
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>24.1.0</version>
+        </dependency>
+
         <!-- JUnit 5 for testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

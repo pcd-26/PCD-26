@@ -3,6 +3,8 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHARED_LOG="$SCRIPT_DIR/dcs_shared.log"
+COMPOSE_FILE="$SCRIPT_DIR/docker-compose.rabbitmq.yml"
+COMPOSE_PROJECT="pcd-dcs-rabbitmq"
 
 # Function to check if RabbitMQ is running
 check_rabbitmq() {
@@ -13,7 +15,7 @@ check_rabbitmq() {
 RMQ_DOCKER_STARTED=false
 if ! check_rabbitmq; then
     echo "RabbitMQ is not running on localhost:5672. Attempting to start RabbitMQ via Docker..."
-    docker run -d --name rabbitmq-dcs-run -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+    docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" up -d rabbitmq
     RMQ_DOCKER_STARTED=true
     echo "Waiting for RabbitMQ to start..."
     for i in {1..30}; do
@@ -68,8 +70,7 @@ cat "$SHARED_LOG"
 # Clean up Docker if we started it
 if [ "$RMQ_DOCKER_STARTED" = true ]; then
     echo "Stopping RabbitMQ Docker container..."
-    docker stop rabbitmq-dcs-run >/dev/null
-    docker rm rabbitmq-dcs-run >/dev/null
+    docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" down --remove-orphans >/dev/null
 fi
 
 echo "Done."

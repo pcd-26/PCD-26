@@ -1,25 +1,28 @@
 package pcd.dttt.registry;
 
 import java.rmi.registry.LocateRegistry;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * Entry point that starts a standalone Java RMI registry.
+ * Entry point that launches a standalone Java RMI registry process.
  *
- * <p>This process is intentionally separate from the server JVM so the registry, server,
- * and clients can be launched independently when needed.</p>
+ * <p>Running the RMI registry in a dedicated process allows the registry, game server,
+ * and client applications to be started, restarted, and monitored independently.</p>
  */
 public final class RegistryMain {
-    /** Default port for the standalone registry. */
+    private static final Logger LOGGER = Logger.getLogger(RegistryMain.class.getName());
+
+    /** Default port for the standalone RMI registry. */
     private static final int DEFAULT_PORT = 1099;
 
-    private RegistryMain() {
-        // Utility class.
-    }
+    /** Private constructor to prevent instantiation of utility class. */
+    private RegistryMain() {}
 
     /**
-     * Starts the RMI registry on the requested port and keeps the JVM alive.
+     * Starts the RMI registry on the specified port (or default 1099) and keeps the JVM running.
      *
-     * @param args optional registry port
+     * @param args optional command-line argument specifying the custom RMI registry port number
      */
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
@@ -27,7 +30,7 @@ public final class RegistryMain {
             try {
                 port = Integer.parseInt(args[0]);
             } catch (NumberFormatException e) {
-                System.err.println("Invalid registry port '" + args[0] + "', using default " + DEFAULT_PORT + ".");
+                LOGGER.warning("Invalid registry port '" + args[0] + "', using default " + DEFAULT_PORT + ".");
             }
         }
 
@@ -36,15 +39,13 @@ public final class RegistryMain {
             System.out.println("RMI registry started on port " + port + ".");
             System.out.println("Press Ctrl+C to terminate the registry process.");
 
-            Object lock = new Object();
-            synchronized (lock) {
-                while (true) {
-                    lock.wait();
-                }
-            }
+            // Keep main thread alive until process termination
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.info("Registry process interrupted, shutting down.");
         } catch (Exception e) {
-            System.err.println("Registry failed to start due to exception:");
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Registry failed to start due to exception", e);
             System.exit(1);
         }
     }

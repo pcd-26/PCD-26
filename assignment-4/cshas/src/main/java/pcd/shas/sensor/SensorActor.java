@@ -59,19 +59,19 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
      * @return the sensor behavior
      */
     public static Behavior<Command> create(
-            String sensorId,
-            SensorType sensorType,
-            Zone zone
+        String sensorId,
+        SensorType sensorType,
+        Zone zone
     ) {
         validate(sensorId, sensorType, zone);
         return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, zone));
     }
 
     private SensorActor(
-            ActorContext<Command> context,
-            String sensorId,
-            SensorType sensorType,
-            Zone zone
+        ActorContext<Command> context,
+        String sensorId,
+        SensorType sensorType,
+        Zone zone
     ) {
         super(context);
         this.sensorId = sensorId;
@@ -80,27 +80,33 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
         // Subscribe to control unit updates from receptionist
         ActorRef<Receptionist.Listing> listingAdapter = context.messageAdapter(
-                Receptionist.Listing.class,
-                listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
+            Receptionist.Listing.class,
+            listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
         );
         context.getSystem().receptionist().tell(
-                Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
+            Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
         );
     }
 
     /**
      * Returns the sensor command handlers.
      *
-     * @return the receive builder for sensor commands
+     * @return the Receive builder for sensor commands
      */
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
-                .onMessage(Activate.class, this::onActivate)
-                .build();
+            .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
+            .onMessage(Activate.class, this::onActivate)
+            .build();
     }
 
+    /**
+     * Handles dynamic updates from the receptionist containing active control unit references.
+     *
+     * @param command update containing the set of discovered control unit actors
+     * @return updated behavior
+     */
     private Behavior<Command> onControlUnitsUpdated(ControlUnitsUpdated command) {
         getContext().getLog().info("Sensor {} discovered control units: {}", sensorId, command.controlUnits());
         this.controlUnits.clear();
@@ -108,12 +114,19 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         return this;
     }
 
+    /**
+     * Handles sensor activation events, broadcasting a {@link ControlUnitActor.SensorActivated}
+     * message containing metadata to all discovered control units.
+     *
+     * @param command activation command
+     * @return updated behavior
+     */
     private Behavior<Command> onActivate(Activate command) {
         getContext().getLog().info(
-                "Sensor activated: id={}, type={}, zone={}",
-                sensorId,
-                sensorType,
-                zone
+            "Sensor activated: id={}, type={}, zone={}",
+            sensorId,
+            sensorType,
+            zone
         );
 
         if (controlUnits.isEmpty()) {
@@ -128,6 +141,13 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         return this;
     }
 
+    /**
+     * Validates sensor construction parameters.
+     *
+     * @param sensorId unique sensor ID
+     * @param sensorType sensor type
+     * @param zone installation zone
+     */
     private static void validate(String sensorId, SensorType sensorType, Zone zone) {
         Objects.requireNonNull(sensorId, "sensorId");
         Objects.requireNonNull(sensorType, "sensorType");

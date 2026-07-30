@@ -198,7 +198,7 @@ public class CLIClient implements GameEventListener {
     private void playGameLoop() {
         // Wait for the game to start if waiting
         synchronized (gameLock) {
-            while (currentBoardState == null || currentBoardState.getStatus() == GameStatus.WAITING) {
+            while (currentBoardState == null || currentBoardState.status() == GameStatus.WAITING) {
                 System.out.println("Waiting for an opponent to join...");
                 try {
                     gameLock.wait();
@@ -225,7 +225,7 @@ public class CLIClient implements GameEventListener {
                 break;
             }
 
-            if (state.getStatus() != GameStatus.ACTIVE) {
+            if (state.status() != GameStatus.ACTIVE) {
                 System.out.println("\nFinal Board:");
                 printBoard(state);
                 showGameEndResult(state, leftFlag);
@@ -234,7 +234,7 @@ public class CLIClient implements GameEventListener {
 
             printBoard(state);
 
-            if (state.getTurnOf().equals(playerName)) {
+            if (state.turnOf().equals(playerName)) {
                 System.out.println("It's your turn!");
                 System.out.print("Enter coordinates (row col, e.g. '0 1') or 'leave': ");
                 String input = scanner.nextLine().trim();
@@ -267,11 +267,11 @@ public class CLIClient implements GameEventListener {
                     System.out.println("Please input exactly two numbers (row and col) or type 'leave'.");
                 }
             } else {
-                System.out.println("Waiting for opponent (" + state.getTurnOf() + ") to move...");
+                System.out.println("Waiting for opponent (" + state.turnOf() + ") to move...");
                 synchronized (gameLock) {
                     while (currentBoardState != null && 
-                           currentBoardState.getStatus() == GameStatus.ACTIVE && 
-                           !currentBoardState.getTurnOf().equals(playerName)) {
+                           currentBoardState.status() == GameStatus.ACTIVE &&
+                           !currentBoardState.turnOf().equals(playerName)) {
                         try {
                             gameLock.wait();
                         } catch (InterruptedException e) {
@@ -300,7 +300,7 @@ public class CLIClient implements GameEventListener {
      * @param leftFlag true if the opponent left before completion
      */
     private void showGameEndResult(BoardState state, boolean leftFlag) {
-        GameStatus status = state.getStatus();
+        GameStatus status = state.status();
         System.out.println("=================================");
         if (status == GameStatus.DRAW) {
             System.out.println("Game over: It's a DRAW!");
@@ -312,7 +312,7 @@ public class CLIClient implements GameEventListener {
                 System.out.println("The game was terminated.");
             }
         } else {
-            String winner = (status == GameStatus.WON_X) ? state.getPlayerX() : state.getPlayerO();
+            String winner = (status == GameStatus.WON_X) ? state.playerX() : state.playerO();
             if (winner.equals(playerName)) {
                 System.out.println("Congratulations! YOU WON!");
             } else {

@@ -4,7 +4,7 @@
 #   ./run-dttt-registry.sh [port]
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-JAR_PATH="$DIR/target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar"
+JAR_PATH="$DIR/target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar"
 
 REBUILD=false
 if [ ! -f "$JAR_PATH" ]; then

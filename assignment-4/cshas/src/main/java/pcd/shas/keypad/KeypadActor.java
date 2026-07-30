@@ -71,28 +71,34 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         super(context);
         // Subscribe to control unit updates from receptionist
         ActorRef<Receptionist.Listing> listingAdapter = context.messageAdapter(
-                Receptionist.Listing.class,
-                listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
+            Receptionist.Listing.class,
+            listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
         );
         context.getSystem().receptionist().tell(
-                Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
+            Receptionist.subscribe(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, listingAdapter)
         );
     }
 
     /**
      * Returns the keypad command handlers.
      *
-     * @return the receive builder for keypad commands
+     * @return the Receive builder for keypad commands
      */
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
-                .onMessage(PressKey.class, this::onPressKey)
-                .onMessage(SubmitPin.class, this::onSubmitPin)
-                .build();
+            .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
+            .onMessage(PressKey.class, this::onPressKey)
+            .onMessage(SubmitPin.class, this::onSubmitPin)
+            .build();
     }
 
+    /**
+     * Handles dynamic updates from the receptionist containing active control unit references.
+     *
+     * @param command update containing the set of discovered control unit actors
+     * @return updated behavior
+     */
     private Behavior<Command> onControlUnitsUpdated(ControlUnitsUpdated command) {
         getContext().getLog().info("Keypad discovered control units: {}", command.controlUnits());
         this.controlUnits.clear();
@@ -100,6 +106,15 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         return this;
     }
 
+    /**
+     * Handles individual key presses on the keypad console.
+     *
+     * <p>Digits are appended to the local buffer, {@code '#'} submits the buffered PIN,
+     * and {@code '*'} clears the buffer.</p>
+     *
+     * @param command key press event
+     * @return updated behavior
+     */
     private Behavior<Command> onPressKey(PressKey command) {
         char key = command.key();
         if (Character.isDigit(key)) {
@@ -119,11 +134,20 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         return this;
     }
 
+    /**
+     * Handles direct submission of a complete PIN string.
+     *
+     * @param command PIN submission command
+     * @return updated behavior
+     */
     private Behavior<Command> onSubmitPin(SubmitPin command) {
         submitPinToControlUnits(command.pin());
         return this;
     }
 
+    /**
+     * Submits the buffered PIN to all discovered control units and clears the buffer.
+     */
     private void submitBufferedPin() {
         if (pinBuffer.isEmpty()) {
             return;
@@ -133,6 +157,11 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         pinBuffer.setLength(0);
     }
 
+    /**
+     * Sends a {@link ControlUnitActor.PinSubmitted} message to all discovered control units.
+     *
+     * @param pin the PIN string to submit
+     */
     private void submitPinToControlUnits(String pin) {
         if (controlUnits.isEmpty()) {
             getContext().getLog().warn("No control unit found in the cluster to submit PIN: {}", pin);

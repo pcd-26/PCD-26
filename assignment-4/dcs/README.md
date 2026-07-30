@@ -9,6 +9,25 @@ This directory contains the implementation of **Exercise #3** of Assignment 4: a
 - RabbitMQ 3.x or compatible with AMQP 0-9-1
 - Docker, if you want the helper scripts to start RabbitMQ automatically
 
+## Quick RabbitMQ Start
+
+If you already have Docker installed, you can start a local RabbitMQ broker for this module with:
+
+```bash
+docker compose -f docker-compose.rabbitmq.yml up -d
+```
+
+The broker exposes:
+
+- AMQP on `localhost:5672`
+- the management UI on `http://localhost:15672` (`guest` / `guest`)
+
+To stop it later:
+
+```bash
+docker compose -f docker-compose.rabbitmq.yml down
+```
+
 ## Design and Concurrency Strategy
 
 The distributed critical section is implemented as a token-based mutual exclusion protocol:

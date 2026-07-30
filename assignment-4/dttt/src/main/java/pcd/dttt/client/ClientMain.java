@@ -1,6 +1,8 @@
 package pcd.dttt.client;
 
 import java.awt.GraphicsEnvironment;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.UIManager;
 import pcd.dttt.common.Lobby;
 
@@ -10,6 +12,11 @@ import pcd.dttt.common.Lobby;
  * instantiating the GameController logic layer and injecting it into the UIs.
  */
 public class ClientMain {
+
+    private static final Logger LOGGER = Logger.getLogger(ClientMain.class.getName());
+
+    /** Private constructor to prevent instantiation of utility class. */
+    private ClientMain() {}
 
     /**
      * Entry point for the Client application.
@@ -90,8 +97,7 @@ public class ClientMain {
             CLIClient cli = new CLIClient(controller, host, port, serviceName);
             cli.start();
         } catch (Exception e) {
-            System.err.println("CLI mode launch failed: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "CLI mode launch failed for target RMI registry at " + host + ":" + port + " (" + serviceName + ")", e);
             System.exit(1);
         }
     }

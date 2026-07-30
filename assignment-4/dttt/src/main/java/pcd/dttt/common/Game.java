@@ -11,6 +11,9 @@ import pcd.dttt.common.exceptions.NotYourTurnException;
 public interface Game extends Remote {
     /**
      * Gets the name of the game.
+     *
+     * @return the game room name
+     * @throws RemoteException if an RMI communication error occurs
      */
     String getName() throws RemoteException;
 
@@ -37,6 +40,9 @@ public interface Game extends Remote {
 
     /**
      * Gets the current board state snapshot.
+     *
+     * @return the current BoardState snapshot
+     * @throws RemoteException if an RMI communication error occurs
      */
     BoardState getBoardState() throws RemoteException;
 }
