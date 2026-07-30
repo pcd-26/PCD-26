@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>pcd</groupId>
-  <artifactId>pcd-ass-04-ex1</artifactId>
+  <artifactId>ex1-clustered-home-alarm-system</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>pcd-assignment-04-ex1</name>
@@ -16,7 +16,7 @@
     <pekko.version>1.0.2</pekko.version>
     <scala.binary.version>2.13</scala.binary.version>
     <slf4j.version>2.0.12</slf4j.version>
-    <logback.version>1.5.3</logback.version>
+    <logback.version>1.5.13</logback.version>
     <junit.version>5.11.0</junit.version>
   </properties>
 

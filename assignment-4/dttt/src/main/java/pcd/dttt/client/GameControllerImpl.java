@@ -37,6 +37,11 @@ public class GameControllerImpl implements GameController, GameEventListener {
     private final List<GameEventListener> listeners = new ArrayList<>();
 
     /**
+     * Constructs a new GameControllerImpl instance.
+     */
+    public GameControllerImpl() {}
+
+    /**
      * {@inheritDoc}
      * Establishes the matchmaking Lobby lookup and exports the player's client callback stub.
      *

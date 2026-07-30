@@ -2,6 +2,7 @@ package pcd.dttt.client;
 
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.io.Serial;
 import java.util.List;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -17,6 +18,7 @@ import pcd.dttt.common.exceptions.NotYourTurnException;
  * Implements {@link GameEventListener} to receive state notifications and safely updates components on the EDT.
  */
 public class GUIClient extends JFrame implements GameEventListener {
+    @Serial
     private static final long serialVersionUID = 1L;
 
     // Sleek Dark Theme Color Palette
@@ -28,8 +30,6 @@ public class GUIClient extends JFrame implements GameEventListener {
     private static final Color COLOR_BTN_BG = new Color(17, 17, 27);
     /** Foreground color for default text labels. */
     private static final Color COLOR_FG = new Color(205, 214, 244);
-    /** Accent color used for highlighting elements. */
-    private static final Color COLOR_ACCENT = new Color(137, 180, 250);
     /** Status color representing success or positive state. */
     private static final Color COLOR_STATUS = new Color(166, 227, 161);
     /** Warning color representing pending or waiting state. */
@@ -102,10 +102,6 @@ public class GUIClient extends JFrame implements GameEventListener {
     private JLabel gameStatusLbl;
     /** Label to display opponent info. */
     private JLabel gameOpponentLbl;
-    /** Button to leave the current match. */
-    private JButton leaveGameBtn;
-    /** Panel container for the tic-tac-toe grid. */
-    private JPanel boardPanel;
 
     /**
      * Constructs a new GUI client frame.
@@ -248,13 +244,10 @@ public class GUIClient extends JFrame implements GameEventListener {
      * @return Panel configured for lobby interaction.
      */
     private JPanel buildLobbyScreen() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(COLOR_BG);
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        JPanel panel = createScreenPanel();
 
         // Top Panel - Header
-        JPanel topPanel = new JPanel(new GridLayout(2, 1, 5, 5));
-        topPanel.setBackground(COLOR_BG);
+        JPanel topPanel = createHeaderPanel();
         JLabel title = new JLabel("Game Lobby", JLabel.CENTER);
         title.setFont(new Font("SansSerif", Font.BOLD, 22));
         title.setForeground(Color.WHITE);
@@ -338,13 +331,10 @@ public class GUIClient extends JFrame implements GameEventListener {
      * @return Panel configured for the game board.
      */
     private JPanel buildGameScreen() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(COLOR_BG);
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        JPanel panel = createScreenPanel();
 
         // Top Information
-        JPanel infoPanel = new JPanel(new GridLayout(2, 1, 5, 5));
-        infoPanel.setBackground(COLOR_BG);
+        JPanel infoPanel = createHeaderPanel();
         
         gameStatusLbl = new JLabel("Waiting for match to begin...", JLabel.CENTER);
         gameStatusLbl.setFont(new Font("SansSerif", Font.BOLD, 18));
@@ -359,41 +349,15 @@ public class GUIClient extends JFrame implements GameEventListener {
         panel.add(infoPanel, BorderLayout.NORTH);
 
         // Center Grid 3x3
-        boardPanel = new JPanel(new GridLayout(3, 3, 10, 10));
+        /* Panel container for the tic-tac-toe grid. */
+        JPanel boardPanel = new JPanel(new GridLayout(3, 3, 10, 10));
         boardPanel.setBackground(COLOR_PANEL_BG);
         boardPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         boardButtons = new JButton[3][3];
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
-                final int row = r;
-                final int col = c;
-                JButton btn = new JButton("");
-                btn.setBackground(COLOR_BTN_BG);
-                btn.setForeground(Color.WHITE);
-                btn.setFont(new Font("SansSerif", Font.BOLD, 54));
-                btn.setFocusPainted(false);
-                btn.setBorder(new LineBorder(new Color(69, 71, 90), 2));
-                btn.addActionListener(e -> handleBoardClick(row, col));
-                btn.setEnabled(false); // Disabled until match starts
-                
-                // Highlight Empty Cell Hover Effects
-                btn.addMouseListener(new java.awt.event.MouseAdapter() {
-                    @Override
-                    public void mouseEntered(java.awt.event.MouseEvent evt) {
-                        if (btn.isEnabled() && btn.getText().isEmpty()) {
-                            btn.setBackground(COLOR_PANEL_BG);
-                        }
-                    }
-
-                    @Override
-                    public void mouseExited(java.awt.event.MouseEvent evt) {
-                        if (btn.getText().isEmpty()) {
-                            btn.setBackground(COLOR_BTN_BG);
-                        }
-                    }
-                });
-                
+                JButton btn = createBoardCellButton(r, c);
                 boardButtons[r][c] = btn;
                 boardPanel.add(btn);
             }
@@ -401,7 +365,8 @@ public class GUIClient extends JFrame implements GameEventListener {
         panel.add(boardPanel, BorderLayout.CENTER);
 
         // Bottom - Leave button
-        leaveGameBtn = createStyledButton("Leave Match", COLOR_BTN_DANGER);
+        /* Button to leave the current match. */
+        JButton leaveGameBtn = createStyledButton("Leave Match", COLOR_BTN_DANGER);
         leaveGameBtn.addActionListener(this::handleLeaveGame);
         panel.add(leaveGameBtn, BorderLayout.SOUTH);
 
@@ -409,6 +374,64 @@ public class GUIClient extends JFrame implements GameEventListener {
     }
 
     // --- Helper UI Factory Methods ---
+
+    /**
+     * Factory method for creating a main screen container panel with padding.
+     * @return formatted border layout panel
+     */
+    private JPanel createScreenPanel() {
+        JPanel panel = new JPanel(new BorderLayout(15, 15));
+        panel.setBackground(COLOR_BG);
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        return panel;
+    }
+
+    /**
+     * Factory method for creating a top header sub-panel with vertical grid layout.
+     * @return formatted header panel
+     */
+    private JPanel createHeaderPanel() {
+        JPanel panel = new JPanel(new GridLayout(2, 1, 5, 5));
+        panel.setBackground(COLOR_BG);
+        return panel;
+    }
+
+    /**
+     * Factory method for creating a grid cell button on the game board with click handlers and hover effects.
+     *
+     * @param row grid row index
+     * @param col grid column index
+     * @return initialized grid cell button
+     */
+    private JButton createBoardCellButton(int row, int col) {
+        JButton btn = new JButton("");
+        btn.setBackground(COLOR_BTN_BG);
+        btn.setForeground(Color.WHITE);
+        btn.setFont(new Font("SansSerif", Font.BOLD, 54));
+        btn.setFocusPainted(false);
+        btn.setBorder(new LineBorder(new Color(69, 71, 90), 2));
+        btn.addActionListener(e -> handleBoardClick(row, col));
+        btn.setEnabled(false); // Disabled until match starts
+
+        // Highlight Empty Cell Hover Effects
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                if (btn.isEnabled() && btn.getText().isEmpty()) {
+                    btn.setBackground(COLOR_PANEL_BG);
+                }
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                if (btn.getText().isEmpty()) {
+                    btn.setBackground(COLOR_BTN_BG);
+                }
+            }
+        });
+
+        return btn;
+    }
 
     /**
      * Factory method for styled labels.
@@ -673,17 +696,11 @@ public class GUIClient extends JFrame implements GameEventListener {
             try {
                 controller.makeMove(r, c);
             } catch (NotYourTurnException ex) {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "It's not your turn!", "Move Rejected", JOptionPane.WARNING_MESSAGE);
-                });
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "It's not your turn!", "Move Rejected", JOptionPane.WARNING_MESSAGE));
             } catch (InvalidMoveException ex) {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "Invalid Move:\n" + ex.getMessage(), "Move Rejected", JOptionPane.WARNING_MESSAGE);
-                });
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Invalid Move:\n" + ex.getMessage(), "Move Rejected", JOptionPane.WARNING_MESSAGE));
             } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this, "Error during move submission:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                });
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error during move submission:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
             }
         }).start();
     }
@@ -726,12 +743,12 @@ public class GUIClient extends JFrame implements GameEventListener {
             }
         }
 
-        GameStatus status = state.getStatus();
+        GameStatus status = state.status();
         if (status == GameStatus.ACTIVE) {
-            String opponentName = myMark == 'X' ? state.getPlayerO() : state.getPlayerX();
+            String opponentName = myMark == 'X' ? state.playerO() : state.playerX();
             gameOpponentLbl.setText("Opponent: " + opponentName + " (" + (myMark == 'X' ? 'O' : 'X') + ") | You: " + controller.getPlayerName() + " (" + myMark + ")");
 
-            if (state.getTurnOf().equals(controller.getPlayerName())) {
+            if (state.turnOf().equals(controller.getPlayerName())) {
                 gameStatusLbl.setText("Your turn!");
                 gameStatusLbl.setForeground(COLOR_STATUS);
                 setBoardEnabled(true);
@@ -775,7 +792,7 @@ public class GUIClient extends JFrame implements GameEventListener {
      * @param state the final terminal board state
      */
     private void showEndGameDialog(BoardState state) {
-        GameStatus status = state.getStatus();
+        GameStatus status = state.status();
         String message;
         String title = "Game Over";
 
@@ -788,7 +805,7 @@ public class GUIClient extends JFrame implements GameEventListener {
             gameStatusLbl.setText("Result: ABANDONED");
             gameStatusLbl.setForeground(COLOR_X);
         } else {
-            String winner = status == GameStatus.WON_X ? state.getPlayerX() : state.getPlayerO();
+            String winner = status == GameStatus.WON_X ? state.playerX() : state.playerO();
             if (winner.equals(controller.getPlayerName())) {
                 message = "Congratulations, you won!";
                 gameStatusLbl.setText("Result: YOU WON!");
@@ -819,9 +836,7 @@ public class GUIClient extends JFrame implements GameEventListener {
      */
     @Override
     public void onGameStarted(BoardState initialState) {
-        SwingUtilities.invokeLater(() -> {
-            updateBoardState(initialState);
-        });
+        SwingUtilities.invokeLater(() -> updateBoardState(initialState));
     }
 
     /**
@@ -831,9 +846,7 @@ public class GUIClient extends JFrame implements GameEventListener {
      */
     @Override
     public void onGameUpdated(BoardState newState) {
-        SwingUtilities.invokeLater(() -> {
-            updateBoardState(newState);
-        });
+        SwingUtilities.invokeLater(() -> updateBoardState(newState));
     }
 
     /**
@@ -843,9 +856,10 @@ public class GUIClient extends JFrame implements GameEventListener {
      */
     @Override
     public void onOpponentLeft(String opponentName) {
-        SwingUtilities.invokeLater(() -> {
-            JOptionPane.showMessageDialog(this, "Opponent '" + opponentName + "' has left the match.",
-                    "Match Abandoned", JOptionPane.WARNING_MESSAGE);
-        });
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                this,
+                "Opponent '" + opponentName + "' has left the match.",
+                "Match Abandoned", JOptionPane.WARNING_MESSAGE
+        ));
     }
 }

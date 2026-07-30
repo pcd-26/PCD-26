@@ -72,9 +72,9 @@ Defaults:
 Command line usage:
 
 ```bash
-java -jar target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar registry [port]
-java -jar target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar server [registryHost] [registryPort] [serviceName]
-java -jar target/distributed-ttt-1.0-SNAPSHOT-jar-with-dependencies.jar client [host] [port] [serviceName] [--cli]
+java -jar target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar registry [port]
+java -jar target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar server [registryHost] [registryPort] [serviceName]
+java -jar target/ex2-distributed-tic-tac-toe-1.0-SNAPSHOT-jar-with-dependencies.jar client [host] [port] [serviceName] [--cli]
 ```
 
 The GUI connection form also allows the host, port, and service name to be edited.

@@ -11,11 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -30,23 +27,18 @@ import java.util.concurrent.TimeoutException;
  * <p>
  * The bootstrap protocol is crash-safe: a temporary exclusive queue on the broker serializes the
  * decision to seed the token, and the token is published only after a passive queue inspection shows
- * that no token message exists and no consumer is holding one. Because the lock queue is deleted at
- * the end of the transition, no bootstrap artifact can outlive the token.
+ * that no token message exists and no consumer is holding one.
  * </p>
  * <p>
  * The token is consumed with manual acknowledgment ({@code autoAck = false}). While a process holds
  * the critical section, its consumer stays registered so a passive bootstrap check can distinguish an
  * initialized system from a non-initialized one. If the process crashes or its connection to RabbitMQ
- * is closed, RabbitMQ automatically requeues the unacknowledged token message.
+ * is closed, RabbitMQ automatically re-queues the unacknowledged token message.
  * </p>
  */
 public class DistributedCriticalSection implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(DistributedCriticalSection.class);
-    private static final String TOKEN_QUEUE_PREFIX = "cs_token_";
-    private static final String BOOTSTRAP_LOCK_QUEUE_PREFIX = "cs_bootstrap_lock_";
-    private static final long BOOTSTRAP_LOCK_RETRY_DELAY_MILLIS = 50L;
-    private static final long BOOTSTRAP_LOCK_TIMEOUT_MILLIS = 10_000L;
     private static final byte[] EMPTY_BODY = new byte[0];
 
     /**
@@ -59,20 +51,19 @@ public class DistributedCriticalSection implements AutoCloseable {
     }
 
     private final Connection connection;
-    private final Channel channel;
     private final String csName;
-    private final String queueName;
-    private final String bootstrapLockQueue;
+    private final TokenQueueManager tokenQueueManager;
+    private final BrokerBootstrapLock bootstrapLock;
     private final boolean ownConnection;
     private final BootstrapHook bootstrapHook;
 
+    private Channel channel;
     private String consumerTag;
     private Long currentDeliveryTag;
 
     /**
      * Creates a new distributed critical section instance using an existing RabbitMQ connection.
-     * The connection lifecycle will NOT be managed by this instance (it will not be closed on
-     * {@link #close()}).
+     * The connection lifecycle will NOT be managed by this instance (it will not be closed on {@link #close()}).
      *
      * @param connection the active RabbitMQ connection to use
      * @param csName     the name of the critical section
@@ -93,8 +84,8 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
         this.connection = connection;
         this.csName = csName;
-        this.queueName = TOKEN_QUEUE_PREFIX + csName;
-        this.bootstrapLockQueue = BOOTSTRAP_LOCK_QUEUE_PREFIX + csName;
+        this.tokenQueueManager = new TokenQueueManager(csName);
+        this.bootstrapLock = new BrokerBootstrapLock(csName);
         this.ownConnection = false;
         this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
         this.channel = connection.createChannel();
@@ -128,8 +119,8 @@ public class DistributedCriticalSection implements AutoCloseable {
         factory.setPort(port);
         this.connection = factory.newConnection();
         this.csName = csName;
-        this.queueName = TOKEN_QUEUE_PREFIX + csName;
-        this.bootstrapLockQueue = BOOTSTRAP_LOCK_QUEUE_PREFIX + csName;
+        this.tokenQueueManager = new TokenQueueManager(csName);
+        this.bootstrapLock = new BrokerBootstrapLock(csName);
         this.ownConnection = true;
         this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
         this.channel = connection.createChannel();
@@ -139,19 +130,13 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     /**
      * Seeds the token queue exactly once, using a temporary broker lock to serialize bootstrap.
-     * <p>
-     * The lock queue is exclusive to the connection that is currently deciding whether a token must
-     * be created. The token is published only if a passive inspection shows that the queue has no
-     * messages and no active consumer. That combination means the critical section has never been
-     * initialized yet. The lock queue is deleted in a {@code finally} block, so no bootstrap
-     * artifact can survive the token itself.
-     * </p>
      */
     private void initializeToken() throws IOException, InterruptedException {
-        synchronized (connection) {
-            channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
+        synchronized (this) {
+            this.channel = tokenQueueManager.declareQueue(this.channel);
 
-            withBootstrapLock(lockChannel -> {
+            bootstrapLock.withLock(connection, lockChannel -> {
+                String queueName = tokenQueueManager.queueName();
                 AMQP.Queue.DeclareOk state = lockChannel.queueDeclarePassive(queueName);
                 if (state.getMessageCount() == 0 && state.getConsumerCount() == 0) {
                     lockChannel.confirmSelect();
@@ -176,55 +161,6 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
     }
 
-    private Map<String, Object> tokenQueueArguments() {
-        Map<String, Object> args = new HashMap<>();
-        args.put("x-max-length", 1);
-        args.put("x-overflow", "reject-publish");
-        return args;
-    }
-
-    private void withBootstrapLock(BootstrapAction action) throws IOException, InterruptedException {
-        synchronized (connection) {
-            long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(BOOTSTRAP_LOCK_TIMEOUT_MILLIS);
-
-            while (true) {
-                Channel lockChannel = connection.createChannel();
-                try {
-                    try {
-                        lockChannel.queueDeclare(bootstrapLockQueue, false, true, false, null);
-                    } catch (IOException lockFailure) {
-                        if (System.nanoTime() >= deadlineNanos) {
-                            throw new IOException(
-                                    "Timed out acquiring bootstrap lock for critical section '" + csName + "'",
-                                    lockFailure);
-                        }
-                        Thread.sleep(BOOTSTRAP_LOCK_RETRY_DELAY_MILLIS);
-                        continue;
-                    }
-
-                    try {
-                        action.run(lockChannel);
-                    } finally {
-                        try {
-                            lockChannel.queueDelete(bootstrapLockQueue);
-                        } catch (IOException cleanupFailure) {
-                            logger.warn("Failed to delete bootstrap lock queue for '{}'", csName, cleanupFailure);
-                        }
-                    }
-                    return;
-                } finally {
-                    try {
-                        if (lockChannel.isOpen()) {
-                            lockChannel.close();
-                        }
-                    } catch (IOException | TimeoutException cleanupFailure) {
-                        logger.warn("Failed to close bootstrap lock channel for '{}'", csName, cleanupFailure);
-                    }
-                }
-            }
-        }
-    }
-
     /**
      * Enters the critical section. This method blocks until the lock is acquired.
      * <p>
@@ -245,8 +181,13 @@ public class DistributedCriticalSection implements AutoCloseable {
         logger.debug("Attempting to enter critical section '{}'", csName);
 
         BlockingQueue<Delivery> deliveryQueue = new ArrayBlockingQueue<>(1);
-        DeliverCallback deliverCallback = (tag, delivery) -> deliveryQueue.offer(delivery);
+        DeliverCallback deliverCallback = (tag, delivery) -> {
+            if (!deliveryQueue.offer(delivery)) {
+                logger.warn("Delivery queue capacity exceeded; token message dropped for '{}'", csName);
+            }
+        };
 
+        String queueName = tokenQueueManager.queueName();
         consumerTag = channel.basicConsume(queueName, false, deliverCallback, tag -> { });
 
         boolean acquired = false;
@@ -276,12 +217,13 @@ public class DistributedCriticalSection implements AutoCloseable {
      * Exits the critical section. This method releases the lock.
      * <p>
      * The temporary bootstrap lock is held while the local consumer is canceled and the token is
-     * requeued, which prevents a concurrent bootstrapper from observing an intermediate state.
-     * The same delivery tag is requeued on the broker and remains owned by this instance until the
+     * re-queued, which prevents a concurrent bootstrapper from observing an intermediate state.
+     * The same delivery tag is re-queued on the broker and remains owned by this instance until the
      * release succeeds.
      * </p>
      *
      * @throws IOException          if a communication error occurs
+     * @throws InterruptedException if thread execution is interrupted during release transition
      * @throws IllegalStateException if the process is not currently in the critical section
      */
     public synchronized void exit() throws IOException, InterruptedException {
@@ -291,7 +233,7 @@ public class DistributedCriticalSection implements AutoCloseable {
 
         logger.debug("Exiting critical section '{}'", csName);
 
-        withBootstrapLock(lockChannel -> {
+        bootstrapLock.withLock(connection, lockChannel -> {
             cancelConsumerQuietly();
             channel.basicNack(currentDeliveryTag, false, true);
         });
@@ -300,12 +242,15 @@ public class DistributedCriticalSection implements AutoCloseable {
         logger.debug("Successfully exited critical section '{}'", csName);
     }
 
+    /**
+     * Cancels the active RabbitMQ consumer quietly without propagating channel errors.
+     */
     private void cancelConsumerQuietly() {
         if (consumerTag == null) {
             return;
         }
         try {
-            if (channel.isOpen()) {
+            if (channel != null && channel.isOpen()) {
                 channel.basicCancel(consumerTag);
             }
         } catch (IOException e) {
@@ -317,13 +262,11 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     /**
      * Closes the channels and optionally the connection if it was created by this instance.
-     * If the critical section is currently held, the unacknowledged token is requeued by RabbitMQ
+     * If the critical section is currently held, the unacknowledged token is re-queued by RabbitMQ
      * when the channel or connection closes.
-     *
-     * @throws Exception if an error occurs while closing RabbitMQ resources
      */
     @Override
-    public void close() throws Exception {
+    public void close() {
         cancelConsumerQuietly();
 
         if (channel != null && channel.isOpen()) {
@@ -340,10 +283,5 @@ public class DistributedCriticalSection implements AutoCloseable {
                 logger.error("Failed to close connection", e);
             }
         }
-    }
-
-    @FunctionalInterface
-    private interface BootstrapAction {
-        void run(Channel lockChannel) throws IOException, InterruptedException;
     }
 }

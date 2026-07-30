@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -275,6 +274,30 @@ class DistributedCriticalSectionTest {
         try (DistributedCriticalSection recovered = new DistributedCriticalSection(HOST, PORT, csName)) {
             recovered.enter();
             recovered.exit();
+        }
+    }
+
+    @Test
+    @DisplayName("Pre-existing queue with inequivalent arguments fails fast without deleting the queue")
+    void preExistingQueueWithInequivalentArgumentsFailsFast() throws Exception {
+        String csName = uniqueName("inequivalent-args");
+        String queueName = tokenQueueName(csName);
+
+        // Pre-create the queue with conflicting arguments (e.g. x-max-length = 999)
+        try (Channel ch = connection.createChannel()) {
+            java.util.Map<String, Object> args = new java.util.HashMap<>();
+            args.put("x-max-length", 999);
+            ch.queueDeclare(queueName, true, false, false, args);
+        }
+
+        // Construction should detect PRECONDITION_FAILED and fail without deleting the queue.
+        assertThrows(IOException.class, () -> new DistributedCriticalSection(HOST, PORT, csName));
+
+        QueueStatus status = readQueueStatus(queueName);
+        assertEquals(0, status.messageCount(), "Queue should remain present after fail-fast initialization");
+        assertEquals(0, status.consumerCount(), "Fail-fast initialization must not leave consumers behind");
+        try (Channel cleanup = connection.createChannel()) {
+            cleanup.queueDelete(queueName);
         }
     }
 

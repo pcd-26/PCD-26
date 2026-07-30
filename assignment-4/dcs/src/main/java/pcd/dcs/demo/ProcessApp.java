@@ -1,5 +1,7 @@
 package pcd.dcs.demo;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import pcd.dcs.DistributedCriticalSection;
 
 import java.io.FileWriter;
@@ -20,9 +22,19 @@ import java.util.Random;
  */
 public class ProcessApp {
 
+    private static final Logger logger = LoggerFactory.getLogger(ProcessApp.class);
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final String SHARED_LOG_FILE = "dcs_shared.log";
 
+    /**
+     * Entry point for running a process application instance.
+     * <p>
+     * Connects to RabbitMQ, instantiates a {@link DistributedCriticalSection} named {@code "demo-cs"},
+     * and performs 5 iterations of acquiring the lock, logging access, simulating work, and releasing the lock.
+     * </p>
+     *
+     * @param args optional command line arguments: {@code [processId, host, port]}
+     */
     public static void main(String[] args) {
         String processId = args.length > 0 ? args[0] : "Process-" + new Random().nextInt(1000);
         String host = args.length > 1 ? args[1] : "localhost";
@@ -46,19 +58,18 @@ public class ProcessApp {
                 System.out.printf("[%s] [%s] ENTERED critical section.\n", enterTime, processId);
 
                 // Write to the shared log file to verify mutual exclusion
-                logToFile(SHARED_LOG_FILE, String.format("[%s] %s ENTER\n", enterTime, processId));
+                logToSharedFile(String.format("[%s] %s ENTER\n", enterTime, processId));
 
                 // Simulate critical section work
                 try {
                     Thread.sleep(1500 + random.nextInt(1000));
                 } catch (InterruptedException e) {
-                    System.err.printf("[%s] [%s] Interrupted during critical section work\n",
-                            LocalTime.now().format(TIME_FORMATTER), processId);
+                    logger.warn("[{}] Interrupted during critical section work", processId, e);
                     Thread.currentThread().interrupt();
                 }
 
                 String exitTime = LocalTime.now().format(TIME_FORMATTER);
-                logToFile(SHARED_LOG_FILE, String.format("[%s] %s EXIT\n", exitTime, processId));
+                logToSharedFile(String.format("[%s] %s EXIT\n", exitTime, processId));
                 System.out.printf("[%s] [%s] Exiting critical section.\n", exitTime, processId);
 
                 // Release the lock
@@ -73,19 +84,23 @@ public class ProcessApp {
                     LocalTime.now().format(TIME_FORMATTER), processId);
 
         } catch (Exception e) {
-            System.err.printf("[%s] [%s] Error in process application: %s\n",
-                    LocalTime.now().format(TIME_FORMATTER), processId, e.getMessage());
-            e.printStackTrace();
+            logger.error("[{}] Error in process application", processId, e);
         }
     }
 
-    private static synchronized void logToFile(String filename, String message) {
-        try (FileWriter fw = new FileWriter(filename, true);
+    /**
+     * Appends a log entry to the shared text file ({@value #SHARED_LOG_FILE}).
+     * Synchronized locally within the JVM to prevent concurrent file write interleaving within the same process.
+     *
+     * @param message log text to write
+     */
+    private static synchronized void logToSharedFile(String message) {
+        try (FileWriter fw = new FileWriter(SHARED_LOG_FILE, true);
              PrintWriter pw = new PrintWriter(fw)) {
             pw.print(message);
             pw.flush();
         } catch (IOException e) {
-            System.err.println("Error writing to shared file: " + e.getMessage());
+            logger.error("Error writing to shared file '{}'", SHARED_LOG_FILE, e);
         }
     }
 }

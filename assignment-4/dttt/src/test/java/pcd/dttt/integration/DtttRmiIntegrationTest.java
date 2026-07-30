@@ -66,8 +66,8 @@ public class DtttRmiIntegrationTest {
             assertTrue(opponent.started.await(5, TimeUnit.SECONDS));
 
             BoardState initialState = game.getBoardState();
-            assertEquals(GameStatus.ACTIVE, initialState.getStatus());
-            assertEquals("Alice", initialState.getTurnOf());
+            assertEquals(GameStatus.ACTIVE, initialState.status());
+            assertEquals("Alice", initialState.turnOf());
 
             game.makeMove("Alice", 0, 0);
 
@@ -76,11 +76,11 @@ public class DtttRmiIntegrationTest {
 
             BoardState afterMove = game.getBoardState();
             assertEquals('X', afterMove.getMark(0, 0));
-            assertEquals("Bob", afterMove.getTurnOf());
+            assertEquals("Bob", afterMove.turnOf());
 
             game.leaveGame("Alice");
             assertTrue(opponent.left.await(5, TimeUnit.SECONDS));
-            assertEquals(GameStatus.ABANDONED, game.getBoardState().getStatus());
+            assertEquals(GameStatus.ABANDONED, game.getBoardState().status());
         } finally {
             creator.close();
             opponent.close();
