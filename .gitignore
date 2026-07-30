@@ -2,18 +2,27 @@
 **/.idea/
 **/.vscode/
 **/*.iml
+**/.codex-tmp/
+**/.cache/
 
 # Python caches
 **/__pycache__/
 **/*.py[cod]
 .pytest_cache/
 **/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.nox/
+**/.tox/
 
 # Java build output
 **/target/
 **/build/
 **/out/
 **/*.class
+**/*.jar
+**/*.war
+**/*.ear
 
 # JPF local checkout/build artifacts
 **/verification/jpf/.jpf-core/
@@ -23,16 +32,29 @@
 .tmp-bench-*/
 benchmarks/results/
 
+# LaTeX / report build output
+**/report/*.aux
+**/report/*.fls
+**/report/*.fdb_latexmk
+**/report/*.log
+**/report/*.out
+**/report/*.toc
+**/report/*.synctex.gz
+**/report/*.pdf
+
 # Misc OS/editor files
 .DS_Store
 Thumbs.db
 *.log
+*.tmp
+*.swp
+*.swo
+*~
 
 # Go build artifacts
-assignment-3/hotc/src/hotc
-assignment-3/hotc/src/hotc.exe
+assignment-3/heads-or-tails-championship/src/heads-or-tails-championship
+assignment-3/heads-or-tails-championship/src/heads-or-tails-championship.exe
+assignment-3/heads-or-tails-championship/src/.gocache
 **/*.exe
-
-/assignment-3/hotc/src/.gocache
 
 */report.pdf

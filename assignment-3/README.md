@@ -1,6 +1,6 @@
 PCD a.y. 2025-2026 - ISI LM UNIBO - Cesena Campus
 
-# Assignment #03 `
+# Assignment #03
 
 v1.0.0-20260504
 
@@ -27,8 +27,8 @@ The goal of the exercise is to design and implement in Go language a championshi
 The deliverable must be a zipped folder `Assignment-03`, to be submitted on the course web site, including:  
 - `src` directory with sources
 - `doc` directory with one short report in PDF per sub-project:
-  - `doc/shas/report.pdf`
-  - `doc/hotc/report.pdf`
+- `doc/smart-home-alarm-system/report.pdf`
+- `doc/heads-or-tails-championship/report.pdf`
 
 Each report should include:
 	- A brief analsysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
@@ -36,5 +36,5 @@ Each report should include:
 
 The report sources live under:
 
-- `shas/report`
-- `hotc/report`
+- `smart-home-alarm-system/report`
+- `heads-or-tails-championship/report`

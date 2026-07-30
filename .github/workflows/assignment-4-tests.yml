@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   cshas:
-    name: Test assignment-04 CSHAS
+    name: Test assignment-04 Clustered Smart Home Alarm System
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -33,19 +33,19 @@ jobs:
           cache: maven
 
       - name: Run CSHAS validation
-        working-directory: assignment-4/cshas
+        working-directory: assignment-4/clustered-smart-home-alarm-system
         run: mvn --batch-mode --no-transfer-progress clean verify
 
       - name: Upload CSHAS test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: assignment-4-cshas-test-reports
-          path: assignment-4/cshas/target/surefire-reports
+          name: assignment-4-clustered-smart-home-alarm-system-test-reports
+          path: assignment-4/clustered-smart-home-alarm-system/target/surefire-reports
           if-no-files-found: ignore
 
   dttt:
-    name: Test assignment-04 DTTT
+    name: Test assignment-04 Distributed Tic-Tac-Toe
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -61,19 +61,19 @@ jobs:
           cache: maven
 
       - name: Run DTTT validation
-        working-directory: assignment-4/dttt
+        working-directory: assignment-4/distributed-tic-tac-toe
         run: mvn --batch-mode --no-transfer-progress clean verify
 
       - name: Upload DTTT test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: assignment-4-dttt-test-reports
-          path: assignment-4/dttt/target/surefire-reports
+          name: assignment-4-distributed-tic-tac-toe-test-reports
+          path: assignment-4/distributed-tic-tac-toe/target/surefire-reports
           if-no-files-found: ignore
 
   dcs:
-    name: Test assignment-04 DCS
+    name: Test assignment-04 Distributed Critical Sections
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -117,15 +117,15 @@ jobs:
           exit 1
 
       - name: Run DCS validation
-        working-directory: assignment-4/dcs
+        working-directory: assignment-4/distributed-critical-sections
         run: mvn --batch-mode --no-transfer-progress clean verify
 
       - name: Upload DCS test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: assignment-4-dcs-test-reports
-          path: assignment-4/dcs/target/surefire-reports
+          name: assignment-4-distributed-critical-sections-test-reports
+          path: assignment-4/distributed-critical-sections/target/surefire-reports
           if-no-files-found: ignore
 
   package:
@@ -155,15 +155,15 @@ jobs:
           sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
       - name: Build CSHAS report
-        working-directory: assignment-4/cshas/report
+        working-directory: assignment-4/clustered-smart-home-alarm-system/report
         run: make
 
       - name: Build DTTT report
-        working-directory: assignment-4/dttt/report
+        working-directory: assignment-4/distributed-tic-tac-toe/report
         run: make
 
       - name: Build DCS report
-        working-directory: assignment-4/dcs/report
+        working-directory: assignment-4/distributed-critical-sections/report
         run: make
 
       - name: Prepare delivery metadata
@@ -179,19 +179,19 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-04/cshas/doc
-          mkdir -p package/Assignment-04/dttt/doc
-          mkdir -p package/Assignment-04/dcs/doc
+          mkdir -p package/Assignment-04/clustered-smart-home-alarm-system/doc
+          mkdir -p package/Assignment-04/distributed-tic-tac-toe/doc
+          mkdir -p package/Assignment-04/distributed-critical-sections/doc
 
-          cp assignment-4/cshas/pom.xml package/Assignment-04/cshas/pom.xml
-          cp -R assignment-4/cshas/src package/Assignment-04/cshas/src
-          cp assignment-4/cshas/report/report.pdf package/Assignment-04/cshas/doc/report.pdf
-          cp assignment-4/dttt/pom.xml package/Assignment-04/dttt/pom.xml
-          cp -R assignment-4/dttt/src package/Assignment-04/dttt/src
-          cp assignment-4/dttt/report/report.pdf package/Assignment-04/dttt/doc/report.pdf
-          cp assignment-4/dcs/pom.xml package/Assignment-04/dcs/pom.xml
-          cp -R assignment-4/dcs/src package/Assignment-04/dcs/src
-          cp assignment-4/dcs/report/report.pdf package/Assignment-04/dcs/doc/report.pdf
+          cp assignment-4/clustered-smart-home-alarm-system/pom.xml package/Assignment-04/clustered-smart-home-alarm-system/pom.xml
+          cp -R assignment-4/clustered-smart-home-alarm-system/src package/Assignment-04/clustered-smart-home-alarm-system/src
+          cp assignment-4/clustered-smart-home-alarm-system/report/report.pdf package/Assignment-04/clustered-smart-home-alarm-system/doc/report.pdf
+          cp assignment-4/distributed-tic-tac-toe/pom.xml package/Assignment-04/distributed-tic-tac-toe/pom.xml
+          cp -R assignment-4/distributed-tic-tac-toe/src package/Assignment-04/distributed-tic-tac-toe/src
+          cp assignment-4/distributed-tic-tac-toe/report/report.pdf package/Assignment-04/distributed-tic-tac-toe/doc/report.pdf
+          cp assignment-4/distributed-critical-sections/pom.xml package/Assignment-04/distributed-critical-sections/pom.xml
+          cp -R assignment-4/distributed-critical-sections/src package/Assignment-04/distributed-critical-sections/src
+          cp assignment-4/distributed-critical-sections/report/report.pdf package/Assignment-04/distributed-critical-sections/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-04)
 
@@ -203,24 +203,24 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
-          test -f package/Assignment-04/cshas/pom.xml
-          test -d package/Assignment-04/cshas/src/main
-          test -d package/Assignment-04/cshas/src/test
-          test -f package/Assignment-04/cshas/doc/report.pdf
-          test -f package/Assignment-04/dttt/pom.xml
-          test -d package/Assignment-04/dttt/src/main
-          test -d package/Assignment-04/dttt/src/test
-          test -f package/Assignment-04/dttt/doc/report.pdf
-          test -f package/Assignment-04/dcs/pom.xml
-          test -d package/Assignment-04/dcs/src/main
-          test -d package/Assignment-04/dcs/src/test
-          test -f package/Assignment-04/dcs/doc/report.pdf
+          test -f package/Assignment-04/clustered-smart-home-alarm-system/pom.xml
+          test -d package/Assignment-04/clustered-smart-home-alarm-system/src/main
+          test -d package/Assignment-04/clustered-smart-home-alarm-system/src/test
+          test -f package/Assignment-04/clustered-smart-home-alarm-system/doc/report.pdf
+          test -f package/Assignment-04/distributed-tic-tac-toe/pom.xml
+          test -d package/Assignment-04/distributed-tic-tac-toe/src/main
+          test -d package/Assignment-04/distributed-tic-tac-toe/src/test
+          test -f package/Assignment-04/distributed-tic-tac-toe/doc/report.pdf
+          test -f package/Assignment-04/distributed-critical-sections/pom.xml
+          test -d package/Assignment-04/distributed-critical-sections/src/main
+          test -d package/Assignment-04/distributed-critical-sections/src/test
+          test -f package/Assignment-04/distributed-critical-sections/doc/report.pdf
           test ! -e package/Assignment-04/report
           test ! -e package/Assignment-04/docs
           test ! -e package/Assignment-04/target
-          test ! -e package/Assignment-04/cshas/target
-          test ! -e package/Assignment-04/dttt/target
-          test ! -e package/Assignment-04/dcs/target
+          test ! -e package/Assignment-04/clustered-smart-home-alarm-system/target
+          test ! -e package/Assignment-04/distributed-tic-tac-toe/target
+          test ! -e package/Assignment-04/distributed-critical-sections/target
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4

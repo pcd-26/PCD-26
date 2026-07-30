@@ -188,12 +188,12 @@ jobs:
         with:
           go-version: "1.22"
 
-      - name: Build and test SHAS (Java)
-        working-directory: assignment-3/shas
+      - name: Build and test Smart Home Alarm System (Java)
+        working-directory: assignment-3/smart-home-alarm-system
         run: mvn -B clean test
 
-      - name: Build and test HOTC (Go)
-        working-directory: assignment-3/hotc/src
+      - name: Build and test Heads-or-Tails Championship (Go)
+        working-directory: assignment-3/heads-or-tails-championship/src
         run: go test -v ./...
 
       - name: Install LaTeX tools
@@ -201,12 +201,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
-      - name: Build SHAS report
-        working-directory: assignment-3/shas/report
+      - name: Build Smart Home Alarm System report
+        working-directory: assignment-3/smart-home-alarm-system/report
         run: make
 
-      - name: Build HOTC report
-        working-directory: assignment-3/hotc/report
+      - name: Build Heads-or-Tails Championship report
+        working-directory: assignment-3/heads-or-tails-championship/report
         run: make
 
       - name: Prepare delivery metadata
@@ -221,14 +221,14 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-03/shas/doc
-          mkdir -p package/Assignment-03/hotc/doc
+          mkdir -p package/Assignment-03/smart-home-alarm-system/doc
+          mkdir -p package/Assignment-03/heads-or-tails-championship/doc
 
-          cp assignment-3/shas/pom.xml package/Assignment-03/shas/pom.xml
-          cp -R assignment-3/shas/src package/Assignment-03/shas/src
-          cp assignment-3/shas/report/report.pdf package/Assignment-03/shas/doc/report.pdf
-          cp assignment-3/hotc/report/report.pdf package/Assignment-03/hotc/doc/report.pdf
-          cp -R assignment-3/hotc/src package/Assignment-03/hotc/src
+          cp assignment-3/smart-home-alarm-system/pom.xml package/Assignment-03/smart-home-alarm-system/pom.xml
+          cp -R assignment-3/smart-home-alarm-system/src package/Assignment-03/smart-home-alarm-system/src
+          cp assignment-3/smart-home-alarm-system/report/report.pdf package/Assignment-03/smart-home-alarm-system/doc/report.pdf
+          cp assignment-3/heads-or-tails-championship/report/report.pdf package/Assignment-03/heads-or-tails-championship/doc/report.pdf
+          cp -R assignment-3/heads-or-tails-championship/src package/Assignment-03/heads-or-tails-championship/src
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-03)
 
@@ -240,18 +240,18 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
-          test -f package/Assignment-03/shas/doc/report.pdf
-          test -f package/Assignment-03/hotc/doc/report.pdf
-          test -f package/Assignment-03/shas/pom.xml
-          test -d package/Assignment-03/shas/src/main
-          test -d package/Assignment-03/shas/src/test
-          test -f package/Assignment-03/hotc/src/main.go
-          test -f package/Assignment-03/hotc/src/go.mod
+          test -f package/Assignment-03/smart-home-alarm-system/doc/report.pdf
+          test -f package/Assignment-03/heads-or-tails-championship/doc/report.pdf
+          test -f package/Assignment-03/smart-home-alarm-system/pom.xml
+          test -d package/Assignment-03/smart-home-alarm-system/src/main
+          test -d package/Assignment-03/smart-home-alarm-system/src/test
+          test -f package/Assignment-03/heads-or-tails-championship/src/main.go
+          test -f package/Assignment-03/heads-or-tails-championship/src/go.mod
           test ! -e package/Assignment-03/doc
           test ! -e package/Assignment-03/report
           test ! -e package/Assignment-03/docs
           test ! -e package/Assignment-03/target
-          test ! -e package/Assignment-03/shas/target
+          test ! -e package/Assignment-03/smart-home-alarm-system/target
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
@@ -280,19 +280,19 @@ jobs:
           sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
       - name: Build CSHAS report
-        working-directory: assignment-4/cshas/report
+        working-directory: assignment-4/clustered-smart-home-alarm-system/report
         run: make
 
       - name: Build DTTT
-        working-directory: assignment-4/dttt
+        working-directory: assignment-4/distributed-tic-tac-toe
         run: mvn -B clean verify
 
       - name: Build DTTT report
-        working-directory: assignment-4/dttt/report
+        working-directory: assignment-4/distributed-tic-tac-toe/report
         run: make
 
       - name: Build DCS report
-        working-directory: assignment-4/dcs/report
+        working-directory: assignment-4/distributed-critical-sections/report
         run: make
 
       - name: Prepare delivery metadata
@@ -307,19 +307,19 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-04/cshas/doc
-          mkdir -p package/Assignment-04/dttt/doc
-          mkdir -p package/Assignment-04/dcs/doc
+          mkdir -p package/Assignment-04/clustered-smart-home-alarm-system/doc
+          mkdir -p package/Assignment-04/distributed-tic-tac-toe/doc
+          mkdir -p package/Assignment-04/distributed-critical-sections/doc
 
-          cp assignment-4/cshas/pom.xml package/Assignment-04/cshas/pom.xml
-          cp -R assignment-4/cshas/src package/Assignment-04/cshas/src
-          cp assignment-4/cshas/report/report.pdf package/Assignment-04/cshas/doc/report.pdf
-          cp assignment-4/dttt/pom.xml package/Assignment-04/dttt/pom.xml
-          cp -R assignment-4/dttt/src package/Assignment-04/dttt/src
-          cp assignment-4/dttt/report/report.pdf package/Assignment-04/dttt/doc/report.pdf
-          cp assignment-4/dcs/pom.xml package/Assignment-04/dcs/pom.xml
-          cp -R assignment-4/dcs/src package/Assignment-04/dcs/src
-          cp assignment-4/dcs/report/report.pdf package/Assignment-04/dcs/doc/report.pdf
+          cp assignment-4/clustered-smart-home-alarm-system/pom.xml package/Assignment-04/clustered-smart-home-alarm-system/pom.xml
+          cp -R assignment-4/clustered-smart-home-alarm-system/src package/Assignment-04/clustered-smart-home-alarm-system/src
+          cp assignment-4/clustered-smart-home-alarm-system/report/report.pdf package/Assignment-04/clustered-smart-home-alarm-system/doc/report.pdf
+          cp assignment-4/distributed-tic-tac-toe/pom.xml package/Assignment-04/distributed-tic-tac-toe/pom.xml
+          cp -R assignment-4/distributed-tic-tac-toe/src package/Assignment-04/distributed-tic-tac-toe/src
+          cp assignment-4/distributed-tic-tac-toe/report/report.pdf package/Assignment-04/distributed-tic-tac-toe/doc/report.pdf
+          cp assignment-4/distributed-critical-sections/pom.xml package/Assignment-04/distributed-critical-sections/pom.xml
+          cp -R assignment-4/distributed-critical-sections/src package/Assignment-04/distributed-critical-sections/src
+          cp assignment-4/distributed-critical-sections/report/report.pdf package/Assignment-04/distributed-critical-sections/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-04)
 
@@ -331,24 +331,24 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
-          test -f package/Assignment-04/cshas/pom.xml
-          test -d package/Assignment-04/cshas/src/main
-          test -d package/Assignment-04/cshas/src/test
-          test -f package/Assignment-04/cshas/doc/report.pdf
-          test -f package/Assignment-04/dttt/pom.xml
-          test -d package/Assignment-04/dttt/src/main
-          test -d package/Assignment-04/dttt/src/test
-          test -f package/Assignment-04/dttt/doc/report.pdf
-          test -f package/Assignment-04/dcs/pom.xml
-          test -d package/Assignment-04/dcs/src/main
-          test -d package/Assignment-04/dcs/src/test
-          test -f package/Assignment-04/dcs/doc/report.pdf
+          test -f package/Assignment-04/clustered-smart-home-alarm-system/pom.xml
+          test -d package/Assignment-04/clustered-smart-home-alarm-system/src/main
+          test -d package/Assignment-04/clustered-smart-home-alarm-system/src/test
+          test -f package/Assignment-04/clustered-smart-home-alarm-system/doc/report.pdf
+          test -f package/Assignment-04/distributed-tic-tac-toe/pom.xml
+          test -d package/Assignment-04/distributed-tic-tac-toe/src/main
+          test -d package/Assignment-04/distributed-tic-tac-toe/src/test
+          test -f package/Assignment-04/distributed-tic-tac-toe/doc/report.pdf
+          test -f package/Assignment-04/distributed-critical-sections/pom.xml
+          test -d package/Assignment-04/distributed-critical-sections/src/main
+          test -d package/Assignment-04/distributed-critical-sections/src/test
+          test -f package/Assignment-04/distributed-critical-sections/doc/report.pdf
           test ! -e package/Assignment-04/report
           test ! -e package/Assignment-04/docs
           test ! -e package/Assignment-04/target
-          test ! -e package/Assignment-04/cshas/target
-          test ! -e package/Assignment-04/dttt/target
-          test ! -e package/Assignment-04/dcs/target
+          test ! -e package/Assignment-04/clustered-smart-home-alarm-system/target
+          test ! -e package/Assignment-04/distributed-tic-tac-toe/target
+          test ! -e package/Assignment-04/distributed-critical-sections/target
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
