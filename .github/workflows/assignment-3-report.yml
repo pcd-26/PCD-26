@@ -33,8 +33,8 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build and test SHAS (Java)
-        working-directory: assignment-3/shas
+      - name: Build and test Smart Home Alarm System (Java)
+        working-directory: assignment-3/smart-home-alarm-system
         env:
           TEST_SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.test_selector || '' }}
         run: |
@@ -45,7 +45,7 @@ jobs:
           fi
 
   test-hotc:
-    name: Test assignment-03 HOTC
+    name: Test assignment-03 Heads-or-Tails Championship
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -58,8 +58,8 @@ jobs:
         with:
           go-version: "1.22"
 
-      - name: Build and test HOTC (Go)
-        working-directory: assignment-3/hotc/src
+      - name: Build and test Heads-or-Tails Championship (Go)
+        working-directory: assignment-3/heads-or-tails-championship/src
         run: go test -v ./...
 
   package:
@@ -92,12 +92,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
-      - name: Build SHAS report
-        working-directory: assignment-3/shas/report
+      - name: Build Smart Home Alarm System report
+        working-directory: assignment-3/smart-home-alarm-system/report
         run: make
 
-      - name: Build HOTC report
-        working-directory: assignment-3/hotc/report
+      - name: Build Heads-or-Tails Championship report
+        working-directory: assignment-3/heads-or-tails-championship/report
         run: make
 
       - name: Prepare delivery metadata
@@ -113,15 +113,15 @@ jobs:
           set -euo pipefail
 
           rm -rf package "$DELIVERY_ZIP"
-          mkdir -p package/Assignment-03/shas/doc
-          mkdir -p package/Assignment-03/hotc/doc
+          mkdir -p package/Assignment-03/smart-home-alarm-system/doc
+          mkdir -p package/Assignment-03/heads-or-tails-championship/doc
 
-          cp assignment-3/shas/pom.xml package/Assignment-03/shas/pom.xml
-          cp -R assignment-3/shas/src package/Assignment-03/shas/src
-          cp assignment-3/shas/report/report.pdf package/Assignment-03/shas/doc/report.pdf
+          cp assignment-3/smart-home-alarm-system/pom.xml package/Assignment-03/smart-home-alarm-system/pom.xml
+          cp -R assignment-3/smart-home-alarm-system/src package/Assignment-03/smart-home-alarm-system/src
+          cp assignment-3/smart-home-alarm-system/report/report.pdf package/Assignment-03/smart-home-alarm-system/doc/report.pdf
 
-          cp -R assignment-3/hotc/src package/Assignment-03/hotc/src
-          cp assignment-3/hotc/report/report.pdf package/Assignment-03/hotc/doc/report.pdf
+          cp -R assignment-3/heads-or-tails-championship/src package/Assignment-03/heads-or-tails-championship/src
+          cp assignment-3/heads-or-tails-championship/report/report.pdf package/Assignment-03/heads-or-tails-championship/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-03)
 
@@ -133,18 +133,18 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
-          test -f package/Assignment-03/shas/doc/report.pdf
-          test -f package/Assignment-03/hotc/doc/report.pdf
-          test -f package/Assignment-03/shas/pom.xml
-          test -d package/Assignment-03/shas/src/main
-          test -d package/Assignment-03/shas/src/test
-          test -f package/Assignment-03/hotc/src/main.go
-          test -f package/Assignment-03/hotc/src/go.mod
+          test -f package/Assignment-03/smart-home-alarm-system/doc/report.pdf
+          test -f package/Assignment-03/heads-or-tails-championship/doc/report.pdf
+          test -f package/Assignment-03/smart-home-alarm-system/pom.xml
+          test -d package/Assignment-03/smart-home-alarm-system/src/main
+          test -d package/Assignment-03/smart-home-alarm-system/src/test
+          test -f package/Assignment-03/heads-or-tails-championship/src/main.go
+          test -f package/Assignment-03/heads-or-tails-championship/src/go.mod
           test ! -e package/Assignment-03/doc
           test ! -e package/Assignment-03/report
           test ! -e package/Assignment-03/docs
           test ! -e package/Assignment-03/target
-          test ! -e package/Assignment-03/shas/target
+          test ! -e package/Assignment-03/smart-home-alarm-system/target
 
       - name: Upload delivery package
         uses: actions/upload-artifact@v4
