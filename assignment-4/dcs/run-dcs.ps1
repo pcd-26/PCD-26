@@ -1,6 +1,8 @@
 # Compile and run two concurrent instances of ProcessApp to demonstrate distributed critical sections.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sharedLog = Join-Path $scriptDir "dcs_shared.log"
+$composeFile = Join-Path $scriptDir "docker-compose.rabbitmq.yml"
+$composeProject = "pcd-dcs-rabbitmq"
 
 function Check-RabbitMQ {
     $socket = New-Object System.Net.Sockets.TcpClient
@@ -16,7 +18,7 @@ function Check-RabbitMQ {
 $rmqDockerStarted = $false
 if (-not (Check-RabbitMQ)) {
     Write-Host "RabbitMQ is not running on localhost:5672. Attempting to start RabbitMQ via Docker..."
-    docker run -d --name rabbitmq-dcs-run -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+    docker compose -p $composeProject -f $composeFile up -d rabbitmq
     $rmqDockerStarted = $true
     Write-Host "Waiting for RabbitMQ to start..."
     for ($i = 0; $i -lt 30; $i++) {
@@ -56,8 +58,7 @@ Get-Content $sharedLog
 
 if ($rmqDockerStarted) {
     Write-Host "Stopping RabbitMQ Docker container..."
-    docker stop rabbitmq-dcs-run | Out-Null
-    docker rm rabbitmq-dcs-run | Out-Null
+    docker compose -p $composeProject -f $composeFile down --remove-orphans | Out-Null
 }
 
 Write-Host "Done."
