@@ -7,6 +7,7 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.config.MassiveBoardConf;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
+import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.threaded.ThreadedGameRunner;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
@@ -126,13 +127,11 @@ public class ThreadedPoool {
     }
 
     /**
-     * Projects the bot shot preview stored in the immutable threaded snapshot
+     * Projects the bot shot preview stored in the immutable runtime snapshot
      * into the shared view model without giving the bot direct access to Swing
      * or mutable game entities.
      */
-    private static void updateBotShotPreview(
-            pcd.poool.threaded.ThreadedGameSnapshot snapshot,
-            ViewModel viewModel) {
+    private static void updateBotShotPreview(RuntimeGameSnapshot snapshot, ViewModel viewModel) {
         if (!snapshot.game().botCanShoot() || snapshot.botBall() == null) {
             viewModel.clearShotPreview(Player.BOT);
             return;

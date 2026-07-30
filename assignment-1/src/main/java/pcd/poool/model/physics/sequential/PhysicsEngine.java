@@ -67,7 +67,7 @@ public class PhysicsEngine implements PhysicsStepper {
     private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
         // Movement first, then pocketing, then pairwise contacts: the order
-        // keeps the sequential baseline easy to explain and reproduce.
+        // keeps the sequential baseline deterministic and reproducible.
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }

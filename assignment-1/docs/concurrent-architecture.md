@@ -267,7 +267,7 @@ PhysicsWorkerThread[]
   - do not decide game rules
   - return partial results to the controller/physics coordinator
 
-SnapshotStore
+SnapshotStoreSupport
   - stores the latest immutable game/board snapshot
   - can be read by the GUI without blocking the simulation loop
 ```
@@ -468,7 +468,7 @@ Recommended active objects:
   results.
 - `HumanInputAdapter`: translates GUI events into commands and enqueues them.
 - `BotThread`: computes bot decisions from immutable snapshots.
-- `SnapshotStore`: stores the latest immutable snapshot for non-blocking GUI
+- `SnapshotStoreSupport`: stores the latest immutable snapshot for non-blocking GUI
   rendering.
 
 The platform-thread implementation provides all building blocks required by
@@ -488,7 +488,7 @@ simulation.
 Runtime components:
 
 - `ThreadedPoool`: playable launcher. It owns the Swing view loop, reads the
-  latest immutable `ThreadedGameSnapshot`, updates `ViewModel`, and requests
+  latest immutable `RuntimeGameSnapshot`, updates `ViewModel`, and requests
   repainting. It does not mutate the game model directly.
 - `ThreadedGameRunner`: execution strategy. It owns one `GameModel`
   instance and starts the platform threads used by the runtime.
@@ -510,7 +510,7 @@ The resulting ownership structure is:
 Swing EDT / BotThread
         |
         v
- CommandQueueMonitor
+ CommandQueueMonitorSupport
         |
         v
  Controller platform thread
@@ -522,7 +522,7 @@ Swing EDT / BotThread
  PhysicsWorker[] for integration and broad phase
         |
         v
- SnapshotStore
+ SnapshotStoreSupport
         |
         v
  GUI rendering loop / BotThread
@@ -538,14 +538,14 @@ collisions in stable order.
 Current synchronization policy:
 
 - human input and bot actions are submitted as commands through
-  `CommandQueueMonitor`;
-- submitted shot commands return a `CommandReceipt`, useful for tests and for
+  `CommandQueueMonitorSupport`;
+- submitted shot commands return a `CommandReceiptSupport`, useful for tests and for
   callers that need to wait for controller execution;
 - shutdown closes the command monitor and rejects pending commands so callers
   cannot remain blocked waiting for a receipt;
-- `SnapshotStore` publishes immutable snapshots and wakes readers waiting for a
+- `SnapshotStoreSupport` publishes immutable snapshots and wakes readers waiting for a
   state condition;
-- the GUI reads `ThreadedGameSnapshot` data and never accesses mutable `Ball`
+- the GUI reads `RuntimeGameSnapshot` data and never accesses mutable `Ball`
   entities;
 - human aiming is enabled only when the current snapshot reports that the human
   cue ball can shoot;
@@ -573,7 +573,7 @@ Remaining design trade-offs:
 
 Recommended custom monitors:
 
-- `CommandQueueMonitor`: bounded or unbounded producer-consumer monitor for
+- `CommandQueueMonitorSupport`: bounded or unbounded producer-consumer monitor for
   input, bot, reset, pause, and resume commands.
 - `WorkerBarrierMonitor`: reusable barrier for phase completion within one
   physics tick.
