@@ -1,14 +1,14 @@
-package pcd.poool.threaded;
+package pcd.poool.runtime;
 
 import java.util.List;
 import pcd.poool.model.common.math.V2d;
-import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.game.GameModel;
+import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.Hole;
 
 /**
- * Immutable state published by the platform-thread runner.
+ * Immutable state published by a game runner.
  *
  * @param game logical game snapshot
  * @param smallBalls immutable small-ball snapshots
@@ -17,7 +17,7 @@ import pcd.poool.model.physics.common.Hole;
  * @param holes immutable hole layout
  * @param botPreviewShot bot shot preview vector, or zero when the bot cannot shoot
  */
-public record ThreadedGameSnapshot(
+public record RuntimeGameSnapshot(
         GameSnapshot game,
         List<Board.BallSnapshot> smallBalls,
         Board.BallSnapshot humanBall,
@@ -26,14 +26,14 @@ public record ThreadedGameSnapshot(
         V2d botPreviewShot) {
 
     /**
-     * Creates a new ThreadedGameSnapshot by copying the state from the given GameModel.
+     * Copies the state from the given game model.
      *
-     * @param game the active game model to snapshot
-     * @return the created immutable ThreadedGameSnapshot instance
+     * @param game active game model
+     * @return immutable runtime snapshot
      */
-    static ThreadedGameSnapshot from(GameModel game) {
+    public static RuntimeGameSnapshot from(GameModel game) {
         var board = game.board();
-        return new ThreadedGameSnapshot(
+        return new RuntimeGameSnapshot(
                 game.snapshot(),
                 List.copyOf(board.getBalls()),
                 board.getPlayerBall(),

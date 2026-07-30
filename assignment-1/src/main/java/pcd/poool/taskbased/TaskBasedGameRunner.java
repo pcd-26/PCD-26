@@ -12,6 +12,13 @@ import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
+import pcd.poool.runtime.BotAgent;
+import pcd.poool.runtime.CommandQueueMonitorSupport;
+import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.CommandSubmissionSupport;
+import pcd.poool.runtime.GameCommand;
+import pcd.poool.runtime.RuntimeGameSnapshot;
+import pcd.poool.runtime.SnapshotStoreSupport;
 
 /**
  * Executor-based execution strategy for Poool.
@@ -28,8 +35,8 @@ public class TaskBasedGameRunner implements AutoCloseable {
     private final TaskBasedPhysicsEngine physicsEngine;
     private final GameModel game;
     private final Config config;
-    private final CommandQueueMonitor commands;
-    private final SnapshotStore snapshots;
+    private final CommandQueueMonitorSupport<GameCommand> commands;
+    private final SnapshotStoreSupport<RuntimeGameSnapshot> snapshots;
     private final ScheduledExecutorService controllerExecutor;
     private final ExecutorService botExecutor;
     private final AtomicReference<RuntimeException> failure;
@@ -58,9 +65,12 @@ public class TaskBasedGameRunner implements AutoCloseable {
     TaskBasedGameRunner(BoardConf boardConf, Config config, TaskBasedPhysicsEngine physicsEngine) {
         this.config = Objects.requireNonNull(config, "config");
         this.physicsEngine = Objects.requireNonNull(physicsEngine, "physicsEngine");
-        game = new GameModel(Objects.requireNonNull(boardConf, "boardConf"), physicsEngine);
-        commands = new CommandQueueMonitor();
-        snapshots = new SnapshotStore(TaskBasedGameSnapshot.from(game));
+        game = new GameModel(
+                Objects.requireNonNull(boardConf, "boardConf"),
+                physicsEngine,
+                config.startupCountdown());
+        commands = new CommandQueueMonitorSupport<>();
+        snapshots = new SnapshotStoreSupport<>(RuntimeGameSnapshot.from(game));
         failure = new AtomicReference<>();
         controllerExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
             var thread = new Thread(runnable, "poool-task-controller");
@@ -90,7 +100,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
         running = true;
         controllerExecutor.scheduleAtFixedRate(this::tick, 0, config.tickMillis(), TimeUnit.MILLISECONDS);
         if (botExecutor != null) {
-            botExecutor.submit(new TaskBasedBotAgent(snapshots, this, config.botThinkTimeMillis()));
+            botExecutor.submit(new BotAgent(snapshots::get, () -> shootBot(), this::isRunning, config.botThinkTimeMillis()));
         }
     }
 
@@ -109,9 +119,9 @@ public class TaskBasedGameRunner implements AutoCloseable {
      * @param velocity shot velocity
      * @return receipt completed when the controller executes the command
      */
-    public CommandReceipt<Boolean> shootHuman(V2d velocity) {
+    public CommandReceiptSupport<Boolean> shootHuman(V2d velocity) {
         ensureHealthy();
-        return submitShotCommand(game -> game.shootHuman(velocity));
+        return CommandSubmissionSupport.submit(commands, game -> game.shootHuman(velocity), false);
     }
 
     /**
@@ -119,9 +129,9 @@ public class TaskBasedGameRunner implements AutoCloseable {
      *
      * @return receipt completed when the controller executes the command
      */
-    public CommandReceipt<Boolean> shootBot() {
+    public CommandReceiptSupport<Boolean> shootBot() {
         ensureHealthy();
-        return submitShotCommand(GameModel::shootBot);
+        return CommandSubmissionSupport.submit(commands, GameModel::shootBot, false);
     }
 
     /**
@@ -129,7 +139,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      *
      * @return latest immutable state published by the controller
      */
-    public TaskBasedGameSnapshot snapshot() {
+    public RuntimeGameSnapshot snapshot() {
         ensureHealthy();
         return snapshots.get();
     }
@@ -139,7 +149,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
      *
      * @return monitor used by tests and views to wait for published snapshots
      */
-    public SnapshotStore snapshots() {
+    public SnapshotStoreSupport<RuntimeGameSnapshot> snapshots() {
         return snapshots;
     }
 
@@ -198,7 +208,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
             if (!game.snapshot().isFinished()) {
                 game.step(config.tickMillis());
             }
-            snapshots.publish(TaskBasedGameSnapshot.from(game));
+            snapshots.publish(RuntimeGameSnapshot.from(game));
         } catch (RuntimeException ex) {
             failure.compareAndSet(null, ex);
             running = false;
@@ -207,7 +217,7 @@ public class TaskBasedGameRunner implements AutoCloseable {
                 botExecutor.shutdownNow();
             }
             controllerExecutor.shutdownNow();
-            snapshots.publish(TaskBasedGameSnapshot.from(game));
+            snapshots.publish(RuntimeGameSnapshot.from(game));
             throw ex;
         }
     }
@@ -227,35 +237,6 @@ public class TaskBasedGameRunner implements AutoCloseable {
         }
     }
 
-    private CommandReceipt<Boolean> submitShotCommand(ShotOperation operation) {
-        var receipt = new CommandReceipt<Boolean>();
-        boolean accepted = commands.put(new GameCommand() {
-            @Override
-            public void execute(GameModel game) {
-                try {
-                    receipt.complete(operation.execute(game));
-                } catch (RuntimeException ex) {
-                    receipt.fail(ex);
-                }
-            }
-
-            @Override
-            public void reject() {
-                receipt.complete(false);
-            }
-        });
-        if (!accepted) {
-            receipt.complete(false);
-        }
-        return receipt;
-    }
-
-    @FunctionalInterface
-    private interface ShotOperation {
-
-        boolean execute(GameModel game);
-    }
-
     /**
      * Runtime configuration for the task-based runner.
      *
@@ -263,8 +244,14 @@ public class TaskBasedGameRunner implements AutoCloseable {
      * @param botEnabled whether to start the asynchronous bot agent
      * @param botThinkTimeMillis delay before the bot submits a shot
      * @param physicsWorkerCount number of executor workers used inside each physics step
+     * @param startupCountdown startup countdown configuration for the game model
      */
-    public record Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis, int physicsWorkerCount) {
+    public record Config(
+            long tickMillis,
+            boolean botEnabled,
+            long botThinkTimeMillis,
+            int physicsWorkerCount,
+            GameModel.StartupCountdown startupCountdown) {
 
         /**
          * Creates a configuration using the default physics worker count.
@@ -277,6 +264,40 @@ public class TaskBasedGameRunner implements AutoCloseable {
             this(tickMillis, botEnabled, botThinkTimeMillis, defaultPhysicsWorkerCount());
         }
 
+        /**
+         * Creates a configuration using the default gameplay countdown.
+         *
+         * @param tickMillis fixed simulation tick duration
+         * @param botEnabled whether to start the asynchronous bot agent
+         * @param botThinkTimeMillis delay before the bot submits a shot
+         * @param physicsWorkerCount number of physics workers
+         */
+        public Config(long tickMillis, boolean botEnabled, long botThinkTimeMillis, int physicsWorkerCount) {
+            this(
+                    tickMillis,
+                    botEnabled,
+                    botThinkTimeMillis,
+                    physicsWorkerCount,
+                    GameModel.StartupCountdown.enabledDefault());
+        }
+
+        /**
+         * Creates a configuration using the default physics worker count and an
+         * explicit startup countdown policy.
+         *
+         * @param tickMillis fixed simulation tick duration
+         * @param botEnabled whether to start the asynchronous bot agent
+         * @param botThinkTimeMillis delay before the bot submits a shot
+         * @param startupCountdown startup countdown configuration
+         */
+        public Config(
+                long tickMillis,
+                boolean botEnabled,
+                long botThinkTimeMillis,
+                GameModel.StartupCountdown startupCountdown) {
+            this(tickMillis, botEnabled, botThinkTimeMillis, defaultPhysicsWorkerCount(), startupCountdown);
+        }
+
         public Config {
             if (tickMillis <= 0) {
                 throw new IllegalArgumentException("tickMillis must be > 0");
@@ -286,6 +307,9 @@ public class TaskBasedGameRunner implements AutoCloseable {
             }
             if (physicsWorkerCount < 1) {
                 throw new IllegalArgumentException("physicsWorkerCount must be >= 1");
+            }
+            if (startupCountdown == null) {
+                throw new IllegalArgumentException("startupCountdown must not be null");
             }
         }
 
@@ -305,7 +329,12 @@ public class TaskBasedGameRunner implements AutoCloseable {
          * @return configuration without the asynchronous bot agent
          */
         public static Config withoutBot() {
-            return new Config(PhysicsDefaults.FIXED_STEP_MILLIS, false, 0, defaultPhysicsWorkerCount());
+            return new Config(
+                    PhysicsDefaults.FIXED_STEP_MILLIS,
+                    false,
+                    0,
+                    defaultPhysicsWorkerCount(),
+                    GameModel.StartupCountdown.disabled());
         }
 
         private static int defaultPhysicsWorkerCount() {

@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import pcd.poool.runtime.CommandQueueMonitorSupport;
+import pcd.poool.runtime.GameCommand;
 
 class CommandQueueMonitorTest {
 
@@ -16,7 +18,7 @@ class CommandQueueMonitorTest {
      */
     @Test
     void pollReturnsCommandsInSubmissionOrder() {
-        var queue = new CommandQueueMonitor();
+        var queue = new CommandQueueMonitorSupport<GameCommand>();
         var first = new CountingCommand();
         var second = new CountingCommand();
 
@@ -34,7 +36,7 @@ class CommandQueueMonitorTest {
      */
     @Test
     void closeRejectsPendingCommandsAndPreventsNewSubmissions() {
-        var queue = new CommandQueueMonitor();
+        var queue = new CommandQueueMonitorSupport<GameCommand>();
         var command = new CountingCommand();
 
         assertTrue(queue.put(command));
