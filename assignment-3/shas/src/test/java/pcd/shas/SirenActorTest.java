@@ -7,6 +7,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import pcd.shas.siren.SirenActor;
 
+import pcd.shas.siren.AlertDevice;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +41,19 @@ class SirenActorTest {
         assertState(siren, true);
 
         siren.tell(new SirenActor.Deactivate());
+        siren.tell(new SirenActor.Deactivate());
+        assertState(siren, false);
+    }
+
+    @Test
+    void sirenImplementsAlertDeviceProtocol() {
+        var siren = testKit.spawn(SirenActor.create());
+        assertTrue(AlertDevice.class.isAssignableFrom(SirenActor.class));
+        assertTrue(AlertDevice.Command.class.isAssignableFrom(SirenActor.Command.class));
+
+        siren.tell(new SirenActor.Activate());
+        assertState(siren, true);
+
         siren.tell(new SirenActor.Deactivate());
         assertState(siren, false);
     }
