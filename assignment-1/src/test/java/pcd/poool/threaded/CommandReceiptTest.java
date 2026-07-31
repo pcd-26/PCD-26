@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
+import pcd.poool.runtime.CommandReceiptSupport;
 
 class CommandReceiptTest {
 
@@ -15,7 +16,7 @@ class CommandReceiptTest {
      */
     @Test
     void awaitReturnsCompletedResult() throws InterruptedException {
-        var receipt = new CommandReceipt<String>();
+        var receipt = new CommandReceiptSupport<String>();
 
         receipt.complete("done");
 
@@ -28,7 +29,7 @@ class CommandReceiptTest {
      */
     @Test
     void awaitTimesOutWhenCommandNeverCompletes() {
-        var receipt = new CommandReceipt<String>();
+        var receipt = new CommandReceiptSupport<String>();
 
         assertThrows(IllegalStateException.class, () -> receipt.await(Duration.ofMillis(20)));
     }
@@ -40,7 +41,7 @@ class CommandReceiptTest {
     @Test
     void awaitUnblocksWhenAnotherThreadCompletesReceipt() {
         assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
-            var receipt = new CommandReceipt<Integer>();
+            var receipt = new CommandReceiptSupport<Integer>();
             var completer = new Thread(() -> receipt.complete(7));
 
             completer.start();
