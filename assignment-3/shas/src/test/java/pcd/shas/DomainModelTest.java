@@ -12,8 +12,11 @@ import java.time.Instant;
 import pcd.shas.keypad.PinSubmitted;
 import java.util.Set;
 
+import pcd.shas.siren.AlertDevice;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DomainModelTest {
@@ -80,5 +83,13 @@ class DomainModelTest {
         assertEquals(Set.of("PERIMETER"), event.selectedZones());
         assertThrows(NullPointerException.class, () -> new PinSubmitted(null, Set.of(), null));
         assertThrows(NullPointerException.class, () -> new PinSubmitted("1234", null, null));
+    }
+
+    @Test
+    void alertDeviceCommandsCanBeInstantiated() {
+        AlertDevice.Activate activate = new AlertDevice.Activate();
+        AlertDevice.Deactivate deactivate = new AlertDevice.Deactivate();
+        assertNotNull(activate);
+        assertNotNull(deactivate);
     }
 }
