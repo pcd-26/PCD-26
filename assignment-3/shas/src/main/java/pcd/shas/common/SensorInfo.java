@@ -9,7 +9,9 @@ package pcd.shas.common;
  */
 public record SensorInfo(String id, SensorType type, Zone zone) {
     /**
-     * Compact constructor validating that the sensor information parameters are not null or empty.
+     * Compact constructor validating that the sensor information parameters are non-null and non-blank.
+     *
+     * @throws IllegalArgumentException if {@code id} is null/blank, or if {@code type} or {@code zone} is null
      */
     public SensorInfo {
         if (id == null || id.isBlank()) {

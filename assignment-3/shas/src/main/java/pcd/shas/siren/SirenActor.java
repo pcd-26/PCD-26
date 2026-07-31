@@ -4,7 +4,6 @@ import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
-import org.apache.pekko.actor.typed.javadsl.Receive;
 
 import java.util.Objects;
 
@@ -36,6 +35,11 @@ public final class SirenActor implements AlertDevice {
      * @param replyTo actor that should receive the state snapshot
      */
     public record QueryState(ActorRef<StateSnapshot> replyTo) implements Command {
+        /**
+         * Compact constructor validating that replyTo actor reference is non-null.
+         *
+         * @throws NullPointerException if {@code replyTo} is null
+         */
         public QueryState {
             Objects.requireNonNull(replyTo, "replyTo");
         }
@@ -57,6 +61,9 @@ public final class SirenActor implements AlertDevice {
         return Behaviors.setup(SirenActor::silent);
     }
 
+    /**
+     * Behavior handling commands when the siren is in silent (off) state.
+     */
     private static Behavior<Command> silent(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
             .onMessage(Activate.class, message -> {
@@ -71,6 +78,9 @@ public final class SirenActor implements AlertDevice {
             .build();
     }
 
+    /**
+     * Behavior handling commands when the siren is in active (sounding) state.
+     */
     private static Behavior<Command> active(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
             .onMessage(Activate.class, message -> Behaviors.same())
