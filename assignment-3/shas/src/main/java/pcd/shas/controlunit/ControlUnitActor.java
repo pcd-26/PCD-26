@@ -24,11 +24,25 @@ import java.util.Objects;
  */
 public final class ControlUnitActor {
 
+    /**
+     * Timer key used for exit delay single-shot timer.
+     */
     private static final Object EXIT_DELAY_TIMER_KEY = "exit-delay";
+
+    /**
+     * Timer key used for entry delay single-shot timer.
+     */
     private static final Object ENTRY_DELAY_TIMER_KEY = "entry-delay";
+
+    /**
+     * Constant set containing all defined system zones, representing full arming mode.
+     */
     private static final Set<Zone> FULL_ARMS = Set.copyOf(EnumSet.allOf(Zone.class));
 
-    private ControlUnitActor() {}   // Utility class
+    /**
+     * Private constructor to prevent instantiation of utility class.
+     */
+    private ControlUnitActor() {}
 
     /**
      * Root protocol for the control unit.
@@ -41,6 +55,11 @@ public final class ControlUnitActor {
      * @param pin the submitted PIN
      */
     public record PinSubmitted(String pin) implements Command {
+        /**
+         * Compact constructor validating that the submitted PIN is non-null.
+         *
+         * @throws NullPointerException if {@code pin} is null
+         */
         public PinSubmitted {
             Objects.requireNonNull(pin, "pin");
         }
@@ -52,6 +71,11 @@ public final class ControlUnitActor {
      * @param sensorInfo the activated sensor
      */
     public record SensorActivated(SensorInfo sensorInfo) implements Command {
+        /**
+         * Compact constructor validating that sensor info is non-null.
+         *
+         * @throws NullPointerException if {@code sensorInfo} is null
+         */
         public SensorActivated {
             Objects.requireNonNull(sensorInfo, "sensorInfo");
         }
@@ -68,6 +92,12 @@ public final class ControlUnitActor {
      * @param activeZones immutable set of zones that should be active when armed
      */
     public record ArmPartial(Set<Zone> activeZones) implements Command {
+        /**
+         * Compact constructor validating that active zones set is non-null and non-empty.
+         *
+         * @throws NullPointerException if {@code activeZones} is null
+         * @throws IllegalArgumentException if {@code activeZones} is empty
+         */
         public ArmPartial {
             Objects.requireNonNull(activeZones, "activeZones");
             if (activeZones.isEmpty()) {
@@ -83,6 +113,11 @@ public final class ControlUnitActor {
      * @param replyTo actor that should receive the state snapshot
      */
     public record QueryState(ActorRef<StateSnapshot> replyTo) implements Command {
+        /**
+         * Compact constructor validating that replyTo actor reference is non-null.
+         *
+         * @throws NullPointerException if {@code replyTo} is null
+         */
         public QueryState {
             Objects.requireNonNull(replyTo, "replyTo");
         }
@@ -94,13 +129,24 @@ public final class ControlUnitActor {
      * @param state the current alarm state
      */
     public record StateSnapshot(AlarmState state) {
+        /**
+         * Compact constructor validating that state is non-null.
+         *
+         * @throws NullPointerException if {@code state} is null
+         */
         public StateSnapshot {
             Objects.requireNonNull(state, "state");
         }
     }
 
+    /**
+     * Internal command triggered when the exit-delay timer expires.
+     */
     record ExitDelayTimeout() implements Command {}
 
+    /**
+     * Internal command triggered when the entry-delay timer expires.
+     */
     record EntryDelayTimeout() implements Command {}
 
     /**
@@ -141,6 +187,9 @@ public final class ControlUnitActor {
         );
     }
 
+    /**
+     * Behavior handling commands when the control unit is in DISARMED state.
+     */
     private static Behavior<Command> disarmed(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
@@ -187,6 +236,9 @@ public final class ControlUnitActor {
             .build();
     }
 
+    /**
+     * Behavior handling commands when the control unit is in EXIT_DELAY state.
+     */
     private static Behavior<Command> exitDelay(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
@@ -230,6 +282,9 @@ public final class ControlUnitActor {
             .build();
     }
 
+    /**
+     * Behavior handling commands when the control unit is in ARMED state.
+     */
     private static Behavior<Command> armed(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
@@ -280,6 +335,9 @@ public final class ControlUnitActor {
             .build();
     }
 
+    /**
+     * Behavior handling commands when the control unit is in ENTRY_DELAY state.
+     */
     private static Behavior<Command> entryDelay(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
@@ -324,6 +382,9 @@ public final class ControlUnitActor {
             .build();
     }
 
+    /**
+     * Behavior handling commands when the control unit is in ALARM state.
+     */
     private static Behavior<Command> alarm(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
@@ -362,6 +423,13 @@ public final class ControlUnitActor {
             .build();
     }
 
+    /**
+     * Validates that the configured PIN is non-null and non-blank.
+     *
+     * @param configuredPin the PIN to validate
+     * @throws NullPointerException if {@code configuredPin} is null
+     * @throws IllegalArgumentException if {@code configuredPin} is blank
+     */
     private static void validateConfiguredPin(String configuredPin) {
         Objects.requireNonNull(configuredPin, "configuredPin");
         if (configuredPin.isBlank()) {
