@@ -14,7 +14,7 @@ public class CommandReceiptSupport<T> {
     private T result;
     private RuntimeException failure;
 
-    protected CommandReceiptSupport() {
+    public CommandReceiptSupport() {
     }
 
     /**

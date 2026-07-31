@@ -18,35 +18,10 @@ public class GameModel {
     private static final double MIN_SHOT_SPEED = 0.05;
     private static final double BOT_SHOT_SPEED = 1.2;
     private static final V2d FALLBACK_BOT_SHOT = new V2d(0.35, -1.0).getNormalized().mul(BOT_SHOT_SPEED);
-
-    private static final boolean IS_TEST_ENV = isJUnitPresent();
-    private static volatile boolean countdownEnabled = !IS_TEST_ENV;
-
-    private static boolean isJUnitPresent() {
-        try {
-            Class.forName("org.junit.jupiter.api.Test");
-            return true;
-        } catch (ClassNotFoundException e) {
-            try {
-                Class.forName("org.junit.Test");
-                return true;
-            } catch (ClassNotFoundException ex) {
-                return false;
-            }
-        }
-    }
-
-    /**
-     * Enables or disables the initial 3-second countdown timer.
-     * Used primarily in test suites to bypass the start delay.
-     *
-     * @param enabled true to enable, false to disable
-     */
-    public static void setCountdownEnabled(boolean enabled) {
-        countdownEnabled = enabled;
-    }
+    private static final long DEFAULT_COUNTDOWN_MILLIS = 3_000;
 
     private final long gameStartSystemTime = System.currentTimeMillis();
+    private final StartupCountdown startupCountdown;
 
     /**
      * Checks if the 3-second game start countdown is active.
@@ -54,7 +29,8 @@ public class GameModel {
      * @return true if countdown is active, false otherwise
      */
     public synchronized boolean isCountdownActive() {
-        return countdownEnabled && (System.currentTimeMillis() - gameStartSystemTime < 3000);
+        return startupCountdown.enabled()
+                && (System.currentTimeMillis() - gameStartSystemTime < startupCountdown.durationMillis());
     }
 
     private final Board board;
@@ -85,8 +61,25 @@ public class GameModel {
      *        sequential engine
      */
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper) {
+        this(conf, physicsStepper, StartupCountdown.enabledDefault());
+    }
+
+    /**
+     * Creates a new game from the given board configuration, physics strategy,
+     * and startup countdown configuration.
+     *
+     * @param conf initial board layout, cue balls, small balls, bounds, and holes
+     * @param physicsStepper physics strategy, or {@code null} for the default
+     *        sequential engine
+     * @param startupCountdown startup countdown configuration
+     */
+    public GameModel(BoardConf conf, PhysicsStepper physicsStepper, StartupCountdown startupCountdown) {
         board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
+        if (startupCountdown == null) {
+            throw new IllegalArgumentException("startupCountdown must not be null");
+        }
+        this.startupCountdown = startupCountdown;
         status = GameStatus.RUNNING_STILL;
     }
 
@@ -276,5 +269,41 @@ public class GameModel {
             return 0.0;
         }
         return totalStepNanos / 1_000_000.0 / simulatedSteps;
+    }
+
+    /**
+     * Startup countdown configuration for a game instance.
+     *
+     * @param enabled whether shots are blocked at startup
+     * @param durationMillis countdown duration in milliseconds
+     */
+    public record StartupCountdown(boolean enabled, long durationMillis) {
+
+        /**
+         * Validates the countdown configuration.
+         */
+        public StartupCountdown {
+            if (durationMillis < 0) {
+                throw new IllegalArgumentException("durationMillis must be >= 0");
+            }
+        }
+
+        /**
+         * Creates the default gameplay countdown.
+         *
+         * @return enabled three-second startup countdown
+         */
+        public static StartupCountdown enabledDefault() {
+            return new StartupCountdown(true, DEFAULT_COUNTDOWN_MILLIS);
+        }
+
+        /**
+         * Creates a disabled startup countdown.
+         *
+         * @return disabled startup countdown
+         */
+        public static StartupCountdown disabled() {
+            return new StartupCountdown(false, 0);
+        }
     }
 }

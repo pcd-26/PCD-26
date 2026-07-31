@@ -2,7 +2,13 @@ name: Assignment 01 CI
 
 on:
   pull_request:
+    paths:
+      - "assignment-1/**"
+      - ".github/workflows/assignment-1-tests.yml"
   push:
+    paths:
+      - "assignment-1/**"
+      - ".github/workflows/assignment-1-tests.yml"
   workflow_dispatch:
     inputs:
       test_selector:
@@ -85,7 +91,6 @@ jobs:
           rm -rf package "$DELIVERY_ZIP"
           mkdir -p package/Assignment-01/doc
 
-          cp assignment-1/pom.xml package/Assignment-01/pom.xml
           cp -R assignment-1/src package/Assignment-01/src
           cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
 
@@ -100,9 +105,9 @@ jobs:
 
           unzip -l "$DELIVERY_ZIP"
           test -f package/Assignment-01/doc/report.pdf
-          test -f package/Assignment-01/pom.xml
           test -d package/Assignment-01/src/main
           test -d package/Assignment-01/src/test
+          test ! -e package/Assignment-01/pom.xml
           test ! -e package/Assignment-01/docs
           test ! -e package/Assignment-01/report
           test ! -e package/Assignment-01/target

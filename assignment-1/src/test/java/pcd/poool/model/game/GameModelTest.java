@@ -22,7 +22,7 @@ class GameModelTest {
      */
     @Test
     void humanScoresWhenOwnCueBallDirectlyPocketsSmallBall() {
-        var game = new GameModel(new DirectScoringConf());
+        var game = readyGame(new DirectScoringConf());
 
         assertTrue(game.shootHuman(new V2d(1.6, 0)));
         runUntilNotMoving(game, 400);
@@ -41,7 +41,7 @@ class GameModelTest {
      */
     @Test
     void humanAndBotCanShootIndependentlyWhenTheirCueBallsAreStopped() {
-        var game = new GameModel(new DirectScoringConf());
+        var game = readyGame(new DirectScoringConf());
 
         assertTrue(game.shootHuman(new V2d(1.6, 0)));
         assertTrue(game.shootBot());
@@ -53,7 +53,7 @@ class GameModelTest {
      */
     @Test
     void pocketingHumanCueBallImmediatelyGivesTheWinToBot() {
-        var game = new GameModel(new HumanCueAlreadyInHoleConf());
+        var game = readyGame(new HumanCueAlreadyInHoleConf());
 
         game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
 
@@ -69,7 +69,7 @@ class GameModelTest {
      */
     @Test
     void exposesBaselineStepMetrics() {
-        var game = new GameModel(new DirectScoringConf());
+        var game = readyGame(new DirectScoringConf());
 
         game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
 
@@ -83,7 +83,7 @@ class GameModelTest {
      */
     @Test
     void botShotCanBePreviewedBeforeItIsExecuted() {
-        var game = new GameModel(new DirectScoringConf());
+        var game = readyGame(new DirectScoringConf());
         game.shootHuman(new V2d(1.6, 0));
         runUntilNotMoving(game, 400);
 
@@ -99,7 +99,7 @@ class GameModelTest {
      */
     @Test
     void smallBallPocketedAfterSmallBallCollisionDoesNotScore() {
-        var game = new GameModel(new IndirectPocketConf());
+        var game = readyGame(new IndirectPocketConf());
 
         assertTrue(game.shootHuman(new V2d(1.6, 0)));
         runUntilNotMoving(game, 500);
@@ -113,31 +113,27 @@ class GameModelTest {
      */
     @Test
     void countdownBlocksShootingUntilExpiredOrDisabled() {
-        GameModel.setCountdownEnabled(true);
-        try {
-            var game = new GameModel(new DirectScoringConf());
-            
-            // Should not be able to shoot
-            assertFalse(game.canHumanShoot());
-            assertFalse(game.canBotShoot());
-            assertFalse(game.shootHuman(new V2d(1.6, 0)));
-            assertFalse(game.shootBot());
-            
-            // Bypass countdown by disabling it
-            GameModel.setCountdownEnabled(false);
-            assertTrue(game.canHumanShoot());
-            assertTrue(game.canBotShoot());
-            assertTrue(game.shootHuman(new V2d(1.6, 0)));
-        } finally {
-            // Restore default (disabled in test env)
-            GameModel.setCountdownEnabled(false);
-        }
+        var blockedGame = new GameModel(new DirectScoringConf(), null, GameModel.StartupCountdown.enabledDefault());
+
+        assertFalse(blockedGame.canHumanShoot());
+        assertFalse(blockedGame.canBotShoot());
+        assertFalse(blockedGame.shootHuman(new V2d(1.6, 0)));
+        assertFalse(blockedGame.shootBot());
+
+        var readyGame = new GameModel(new DirectScoringConf(), null, GameModel.StartupCountdown.disabled());
+        assertTrue(readyGame.canHumanShoot());
+        assertTrue(readyGame.canBotShoot());
+        assertTrue(readyGame.shootHuman(new V2d(1.6, 0)));
     }
 
     private void runUntilNotMoving(GameModel game, int maxSteps) {
         for (int i = 0; i < maxSteps && game.snapshot().status() == GameStatus.BALLS_MOVING; i++) {
             game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
         }
+    }
+
+    private GameModel readyGame(BoardConf conf) {
+        return new GameModel(conf, null, GameModel.StartupCountdown.disabled());
     }
 
     private static class DirectScoringConf implements BoardConf {

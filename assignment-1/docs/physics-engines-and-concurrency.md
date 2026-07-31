@@ -236,7 +236,7 @@ The physics engines do not directly feed the GUI mutable board objects.
 
 Instead, the runtime publishes immutable or copy-based results:
 
-- `GameSnapshot` and `ThreadedGameSnapshot` for match-level state;
+- `GameSnapshot` and `RuntimeGameSnapshot` for match-level state;
 - `Board.BallSnapshot` for render-friendly ball state;
 - `Board.HoleInteractions` for hole results gathered by the task-based
   coordinator;
@@ -287,5 +287,5 @@ If you want a short explanation path, use this order:
 2. `PhysicsEngine` as the sequential baseline.
 3. `ThreadedPhysicsEngine` as the worker-thread version.
 4. `TaskBasedPhysicsEngine` as the executor-based version.
-5. `GameSnapshot` / `ThreadedGameSnapshot` / `StepProfile` as the immutable
+5. `GameSnapshot` / `RuntimeGameSnapshot` / `StepProfile` as the immutable
    results that leave the physics layer.
