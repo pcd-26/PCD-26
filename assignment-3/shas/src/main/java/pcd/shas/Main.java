@@ -21,18 +21,16 @@ public final class Main {
 
     private static final String SYSTEM_NAME = "shas";
     private static final Config DEMO_OVERRIDE = ConfigFactory.parseString(
-            """
-            shas {
-              correctPin = "1234"
-              exitDelay = 300 milliseconds
-              entryDelay = 300 milliseconds
-            }
-            """
+        """
+        shas {
+          correctPin = "1234"
+          exitDelay = 300 milliseconds
+          entryDelay = 300 milliseconds
+        }
+        """
     );
 
-    private Main() {
-        // Utility class.
-    }
+    private Main() {}   // Utility class
 
     public static void main(String[] args) {
         Config config = DEMO_OVERRIDE.withFallback(ConfigFactory.load()).resolve();
