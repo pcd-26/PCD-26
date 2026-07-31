@@ -42,6 +42,8 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
      * @param zone installation zone
      * @param controlUnit control unit actor
      * @return the sensor behavior
+     * @throws NullPointerException if any argument is null
+     * @throws IllegalArgumentException if {@code sensorId} is blank
      */
     public static Behavior<Command> create(
         String sensorId,
@@ -74,6 +76,12 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
             .build();
     }
 
+    /**
+     * Handles physical activation commands, creating a timestamped {@link SensorEvent} and forwarding info to control unit.
+     *
+     * @param command activation command
+     * @return behavior instance
+     */
     private Behavior<Command> onActivate(Activate command) {
         SensorEvent event = new SensorEvent(new SensorInfo(sensorId, sensorType, zone), Instant.now());
         getContext().getLog().info(
@@ -87,6 +95,12 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         return this;
     }
 
+    /**
+     * Validates constructor arguments for non-null and non-blank values.
+     *
+     * @throws NullPointerException if any argument is null
+     * @throws IllegalArgumentException if {@code sensorId} is blank
+     */
     private static void validate(String sensorId, SensorType sensorType, Zone zone, ActorRef<ControlUnitActor.Command> controlUnit) {
         Objects.requireNonNull(sensorId, "sensorId");
         Objects.requireNonNull(sensorType, "sensorType");
