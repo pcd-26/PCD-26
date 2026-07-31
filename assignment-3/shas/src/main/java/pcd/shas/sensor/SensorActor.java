@@ -11,6 +11,7 @@ import pcd.shas.common.SensorType;
 import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 
+import java.time.Instant;
 import java.util.Objects;
 
 /**
@@ -43,21 +44,21 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
      * @return the sensor behavior
      */
     public static Behavior<Command> create(
-            String sensorId,
-            SensorType sensorType,
-            Zone zone,
-            ActorRef<ControlUnitActor.Command> controlUnit
+        String sensorId,
+        SensorType sensorType,
+        Zone zone,
+        ActorRef<ControlUnitActor.Command> controlUnit
     ) {
         validate(sensorId, sensorType, zone, controlUnit);
         return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, zone, controlUnit));
     }
 
     private SensorActor(
-            ActorContext<Command> context,
-            String sensorId,
-            SensorType sensorType,
-            Zone zone,
-            ActorRef<ControlUnitActor.Command> controlUnit
+        ActorContext<Command> context,
+        String sensorId,
+        SensorType sensorType,
+        Zone zone,
+        ActorRef<ControlUnitActor.Command> controlUnit
     ) {
         super(context);
         this.sensorId = sensorId;
@@ -69,18 +70,20 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(Activate.class, this::onActivate)
-                .build();
+            .onMessage(Activate.class, this::onActivate)
+            .build();
     }
 
     private Behavior<Command> onActivate(Activate command) {
+        SensorEvent event = new SensorEvent(new SensorInfo(sensorId, sensorType, zone), Instant.now());
         getContext().getLog().info(
-                "Sensor activated: id={}, type={}, zone={}",
-                sensorId,
-                sensorType,
-                zone
+            "Sensor activated: id={}, type={}, zone={}, timestamp={}",
+            event.info().id(),
+            event.info().type(),
+            event.info().zone(),
+            event.timestamp()
         );
-        controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo(sensorId, sensorType, zone)));
+        controlUnit.tell(new ControlUnitActor.SensorActivated(event.info()));
         return this;
     }
 

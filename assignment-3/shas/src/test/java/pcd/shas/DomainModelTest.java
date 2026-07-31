@@ -6,6 +6,12 @@ import pcd.shas.common.SensorInfo;
 import pcd.shas.common.SensorType;
 import pcd.shas.common.Zone;
 
+import pcd.shas.sensor.SensorEvent;
+import java.time.Instant;
+
+import pcd.shas.keypad.PinSubmitted;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -53,5 +59,26 @@ class DomainModelTest {
         assertEquals("front_door", sensor.id());
         assertEquals(SensorType.DOOR_WINDOW, sensor.type());
         assertEquals(Zone.PERIMETER, sensor.zone());
+    }
+
+    @Test
+    void sensorEventValidatesAndExposesData() {
+        SensorInfo info = new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER);
+        Instant now = Instant.now();
+        SensorEvent event = new SensorEvent(info, now);
+
+        assertEquals(info, event.info());
+        assertEquals(now, event.timestamp());
+        assertThrows(NullPointerException.class, () -> new SensorEvent(null, now));
+        assertThrows(NullPointerException.class, () -> new SensorEvent(info, null));
+    }
+
+    @Test
+    void keypadPinSubmittedValidatesAndExposesData() {
+        PinSubmitted event = new PinSubmitted("1234", Set.of("PERIMETER"), null);
+        assertEquals("1234", event.pin());
+        assertEquals(Set.of("PERIMETER"), event.selectedZones());
+        assertThrows(NullPointerException.class, () -> new PinSubmitted(null, Set.of(), null));
+        assertThrows(NullPointerException.class, () -> new PinSubmitted("1234", null, null));
     }
 }
