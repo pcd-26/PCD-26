@@ -24,6 +24,12 @@
 **/*.war
 **/*.ear
 
+# Legacy assignment output folders kept out of the repo tree
+assignment-3/shas/
+assignment-4/cshas/
+assignment-4/dcs/
+assignment-4/dttt/
+
 # JPF local checkout/build artifacts
 **/verification/jpf/.jpf-core/
 **/verification/jpf/.jpf-build/
