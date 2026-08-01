@@ -31,9 +31,9 @@ public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration
 
         Config shasConfig = config.getConfig(ROOT_PATH);
         return new AlarmConfiguration(
-            shasConfig.getString("correctPin"),
-            shasConfig.getDuration("exitDelay"),
-            shasConfig.getDuration("entryDelay")
+                shasConfig.getString("correctPin"),
+                shasConfig.getDuration("exitDelay"),
+                shasConfig.getDuration("entryDelay")
         );
     }
 
@@ -43,11 +43,11 @@ public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration
             throw new IllegalArgumentException("correctPin cannot be blank");
         }
 
-        validatePositiveDuration(exitDelay, "exitDelay");
-        validatePositiveDuration(entryDelay, "entryDelay");
+        requirePositiveDuration(exitDelay, "exitDelay");
+        requirePositiveDuration(entryDelay, "entryDelay");
     }
 
-    private static void validatePositiveDuration(Duration duration, String fieldName) {
+    private static void requirePositiveDuration(Duration duration, String fieldName) {
         Objects.requireNonNull(duration, fieldName);
         if (duration.isZero() || duration.isNegative()) {
             throw new IllegalArgumentException(fieldName + " must be positive");

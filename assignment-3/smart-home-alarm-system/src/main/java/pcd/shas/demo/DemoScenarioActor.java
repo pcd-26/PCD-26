@@ -23,8 +23,19 @@ import java.util.Set;
  */
 public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.Command> {
 
+    /**
+     * Timer key for scheduling the next step of the demo scenario.
+     */
     private static final Object NEXT_STEP_TIMER = "next-step";
+
+    /**
+     * Gap duration between individual demo actions.
+     */
     private static final Duration STEP_GAP = Duration.ofMillis(150);
+
+    /**
+     * Grace duration before shutting down system after demo completes.
+     */
     private static final Duration FINAL_GRACE = Duration.ofMillis(300);
 
     /**
@@ -37,24 +48,52 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
      */
     public record Start() implements Command {}
 
+    /**
+     * Internal command to advance the scenario state machine to the next step.
+     */
     private record Advance() implements Command {}
 
+    /**
+     * Internal adapter message wrapping a control unit state snapshot.
+     *
+     * @param snapshot the control unit state snapshot
+     */
     private record ControlStateObserved(ControlUnitActor.StateSnapshot snapshot) implements Command {}
 
+    /**
+     * Internal adapter message wrapping a siren state snapshot.
+     *
+     * @param snapshot the siren state snapshot
+     */
     private record SirenStateObserved(SirenActor.StateSnapshot snapshot) implements Command {}
 
+    /**
+     * Steps in the demo scenario state sequence.
+     */
     private enum Step {
+        /** Initial state. */
         START,
+        /** State after PIN submission. */
         AFTER_PIN,
+        /** State after exit delay expiration. */
         AFTER_EXIT_DELAY,
+        /** State after sensor activation while armed. */
         AFTER_SENSOR_IN_ARMED,
+        /** State after entry delay expiration. */
         AFTER_ENTRY_DELAY,
+        /** State after disarm PIN entry. */
         AFTER_DISARM,
+        /** State when partial night mode is configured. */
         NIGHT_MODE_CONFIGURED,
+        /** State during night mode exit delay. */
         NIGHT_MODE_EXIT_DELAY,
+        /** State when armed in night mode. */
         NIGHT_MODE_ARMED,
+        /** State during night mode entry delay. */
         NIGHT_MODE_ENTRY_DELAY,
+        /** State after night mode disarm. */
         NIGHT_MODE_DISARMED,
+        /** Final state before stopping. */
         STOPPING
     }
 
@@ -73,64 +112,70 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
     private String pendingControlLabel = "";
     private String pendingSirenLabel = "";
 
+    /**
+     * Creates the demo scenario actor behavior.
+     *
+     * @param configuration alarm configuration containing PIN and delay parameters
+     * @return the demo actor behavior
+     * @throws NullPointerException if {@code configuration} is null
+     */
     public static Behavior<Command> create(AlarmConfiguration configuration) {
         Objects.requireNonNull(configuration, "configuration");
 
         return Behaviors.setup(context -> Behaviors.withTimers(timers -> {
             ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter =
-                    context.messageAdapter(ControlUnitActor.StateSnapshot.class, ControlStateObserved::new);
+                context.messageAdapter(ControlUnitActor.StateSnapshot.class, ControlStateObserved::new);
             ActorRef<SirenActor.StateSnapshot> sirenStateAdapter =
-                    context.messageAdapter(SirenActor.StateSnapshot.class, SirenStateObserved::new);
+                context.messageAdapter(SirenActor.StateSnapshot.class, SirenStateObserved::new);
 
             ActorRef<SirenActor.Command> siren = context.spawn(SirenActor.create(), "siren");
             ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
-                    ControlUnitActor.create(
-                            configuration.correctPin(),
-                            configuration.exitDelay(),
-                            configuration.entryDelay(),
-                            siren
-                    ),
-                    "control-unit"
+                ControlUnitActor.create(
+                    configuration.correctPin(),
+                    configuration.exitDelay(),
+                    configuration.entryDelay(),
+                    siren
+                ),
+                "control-unit"
             );
             ActorRef<KeypadActor.Command> keypad = context.spawn(KeypadActor.create(controlUnit), "keypad");
             ActorRef<SensorActor.Command> perimeterSensor = context.spawn(
-                    SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnit),
-                    "front-door-sensor"
+                SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnit),
+                "front-door-sensor"
             );
             ActorRef<SensorActor.Command> livingRoomSensor = context.spawn(
-                    SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, Zone.LIVING_AREA, controlUnit),
-                    "living-room-sensor"
+                SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, Zone.LIVING_AREA, controlUnit),
+                "living-room-sensor"
             );
 
-            DemoScenarioActor actor = new DemoScenarioActor(
-                    context,
-                    timers,
-                    keypad,
-                    perimeterSensor,
-                    livingRoomSensor,
-                    controlUnit,
-                    siren,
-                    controlStateAdapter,
-                    sirenStateAdapter,
-                    configuration.exitDelay(),
-                    configuration.entryDelay()
+            return new DemoScenarioActor(
+                context,
+                timers,
+                keypad,
+                perimeterSensor,
+                livingRoomSensor,
+                controlUnit,
+                siren,
+                controlStateAdapter,
+                sirenStateAdapter,
+                configuration.exitDelay(),
+                configuration.entryDelay()
             );
-            return actor;
         }));
     }
 
     private DemoScenarioActor(
-            ActorContext<Command> context,
-            TimerScheduler<Command> timers,
-            ActorRef<KeypadActor.Command> keypad,
-            ActorRef<SensorActor.Command> perimeterSensor,
-            ActorRef<SensorActor.Command> livingRoomSensor,
-            ActorRef<ControlUnitActor.Command> controlUnit,
-            ActorRef<SirenActor.Command> siren,
-            ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter,
-            ActorRef<SirenActor.StateSnapshot> sirenStateAdapter,
-            Duration exitDelay,
-            Duration entryDelay
+        ActorContext<Command> context,
+        TimerScheduler<Command> timers,
+        ActorRef<KeypadActor.Command> keypad,
+        ActorRef<SensorActor.Command> perimeterSensor,
+        ActorRef<SensorActor.Command> livingRoomSensor,
+        ActorRef<ControlUnitActor.Command> controlUnit,
+        ActorRef<SirenActor.Command> siren,
+        ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter,
+        ActorRef<SirenActor.StateSnapshot> sirenStateAdapter,
+        Duration exitDelay,
+        Duration entryDelay
     ) {
         super(context);
         this.timers = timers;
@@ -148,13 +193,16 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(Start.class, this::onStart)
-                .onMessage(Advance.class, this::onAdvance)
-                .onMessage(ControlStateObserved.class, this::onControlStateObserved)
-                .onMessage(SirenStateObserved.class, this::onSirenStateObserved)
-                .build();
+            .onMessage(Start.class, this::onStart)
+            .onMessage(Advance.class, this::onAdvance)
+            .onMessage(ControlStateObserved.class, this::onControlStateObserved)
+            .onMessage(SirenStateObserved.class, this::onSirenStateObserved)
+            .build();
     }
 
+    /**
+     * Handler for the Start command, initiating step 1 of the demo.
+     */
     private Behavior<Command> onStart(Start command) {
         getContext().getLog().info("Demo step 1: system starts in DISARMED");
         queryState("initial state");
@@ -166,6 +214,9 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         return this;
     }
 
+    /**
+     * Handler for Advance command, stepping through the scripted demo sequence.
+     */
     private Behavior<Command> onAdvance(Advance command) {
         switch (step) {
             case AFTER_PIN -> {
@@ -249,34 +300,51 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         return this;
     }
 
+    /**
+     * Handler for control unit state query responses.
+     */
     private Behavior<Command> onControlStateObserved(ControlStateObserved observed) {
         getContext().getLog().info(
-                "Control unit reports {}: {}",
-                pendingControlLabel,
-                observed.snapshot().state()
+            "Control unit reports {}: {}",
+            pendingControlLabel,
+            observed.snapshot().state()
         );
         return this;
     }
 
+    /**
+     * Handler for siren state query responses.
+     */
     private Behavior<Command> onSirenStateObserved(SirenStateObserved observed) {
         getContext().getLog().info(
-                "Siren reports {}: {}",
-                pendingSirenLabel,
-                observed.snapshot().active() ? "ACTIVE" : "INACTIVE"
+            "Siren reports {}: {}",
+            pendingSirenLabel,
+            observed.snapshot().active() ? "ACTIVE" : "INACTIVE"
         );
         return this;
     }
 
+    /**
+     * Sends a state query request to the control unit with a logging label.
+     */
     private void queryState(String label) {
         pendingControlLabel = label;
         controlUnit.tell(new ControlUnitActor.QueryState(controlStateAdapter));
     }
 
+    /**
+     * Sends a state query request to the siren actor with a logging label.
+     */
     private void querySirenState(String label) {
         pendingSirenLabel = label;
         siren.tell(new SirenActor.QueryState(sirenStateAdapter));
     }
 
+    /**
+     * Simulates pressing key digits on the keypad followed by the '#' submit key.
+     *
+     * @param pin the PIN string to submit
+     */
     private void pressPin(String pin) {
         for (char character : pin.toCharArray()) {
             keypad.tell(new KeypadActor.PressKey(character));
