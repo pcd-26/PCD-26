@@ -22,13 +22,22 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
 
     /**
      * Simulates pressing a single keypad key.
+     *
+     * @param key character key pressed (0-9 for digits, '#' for submit, '*' for clear)
      */
     public record PressKey(char key) implements Command {}
 
     /**
      * Simulates direct submission of a PIN.
+     *
+     * @param pin the submitted PIN string
      */
     public record SubmitPin(String pin) implements Command {
+        /**
+         * Compact constructor validating that the submitted PIN string is non-null.
+         *
+         * @throws NullPointerException if {@code pin} is null
+         */
         public SubmitPin {
             Objects.requireNonNull(pin, "pin");
         }
@@ -42,6 +51,7 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
      *
      * @param controlUnit the control unit actor
      * @return the keypad behavior
+     * @throws NullPointerException if {@code controlUnit} is null
      */
     public static Behavior<Command> create(ActorRef<ControlUnitActor.Command> controlUnit) {
         Objects.requireNonNull(controlUnit, "controlUnit");
@@ -56,11 +66,17 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-                .onMessage(PressKey.class, this::onPressKey)
-                .onMessage(SubmitPin.class, this::onSubmitPin)
-                .build();
+            .onMessage(PressKey.class, this::onPressKey)
+            .onMessage(SubmitPin.class, this::onSubmitPin)
+            .build();
     }
 
+    /**
+     * Handles single keypress commands, buffering digits, submitting on '#', or clearing buffer on '*'.
+     *
+     * @param command keypress command
+     * @return behavior instance
+     */
     private Behavior<Command> onPressKey(PressKey command) {
         char key = command.key();
         if (Character.isDigit(key)) {
@@ -80,17 +96,29 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         return this;
     }
 
+    /**
+     * Handles direct PIN submission commands.
+     *
+     * @param command PIN submission command
+     * @return behavior instance
+     */
     private Behavior<Command> onSubmitPin(SubmitPin command) {
+        getContext().getLog().info("Keypad submitting PIN event for pin length={}", command.pin().length());
         controlUnit.tell(new ControlUnitActor.PinSubmitted(command.pin()));
         return this;
     }
 
+    /**
+     * Submits buffered digit sequence to the control unit and resets buffer.
+     */
     private void submitBufferedPin() {
         if (pinBuffer.isEmpty()) {
             return;
         }
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted(pinBuffer.toString()));
+        String pin = pinBuffer.toString();
+        getContext().getLog().info("Keypad submitting buffered PIN event for pin length={}", pin.length());
+        controlUnit.tell(new ControlUnitActor.PinSubmitted(pin));
         pinBuffer.setLength(0);
     }
 }

@@ -18,6 +18,9 @@ import java.util.Objects;
  */
 public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration entryDelay) {
 
+    /**
+     * Configuration root path prefix in Typesafe Config tree.
+     */
     private static final String ROOT_PATH = "shas";
 
     /**
@@ -25,33 +28,47 @@ public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration
      *
      * @param config the loaded application config
      * @return the parsed alarm configuration
+     * @throws NullPointerException if {@code config} is null
      */
     public static AlarmConfiguration from(Config config) {
         Objects.requireNonNull(config, "config");
 
         Config shasConfig = config.getConfig(ROOT_PATH);
         return new AlarmConfiguration(
-                shasConfig.getString("correctPin"),
-                shasConfig.getDuration("exitDelay"),
-                shasConfig.getDuration("entryDelay")
+            shasConfig.getString("correctPin"),
+            shasConfig.getDuration("exitDelay"),
+            shasConfig.getDuration("entryDelay")
         );
     }
 
+    /**
+     * Compact constructor enforcing validation rules for configuration fields.
+     *
+     * @throws NullPointerException if any parameter is null
+     * @throws IllegalArgumentException if {@code correctPin} is blank or delays are non-positive
+     */
     public AlarmConfiguration {
         Objects.requireNonNull(correctPin, "correctPin");
         if (correctPin.isBlank()) {
             throw new IllegalArgumentException("correctPin cannot be blank");
         }
 
-        exitDelay = requirePositiveDuration(exitDelay, "exitDelay");
-        entryDelay = requirePositiveDuration(entryDelay, "entryDelay");
+        requirePositiveDuration(exitDelay, "exitDelay");
+        requirePositiveDuration(entryDelay, "entryDelay");
     }
 
-    private static Duration requirePositiveDuration(Duration duration, String fieldName) {
+    /**
+     * Validates that the provided duration parameter is strictly positive.
+     *
+     * @param duration the duration value to check
+     * @param fieldName the field name used in exception messages
+     * @throws NullPointerException if {@code duration} is null
+     * @throws IllegalArgumentException if {@code duration} is zero or negative
+     */
+    private static void requirePositiveDuration(Duration duration, String fieldName) {
         Objects.requireNonNull(duration, fieldName);
         if (duration.isZero() || duration.isNegative()) {
             throw new IllegalArgumentException(fieldName + " must be positive");
         }
-        return duration;
     }
 }

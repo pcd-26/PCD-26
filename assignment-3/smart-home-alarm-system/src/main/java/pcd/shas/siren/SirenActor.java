@@ -4,23 +4,20 @@ import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
-import org.apache.pekko.actor.typed.javadsl.Receive;
 
 import java.util.Objects;
 
 /**
- * Typed siren actor for the alarm system.
+ * Typed siren actor for the alarm system, implementing the AlertDevice abstraction.
  */
-public final class SirenActor {
+public final class SirenActor implements AlertDevice {
 
-    private SirenActor() {
-        // Utility class.
-    }
+    private SirenActor() {} // Utility class
 
     /**
-     * Root protocol for the siren.
+     * Root protocol for the siren, extending generic alert device commands.
      */
-    public interface Command {}
+    public interface Command extends AlertDevice.Command {}
 
     /**
      * Turns the siren on.
@@ -38,6 +35,11 @@ public final class SirenActor {
      * @param replyTo actor that should receive the state snapshot
      */
     public record QueryState(ActorRef<StateSnapshot> replyTo) implements Command {
+        /**
+         * Compact constructor validating that replyTo actor reference is non-null.
+         *
+         * @throws NullPointerException if {@code replyTo} is null
+         */
         public QueryState {
             Objects.requireNonNull(replyTo, "replyTo");
         }
@@ -59,31 +61,37 @@ public final class SirenActor {
         return Behaviors.setup(SirenActor::silent);
     }
 
+    /**
+     * Behavior handling commands when the siren is in silent (off) state.
+     */
     private static Behavior<Command> silent(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
-                .onMessage(Activate.class, message -> {
-                    context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
-                    return active(context);
-                })
-                .onMessage(Deactivate.class, message -> Behaviors.same())
-                .onMessage(QueryState.class, message -> {
-                    message.replyTo().tell(new StateSnapshot(false));
-                    return Behaviors.same();
-                })
-                .build();
+            .onMessage(Activate.class, message -> {
+                context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
+                return active(context);
+            })
+            .onMessage(Deactivate.class, message -> Behaviors.same())
+            .onMessage(QueryState.class, message -> {
+                message.replyTo().tell(new StateSnapshot(false));
+                return Behaviors.same();
+            })
+            .build();
     }
 
+    /**
+     * Behavior handling commands when the siren is in active (sounding) state.
+     */
     private static Behavior<Command> active(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
-                .onMessage(Activate.class, message -> Behaviors.same())
-                .onMessage(Deactivate.class, message -> {
-                    context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
-                    return silent(context);
-                })
-                .onMessage(QueryState.class, message -> {
-                    message.replyTo().tell(new StateSnapshot(true));
-                    return Behaviors.same();
-                })
-                .build();
+            .onMessage(Activate.class, message -> Behaviors.same())
+            .onMessage(Deactivate.class, message -> {
+                context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
+                return silent(context);
+            })
+            .onMessage(QueryState.class, message -> {
+                message.replyTo().tell(new StateSnapshot(true));
+                return Behaviors.same();
+            })
+            .build();
     }
 }
