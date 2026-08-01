@@ -9,7 +9,6 @@ import org.apache.pekko.actor.typed.javadsl.Receive;
 import pcd.shas.controlunit.ControlUnitActor;
 
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Typed keypad actor that collects local PIN input and forwards submissions to the control unit.
@@ -104,9 +103,8 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
      * @return behavior instance
      */
     private Behavior<Command> onSubmitPin(SubmitPin command) {
-        PinSubmitted event = new PinSubmitted(command.pin(), Set.of(), getContext().getSelf());
-        getContext().getLog().info("Keypad submitting PIN event for pin length={}", event.pin().length());
-        controlUnit.tell(new ControlUnitActor.PinSubmitted(event.pin()));
+        getContext().getLog().info("Keypad submitting PIN event for pin length={}", command.pin().length());
+        controlUnit.tell(new ControlUnitActor.PinSubmitted(command.pin()));
         return this;
     }
 
@@ -118,9 +116,9 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
             return;
         }
 
-        PinSubmitted event = new PinSubmitted(pinBuffer.toString(), Set.of(), getContext().getSelf());
-        getContext().getLog().info("Keypad submitting buffered PIN event for pin length={}", event.pin().length());
-        controlUnit.tell(new ControlUnitActor.PinSubmitted(event.pin()));
+        String pin = pinBuffer.toString();
+        getContext().getLog().info("Keypad submitting buffered PIN event for pin length={}", pin.length());
+        controlUnit.tell(new ControlUnitActor.PinSubmitted(pin));
         pinBuffer.setLength(0);
     }
 }
