@@ -186,7 +186,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
         }
 
         notifyStateToClient(leavingClient, state);
-        notifyOpponentLeft(opponentClient, playerName, state);
+        notifyOpponentLeftNow(opponentClient, playerName, state);
         
         shutdownExecutor();
     }
@@ -435,6 +435,19 @@ public class GameImpl extends UnicastRemoteObject implements Game {
                 // Ignore disconnects during shutdown.
             }
         });
+    }
+
+    /** Notifies the opponent synchronously so leave operations complete before returning. */
+    private void notifyOpponentLeftNow(PlayerClient client, String playerName, BoardState state) {
+        if (client == null) {
+            return;
+        }
+        try {
+            client.opponentLeft(playerName);
+            client.gameUpdated(state);
+        } catch (RemoteException e) {
+            // Ignore disconnects during shutdown.
+        }
     }
 
     /** Sends the final board state to a client, if present. */
