@@ -41,12 +41,10 @@ public class ViewFrame extends JFrame {
     private static final int SMALL_BALL_STROKE_WIDTH = 1;
     private static final int PLAYER_BALL_STROKE_WIDTH = 3;
     private static final int BOT_BALL_STROKE_WIDTH = 3;
-    private static final int SHOT_PREVIEW_STROKE_WIDTH = 3;
     private static final float MIN_ARROW_WIDTH = 2.0f;
     private static final float MAX_ARROW_WIDTH = 5.0f;
     private static final float SHOT_PROJECTION_STROKE_WIDTH = 2.0f;
     private static final float[] SHOT_PROJECTION_DASH = {8.0f, 8.0f};
-    private static final int HUD_X = 20;
     private static final int HUD_STATS_X = 20;
     private static final int HUD_BALL_COUNT_Y = 40;
     private static final int HUD_FPS_Y = 90;

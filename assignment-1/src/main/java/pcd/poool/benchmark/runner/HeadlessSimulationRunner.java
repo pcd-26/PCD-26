@@ -25,6 +25,7 @@ public final class HeadlessSimulationRunner {
 
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
     private static final long STEP_MILLIS = PhysicsDefaults.FIXED_STEP_MILLIS;
+    @SuppressWarnings("unused")
     private static volatile long blackhole;
 
     private HeadlessSimulationRunner() {

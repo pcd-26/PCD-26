@@ -9,7 +9,6 @@ import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
-import pcd.poool.model.physics.config.StandardGameBoardConf;
 
 /**
  * Immutable benchmark workload definition for deterministic physics

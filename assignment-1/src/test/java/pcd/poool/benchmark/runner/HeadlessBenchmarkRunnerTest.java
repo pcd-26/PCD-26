@@ -8,10 +8,9 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import pcd.poool.benchmark.BenchmarkConfig;
-import pcd.poool.benchmark.BenchmarkRunResult;
-import pcd.poool.benchmark.HeadlessBenchmarkRunner;
-import pcd.poool.benchmark.RuntimeTelemetryCsvWriter;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkRunResult;
+import pcd.poool.benchmark.io.RuntimeTelemetryCsvWriter;
 
 class HeadlessBenchmarkRunnerTest {
 

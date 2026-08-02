@@ -37,6 +37,7 @@ public final class ScalabilityBenchmarkRunner {
     private static final int DEFAULT_WARMUP_RUNS = 2;
     private static final int DEFAULT_MEASURED_RUNS = 5;
     private static final Path DEFAULT_OUTPUT_FILE = defaultAssignmentPath("benchmarks", "results", "raw-scalability-results.csv");
+    @SuppressWarnings("unused")
     private static volatile long blackhole;
 
     private ScalabilityBenchmarkRunner() {
