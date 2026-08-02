@@ -191,74 +191,14 @@ public class FSStatGUI extends JFrame {
         String paradigm = (String) paradigmCombo.getSelectedItem();
         long maxFS = sizeUnit.toBytes(maxFSInput);
 
-        // UI Reset
-        tableModel.setRowCount(0);
-        for (int i = 0; i <= nb; i++) {
-            tableModel.addRow(new Object[]{getBandRangeLabel(i, maxFS, nb, sizeUnit), 0L});
-        }
-        totalFilesVal.setText("0");
-        durationVal.setText(FSReport.formatDuration(0));
-        progressBar.setIndeterminate(true);
-        statusLabel.setText(" Scanning using " + paradigm + "...");
-        setRunningState(true);
+        resetScanUi(paradigm, maxFS, nb, sizeUnit);
 
         if ("Virtual Threads".equals(paradigm)) {
-            currentJob = VirtualThreadsFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
-                @Override
-                public void onUpdate(FSReport report) {
-                    SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
-                }
-
-                @Override
-                public void onCompleted(FSReport report) {
-                    SwingUtilities.invokeLater(() -> {
-                        updateUI(report, sizeUnit);
-                        scanFinished("Scan completed in " + report.formatDuration() + ".");
-                    });
-                }
-
-                @Override
-                public void onError(Throwable error) {
-                    SwingUtilities.invokeLater(() -> scanFailed(error.getMessage()));
-                }
-            });
+            currentJob = VirtualThreadsFSStat.getFSReport(path, maxFS, nb, createUiListener(sizeUnit));
         } else if ("Event-Loop (Vert.x)".equals(paradigm)) {
-            currentJob = EventLoopFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
-                @Override
-                public void onUpdate(FSReport report) {
-                    SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
-                }
-
-                @Override
-                public void onCompleted(FSReport report) {
-                    SwingUtilities.invokeLater(() -> {
-                        updateUI(report, sizeUnit);
-                        scanFinished("Scan completed in " + report.formatDuration() + ".");
-                    });
-                }
-
-                @Override
-                public void onError(Throwable error) {
-                    SwingUtilities.invokeLater(() -> scanFailed(error.getMessage()));
-                }
-            });
+            currentJob = EventLoopFSStat.getFSReport(path, maxFS, nb, createUiListener(sizeUnit));
         } else if ("Reactive Programming (Rx)".equals(paradigm)) {
-            final FSReport[] lastReport = new FSReport[1];
-            rxDisposable = ReactiveFSStat.getFSReport(path, maxFS, nb)
-                .subscribe(
-                    report -> {
-                        lastReport[0] = report;
-                        SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
-                    },
-                    error -> SwingUtilities.invokeLater(() -> scanFailed(error.getMessage())),
-                    () -> SwingUtilities.invokeLater(() -> {
-                        if (lastReport[0] != null) {
-                            scanFinished("Scan completed in " + lastReport[0].formatDuration() + ".");
-                        } else {
-                            scanFinished("Scan completed.");
-                        }
-                    })
-                );
+            startReactiveScan(path, maxFS, nb, sizeUnit);
         }
     }
 
@@ -287,7 +227,7 @@ public class FSStatGUI extends JFrame {
         for (int i = 0; i < bands.length; i++) {
             if (i < tableModel.getRowCount()) {
                 tableModel.setValueAt(bands[i], i, 1);
-                tableModel.setValueAt(getBandRangeLabel(i, report.maxFS(), report.nb(), displayUnit), i, 0);
+                tableModel.setValueAt(report.getBandLabel(i, displayUnit), i, 0);
             }
         }
     }
@@ -320,17 +260,57 @@ public class FSStatGUI extends JFrame {
         paradigmCombo.setEnabled(!running);
     }
 
-    private String getBandRangeLabel(int index, long maxFS, int nb, SizeUnit unit) {
-        if (index == nb) {
-            return String.format("> %s", unit.format(maxFS));
+    private void resetScanUi(String paradigm, long maxFS, int nb, SizeUnit sizeUnit) {
+        tableModel.setRowCount(0);
+        for (int i = 0; i <= nb; i++) {
+            tableModel.addRow(new Object[]{FSReport.formatBandLabel(maxFS, nb, i, sizeUnit), 0L});
         }
-        double bandWidth = (double) maxFS / nb;
-        long min = Math.round(index * bandWidth);
-        long max = Math.round((index + 1) * bandWidth) - 1;
-        if (index == nb - 1) {
-            max = maxFS;
-        }
-        return String.format("[%s - %s]", unit.format(min), unit.format(max));
+        totalFilesVal.setText("0");
+        durationVal.setText(FSReport.formatDuration(0));
+        progressBar.setIndeterminate(true);
+        statusLabel.setText(" Scanning using " + paradigm + "...");
+        setRunningState(true);
+    }
+
+    private FSReportListener createUiListener(SizeUnit sizeUnit) {
+        return new FSReportListener() {
+            @Override
+            public void onUpdate(FSReport report) {
+                SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
+            }
+
+            @Override
+            public void onCompleted(FSReport report) {
+                SwingUtilities.invokeLater(() -> {
+                    updateUI(report, sizeUnit);
+                    scanFinished("Scan completed in " + report.formatDuration() + ".");
+                });
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                SwingUtilities.invokeLater(() -> scanFailed(error.getMessage()));
+            }
+        };
+    }
+
+    private void startReactiveScan(String path, long maxFS, int nb, SizeUnit sizeUnit) {
+        final FSReport[] lastReport = new FSReport[1];
+        rxDisposable = ReactiveFSStat.getFSReport(path, maxFS, nb)
+            .subscribe(
+                report -> {
+                    lastReport[0] = report;
+                    SwingUtilities.invokeLater(() -> updateUI(report, sizeUnit));
+                },
+                error -> SwingUtilities.invokeLater(() -> scanFailed(error.getMessage())),
+                () -> SwingUtilities.invokeLater(() -> {
+                    if (lastReport[0] != null) {
+                        scanFinished("Scan completed in " + lastReport[0].formatDuration() + ".");
+                    } else {
+                        scanFinished("Scan completed.");
+                    }
+                })
+            );
     }
 
     /**
