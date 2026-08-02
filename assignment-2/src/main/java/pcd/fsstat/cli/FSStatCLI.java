@@ -155,10 +155,6 @@ public class FSStatCLI {
         );
     }
 
-    private static void printFinalReport(FSReport report) {
-        printFinalReport(report, SizeUnit.BYTES);
-    }
-
     private static void printFinalReport(FSReport report, SizeUnit displayUnit) {
         System.out.println("\n==============================================");
         System.out.println("FINAL FILE SIZE DISTRIBUTION REPORT");
