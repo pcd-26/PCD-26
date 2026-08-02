@@ -10,7 +10,6 @@ import pcd.fsstat.common.FSReportListener;
 import pcd.fsstat.common.FSUtils;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
