@@ -48,6 +48,55 @@ public class FSStatRobustnessCorrectnessTest {
     }
 
     /**
+     * Builds a wider and deeper deterministic hierarchy used to compare the
+     * three implementations on a non-trivial dataset.
+     *
+     * @param root The root directory.
+     * @throws IOException If hierarchy creation fails.
+     */
+    private void createWideDeepHierarchy(Path root) throws IOException {
+        writeDummyFile(root.resolve("root_10.dat").toFile(), 10);
+
+        Path dirA = root.resolve("dirA");
+        Path dirB = root.resolve("dirB");
+        assertTrue(dirA.toFile().mkdir());
+        assertTrue(dirB.toFile().mkdir());
+
+        writeDummyFile(dirA.resolve("a_0.dat").toFile(), 0);
+        writeDummyFile(dirA.resolve("a_25.dat").toFile(), 25);
+        writeDummyFile(dirA.resolve("a_101.dat").toFile(), 101);
+
+        writeDummyFile(dirB.resolve("b_50.dat").toFile(), 50);
+        writeDummyFile(dirB.resolve("b_75.dat").toFile(), 75);
+        writeDummyFile(dirB.resolve("b_250.dat").toFile(), 250);
+
+        Path dirA1 = dirA.resolve("dirA1");
+        Path dirA2 = dirA.resolve("dirA2");
+        Path dirB1 = dirB.resolve("dirB1");
+        Path dirB2 = dirB.resolve("dirB2");
+        assertTrue(dirA1.toFile().mkdir());
+        assertTrue(dirA2.toFile().mkdir());
+        assertTrue(dirB1.toFile().mkdir());
+        assertTrue(dirB2.toFile().mkdir());
+
+        writeDummyFile(dirA1.resolve("a1_10.dat").toFile(), 10);
+        writeDummyFile(dirA1.resolve("a1_25.dat").toFile(), 25);
+        writeDummyFile(dirA1.resolve("a1_50.dat").toFile(), 50);
+
+        writeDummyFile(dirA2.resolve("a2_0.dat").toFile(), 0);
+        writeDummyFile(dirA2.resolve("a2_75.dat").toFile(), 75);
+        writeDummyFile(dirA2.resolve("a2_101.dat").toFile(), 101);
+
+        writeDummyFile(dirB1.resolve("b1_25.dat").toFile(), 25);
+        writeDummyFile(dirB1.resolve("b1_75.dat").toFile(), 75);
+        writeDummyFile(dirB1.resolve("b1_150.dat").toFile(), 150);
+
+        writeDummyFile(dirB2.resolve("b2_0.dat").toFile(), 0);
+        writeDummyFile(dirB2.resolve("b2_50.dat").toFile(), 50);
+        writeDummyFile(dirB2.resolve("b2_101.dat").toFile(), 101);
+    }
+
+    /**
      * Runs the Virtual Threads scanner synchronously and returns the report.
      *
      * @param path  The root path to scan.
@@ -313,6 +362,34 @@ public class FSStatRobustnessCorrectnessTest {
         assertEquals(1, bands[2]);
         assertEquals(1, bands[3]);
         assertEquals(1, bands[4]);
+    }
+
+    /**
+     * Verifies that a larger and wider hierarchy produces identical results
+     * across all implementations.
+     *
+     * @param tempDir Path injected by JUnit.
+     * @throws Exception If execution fails.
+     */
+    @Test
+    public void testWideDeepDirectoryConsistency(@TempDir Path tempDir) throws Exception {
+        createWideDeepHierarchy(tempDir);
+
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAX_FS, NB);
+        FSReport rxReport = runReactive(tempDir.toString(), MAX_FS, NB);
+        FSReport evReport = runEventLoop(tempDir.toString(), MAX_FS, NB);
+
+        assertReportsEqual(vtReport, rxReport);
+        assertReportsEqual(vtReport, evReport);
+
+        assertEquals(19, vtReport.totalFiles());
+        long[] bands = vtReport.bandsCount();
+        assertEquals(5, bands.length);
+        assertEquals(5, bands[0]);
+        assertEquals(3, bands[1]);
+        assertEquals(3, bands[2]);
+        assertEquals(3, bands[3]);
+        assertEquals(5, bands[4]);
     }
 
     /**
