@@ -76,21 +76,7 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     DistributedCriticalSection(Connection connection, String csName, BootstrapHook bootstrapHook)
             throws IOException, InterruptedException {
-        if (connection == null) {
-            throw new IllegalArgumentException("Connection cannot be null");
-        }
-        if (csName == null || csName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Critical section name cannot be empty");
-        }
-        this.connection = connection;
-        this.csName = csName;
-        this.tokenQueueManager = new TokenQueueManager(csName);
-        this.bootstrapLock = new BrokerBootstrapLock(csName);
-        this.ownConnection = false;
-        this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
-        this.channel = connection.createChannel();
-        this.channel.basicQos(1);
-        initializeToken();
+        this(connection, csName, false, bootstrapHook);
     }
 
     /**
@@ -111,19 +97,32 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     DistributedCriticalSection(String host, int port, String csName, BootstrapHook bootstrapHook)
             throws IOException, TimeoutException, InterruptedException {
-        if (csName == null || csName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Critical section name cannot be empty");
-        }
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(host);
-        factory.setPort(port);
-        this.connection = factory.newConnection();
-        this.csName = csName;
-        this.tokenQueueManager = new TokenQueueManager(csName);
-        this.bootstrapLock = new BrokerBootstrapLock(csName);
-        this.ownConnection = true;
+        this(openConnection(host, port), csName, true, bootstrapHook);
+    }
+
+    /**
+     * Initializes the shared state for every constructor variant.
+     *
+     * @param connection active RabbitMQ connection
+     * @param csName critical section name
+     * @param ownConnection whether this instance owns the connection lifecycle
+     * @param bootstrapHook optional hook that runs before the first token publish
+     * @throws IOException if the channel cannot be opened or queue declaration fails
+     * @throws InterruptedException if bootstrap lock acquisition is interrupted
+     */
+    private DistributedCriticalSection(
+            Connection connection,
+            String csName,
+            boolean ownConnection,
+            BootstrapHook bootstrapHook
+    ) throws IOException, InterruptedException {
+        this.connection = requireConnection(connection);
+        this.csName = requireCriticalSectionName(csName);
+        this.tokenQueueManager = new TokenQueueManager(this.csName);
+        this.bootstrapLock = new BrokerBootstrapLock(this.csName);
+        this.ownConnection = ownConnection;
         this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
-        this.channel = connection.createChannel();
+        this.channel = this.connection.createChannel();
         this.channel.basicQos(1);
         initializeToken();
     }
@@ -159,6 +158,48 @@ public class DistributedCriticalSection implements AutoCloseable {
                 }
             });
         }
+    }
+
+    /**
+     * Opens a new RabbitMQ connection for a managed instance.
+     *
+     * @param host RabbitMQ host
+     * @param port RabbitMQ port
+     * @return the newly created connection
+     * @throws IOException if the connection cannot be opened
+     * @throws TimeoutException if connection establishment times out
+     */
+    private static Connection openConnection(String host, int port) throws IOException, TimeoutException {
+        ConnectionFactory factory = new ConnectionFactory();
+        factory.setHost(host);
+        factory.setPort(port);
+        return factory.newConnection();
+    }
+
+    /**
+     * Validates that a connection reference is present.
+     *
+     * @param connection RabbitMQ connection to validate
+     * @return the validated connection
+     */
+    private static Connection requireConnection(Connection connection) {
+        if (connection == null) {
+            throw new IllegalArgumentException("Connection cannot be null");
+        }
+        return connection;
+    }
+
+    /**
+     * Validates the critical section name without changing its original form.
+     *
+     * @param csName critical section name
+     * @return the original critical section name
+     */
+    private static String requireCriticalSectionName(String csName) {
+        if (csName == null || csName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Critical section name cannot be empty");
+        }
+        return csName;
     }
 
     /**
