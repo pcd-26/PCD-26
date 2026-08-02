@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.util;
 
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
@@ -6,12 +6,12 @@ import pcd.poool.model.physics.common.Board;
 /**
  * Computes deterministic board-state hashes for benchmark comparisons.
  */
-final class BenchmarkStateHasher {
+public final class BenchmarkStateHasher {
 
     private BenchmarkStateHasher() {
     }
 
-    static long checksum(Board board) {
+    public static long checksum(Board board) {
         synchronized (board) {
             long hash = 0x9E3779B97F4A7C15L;
             hash = mix(hash, board.getPocketedSmallBalls());

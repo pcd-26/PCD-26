@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.config;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

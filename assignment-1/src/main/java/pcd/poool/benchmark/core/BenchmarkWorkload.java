@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.io;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +10,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkRunResult;
+import pcd.poool.benchmark.core.BenchmarkSummary;
 
 /**
  * Writes benchmark raw runs and summaries to CSV files.

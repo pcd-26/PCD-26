@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.postprocess;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -12,11 +12,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import pcd.poool.benchmark.config.BenchmarkConfig;
 
 /**
  * Post-processes the scalability benchmark raw CSV into an aggregated CSV.
  */
-final class ScalabilityBenchmarkResultsPostProcessor {
+public final class ScalabilityBenchmarkResultsPostProcessor {
 
     static final String AGGREGATED_FILE_NAME = "aggregated-scalability-results.csv";
 
@@ -33,7 +34,7 @@ final class ScalabilityBenchmarkResultsPostProcessor {
      * @return generated derived scalability data
      * @throws IOException if reading or writing fails
      */
-    static DerivedResults process(Path rawResultsFile) throws IOException {
+    public static DerivedResults process(Path rawResultsFile) throws IOException {
         Objects.requireNonNull(rawResultsFile, "rawResultsFile");
         Path parent = rawResultsFile.getParent();
         Path outputDir = parent == null ? Path.of(".") : parent;

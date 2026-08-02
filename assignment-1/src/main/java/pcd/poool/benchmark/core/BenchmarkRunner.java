@@ -1,9 +1,10 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import pcd.poool.benchmark.config.BenchmarkConfig;
 
 /**
  * Shared infrastructure for benchmark timing and aggregation.

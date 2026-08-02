@@ -1,9 +1,12 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.engine;
 
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkRunner;
+import pcd.poool.benchmark.core.BenchmarkStateFingerprint;
 
 /**
  * Compares benchmarked implementations on the same scenario and rejects
