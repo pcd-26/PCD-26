@@ -6,6 +6,12 @@ v1.0.0-20260517
 
 The assignment is about distributed programming.
 
+## Internal Notes
+
+- [Clustered smart home internal docs](clustered-smart-home-alarm-system/docs/internal-project-documentation.md)
+- [Distributed tic-tac-toe internal docs](distributed-tic-tac-toe/docs/internal-project-documentation.md)
+- [Distributed critical sections internal docs](distributed-critical-sections/docs/internal-project-documentation.md)
+
 ### Exercise #1 - *Distributed Smart Home Alarm System*
 
 - [Description](https://github.com/nicolasfara/seminar-pcd-actor-pekko-code/blob/master/assignment_4_smart_home_alarm_cluster.md) by N. Farabegoli
