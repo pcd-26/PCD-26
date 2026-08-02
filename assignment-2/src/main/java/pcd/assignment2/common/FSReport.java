@@ -96,6 +96,19 @@ public record FSReport(
      * @return A formatted String representing the size range.
      */
     public String getBandLabel(int index, SizeUnit unit) {
+        return formatBandLabel(maxFS, nb, index, unit);
+    }
+
+    /**
+     * Gets a human-readable text label describing a specific size band's range.
+     *
+     * @param maxFS The maximum file size threshold.
+     * @param nb    The number of bands dividing the range.
+     * @param index The band index.
+     * @param unit  The display unit to use for the formatted range.
+     * @return A formatted String representing the size range.
+     */
+    public static String formatBandLabel(long maxFS, int nb, int index, SizeUnit unit) {
         if (index < 0 || index > nb) {
             throw new IllegalArgumentException("Index out of bounds: " + index);
         }
