@@ -1,93 +1,65 @@
 \documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
 \usepackage{hyperref}
-\usepackage{listings}
-\usepackage{xcolor}
 
-\title{Report PCD 2025-2026 \\ Distributed Critical Sections with a Message-Oriented Middleware (Assignment 4 - Exercise 3)}
-\author{Francesco}
+\title{Report PCD 2025-2026\\Distributed Critical Sections with a Message-Oriented Middleware\\Assignment 4 - Exercise 3}
+\author{Alex Santini \\ Francesco Valentini}
 \date{\today}
-
-\lstset{
-  basicstyle=\ttfamily\small,
-  keywordstyle=\color{blue},
-  stringstyle=\color{red},
-  commentstyle=\color{green!60!black},
-  numbers=left,
-  numberstyle=\tiny,
-  frame=single,
-  breaklines=true
-}
 
 \begin{document}
 
 \maketitle
 
-\section{Introduction}
-This project implements a high-level middleware for distributed critical sections using Java and RabbitMQ.
-The goal is to let independent processes coordinate access to a shared critical section without knowing
-anything about each other beyond the critical-section name.
+\section{Problem}
+The optional assignment asks for a simple middleware that provides distributed critical sections to independent processes. The key requirement is that a process must use the middleware without needing to know anything about the other participants, and the implementation must rely on a message-oriented middleware such as RabbitMQ.
 
-\section{Analysis}
-The problem is a distributed mutual exclusion problem with crash recovery constraints:
+The problem is a good fit for message passing because the coordination concern is very small but very strict: at any time exactly one process may hold the critical section. The middleware therefore needs a shared broker-managed token, not shared memory or direct process-to-process coordination.
+
+\section{Concurrency Analysis}
+The problem is a distributed mutual exclusion protocol with failure recovery.
 \begin{itemize}
-    \item \textbf{Mutual exclusion}: at most one process may enter the critical section at a time.
-    \item \textbf{Crash recovery}: if the holder crashes while inside the critical section, the token must be
-    returned automatically by the broker.
-    \item \textbf{Bootstrap safety}: initialization must never leave the system in a state where the critical
-    section is marked initialized but the token does not exist.
-    \item \textbf{Independence}: processes must not coordinate through local static state, shared files, or any
-    direct inter-process channel.
-    \item \textbf{Broker semantics}: the solution must rely on RabbitMQ message passing and broker-provided
-    primitives only.
+    \item At most one process may enter the critical section at a time.
+    \item The middleware must tolerate crashes without leaving the section permanently locked.
+    \item Bootstrap must be safe, so token creation cannot happen twice.
+    \item Different critical-section names must remain independent.
 \end{itemize}
 
-\section{Design}
-The middleware is implemented as a token queue protocol:
+The subtle part is that safety must survive failures. If the holder crashes, the system should not stay blocked forever, and if bootstrap is interrupted, the next process should be able to recover the queue without manual cleanup. That is why the design relies on broker semantics instead of keeping a second local copy of state.
+
+\section{Strategy}
+The implementation uses a token-queue protocol on RabbitMQ.
 \begin{itemize}
-    \item \textbf{Token queue}: each critical section is mapped to a durable queue named
-    \texttt{cs\_token\_<csName>}.
-    \item \textbf{Token message}: the queue contains exactly one persistent token when the critical section is
-    available.
-    \item \textbf{Acquire}: \texttt{enter()} creates a consumer with manual acknowledgement and blocks until the
-    token delivery arrives.
-    \item \textbf{Release}: \texttt{exit()} requeues the same delivery using \texttt{basicNack(..., requeue = true)}
-    after the local consumer has been canceled.
-    \item \textbf{Crash-safe bootstrap}: a temporary exclusive queue \texttt{cs\_bootstrap\_lock\_<csName>} serializes
-    initialization. The broker is queried passively, and the token is published only when the queue is empty and
-    has no consumers.
+    \item Each critical section uses its own durable token queue.
+    \item The queue contains exactly one persistent token when the section is available.
+    \item \texttt{enter()} consumes the token with manual acknowledgments and blocks until it is delivered.
+    \item \texttt{exit()} cancels the local consumer and requeues the same delivery with \texttt{basicNack(..., requeue = true)}.
+    \item A temporary exclusive bootstrap-lock queue serializes initialization and keeps the protocol recoverable.
 \end{itemize}
 
-This design keeps the token itself as the only durable state that matters. The bootstrap lock queue exists only
-while a process is deciding whether the token must be created, so no initialization marker can outlive the token.
-If a process crashes while holding the token, RabbitMQ requeues the unacknowledged delivery when the connection
-or channel closes.
+This design keeps the public API intentionally small: \texttt{enter()}, \texttt{exit()}, and \texttt{close()}. Recovery is broker-driven, so if a process crashes while holding the token, RabbitMQ requeues the unacknowledged delivery automatically.
 
-The implementation also preserves lifecycle clarity:
-\begin{itemize}
-    \item the middleware may be created from an existing connection or by creating its own connection;
-    \item \texttt{close()} closes the channel and, when appropriate, the connection;
-    \item the public API is intentionally small: \texttt{enter()}, \texttt{exit()}, and \texttt{close()}.
-\end{itemize}
+The bootstrap lock is important because it removes the only race that could otherwise create duplicate tokens. Once the token exists, the queue itself becomes the single source of truth. That keeps the protocol easy to explain: the presence of the token means the section is free, and the absence of the token means somebody owns it.
 
 \section{Validation}
-Validation is covered by JUnit tests that exercise the full protocol:
-\begin{enumerate}
-    \item concurrent initialization by multiple middleware instances;
-    \item exactly one token created for a critical section;
-    \item interrupted bootstrap and later recovery by another process;
-    \item crash while holding the token and automatic requeueing by RabbitMQ;
-    \item mutual exclusion with multiple concurrent processes;
-    \item repeated acquire/release cycles;
-    \item rejection of release without ownership and of double release;
-    \item independence of different critical-section names;
-    \item shutdown cleanup without losing the token.
-\end{enumerate}
+The JUnit suite exercises the protocol end to end.
+\begin{itemize}
+    \item concurrent bootstrap creates exactly one token;
+    \item interrupted bootstrap is recoverable;
+    \item crash while holding the token causes requeueing;
+    \item multiple processes respect mutual exclusion;
+    \item repeated acquire/release cycles work correctly;
+    \item invalid release attempts are rejected;
+    \item different critical-section names do not interfere.
+\end{itemize}
 
-\section{Conclusions}
-The resulting middleware provides a simple and robust distributed critical-section service built entirely on
-RabbitMQ message passing. The token queue acts as the single source of truth, the bootstrap lock queue prevents
-duplicate initialization, and manual acknowledgements ensure the token returns automatically after failures.
-This keeps the solution easy to reason about while still handling the main distributed-systems concerns of
-coordination, crash recovery, and resource cleanup.
+These tests matter because they exercise the exact distributed failure modes the assignment cares about: concurrent startup, ownership loss, requeueing after crash, and independence between unrelated critical sections.
+
+\section{Trade-offs}
+The middleware deliberately solves one problem well instead of becoming a generic coordination framework. It models one critical section as one token queue, which keeps the API tiny and the reasoning straightforward. The trade-off is that the broker is part of the availability story, but that is acceptable here because the assignment explicitly asks for a MOM-based solution.
+
+\section{Conclusion}
+The middleware is small but complete: RabbitMQ provides the shared state, the token queue enforces mutual exclusion, and the bootstrap lock prevents inconsistent initialization. The result is a clean distributed protocol that matches the assignment requirements without introducing unnecessary complexity.
 
 \end{document}

@@ -1,57 +1,61 @@
 \documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
 \usepackage{hyperref}
-\usepackage{listings}
-\usepackage{xcolor}
 
-\title{Report PCD 2025-2026 \\ Clustered Smart Home Alarm System (Assignment 4 - Exercise 1)}
-\author{Francesco}
+\title{Report PCD 2025-2026\\Clustered Smart Home Alarm System\\Assignment 4 - Exercise 1}
+\author{Alex Santini \\ Francesco Valentini}
 \date{\today}
-
-\lstset{
-  language=Java,
-  basicstyle=\ttfamily\small,
-  keywordstyle=\color{blue},
-  stringstyle=\color{red},
-  commentstyle=\color{green!60!black},
-  numbers=left,
-  numberstyle=\tiny,
-  frame=single,
-  breaklines=true
-}
 
 \begin{document}
 
 \maketitle
 
-\section{Introduction}
-The objective of this assignment is to extend the \textit{Smart Home Alarm System} (SHAS) from Assignment 3 into a distributed system running on an \textbf{Apache Pekko Cluster}. The cluster architecture decouples physical deployment from application logic: sensors, keypads, sirens, and the control unit can reside on different cluster nodes, communicating transparently via message passing.
+\section{Problem}
+The assignment asks to distribute the smart home alarm system over an Apache Pekko Cluster while preserving the same alarm behavior as the previous assignment. The system must support at least three nodes, allow sensors and keypads to run on different nodes, and recover safely if the control unit is restarted.
 
-\section{Analysis}
-Transitioning to a clustered environment introduces major concurrency and distribution challenges:
+The important point is that distribution must not change the meaning of the alarm system. A sensor activation still has the same effect, the timing rules still apply, and the control unit must remain the only authority for the system state. The cluster is therefore an execution detail, not a change in the domain rules.
+
+\section{Concurrency Analysis}
+The main concurrency issues are ownership of the alarm state, asynchronous sensor input, and failure recovery.
 \begin{itemize}
-    \item \textbf{Location Transparency}: Actors (sensors, keypads, control units) cannot rely on local reference passing. They must discover each other dynamically across the cluster.
-    \item \textbf{Partial Failures and Recovery}: If the Control Unit node crashes or restarts, its state is lost. From a security standpoint, the restarted node must not make assumptions about the system's previous state (neither armed nor disarmed), and it must enter a safe \textbf{RECOVERY} state where events are logged/ignored until a correct PIN is supplied.
-    \item \textbf{Serialization}: Message objects are transmitted over network sockets, requiring a robust serialization mechanism instead of standard Java serialization.
+    \item The control unit is the single authority for the alarm state machine.
+    \item Sensors and keypads are independent actors that communicate only through messages.
+    \item The control unit must ignore sensor events while recovering, because a restart loses the previous in-memory state.
+    \item Timing rules still matter, so arming and intrusion delays must remain deterministic.
 \end{itemize}
 
-\section{Design}
-The system is built on Apache Pekko Typed Cluster using the following design strategies:
+This setup creates a classic distributed-systems problem: the system must stay responsive even when actors live on different nodes, but it must also avoid unsafe assumptions after failures. The recovery state is therefore not an implementation accident. It is the safe default that prevents the restarted node from acting as if it knew the previous alarm condition.
+
+\section{Strategy}
+The implementation uses typed actors and receptionist-based discovery.
 \begin{itemize}
-    \item \textbf{Dynamic Discovery via Receptionist}: Both the Control Unit and Siren register themselves with the Pekko \texttt{Receptionist} using dedicated \texttt{ServiceKey} instances. Sensors and Keypads subscribe to the Control Unit service key to dynamically track available references and broadcast commands.
-    \item \textbf{Safe Recovery State}: The \texttt{ControlUnitActor} is structured as a typed state machine. On startup or restart, it enters the \texttt{RECOVERY} state. While in recovery, sensor activations are logged and discarded, and arming commands are rejected. A correct \texttt{PinSubmitted} command transitions the system back to \texttt{DISARMED}.
-    \item \textbf{Jackson Serialization}: All cluster-transmissible messages implement the empty marker interface \texttt{MySerializable}. Pekko is configured via \texttt{application.conf} to bind this interface to the \texttt{jackson-json} serializer.
-    \item \textbf{Optimized Cluster Join Configuration}: The seed nodes timeout (\texttt{seed-node-timeout}) is tuned to \texttt{1s} and \texttt{retry-unsuccessful-join-after} is set to \texttt{1s} to ensure fast cluster formation and reduce integration test delays.
+    \item The control unit registers itself and discovers sirens dynamically.
+    \item Keypads subscribe to control-unit updates and forward PIN submissions.
+    \item Sensors keep a stable \texttt{sensorId} and send serializable \texttt{SensorInfo} messages.
+    \item The runtime startup helper builds the Pekko Cluster configuration for three supported nodes.
 \end{itemize}
+
+The control unit starts in \texttt{RECOVERY} after creation or restart. Only a correct PIN can move it back to \texttt{DISARMED}. Until then, arming commands and sensor activations are ignored or logged.
+
+The design keeps the code small by separating responsibilities cleanly. Startup code builds the cluster configuration, actors implement the alarm protocol, and shared messages remain serializable and stable across nodes. This makes the system easy to test locally while still matching the distributed deployment model required by the assignment.
 
 \section{Validation}
-Validation comprises unit tests, integration tests, and a self-contained automatic simulation:
-\begin{enumerate}
-    \item \textbf{Unit Tests (\texttt{ControlUnitActorTest})}: Exercises the state machine in isolation, verifying that the initial state is \texttt{RECOVERY}, sensor events are ignored, and recovery completes only upon receiving the correct PIN.
-    \item \textbf{Integration Tests (\texttt{ClusteredSystemTest})}: Programmatically spawns three local \texttt{ActorSystem} nodes on different ports, forms a cluster, and simulates a full alarm arming, sensor activation (entry delay), and disarming workflow over the loopback network.
-    \item \textbf{Simulation Demo (\texttt{Main})}: Automatically initializes three nodes representing different physical components, demonstrates correct PIN disarming from recovery, arms the system, terminates the Control Unit node, spawns a new one to demonstrate recovery state activation, and verifies that sensors are ignored until the system is disarmed again.
-\end{enumerate}
+The implementation is covered by unit and integration tests.
+\begin{itemize}
+    \item \texttt{ControlUnitActorTest} checks the state machine, timing behavior, and recovery rules.
+    \item \texttt{SensorActorTest} and \texttt{KeypadActorTest} check receptionist discovery and message delivery.
+    \item \texttt{ClusteredSystemTest} verifies three-node cluster formation, sensor handling, and restart recovery.
+    \item \texttt{NodeStartupTest} checks the startup parser and cluster seed-node generation.
+\end{itemize}
 
-\section{Conclusions}
-The Pekko Cluster model enables building robust, secure, and location-transparent distributed applications. By pairing the Receptionist discovery mechanism with a secure recovery protocol, the system safely handles partial node failures and restarts without exposing the smart home to unauthorized access or false alarms.
+The tests are useful not only because they confirm correctness, but because they document the intended distributed behavior. In particular, they lock in the three-node setup, the recovery semantics, and the fact that the control unit never assumes a dangerous default after a restart.
+
+\section{Trade-offs}
+This solution prefers clarity over maximum generality. It supports the required distributed roles and recovery semantics, but it does not try to add persistence, replication, or more advanced cluster topologies. That choice keeps the code aligned with the assignment and avoids introducing complexity that would not improve the learning goals.
+
+\section{Conclusion}
+The project keeps the alarm semantics from the previous assignment, but makes the deployment distributed and failure-aware. The design is intentionally small: typed messages, a single state owner, dynamic discovery, and safe recovery are enough to satisfy the assignment while keeping the code easy to reason about.
 
 \end{document}
