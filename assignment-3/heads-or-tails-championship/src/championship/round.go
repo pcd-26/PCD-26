@@ -30,10 +30,8 @@ func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]
 		return nil, nil, fmt.Errorf("coin tosser factory must not be nil")
 	}
 
-	for _, player := range players {
-		if err := validatePlayer(player); err != nil {
-			return nil, nil, fmt.Errorf("invalid player in round: %w", err)
-		}
+	if err := validatePlayers(players, "round"); err != nil {
+		return nil, nil, err
 	}
 
 	matchCount := len(players) / 2

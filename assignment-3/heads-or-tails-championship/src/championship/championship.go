@@ -14,10 +14,8 @@ func PlayChampionship(players []Player, tosserFactory CoinTosserFactory) (Champi
 		return ChampionshipResult{}, fmt.Errorf("coin tosser factory must not be nil")
 	}
 
-	for _, player := range players {
-		if err := validatePlayer(player); err != nil {
-			return ChampionshipResult{}, fmt.Errorf("invalid player in championship: %w", err)
-		}
+	if err := validatePlayers(players, "championship"); err != nil {
+		return ChampionshipResult{}, err
 	}
 
 	if len(players) == 1 {
@@ -53,4 +51,14 @@ func log2(value int) int {
 		result++
 	}
 	return result
+}
+
+func validatePlayers(players []Player, scope string) error {
+	for _, player := range players {
+		if err := validatePlayer(player); err != nil {
+			return fmt.Errorf("invalid player in %s: %w", scope, err)
+		}
+	}
+
+	return nil
 }
