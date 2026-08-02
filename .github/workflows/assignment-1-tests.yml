@@ -58,7 +58,7 @@ jobs:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     concurrency:
-      group: assignment-release-main
+      group: assignment-01-release-main
       cancel-in-progress: false
 
     steps:
@@ -133,9 +133,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: latest
-          RELEASE_TITLE: Latest Assignments Package
-          RELEASE_NOTES: Automated per-assignment delivery zips.
+          RELEASE_TAG: assignment-01-latest
+          RELEASE_TITLE: Assignment 01 Delivery Package
+          RELEASE_NOTES: Automated delivery zip for Assignment 01.
           DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
         run: |
           set -euo pipefail

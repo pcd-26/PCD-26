@@ -71,7 +71,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 25
     concurrency:
-      group: assignment-release-main
+      group: assignment-03-release-main
       cancel-in-progress: false
 
     steps:
@@ -159,9 +159,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: latest
-          RELEASE_TITLE: Latest Assignments Package
-          RELEASE_NOTES: Automated per-assignment delivery zips.
+          RELEASE_TAG: assignment-03-latest
+          RELEASE_TITLE: Assignment 03 Delivery Package
+          RELEASE_NOTES: Automated delivery zip for Assignment 03.
           DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
         run: |
           set -euo pipefail
