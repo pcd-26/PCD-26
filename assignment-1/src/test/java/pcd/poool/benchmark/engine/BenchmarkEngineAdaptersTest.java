@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import pcd.poool.benchmark.config.BenchmarkConfig;
 import pcd.poool.benchmark.core.BenchmarkWorkload;
 import pcd.poool.benchmark.core.BenchmarkWorkloads;
 import pcd.poool.model.physics.common.Board;
