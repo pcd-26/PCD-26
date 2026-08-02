@@ -1,6 +1,16 @@
 \documentclass[11pt,a4paper]{article}
 
-\title{Report PCD 2026}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{lmodern}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\renewcommand{\arraystretch}{1.15}
+
+\title{\vspace{-1.5cm}Assignment 3 - Smart Home Alarm System}
 \author{}
 \date{\today}
 
@@ -8,26 +18,74 @@
 
 \maketitle
 
-\section{Introduction}
+\begin{itemize}
+  \item \textbf{Scope:} Apache Pekko typed actors for a smart home alarm with configurable delays and zone-based arming.
+  \item \textbf{Main concurrency issue:} one state owner must serialize transitions while peripherals remain event sources only.
+  \item \textbf{Validation focus:} state machine correctness, stale timer handling, partial arming, and demo startup.
+\end{itemize}
 
-% Write the assignment report here.
+\section*{Problem Analysis}
+The alarm system is modeled as a typed-actor controller for a home security domain.
+The core concurrent requirement is ownership of state: the control unit must serialize all transitions, while sensors, keypad, and siren remain separate actors that only exchange messages.
+The system has five states:
+\textit{DISARMED}, \textit{EXIT\_DELAY}, \textit{ARMED}, \textit{ENTRY\_DELAY}, and \textit{ALARM}.
+Only a valid PIN or an internal timeout may change the state.
+Sensor events are state-dependent: they are ignored while disarmed, can start the entry delay only when they belong to an active zone, and have no effect once the alarm is active.
+This structure matches the assignment requirement that timing and sensor handling must be deterministic and driven by explicit state transitions rather than scattered conditional checks.
 
-\input{sections/shas-implementation}
+\section*{Adopted Strategy}
+The implementation uses one actor per responsibility:
+\begin{itemize}
+  \item the control unit owns the state machine, the PIN, the active-zone set, and the delay timers;
+  \item the keypad buffers local key presses and forwards only completed PIN submissions;
+  \item the sensor actor is a thin adapter that forwards intrusion events;
+  \item the siren actor owns only the emergency-device on/off status.
+\end{itemize}
 
-\section{Analysis}
+Zone-based arming is implemented by storing an immutable set of active zones and resetting it to the full set when the system returns to \textit{DISARMED}.
+Timeouts are modeled as normal messages and cancelled when the actor leaves the timed state, which avoids stale transitions and keeps the execution model close to the actor abstraction.
 
-% Add the problem analysis, focusing on the relevant technical aspects.
+\section*{Architecture Notes}
+The control unit is the only actor allowed to change the system state, which keeps the transition logic auditable and prevents split-brain behavior.
+The keypad and sensor actors do not contain business rules; they only convert local events into domain messages.
+That separation is useful in testing because the state machine can be exercised directly without involving the full demo wiring.
+The demo actor stays outside the domain logic and only coordinates a scripted scenario.
+The configuration object is also isolated from the actors so the same state machine can be started with production defaults or test-specific delays.
 
-\section{Design}
+\section*{Correctness Properties}
+The implementation preserves a small set of invariants:
+\begin{itemize}
+  \item the correct PIN is required before any arming or disarming transition;
+  \item incorrect PINs are ignored in every state;
+  \item only one exit-delay timer and one entry-delay timer can be active at a time;
+  \item an intrusion in an inactive zone never starts the entry delay;
+  \item the siren is activated only on the transition to \textit{ALARM} and deactivated when the system is disarmed again;
+  \item stale timeout messages are harmless because the actor either cancels the timer when leaving the timed state or ignores the timeout in states where it is no longer meaningful.
+\end{itemize}
 
-% Describe the adopted strategy and implementation choices.
+These invariants are enough to guarantee that the emergency device is never triggered by a sensor while the system is explicitly disarmed or while the selected zone set excludes that sensor.
 
-\section{Validation}
+\section*{Validation}
+The test suite covers configuration parsing, the control-unit state machine, keypad forwarding, sensor forwarding, siren state changes, and the demo entry point.
+Dedicated tests cover the partial-arming scenario and stale timeout handling.
+The state-machine tests exercise the full path from arming to alarm and back to disarming, including the handling of ignored sensor events.
+This gives coverage for both the nominal flow and the most relevant edge cases from the assignment statement.
+The presence of direct actor tests is important here because the assignment is primarily about concurrent behavior, so the correctness of the message protocol matters as much as the visible outcome.
+The runnable demo exercises the full alarm cycle and a night-mode scenario with partial arming.
 
-% Summarize the tests and validation results.
+\section*{Build and Run}
+\begin{itemize}
+  \item Build: mvn -f assignment-3/smart-home-alarm-system/pom.xml compile
+  \item Test: mvn -f assignment-3/smart-home-alarm-system/pom.xml test
+  \item Demo: mvn -f assignment-3/smart-home-alarm-system/pom.xml exec:java
+\end{itemize}
 
-\section{Conclusions}
+The runnable scenario is intentionally short so it can be used both as a smoke test and as a quick manual validation of the alarm flow.
 
-% Add final remarks.
+\section*{Conclusion}
+The design keeps concurrency local to the actor model and avoids shared mutable state.
+This makes the behavior deterministic, testable, and aligned with the assignment requirements.
+The resulting structure is small enough to review quickly but still faithful to the concurrency model requested by the assignment.
+Overall, the implementation satisfies the requested alarm semantics while keeping the actor responsibilities explicit and the timing behavior observable.
 
 \end{document}
