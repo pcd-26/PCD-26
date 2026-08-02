@@ -137,6 +137,8 @@ jobs:
       - dcs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 25
+    permissions:
+      contents: write
     concurrency:
       group: assignment-04-release-main
       cancel-in-progress: false
