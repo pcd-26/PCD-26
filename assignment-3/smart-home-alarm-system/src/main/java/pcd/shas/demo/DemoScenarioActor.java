@@ -263,6 +263,10 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
             case NIGHT_MODE_CONFIGURED -> {
                 getContext().getLog().info("Demo step 13: system automatically enters ARMED in night mode");
                 queryState("after night-mode exit delay");
+                step = Step.NIGHT_MODE_ARMED;
+                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+            }
+            case NIGHT_MODE_ARMED -> {
                 getContext().getLog().info("Demo step 14: a sensor in an inactive zone is ignored");
                 livingRoomSensor.tell(new SensorActor.Activate());
                 queryState("after inactive-zone sensor activation");
@@ -273,11 +277,12 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
                 getContext().getLog().info("Demo step 15: a sensor in an active zone enters ENTRY_DELAY");
                 perimeterSensor.tell(new SensorActor.Activate());
                 queryState("after active-zone sensor activation");
-                step = Step.NIGHT_MODE_ARMED;
+                step = Step.NIGHT_MODE_ENTRY_DELAY;
                 timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
             }
-            case NIGHT_MODE_ARMED -> {
+            case NIGHT_MODE_ENTRY_DELAY -> {
                 getContext().getLog().info("Demo step 16: correct PIN returns the system to DISARMED");
+                queryState("during night-mode entry delay");
                 pressPin("1234");
                 step = Step.NIGHT_MODE_DISARMED;
                 timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
