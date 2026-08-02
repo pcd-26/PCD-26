@@ -12,7 +12,6 @@ import pcd.poool.benchmark.config.BenchmarkConfig;
 import pcd.poool.benchmark.core.BenchmarkInstrumentation;
 import pcd.poool.benchmark.core.BenchmarkRunResult;
 import pcd.poool.benchmark.core.BenchmarkRunner;
-import pcd.poool.benchmark.core.BenchmarkSummary;
 
 class BenchmarkCsvWriterTest {
 

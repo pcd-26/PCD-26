@@ -12,7 +12,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
-import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialCollisionDetector;
@@ -50,7 +49,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private static final int MIN_POOL_SIZE = 1;
     private static final int MIN_ITEMS_FOR_PARALLEL_RANGES = 256;
     private static final int MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY = 256;
-    private static final int MIN_PAIRS_FOR_ACCUMULATED_SOLVER = 512;
     private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
     private final ExecutorService executor;
@@ -478,59 +476,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private void resolveCollisionsWithAccumulatedImpulses(
-            Board board,
-            List<Ball> balls,
-            CollisionPairs pairs,
-            StepProfileAccumulator profile) {
-        long collisionResolutionStart = profile == null ? 0 : System.nanoTime();
-        var localAccumulators = new CollisionAccumulator[Math.min(poolSize, pairs.size())];
-        runRanges(pairs.size(), (from, to, workerIndex) -> {
-            var accumulator = new CollisionAccumulator(balls.size());
-            for (int i = from; i < to; i++) {
-                accumulator.addCollision(balls, pairs.encodedPairs()[i]);
-            }
-            localAccumulators[workerIndex] = accumulator;
-            return null;
-        }, profile);
-        if (profile != null) {
-            profile.collisionResolutionNanos += System.nanoTime() - collisionResolutionStart;
-        }
-
-        long mergeApplyStart = profile == null ? 0 : System.nanoTime();
-        var merged = new CollisionAccumulator(balls.size());
-        for (var accumulator : localAccumulators) {
-            if (accumulator != null) {
-                merged.merge(accumulator);
-            }
-        }
-
-        // The final board writes are serialized by ball index, but each index
-        // is touched once only, so the apply phase stays race-free.
-        for (int i = 0; i < merged.contactPairCount; i++) {
-            long pair = merged.contactPairs[i];
-            board.recordCollision(balls.get(firstIndex(pair)), balls.get(secondIndex(pair)));
-        }
-
-        runRanges(balls.size(), (from, to, workerIndex) -> {
-            long workerStart = profile == null ? 0 : System.nanoTime();
-            for (int i = from; i < to; i++) {
-                balls.get(i).translate(new V2d(merged.positionDeltaX[i], merged.positionDeltaY[i]));
-                balls.get(i).addVelocity(new V2d(merged.velocityDeltaX[i], merged.velocityDeltaY[i]));
-            }
-            if (profile != null) {
-                profile.applyWorkerItems[workerIndex] += to - from;
-                profile.applyWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
-            }
-            return null;
-        }, profile);
-        if (profile != null) {
-            long mergeApplyNanos = System.nanoTime() - mergeApplyStart;
-            profile.mergeApplyNanos += mergeApplyNanos;
-            profile.aggregationNanos += mergeApplyNanos;
-        }
-    }
-
     List<List<SpatialCollisionDetector.Pair>> buildCollisionRounds(
             List<SpatialCollisionDetector.Pair> pairs,
             int ballCount) {
@@ -869,109 +814,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 newCapacity *= 2;
             }
             values = Arrays.copyOf(values, newCapacity);
-        }
-    }
-
-    private static final class CollisionAccumulator {
-
-        private final double[] positionDeltaX;
-        private final double[] positionDeltaY;
-        private final double[] velocityDeltaX;
-        private final double[] velocityDeltaY;
-        private long[] contactPairs;
-        private int contactPairCount;
-
-        private CollisionAccumulator(int ballCount) {
-            positionDeltaX = new double[ballCount];
-            positionDeltaY = new double[ballCount];
-            velocityDeltaX = new double[ballCount];
-            velocityDeltaY = new double[ballCount];
-            contactPairs = new long[16];
-        }
-
-        private void addCollision(List<Ball> balls, long packedPair) {
-            int firstIndex = firstIndex(packedPair);
-            int secondIndex = secondIndex(packedPair);
-            var a = balls.get(firstIndex);
-            var b = balls.get(secondIndex);
-
-            double dx = b.getPos().x() - a.getPos().x();
-            double dy = b.getPos().y() - a.getPos().y();
-            double dist = Math.hypot(dx, dy);
-            double minD = a.getRadius() + b.getRadius();
-
-            if (dist >= minD) {
-                return;
-            }
-            if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
-                dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
-                dy = 0.0;
-                dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
-            }
-
-            double nx = dx / dist;
-            double ny = dy / dist;
-            double totalMass = a.getMass() + b.getMass();
-            double overlap = minD - dist;
-            double firstPositionCorrection = overlap * (b.getMass() / totalMass);
-            double secondPositionCorrection = overlap * (a.getMass() / totalMass);
-
-            double firstVelocityDeltaX = 0.0;
-            double firstVelocityDeltaY = 0.0;
-            double secondVelocityDeltaX = 0.0;
-            double secondVelocityDeltaY = 0.0;
-            double relativeVelocityX = b.getVel().x() - a.getVel().x();
-            double relativeVelocityY = b.getVel().y() - a.getVel().y();
-            double relativeVelocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
-            if (relativeVelocityAlongNormal <= 0) {
-                double impulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityAlongNormal
-                        / (1.0 / a.getMass() + 1.0 / b.getMass());
-                firstVelocityDeltaX = -(impulse / a.getMass()) * nx;
-                firstVelocityDeltaY = -(impulse / a.getMass()) * ny;
-                secondVelocityDeltaX = (impulse / b.getMass()) * nx;
-                secondVelocityDeltaY = (impulse / b.getMass()) * ny;
-            }
-
-            positionDeltaX[firstIndex] += -nx * firstPositionCorrection;
-            positionDeltaY[firstIndex] += -ny * firstPositionCorrection;
-            velocityDeltaX[firstIndex] += firstVelocityDeltaX;
-            velocityDeltaY[firstIndex] += firstVelocityDeltaY;
-            positionDeltaX[secondIndex] += nx * secondPositionCorrection;
-            positionDeltaY[secondIndex] += ny * secondPositionCorrection;
-            velocityDeltaX[secondIndex] += secondVelocityDeltaX;
-            velocityDeltaY[secondIndex] += secondVelocityDeltaY;
-            appendContactPair(packedPair);
-        }
-
-        private void merge(CollisionAccumulator other) {
-            for (int i = 0; i < positionDeltaX.length; i++) {
-                positionDeltaX[i] += other.positionDeltaX[i];
-                positionDeltaY[i] += other.positionDeltaY[i];
-                velocityDeltaX[i] += other.velocityDeltaX[i];
-                velocityDeltaY[i] += other.velocityDeltaY[i];
-            }
-            if (other.contactPairCount == 0) {
-                return;
-            }
-            ensureContactCapacity(contactPairCount + other.contactPairCount);
-            System.arraycopy(other.contactPairs, 0, contactPairs, contactPairCount, other.contactPairCount);
-            contactPairCount += other.contactPairCount;
-        }
-
-        private void appendContactPair(long packedPair) {
-            ensureContactCapacity(contactPairCount + 1);
-            contactPairs[contactPairCount++] = packedPair;
-        }
-
-        private void ensureContactCapacity(int requiredCapacity) {
-            if (requiredCapacity <= contactPairs.length) {
-                return;
-            }
-            int newCapacity = contactPairs.length;
-            while (newCapacity < requiredCapacity) {
-                newCapacity *= 2;
-            }
-            contactPairs = java.util.Arrays.copyOf(contactPairs, newCapacity);
         }
     }
 
