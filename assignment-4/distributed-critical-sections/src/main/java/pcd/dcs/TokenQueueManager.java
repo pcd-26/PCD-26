@@ -3,8 +3,6 @@ package pcd.dcs;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ShutdownSignalException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -19,8 +17,6 @@ import java.util.Map;
  * </p>
  */
 record TokenQueueManager(String queueName) {
-
-    private static final Logger logger = LoggerFactory.getLogger(TokenQueueManager.class);
     private static final String TOKEN_QUEUE_PREFIX = "cs_token_";
 
     TokenQueueManager(String queueName) {

@@ -190,7 +190,6 @@ public class GameImpl extends UnicastRemoteObject implements Game {
     public void leaveGame(String playerName) throws RemoteException {
         BoardState state;
         PlayerClient opponentClient;
-        String opponentName;
         PlayerClient leavingClient;
 
         synchronized (this) {
@@ -205,11 +204,9 @@ public class GameImpl extends UnicastRemoteObject implements Game {
 
             if (playerName.equals(playerXName)) {
                 opponentClient = playerOClient;
-                opponentName = playerOName;
                 leavingClient = playerXClient;
             } else {
                 opponentClient = playerXClient;
-                opponentName = playerXName;
                 leavingClient = playerOClient;
             }
         }
@@ -365,7 +362,6 @@ public class GameImpl extends UnicastRemoteObject implements Game {
         turnOf = null;
         BoardState state = getBoardStateSnapshot();
 
-        String opponentName = disconnectedPlayer.equals(playerXName) ? playerOName : playerXName;
         PlayerClient opponentClient = disconnectedPlayer.equals(playerXName) ? playerOClient : playerXClient;
 
         if (opponentClient != null) {

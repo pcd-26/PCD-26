@@ -208,7 +208,7 @@ public class ClusteredSystemTest {
     }
 
     private int clusterMemberCount(ActorSystem<?> system) {
-        return Cluster.get(system).state().members().size();
+        return Cluster.get(system).state().members().iterator().size();
     }
 
     private void roundTrip(Serialization serialization, Object message) throws Exception {
