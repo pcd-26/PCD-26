@@ -254,7 +254,7 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
                 querySirenState("after disarm");
                 getContext().getLog().info("Demo step 11: system returns to DISARMED and the siren deactivates");
                 getContext().getLog().info("Demo step 12: night mode partial arming is configured for PERIMETER and GROUND_FLOOR");
-                controlUnit.tell(new ControlUnitActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
+                keypad.tell(new KeypadActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
                 pressPin("1234");
                 queryState("after night-mode PIN submission");
                 step = Step.NIGHT_MODE_CONFIGURED;
