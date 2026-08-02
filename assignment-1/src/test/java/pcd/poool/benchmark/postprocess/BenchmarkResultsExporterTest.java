@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.postprocess;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,6 +9,11 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkRunResult;
+import pcd.poool.benchmark.core.BenchmarkRunner;
+import pcd.poool.benchmark.core.BenchmarkSummary;
+import pcd.poool.benchmark.core.RuntimeTelemetry;
 
 class BenchmarkResultsExporterTest {
 

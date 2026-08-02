@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +14,7 @@ import pcd.poool.model.physics.config.StandardGameBoardConf;
  * Deterministic benchmark board configuration with a configurable small-ball
  * count and seed.
  */
-final class SeededBenchmarkBoardConf implements BoardConf {
+public final class SeededBenchmarkBoardConf implements BoardConf {
 
     private static final Boundary BOARD_BOUNDARY = new StandardGameBoardConf().getBoardBoundary();
     private static final double INNER_LEFT = -1.20;
@@ -31,7 +31,7 @@ final class SeededBenchmarkBoardConf implements BoardConf {
     private final long seed;
     private final List<Ball> smallBalls;
 
-    SeededBenchmarkBoardConf(int ballCount, long seed) {
+    public SeededBenchmarkBoardConf(int ballCount, long seed) {
         this.ballCount = ballCount;
         this.seed = seed;
         this.smallBalls = buildSmallBalls();

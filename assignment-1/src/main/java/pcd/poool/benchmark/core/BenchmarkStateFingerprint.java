@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 /**
  * Final-state fingerprint used by the benchmark correctness guard.

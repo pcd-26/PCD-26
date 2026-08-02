@@ -1,6 +1,11 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.runner;
 
 import java.util.Locale;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkInstrumentation;
+import pcd.poool.benchmark.core.BenchmarkRunner;
+import pcd.poool.benchmark.core.BenchmarkStateFingerprint;
+import pcd.poool.benchmark.core.SeededBenchmarkBoardConf;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;

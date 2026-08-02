@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.io;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -8,11 +8,12 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import pcd.poool.benchmark.runner.HeadlessBenchmarkRunner;
 
 /**
  * Writes the raw CSV output for the headless benchmark runner.
  */
-final class HeadlessBenchmarkCsvWriter {
+public final class HeadlessBenchmarkCsvWriter {
 
     private static final String HEADER =
             "implementation,balls,workers,steps,seed,runIndex,warmup,elapsedMs,throughput,coordinationMs,coordinationRatio,tasksSubmitted,stateHash,jvm,os,availableProcessors";
@@ -20,7 +21,7 @@ final class HeadlessBenchmarkCsvWriter {
     private HeadlessBenchmarkCsvWriter() {
     }
 
-    static void initialize(Path outputFile) throws IOException {
+    public static void initialize(Path outputFile) throws IOException {
         Objects.requireNonNull(outputFile, "outputFile");
 
         Path parent = outputFile.getParent();
@@ -37,7 +38,7 @@ final class HeadlessBenchmarkCsvWriter {
                 StandardOpenOption.WRITE);
     }
 
-    static void append(Path outputFile, HeadlessBenchmarkRunner.BenchmarkRow row) throws IOException {
+    public static void append(Path outputFile, HeadlessBenchmarkRunner.BenchmarkRow row) throws IOException {
         Objects.requireNonNull(outputFile, "outputFile");
         Objects.requireNonNull(row, "row");
         ensureInitialized(outputFile);
@@ -73,7 +74,7 @@ final class HeadlessBenchmarkCsvWriter {
      * @param rows raw measured rows
      * @throws IOException if writing fails
      */
-    static void write(Path outputFile, List<HeadlessBenchmarkRunner.BenchmarkRow> rows) throws IOException {
+    public static void write(Path outputFile, List<HeadlessBenchmarkRunner.BenchmarkRow> rows) throws IOException {
         Objects.requireNonNull(outputFile, "outputFile");
         Objects.requireNonNull(rows, "rows");
         initialize(outputFile);

@@ -12,6 +12,14 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkInstrumentation;
+import pcd.poool.benchmark.core.BenchmarkRunner;
+import pcd.poool.benchmark.core.BenchmarkStateFingerprint;
+import pcd.poool.benchmark.core.RuntimeTelemetry;
+import pcd.poool.benchmark.io.BenchmarkCsvWriter;
+import pcd.poool.benchmark.io.RuntimeTelemetryCsvWriter;
+import pcd.poool.benchmark.runner.BenchmarkSuite;
 
 class BenchmarkSuiteTest {
 

@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.runner;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -54,7 +54,7 @@ public final class BenchmarkPipeline {
         return run(request, BenchmarkPipelineSteps.defaultSteps());
     }
 
-    static BenchmarkPipelineReport run(BenchmarkPipelineRequest request, BenchmarkPipelineSteps steps) throws Exception {
+    public static BenchmarkPipelineReport run(BenchmarkPipelineRequest request, BenchmarkPipelineSteps steps) throws Exception {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(steps, "steps");
 
@@ -317,7 +317,7 @@ public final class BenchmarkPipeline {
     /**
      * Step bundle used by the default pipeline.
      */
-    interface BenchmarkPipelineSteps {
+    public interface BenchmarkPipelineSteps {
 
         HeadlessBenchmarkRunner.BenchmarkReport runHeadless(HeadlessBenchmarkRunner.BenchmarkRequest request) throws IOException;
 
