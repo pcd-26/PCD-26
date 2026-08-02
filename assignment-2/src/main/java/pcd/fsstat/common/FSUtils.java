@@ -1,4 +1,4 @@
-package pcd.assignment2.common;
+package pcd.fsstat.common;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;

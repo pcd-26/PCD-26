@@ -1,9 +1,9 @@
-package pcd.assignment2.virtualthreads;
+package pcd.fsstat.virtualthreads;
 
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSReportJob;
-import pcd.assignment2.common.FSReportListener;
-import pcd.assignment2.common.FSUtils;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSReportJob;
+import pcd.fsstat.common.FSReportListener;
+import pcd.fsstat.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;

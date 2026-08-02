@@ -1,12 +1,12 @@
-package pcd.assignment2.cli;
+package pcd.fsstat.cli;
 
 import io.reactivex.rxjava3.core.Observable;
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSReportListener;
-import pcd.assignment2.common.SizeUnit;
-import pcd.assignment2.eventloop.EventLoopFSStat;
-import pcd.assignment2.reactive.ReactiveFSStat;
-import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSReportListener;
+import pcd.fsstat.common.SizeUnit;
+import pcd.fsstat.eventloop.EventLoopFSStat;
+import pcd.fsstat.reactive.ReactiveFSStat;
+import pcd.fsstat.virtualthreads.VirtualThreadsFSStat;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
@@ -107,8 +107,8 @@ public class FSStatCLI {
 
     static ParsedArguments parseArguments(String[] args) {
         if (args == null || args.length < 3) {
-            System.err.println("Usage: java -cp ... pcd.assignment2.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
-            System.err.println("Example: java -cp ... pcd.assignment2.cli.FSStatCLI . 10 5 MB vt");
+            System.err.println("Usage: java -cp ... pcd.fsstat.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
+            System.err.println("Example: java -cp ... pcd.fsstat.cli.FSStatCLI . 10 5 MB vt");
             return null;
         }
 

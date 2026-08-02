@@ -1,10 +1,10 @@
-package pcd.assignment2.reactive;
+package pcd.fsstat.reactive;
 
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.schedulers.Schedulers;
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSUtils;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;

@@ -1,4 +1,4 @@
-package pcd.assignment2.common;
+package pcd.fsstat.common;
 
 /**
  * Callback listener for receiving updates, completion events, and errors

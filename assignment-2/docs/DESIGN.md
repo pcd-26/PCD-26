@@ -86,7 +86,7 @@ Run the GUI application using one of the helper scripts, which now always perfor
 
 If you prefer to call Maven directly, use:
 ```bash
-mvn -f assignment-2/pom.xml clean compile exec:java -Dexec.mainClass="pcd.assignment2.gui.FSStatGUI"
+mvn -f assignment-2/pom.xml clean compile exec:java -Dexec.mainClass="pcd.fsstat.gui.FSStatGUI"
 ```
 
 ## 4. CLI Examples
