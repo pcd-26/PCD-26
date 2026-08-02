@@ -478,42 +478,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private void resolveCollisionsInParallelRounds(
-            Board board,
-            List<Ball> balls,
-            CollisionPairs pairs,
-            StepProfileAccumulator profile) {
-        if (pairs.size() == 0) {
-            return;
-        }
-        if (pairs.size() >= MIN_PAIRS_FOR_ACCUMULATED_SOLVER) {
-            resolveCollisionsWithAccumulatedImpulses(board, balls, pairs, profile);
-            return;
-        }
-
-        long collisionResolutionStart = profile == null ? 0 : System.nanoTime();
-        for (long pair : pairs.encodedPairs()) {
-            var first = balls.get(firstIndex(pair));
-            var second = balls.get(secondIndex(pair));
-            board.recordCollision(first, second);
-        }
-
-        // Rounds keep the write set disjoint: a ball appears in at most one
-        // pair per round, so worker tasks can resolve them in parallel safely.
-        for (var round : buildCollisionRounds(pairs, balls.size())) {
-            runRanges(round.size(), (from, to, workerIndex) -> {
-                for (int i = from; i < to; i++) {
-                    long pair = round.encodedPairs()[i];
-                    Ball.resolveCollision(balls.get(firstIndex(pair)), balls.get(secondIndex(pair)));
-                }
-                return null;
-            }, profile);
-        }
-        if (profile != null) {
-            profile.collisionResolutionNanos += System.nanoTime() - collisionResolutionStart;
-        }
-    }
-
     private void resolveCollisionsWithAccumulatedImpulses(
             Board board,
             List<Ball> balls,
@@ -1262,7 +1226,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         private long localGridBuildNanos;
         private long gridMergeNanos;
         private long pairCollectionNanos;
-        private long syncNanos;
         private long aggregationNanos;
         private long taskSubmissionNanos;
         private long joinOrFutureWaitNanos;

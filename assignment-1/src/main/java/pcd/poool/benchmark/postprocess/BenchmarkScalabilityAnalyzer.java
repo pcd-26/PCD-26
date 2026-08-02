@@ -8,12 +8,10 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import pcd.poool.benchmark.config.BenchmarkConfig;
 import pcd.poool.benchmark.io.BenchmarkCsvWriter;
 
@@ -249,14 +247,6 @@ public final class BenchmarkScalabilityAnalyzer {
                     .thenComparingInt(SpeedupRow::threads));
         }
         return grouped;
-    }
-
-    private static Map<RowKey, SpeedupRow> indexSpeedupRows(List<SpeedupRow> rows) {
-        Map<RowKey, SpeedupRow> indexed = new LinkedHashMap<>();
-        for (var row : rows) {
-            indexed.put(new RowKey(row.balls(), row.steps(), row.seed(), row.implementation(), row.threads()), row);
-        }
-        return indexed;
     }
 
     private static Map<RowKey, EfficiencyRow> indexEfficiencyRows(List<EfficiencyRow> rows) {

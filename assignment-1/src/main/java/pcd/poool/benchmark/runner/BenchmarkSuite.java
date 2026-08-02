@@ -433,20 +433,4 @@ public final class BenchmarkSuite {
     private record ScenarioKey(int balls, int steps, long seed) {
     }
 
-    private static void resetDirectory(Path directory) throws Exception {
-        if (!Files.exists(directory)) {
-            return;
-        }
-        try (var paths = Files.walk(directory)) {
-            paths.sorted(java.util.Comparator.reverseOrder())
-                    .filter(path -> !path.equals(directory))
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (Exception ex) {
-                            throw new IllegalStateException("failed to clear directory: " + directory, ex);
-                        }
-                    });
-        }
-    }
 }

@@ -185,7 +185,6 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
         @SuppressWarnings("unchecked")
         Map<SpatialGridSupport.GridCell, IntBag>[] localGrids = new Map[workers.length];
-        long localGridStart = profile == null ? 0 : System.nanoTime();
         // Each worker builds a private grid so no shared bucket map is written
         // concurrently during the broad phase.
         runRanges(balls.size(), (from, to, workerIndex) -> {
@@ -202,10 +201,6 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 profile.localGridWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
             }
         }, profile);
-        if (profile != null) {
-            profile.localGridBuildNanos += System.nanoTime() - localGridStart;
-        }
-
         long aggregationStart = profile == null ? 0 : System.nanoTime();
         // The coordinator merges first, then sorts cells to keep pair ownership
         // and collision recording deterministic.
@@ -227,7 +222,6 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         orderedCells.sort((first, second) -> first.cell().compareTo(second.cell()));
         if (profile != null) {
-            profile.gridMergeNanos += System.nanoTime() - aggregationStart;
             profile.aggregationNanos += System.nanoTime() - aggregationStart;
             profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
         }
@@ -276,8 +270,6 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         applyMergedDeltas(balls, mergedDeltas, profile);
         if (profile != null) {
-            profile.candidatePairs += pairCount;
-            profile.mergedCells += orderedCells.size();
             profile.collisionDetectionNanos += mergeApplyStart - collisionStart;
             profile.mergeApplyNanos += System.nanoTime() - mergeApplyStart;
             profile.aggregationNanos += System.nanoTime() - mergeApplyStart;
@@ -832,15 +824,11 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         private long collisionDetectionNanos;
         private long collisionResolutionNanos;
         private long mergeApplyNanos;
-        private long localGridBuildNanos;
-        private long gridMergeNanos;
         private long aggregationNanos;
         private long taskSubmissionNanos;
         private long joinOrFutureWaitNanos;
         private long lockAcquisitions;
         private long submittedTasks;
-        private int candidatePairs;
-        private int mergedCells;
         private int maxCellOccupancy;
 
         private StepProfileAccumulator(int workerCount) {
