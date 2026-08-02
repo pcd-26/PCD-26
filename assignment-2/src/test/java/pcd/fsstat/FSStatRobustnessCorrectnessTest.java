@@ -1,12 +1,12 @@
-package pcd.assignment2;
+package pcd.fsstat;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSReportListener;
-import pcd.assignment2.eventloop.EventLoopFSStat;
-import pcd.assignment2.reactive.ReactiveFSStat;
-import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSReportListener;
+import pcd.fsstat.eventloop.EventLoopFSStat;
+import pcd.fsstat.reactive.ReactiveFSStat;
+import pcd.fsstat.virtualthreads.VirtualThreadsFSStat;
 
 import java.io.File;
 import java.io.FileOutputStream;

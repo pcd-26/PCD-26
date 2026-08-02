@@ -30,13 +30,13 @@ The CLI and GUI can select any of the three implementations at runtime.
 
 | Path | Responsibility |
 | :--- | :--- |
-| `src/main/java/pcd/assignment2/common` | Shared data types and utilities. |
-| `src/main/java/pcd/assignment2/virtualthreads` | Virtual-thread implementation. |
-| `src/main/java/pcd/assignment2/reactive` | RxJava implementation. |
-| `src/main/java/pcd/assignment2/eventloop` | Vert.x event-loop implementation. |
-| `src/main/java/pcd/assignment2/cli` | Console entry point. |
-| `src/main/java/pcd/assignment2/gui` | Swing demo application. |
-| `src/test/java/pcd/assignment2` | Unit, integration-style, and robustness tests. |
+| `src/main/java/pcd/fsstat/common` | Shared data types and utilities. |
+| `src/main/java/pcd/fsstat/virtualthreads` | Virtual-thread implementation. |
+| `src/main/java/pcd/fsstat/reactive` | RxJava implementation. |
+| `src/main/java/pcd/fsstat/eventloop` | Vert.x event-loop implementation. |
+| `src/main/java/pcd/fsstat/cli` | Console entry point. |
+| `src/main/java/pcd/fsstat/gui` | Swing demo application. |
+| `src/test/java/pcd/fsstat` | Unit, integration-style, and robustness tests. |
 
 The `docs/` directory contains maintainers-only documentation:
 

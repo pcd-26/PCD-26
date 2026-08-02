@@ -1,4 +1,4 @@
-package pcd.assignment2.common;
+package pcd.fsstat.common;
 
 /**
  * Represents a handle to a running filesystem statistics report job.

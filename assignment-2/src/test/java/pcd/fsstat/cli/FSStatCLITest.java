@@ -1,10 +1,10 @@
-package pcd.assignment2.cli;
+package pcd.fsstat.cli;
 
 import io.reactivex.rxjava3.core.Observable;
 import org.junit.jupiter.api.Test;
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSReportListener;
-import pcd.assignment2.common.SizeUnit;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSReportListener;
+import pcd.fsstat.common.SizeUnit;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;

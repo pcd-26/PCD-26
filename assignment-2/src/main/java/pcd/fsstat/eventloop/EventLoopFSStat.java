@@ -1,13 +1,13 @@
-package pcd.assignment2.eventloop;
+package pcd.fsstat.eventloop;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.file.FileProps;
 import io.vertx.core.file.FileSystem;
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSReportJob;
-import pcd.assignment2.common.FSReportListener;
-import pcd.assignment2.common.FSUtils;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSReportJob;
+import pcd.fsstat.common.FSReportListener;
+import pcd.fsstat.common.FSUtils;
 
 import java.io.File;
 import java.io.IOException;
