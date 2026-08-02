@@ -70,6 +70,9 @@ jobs:
       - test-hotc
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 25
+    concurrency:
+      group: assignment-release-main
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -151,3 +154,26 @@ jobs:
         with:
           name: assignment-03-package
           path: ${{ steps.delivery_meta.outputs.zip_name }}
+
+      - name: Publish release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: latest
+          RELEASE_TITLE: Latest Assignments Package
+          RELEASE_NOTES: Automated per-assignment delivery zips.
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES"
+          else
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES"
+          fi
+
+          gh release upload "$RELEASE_TAG" "$DELIVERY_ZIP" --clobber
