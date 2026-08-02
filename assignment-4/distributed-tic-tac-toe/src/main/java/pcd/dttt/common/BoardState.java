@@ -23,6 +23,9 @@ public record BoardState(char[][] grid, String playerX, String playerO, String t
     @Serial
     private static final long serialVersionUID = 1L;
 
+    /** The board is always a 3x3 grid. */
+    public static final int BOARD_SIZE = 3;
+
     /**
      * Creates a new BoardState snapshot.
      * Performs a deep copy of the grid array to maintain absolute immutability of this object.
@@ -34,11 +37,7 @@ public record BoardState(char[][] grid, String playerX, String playerO, String t
      * @param status  the current game status
      */
     public BoardState(char[][] grid, String playerX, String playerO, String turnOf, GameStatus status) {
-        // Deep copy the grid to ensure immutability
-        this.grid = new char[3][3];
-        for (int i = 0; i < 3; i++) {
-            this.grid[i] = Arrays.copyOf(grid[i], 3);
-        }
+        this.grid = copyGrid(grid);
         this.playerX = playerX;
         this.playerO = playerO;
         this.turnOf = turnOf;
@@ -52,11 +51,7 @@ public record BoardState(char[][] grid, String playerX, String playerO, String t
      */
     @Override
     public char[][] grid() {
-        char[][] copy = new char[3][3];
-        for (int i = 0; i < 3; i++) {
-            copy[i] = Arrays.copyOf(this.grid[i], 3);
-        }
-        return copy;
+        return copyGrid(this.grid);
     }
 
     /**
@@ -68,7 +63,7 @@ public record BoardState(char[][] grid, String playerX, String playerO, String t
      * @throws IllegalArgumentException if the coordinates are out of bounds
      */
     public char getMark(int row, int col) {
-        if (row < 0 || row >= 3 || col < 0 || col >= 3) {
+        if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
             throw new IllegalArgumentException("Grid indices must be between 0 and 2");
         }
         return grid[row][col];
@@ -129,16 +124,25 @@ public record BoardState(char[][] grid, String playerX, String playerO, String t
         sb.append("Status: ").append(status).append("\n");
         sb.append("Player X: ").append(playerX != null ? playerX : "<waiting>").append("\n");
         sb.append("Player O: ").append(playerO != null ? playerO : "<waiting>").append("\n");
-        if (status == GameStatus.ACTIVE) {
+        if (status.isActive()) {
             sb.append("Turn: ").append(turnOf).append("\n");
         }
         sb.append("Grid:\n");
-        for (int r = 0; r < 3; r++) {
+        for (int r = 0; r < BOARD_SIZE; r++) {
             sb.append(" ").append(grid[r][0]).append(" | ").append(grid[r][1]).append(" | ").append(grid[r][2]).append(" \n");
-            if (r < 2) {
+            if (r < BOARD_SIZE - 1) {
                 sb.append("---+---+---\n");
             }
         }
         return sb.toString();
+    }
+
+    /** Makes a deep copy of the 3x3 grid. */
+    private static char[][] copyGrid(char[][] source) {
+        char[][] copy = new char[BOARD_SIZE][BOARD_SIZE];
+        for (int row = 0; row < BOARD_SIZE; row++) {
+            copy[row] = Arrays.copyOf(source[row], BOARD_SIZE);
+        }
+        return copy;
     }
 }

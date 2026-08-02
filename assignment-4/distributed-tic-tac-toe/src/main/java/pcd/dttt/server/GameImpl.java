@@ -32,6 +32,8 @@ import pcd.dttt.common.exceptions.GameFullException;
  */
 public class GameImpl extends UnicastRemoteObject implements Game {
     private static final long serialVersionUID = 1L;
+    private static final int BOARD_SIZE = BoardState.BOARD_SIZE;
+    private static final char EMPTY_CELL = ' ';
 
     /** The unique name identifying this game room. */
     private final String name;
@@ -78,10 +80,10 @@ public class GameImpl extends UnicastRemoteObject implements Game {
         this.playerXName = creatorName;
         this.playerXClient = creatorClient;
         this.status = GameStatus.WAITING;
-        this.grid = new char[3][3];
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                grid[r][c] = ' ';
+        this.grid = new char[BOARD_SIZE][BOARD_SIZE];
+        for (int r = 0; r < BOARD_SIZE; r++) {
+            for (int c = 0; c < BOARD_SIZE; c++) {
+                grid[r][c] = EMPTY_CELL;
             }
         }
     }
@@ -109,18 +111,15 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      */
     public synchronized void join(String joinerName, PlayerClient joinerClient) throws GameFullException {
         ensureOpen();
-        if (status != GameStatus.WAITING) {
-            throw new GameFullException("Game is not in WAITING state.");
-        }
-        if (joinerName.equals(playerXName)) {
-            throw new IllegalArgumentException("Opponent name cannot be identical to the creator's name.");
-        }
+        ensureWaiting();
+        ensureDistinctPlayers(joinerName);
+
         this.playerOName = joinerName;
         this.playerOClient = joinerClient;
         this.status = GameStatus.ACTIVE;
-        this.turnOf = playerXName; // X always starts
+        this.turnOf = playerXName;
 
-        BoardState state = getBoardStateSnapshot();
+        BoardState state = snapshotState();
         notifyGameStarted(state);
     }
 
@@ -143,39 +142,20 @@ public class GameImpl extends UnicastRemoteObject implements Game {
         BoardState state;
         synchronized (this) {
             ensureOpen();
-            if (status != GameStatus.ACTIVE) {
-                throw new InvalidMoveException("Game is not active (current status: " + status + ").");
-            }
-            if (turnOf == null || !turnOf.equals(playerName)) {
-                throw new NotYourTurnException("It is not your turn.");
-            }
-            if (row < 0 || row >= 3 || col < 0 || col >= 3) {
-                throw new InvalidMoveException("Invalid coordinates: (" + row + ", " + col + ")");
-            }
-            if (grid[row][col] != ' ') {
-                throw new InvalidMoveException("Cell (" + row + ", " + col + ") is already occupied.");
-            }
+            ensureActive();
+            ensurePlayerTurn(playerName);
+            ensureMoveInBounds(row, col);
+            ensureCellEmpty(row, col);
 
-            // Place mark
-            char mark = playerName.equals(playerXName) ? 'X' : 'O';
+            char mark = markFor(playerName);
             grid[row][col] = mark;
 
-            // Evaluate board status
-            if (checkWin(mark)) {
-                status = playerName.equals(playerXName) ? GameStatus.WON_X : GameStatus.WON_O;
-                turnOf = null;
-            } else if (isBoardFull()) {
-                status = GameStatus.DRAW;
-                turnOf = null;
-            } else {
-                // Switch turn
-                turnOf = playerName.equals(playerXName) ? playerOName : playerXName;
-            }
+            status = resolveStatusAfterMove(playerName, mark);
+            turnOf = status.isActive() ? opponentNameOf(playerName) : null;
 
-            state = getBoardStateSnapshot();
+            state = snapshotState();
         }
 
-        // Notify clients outside of the synchronized lock (Open Call pattern)
         notifyGameUpdated(state);
     }
 
@@ -194,45 +174,19 @@ public class GameImpl extends UnicastRemoteObject implements Game {
 
         synchronized (this) {
             ensureOpen();
-            if (status == GameStatus.WON_X || status == GameStatus.WON_O || 
-                status == GameStatus.DRAW || status == GameStatus.ABANDONED) {
-                return; // Already ended
+            if (status.isTerminal()) {
+                return;
             }
             status = GameStatus.ABANDONED;
             turnOf = null;
-            state = getBoardStateSnapshot();
+            state = snapshotState();
 
-            if (playerName.equals(playerXName)) {
-                opponentClient = playerOClient;
-                leavingClient = playerXClient;
-            } else {
-                opponentClient = playerXClient;
-                leavingClient = playerOClient;
-            }
+            opponentClient = opponentClientOf(playerName);
+            leavingClient = clientOf(playerName);
         }
 
-        // Notify leaving client of the final abandoned state
-        if (leavingClient != null) {
-            callbackExecutor.submit(() -> {
-                try {
-                    leavingClient.gameUpdated(state);
-                } catch (RemoteException e) {
-                    // Ignore client disconnection on exit
-                }
-            });
-        }
-
-        // Notify opponent
-        if (opponentClient != null) {
-            callbackExecutor.submit(() -> {
-                try {
-                    opponentClient.opponentLeft(playerName);
-                    opponentClient.gameUpdated(state);
-                } catch (RemoteException e) {
-                    // Ignore
-                }
-            });
-        }
+        notifyStateToClient(leavingClient, state);
+        notifyOpponentLeft(opponentClient, playerName, state);
         
         shutdownExecutor();
     }
@@ -246,7 +200,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
     @Override
     public synchronized BoardState getBoardState() throws RemoteException {
         ensureOpen();
-        return getBoardStateSnapshot();
+        return snapshotState();
     }
 
     /**
@@ -255,7 +209,7 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      *
      * @return the BoardState snapshot
      */
-    private BoardState getBoardStateSnapshot() {
+    private BoardState snapshotState() {
         return new BoardState(grid, playerXName, playerOName, turnOf, status);
     }
 
@@ -268,16 +222,16 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      */
     private boolean checkWin(char mark) {
         // Rows
-        for (int r = 0; r < 3; r++) {
-            if (grid[r][0] == mark && grid[r][1] == mark && grid[r][2] == mark) return true;
+        for (int r = 0; r < BOARD_SIZE; r++) {
+            if (lineMatches(grid[r][0], grid[r][1], grid[r][2], mark)) return true;
         }
         // Columns
-        for (int c = 0; c < 3; c++) {
-            if (grid[0][c] == mark && grid[1][c] == mark && grid[2][c] == mark) return true;
+        for (int c = 0; c < BOARD_SIZE; c++) {
+            if (lineMatches(grid[0][c], grid[1][c], grid[2][c], mark)) return true;
         }
         // Diagonals
-        if (grid[0][0] == mark && grid[1][1] == mark && grid[2][2] == mark) return true;
-        if (grid[0][2] == mark && grid[1][1] == mark && grid[2][0] == mark) return true;
+        if (lineMatches(grid[0][0], grid[1][1], grid[2][2], mark)) return true;
+        if (lineMatches(grid[0][BOARD_SIZE - 1], grid[1][1], grid[2][0], mark)) return true;
         return false;
     }
 
@@ -288,9 +242,9 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      * @return true if board is full, false otherwise
      */
     private boolean isBoardFull() {
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                if (grid[r][c] == ' ') return false;
+        for (int r = 0; r < BOARD_SIZE; r++) {
+            for (int c = 0; c < BOARD_SIZE; c++) {
+                if (grid[r][c] == EMPTY_CELL) return false;
             }
         }
         return true;
@@ -304,18 +258,10 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      */
     private void notifyGameStarted(BoardState state) {
         callbackExecutor.submit(() -> {
-            try {
-                playerXClient.gameStarted(state);
-            } catch (RemoteException e) {
-                handleClientDisconnect(playerXName);
+            if (!notifyStarted(playerXClient, playerXName, state)) {
                 return;
             }
-
-            try {
-                playerOClient.gameStarted(state);
-            } catch (RemoteException e) {
-                handleClientDisconnect(playerOName);
-            }
+            notifyStarted(playerOClient, playerOName, state);
         });
     }
 
@@ -327,22 +273,11 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      */
     private void notifyGameUpdated(BoardState state) {
         callbackExecutor.submit(() -> {
-            try {
-                playerXClient.gameUpdated(state);
-            } catch (RemoteException e) {
-                handleClientDisconnect(playerXName);
-            }
-
-            if (playerOClient != null) {
-                try {
-                    playerOClient.gameUpdated(state);
-                } catch (RemoteException e) {
-                    handleClientDisconnect(playerOName);
-                }
-            }
+            notifyUpdated(playerXClient, playerXName, state);
+            notifyUpdated(playerOClient, playerOName, state);
         });
 
-        if (state.status() != GameStatus.ACTIVE && state.status() != GameStatus.WAITING) {
+        if (state.status().isTerminal()) {
             shutdownExecutor();
         }
     }
@@ -354,15 +289,14 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      * @param disconnectedPlayer the name of the player that is unreachable
      */
     private synchronized void handleClientDisconnect(String disconnectedPlayer) {
-        if (status == GameStatus.WON_X || status == GameStatus.WON_O || 
-            status == GameStatus.DRAW || status == GameStatus.ABANDONED) {
-            return; // Game has already terminated
+        if (status.isTerminal()) {
+            return;
         }
         status = GameStatus.ABANDONED;
         turnOf = null;
-        BoardState state = getBoardStateSnapshot();
+        BoardState state = snapshotState();
 
-        PlayerClient opponentClient = disconnectedPlayer.equals(playerXName) ? playerOClient : playerXClient;
+        PlayerClient opponentClient = opponentClientOf(disconnectedPlayer);
 
         if (opponentClient != null) {
             callbackExecutor.submit(() -> {
@@ -382,6 +316,139 @@ public class GameImpl extends UnicastRemoteObject implements Game {
      */
     private void shutdownExecutor() {
         callbackExecutor.shutdown();
+    }
+
+    /** Ensures the game is still waiting for an opponent. */
+    private void ensureWaiting() throws GameFullException {
+        if (!status.isWaiting()) {
+            throw new GameFullException("Game is not in WAITING state.");
+        }
+    }
+
+    /** Ensures the joiner is not reusing the creator's nickname. */
+    private void ensureDistinctPlayers(String joinerName) {
+        if (joinerName.equals(playerXName)) {
+            throw new IllegalArgumentException("Opponent name cannot be identical to the creator's name.");
+        }
+    }
+
+    /** Ensures the game is currently active. */
+    private void ensureActive() throws InvalidMoveException {
+        if (!status.isActive()) {
+            throw new InvalidMoveException("Game is not active (current status: " + status + ").");
+        }
+    }
+
+    /** Ensures the requested player is the one whose turn it is. */
+    private void ensurePlayerTurn(String playerName) throws NotYourTurnException {
+        if (turnOf == null || !turnOf.equals(playerName)) {
+            throw new NotYourTurnException("It is not your turn.");
+        }
+    }
+
+    /** Ensures the coordinates are inside the board. */
+    private void ensureMoveInBounds(int row, int col) throws InvalidMoveException {
+        if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
+            throw new InvalidMoveException("Invalid coordinates: (" + row + ", " + col + ")");
+        }
+    }
+
+    /** Ensures the chosen cell is still empty. */
+    private void ensureCellEmpty(int row, int col) throws InvalidMoveException {
+        if (grid[row][col] != EMPTY_CELL) {
+            throw new InvalidMoveException("Cell (" + row + ", " + col + ") is already occupied.");
+        }
+    }
+
+    /** Returns the board mark assigned to the given player. */
+    private char markFor(String playerName) {
+        return playerName.equals(playerXName) ? 'X' : 'O';
+    }
+
+    /** Resolves the next game status after a move. */
+    private GameStatus resolveStatusAfterMove(String playerName, char mark) {
+        if (checkWin(mark)) {
+            return playerName.equals(playerXName) ? GameStatus.WON_X : GameStatus.WON_O;
+        }
+        if (isBoardFull()) {
+            return GameStatus.DRAW;
+        }
+        return GameStatus.ACTIVE;
+    }
+
+    /** Returns the other player's name. */
+    private String opponentNameOf(String playerName) {
+        return playerName.equals(playerXName) ? playerOName : playerXName;
+    }
+
+    /** Returns the client associated with the given player. */
+    private PlayerClient clientOf(String playerName) {
+        return playerName.equals(playerXName) ? playerXClient : playerOClient;
+    }
+
+    /** Returns the opponent client for the given player. */
+    private PlayerClient opponentClientOf(String playerName) {
+        return playerName.equals(playerXName) ? playerOClient : playerXClient;
+    }
+
+    /** Returns true when three cells contain the same mark. */
+    private boolean lineMatches(char first, char second, char third, char mark) {
+        return first == mark && second == mark && third == mark;
+    }
+
+    /** Notifies a client that the game has started, ignoring disconnections. */
+    private boolean notifyStarted(PlayerClient client, String playerName, BoardState state) {
+        if (client == null) {
+            return true;
+        }
+        try {
+            client.gameStarted(state);
+            return true;
+        } catch (RemoteException e) {
+            handleClientDisconnect(playerName);
+            return false;
+        }
+    }
+
+    /** Notifies a client that the board changed, ignoring disconnections. */
+    private void notifyUpdated(PlayerClient client, String playerName, BoardState state) {
+        if (client == null) {
+            return;
+        }
+        try {
+            client.gameUpdated(state);
+        } catch (RemoteException e) {
+            handleClientDisconnect(playerName);
+        }
+    }
+
+    /** Notifies the opponent that a player left, if the opponent is still connected. */
+    private void notifyOpponentLeft(PlayerClient client, String playerName, BoardState state) {
+        if (client == null) {
+            return;
+        }
+        callbackExecutor.submit(() -> {
+            try {
+                client.opponentLeft(playerName);
+                client.gameUpdated(state);
+            } catch (RemoteException e) {
+                // Ignore disconnects during shutdown.
+            }
+        });
+    }
+
+    /** Sends the final board state to a client, if present. */
+    private void notifyStateToClient(PlayerClient client, BoardState state) {
+        if (client == null) {
+            return;
+        }
+        callbackExecutor.submit(() -> {
+            try {
+                client.gameUpdated(state);
+            } catch (RemoteException e) {
+                // Ignore client disconnection on exit.
+            }
+        });
     }
 
     /**

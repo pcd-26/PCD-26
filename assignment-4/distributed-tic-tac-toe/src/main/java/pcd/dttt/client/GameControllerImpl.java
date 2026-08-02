@@ -84,10 +84,7 @@ public class GameControllerImpl implements GameController, GameEventListener {
      */
     @Override
     public void createGame(String gameName) throws Exception {
-        if (lobby == null) {
-            throw new IllegalStateException("Lobby connection is not established.");
-        }
-        this.currentGame = lobby.createGame(gameName, playerName, clientStub);
+        this.currentGame = lobby().createGame(gameName, playerName, clientStub);
     }
 
     /**
@@ -99,10 +96,7 @@ public class GameControllerImpl implements GameController, GameEventListener {
      */
     @Override
     public void joinGame(String gameName) throws Exception {
-        if (lobby == null) {
-            throw new IllegalStateException("Lobby connection is not established.");
-        }
-        this.currentGame = lobby.joinGame(gameName, playerName, clientStub);
+        this.currentGame = lobby().joinGame(gameName, playerName, clientStub);
     }
 
     /**
@@ -114,10 +108,7 @@ public class GameControllerImpl implements GameController, GameEventListener {
      */
     @Override
     public List<String> getWaitingGames() throws Exception {
-        if (lobby == null) {
-            throw new IllegalStateException("Lobby connection is not established.");
-        }
-        return lobby.getWaitingGames();
+        return lobby().getWaitingGames();
     }
 
     /**
@@ -202,11 +193,7 @@ public class GameControllerImpl implements GameController, GameEventListener {
      */
     @Override
     public void onGameStarted(BoardState initialState) {
-        synchronized (listeners) {
-            for (GameEventListener l : listeners) {
-                l.onGameStarted(initialState);
-            }
-        }
+        notifyListeners(listener -> listener.onGameStarted(initialState));
     }
 
     /**
@@ -217,11 +204,7 @@ public class GameControllerImpl implements GameController, GameEventListener {
      */
     @Override
     public void onGameUpdated(BoardState newState) {
-        synchronized (listeners) {
-            for (GameEventListener l : listeners) {
-                l.onGameUpdated(newState);
-            }
-        }
+        notifyListeners(listener -> listener.onGameUpdated(newState));
     }
 
     /**
@@ -232,11 +215,7 @@ public class GameControllerImpl implements GameController, GameEventListener {
      */
     @Override
     public void onOpponentLeft(String opponentName) {
-        synchronized (listeners) {
-            for (GameEventListener l : listeners) {
-                l.onOpponentLeft(opponentName);
-            }
-        }
+        notifyListeners(listener -> listener.onOpponentLeft(opponentName));
     }
 
     /**
@@ -252,6 +231,23 @@ public class GameControllerImpl implements GameController, GameEventListener {
                 // Ignore cleanup failures
             }
             clientStub = null;
+        }
+    }
+
+    /** Returns the lobby connection or fails fast when the client is disconnected. */
+    private Lobby lobby() {
+        if (lobby == null) {
+            throw new IllegalStateException("Lobby connection is not established.");
+        }
+        return lobby;
+    }
+
+    /** Runs the given action for each registered listener under the listener lock. */
+    private void notifyListeners(java.util.function.Consumer<GameEventListener> action) {
+        synchronized (listeners) {
+            for (GameEventListener listener : listeners) {
+                action.accept(listener);
+            }
         }
     }
 }

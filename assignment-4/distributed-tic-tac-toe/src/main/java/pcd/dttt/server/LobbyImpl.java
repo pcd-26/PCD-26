@@ -62,8 +62,7 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
     public Game createGame(String gameName, String playerName, PlayerClient client)
             throws RemoteException, GameAlreadyExistsException {
         ensureOpen();
-        
-        pruneFinishedGames();
+        pruneInactiveGames();
 
         GameImpl game = new GameImpl(gameName, playerName, client);
         GameImpl existing = games.putIfAbsent(gameName, game);
@@ -91,8 +90,7 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
     public Game joinGame(String gameName, String playerName, PlayerClient client)
             throws RemoteException, GameNotFoundException, GameFullException {
         ensureOpen();
-        
-        pruneFinishedGames();
+        pruneInactiveGames();
         
         GameImpl game = games.get(gameName);
         if (game == null) {
@@ -115,15 +113,12 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
     public List<String> getWaitingGames() throws RemoteException {
         ensureOpen();
         List<String> waiting = new ArrayList<>();
-        for (Map.Entry<String, GameImpl> entry : new ArrayList<>(games.entrySet())) {
-            GameImpl game = entry.getValue();
-            GameStatus status = game.getBoardState().status();
-            if (status == GameStatus.WAITING) {
+        for (Map.Entry<String, GameImpl> entry : snapshotGames()) {
+            GameStatus status = entry.getValue().getBoardState().status();
+            if (status.isWaiting()) {
                 waiting.add(entry.getKey());
-            } else if (status != GameStatus.ACTIVE) {
-                // Prune completed/abandoned games from the active list
-                game.close();
-                games.remove(entry.getKey(), game);
+            } else if (status.isTerminal()) {
+                removeGame(entry.getKey(), entry.getValue());
             }
         }
         return waiting;
@@ -135,14 +130,23 @@ public class LobbyImpl extends UnicastRemoteObject implements Lobby {
      *
      * @throws RemoteException if an RMI error occurs while querying game states
      */
-    private void pruneFinishedGames() throws RemoteException {
-        for (Map.Entry<String, GameImpl> entry : new ArrayList<>(games.entrySet())) {
-            GameStatus status = entry.getValue().getBoardState().status();
-            if (status != GameStatus.WAITING && status != GameStatus.ACTIVE) {
-                entry.getValue().close();
-                games.remove(entry.getKey(), entry.getValue());
+    private void pruneInactiveGames() throws RemoteException {
+        for (Map.Entry<String, GameImpl> entry : snapshotGames()) {
+            if (entry.getValue().getBoardState().status().isTerminal()) {
+                removeGame(entry.getKey(), entry.getValue());
             }
         }
+    }
+
+    /** Returns a stable snapshot of the lobby games to iterate without concurrent modification. */
+    private List<Map.Entry<String, GameImpl>> snapshotGames() {
+        return new ArrayList<>(games.entrySet());
+    }
+
+    /** Closes a game and removes it from the lobby if it is still mapped to the expected instance. */
+    private void removeGame(String gameName, GameImpl game) {
+        game.close();
+        games.remove(gameName, game);
     }
 
     /**
