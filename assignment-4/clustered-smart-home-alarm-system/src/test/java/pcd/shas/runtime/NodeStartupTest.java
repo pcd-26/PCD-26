@@ -48,6 +48,18 @@ public class NodeStartupTest {
     }
 
     @Test
+    public void defaultsHostPortAndSeedNodesWhenFlagsAreMissing() {
+        NodeStartup.NodeArguments arguments = NodeStartup.parseNodeArguments(new String[] {
+                "keypad"
+        });
+
+        assertEquals(NodeStartup.Role.KEYPAD, arguments.role());
+        assertEquals("127.0.0.1", arguments.host());
+        assertEquals(2552, arguments.port());
+        assertEquals(List.of("127.0.0.1:2552"), arguments.seedNodes());
+    }
+
+    @Test
     public void buildsClusterConfigWithSeedNodes() {
         Config config = NodeStartup.buildClusterConfig(
                 "shas-cluster",
@@ -65,6 +77,14 @@ public class NodeStartupTest {
                         "pekko://shas-cluster@127.0.0.1:2603"
                 ),
                 config.getStringList("pekko.cluster.seed-nodes")
+        );
+    }
+
+    @Test
+    public void convertsHostPortSeedNodesToPekkoUris() {
+        assertEquals(
+                "pekko://shas-cluster@127.0.0.1:2601",
+                NodeStartup.toSeedNodeUri("shas-cluster", "127.0.0.1:2601")
         );
     }
 }

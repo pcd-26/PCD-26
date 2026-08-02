@@ -5,7 +5,6 @@ import com.typesafe.config.ConfigFactory;
 import pcd.shas.common.SensorType;
 import pcd.shas.common.Zone;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -93,18 +92,18 @@ public final class NodeStartup {
 
         String host = flags.getOrDefault("--host", DEFAULT_HOST);
         int port = parsePort(flags.get("--port"), role);
-        List<String> seedNodes = parseSeedNodes(flags.get("--seed-nodes"));
-        if (seedNodes.isEmpty()) {
-            seedNodes = List.of(host + ":" + port);
-        }
+        List<String> seedNodes = resolveSeedNodes(flags.get("--seed-nodes"), host, port);
 
         return switch (role) {
             case CONTROL_UNIT, KEYPAD -> new NodeArguments(role, host, port, seedNodes, null, null, null);
             case SENSOR -> new NodeArguments(
-                role, host, port, seedNodes,
-                require(flags, "--sensor-id"),
-                parseSensorType(require(flags, "--sensor-type")),
-                parseZone(require(flags, "--zone"))
+                role,
+                host,
+                port,
+                seedNodes,
+                requireFlag(flags, "--sensor-id"),
+                parseSensorType(requireFlag(flags, "--sensor-type")),
+                parseZone(requireFlag(flags, "--zone"))
             );
         };
     }
@@ -119,31 +118,12 @@ public final class NodeStartup {
      * @return the parsed configuration
      */
     public static Config buildClusterConfig(String systemName, String host, int port, List<String> seedNodes) {
-        Objects.requireNonNull(systemName, "systemName");
-        Objects.requireNonNull(host, "host");
+        validateSystemIdentity(systemName, host, port);
         Objects.requireNonNull(seedNodes, "seedNodes");
-        if (systemName.isBlank()) {
-            throw new IllegalArgumentException("systemName cannot be blank");
-        }
-        if (host.isBlank()) {
-            throw new IllegalArgumentException("host cannot be blank");
-        }
-        if (port <= 0 || port > 65535) {
-            throw new IllegalArgumentException("port must be between 1 and 65535");
-        }
 
-        List<String> resolvedSeedNodes = seedNodes.isEmpty()
-            ? List.of(host + ":" + port)
-            : List.copyOf(seedNodes);
-        String seedNodeList = resolvedSeedNodes.stream()
-            .map(seedNode -> "\"" + toSeedNodeUri(systemName, seedNode) + "\"")
-            .collect(Collectors.joining(", "));
-        String configText = """
-            pekko.remote.artery.canonical.hostname = "%s"
-            pekko.remote.artery.canonical.port = %d
-            pekko.cluster.seed-nodes = [%s]
-            """.formatted(host, port, seedNodeList);
-        return ConfigFactory.parseString(configText).withFallback(ConfigFactory.load());
+        List<String> resolvedSeedNodes = resolveSeedNodes(seedNodes, host, port);
+        return ConfigFactory.parseString(buildClusterConfigText(systemName, host, port, resolvedSeedNodes))
+            .withFallback(ConfigFactory.load());
     }
 
     /**
@@ -156,11 +136,8 @@ public final class NodeStartup {
     public static String toSeedNodeUri(String systemName, String hostPort) {
         Objects.requireNonNull(systemName, "systemName");
         Objects.requireNonNull(hostPort, "hostPort");
-        String[] parts = hostPort.trim().split(":", 2);
-        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
-            throw new IllegalArgumentException("seed nodes must be in host:port form");
-        }
-        return toSeedNodeUri(systemName, parts[0].trim(), parsePort(parts[1].trim(), Role.CONTROL_UNIT));
+        String[] parts = splitHostPort(hostPort);
+        return toSeedNodeUri(systemName, parts[0], parsePort(parts[1], Role.CONTROL_UNIT));
     }
 
     /**
@@ -172,17 +149,7 @@ public final class NodeStartup {
      * @return the Pekko URI used in cluster seed-node configuration
      */
     public static String toSeedNodeUri(String systemName, String host, int port) {
-        Objects.requireNonNull(systemName, "systemName");
-        Objects.requireNonNull(host, "host");
-        if (systemName.isBlank()) {
-            throw new IllegalArgumentException("systemName cannot be blank");
-        }
-        if (host.isBlank()) {
-            throw new IllegalArgumentException("host cannot be blank");
-        }
-        if (port <= 0 || port > 65535) {
-            throw new IllegalArgumentException("port must be between 1 and 65535");
-        }
+        validateSystemIdentity(systemName, host, port);
         return "pekko://%s@%s:%d".formatted(systemName, host, port);
     }
 
@@ -209,17 +176,16 @@ public final class NodeStartup {
      * @return map of flag names to values
      */
     private static Map<String, String> parseFlags(String[] args) {
-        List<String> items = new ArrayList<>(Arrays.asList(args));
         java.util.LinkedHashMap<String, String> flags = new java.util.LinkedHashMap<>();
-        for (int i = 0; i < items.size(); i++) {
-            String token = items.get(i);
+        for (int i = 0; i < args.length; i++) {
+            String token = args[i];
             if (!token.startsWith("--")) {
                 throw new IllegalArgumentException("unexpected argument: " + token);
             }
-            if (i + 1 >= items.size()) {
+            if (i + 1 >= args.length) {
                 throw new IllegalArgumentException("missing value for " + token);
             }
-            String value = items.get(++i);
+            String value = args[++i];
             if (value.startsWith("--")) {
                 throw new IllegalArgumentException("missing value for " + token);
             }
@@ -235,7 +201,7 @@ public final class NodeStartup {
      * @param key requested flag name
      * @return the flag value
      */
-    private static String require(Map<String, String> flags, String key) {
+    private static String requireFlag(Map<String, String> flags, String key) {
         String value = flags.get(key);
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("missing required flag: " + key);
@@ -252,11 +218,7 @@ public final class NodeStartup {
      */
     private static int parsePort(String rawPort, Role role) {
         if (rawPort == null || rawPort.isBlank()) {
-            return switch (role) {
-                case CONTROL_UNIT -> DEFAULT_CONTROL_UNIT_PORT;
-                case KEYPAD -> DEFAULT_KEYPAD_PORT;
-                case SENSOR -> DEFAULT_SENSOR_PORT;
-            };
+            return defaultPortFor(role);
         }
         try {
             return Integer.parseInt(rawPort);
@@ -279,6 +241,106 @@ public final class NodeStartup {
             .map(String::trim)
             .filter(seed -> !seed.isEmpty())
             .toList();
+    }
+
+    /**
+     * Returns the resolved seed nodes, defaulting to the local node when no explicit list is provided.
+     *
+     * @param rawSeedNodes raw comma-separated seed list
+     * @param host local host
+     * @param port local port
+     * @return immutable list of seed-node host:port strings
+     */
+    private static List<String> resolveSeedNodes(String rawSeedNodes, String host, int port) {
+        List<String> seedNodes = parseSeedNodes(rawSeedNodes);
+        if (!seedNodes.isEmpty()) {
+            return seedNodes;
+        }
+        return List.of(host + ":" + port);
+    }
+
+    /**
+     * Returns the resolved seed nodes, defaulting to the local node when the provided list is empty.
+     *
+     * @param seedNodes explicit seed node list
+     * @param host local host
+     * @param port local port
+     * @return immutable list of seed-node host:port strings
+     */
+    private static List<String> resolveSeedNodes(List<String> seedNodes, String host, int port) {
+        if (!seedNodes.isEmpty()) {
+            return List.copyOf(seedNodes);
+        }
+        return List.of(host + ":" + port);
+    }
+
+    /**
+     * Validates the logical identity used by cluster startup helpers.
+     *
+     * @param systemName actor system name
+     * @param host host name or IP address
+     * @param port TCP port
+     */
+    private static void validateSystemIdentity(String systemName, String host, int port) {
+        Objects.requireNonNull(systemName, "systemName");
+        Objects.requireNonNull(host, "host");
+        if (systemName.isBlank()) {
+            throw new IllegalArgumentException("systemName cannot be blank");
+        }
+        if (host.isBlank()) {
+            throw new IllegalArgumentException("host cannot be blank");
+        }
+        if (port <= 0 || port > 65535) {
+            throw new IllegalArgumentException("port must be between 1 and 65535");
+        }
+    }
+
+    /**
+     * Returns the default port for the given role.
+     *
+     * @param role node role
+     * @return default TCP port
+     */
+    private static int defaultPortFor(Role role) {
+        return switch (role) {
+            case CONTROL_UNIT -> DEFAULT_CONTROL_UNIT_PORT;
+            case KEYPAD -> DEFAULT_KEYPAD_PORT;
+            case SENSOR -> DEFAULT_SENSOR_PORT;
+        };
+    }
+
+    /**
+     * Splits a seed-node host:port string into its trimmed components.
+     *
+     * @param hostPort seed-node address
+     * @return two-element array containing host and port
+     */
+    private static String[] splitHostPort(String hostPort) {
+        String[] parts = hostPort.trim().split(":", 2);
+        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+            throw new IllegalArgumentException("seed nodes must be in host:port form");
+        }
+        return new String[] { parts[0].trim(), parts[1].trim() };
+    }
+
+    /**
+     * Builds the textual Pekko configuration used for a single node.
+     *
+     * @param systemName actor system name
+     * @param host bind host
+     * @param port bind port
+     * @param seedNodes resolved seed nodes
+     * @return configuration text
+     */
+    private static String buildClusterConfigText(String systemName, String host, int port, List<String> seedNodes) {
+        String seedNodeList = seedNodes.stream()
+            .map(seedNode -> "\"" + toSeedNodeUri(systemName, seedNode) + "\"")
+            .collect(Collectors.joining(", "));
+        return """
+            pekko.remote.artery.canonical.hostname = "%s"
+            pekko.remote.artery.canonical.port = %d
+            pekko.cluster.seed-nodes = [%s]
+            """.formatted(host, port, seedNodeList);
     }
 
     /**
