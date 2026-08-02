@@ -215,24 +215,14 @@ public final class ControlUnitActor {
                     return exitDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, selectedZones);
                 }
 
-                context.getLog().info("Ignoring PIN submission while DISARMED");
-                return Behaviors.same();
+                return ignorePinSubmission(context, AlarmState.DISARMED);
             })
             .onMessage(SensorActivated.class, message -> {
-                context.getLog().info(
-                        "Ignoring sensor activation while DISARMED: sensor={}, type={}, zone={}",
-                        message.sensorInfo().id(),
-                        message.sensorInfo().type(),
-                        message.sensorInfo().zone()
-                );
-                return Behaviors.same();
+                return ignoreSensorActivation(context, AlarmState.DISARMED, message.sensorInfo());
             })
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> {
-                message.replyTo().tell(new StateSnapshot(AlarmState.DISARMED));
-                return Behaviors.same();
-            })
+            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.DISARMED))
             .build();
     }
 
@@ -257,17 +247,10 @@ public final class ControlUnitActor {
                     return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
                 }
 
-                context.getLog().info("Ignoring PIN submission while EXIT_DELAY is active");
-                return Behaviors.same();
+                return ignorePinSubmission(context, AlarmState.EXIT_DELAY);
             })
             .onMessage(SensorActivated.class, message -> {
-                context.getLog().info(
-                    "Ignoring sensor activation while EXIT_DELAY is active: sensor={}, type={}, zone={}",
-                    message.sensorInfo().id(),
-                    message.sensorInfo().type(),
-                    message.sensorInfo().zone()
-                );
-                return Behaviors.same();
+                return ignoreSensorActivation(context, AlarmState.EXIT_DELAY, message.sensorInfo());
             })
             .onMessage(ExitDelayTimeout.class, message -> {
                 timers.cancel(EXIT_DELAY_TIMER_KEY);
@@ -275,10 +258,7 @@ public final class ControlUnitActor {
                 return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, selectedZones);
             })
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> {
-                message.replyTo().tell(new StateSnapshot(AlarmState.EXIT_DELAY));
-                return Behaviors.same();
-            })
+            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.EXIT_DELAY))
             .build();
     }
 
@@ -303,35 +283,26 @@ public final class ControlUnitActor {
                     return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
                 }
 
-                context.getLog().info("Ignoring PIN submission while ARMED");
-                return Behaviors.same();
+                return ignorePinSubmission(context, AlarmState.ARMED);
             })
             .onMessage(SensorActivated.class, message -> {
-                if (activeZones.contains(message.sensorInfo().zone())) {
+                SensorInfo sensorInfo = message.sensorInfo();
+                if (activeZones.contains(sensorInfo.zone())) {
                     context.getLog().info(
                         "Transition ARMED -> ENTRY_DELAY due to sensor activation: sensor={}, type={}, zone={}",
-                        message.sensorInfo().id(),
-                        message.sensorInfo().type(),
-                        message.sensorInfo().zone()
+                        sensorInfo.id(),
+                        sensorInfo.type(),
+                        sensorInfo.zone()
                     );
                     timers.startSingleTimer(ENTRY_DELAY_TIMER_KEY, new EntryDelayTimeout(), entryDelayDuration);
                     return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, activeZones);
                 }
 
-                context.getLog().info(
-                    "Ignoring sensor activation while ARMED because zone {} is inactive: sensor={}, type={}",
-                    message.sensorInfo().zone(),
-                    message.sensorInfo().id(),
-                    message.sensorInfo().type()
-                );
-                return Behaviors.same();
+                return ignoreInactiveZone(context, sensorInfo);
             })
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> {
-                message.replyTo().tell(new StateSnapshot(AlarmState.ARMED));
-                return Behaviors.same();
-            })
+            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.ARMED))
             .build();
     }
 
@@ -356,17 +327,10 @@ public final class ControlUnitActor {
                     return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
                 }
 
-                context.getLog().info("Ignoring PIN submission while ENTRY_DELAY is active");
-                return Behaviors.same();
+                return ignorePinSubmission(context, AlarmState.ENTRY_DELAY);
             })
             .onMessage(SensorActivated.class, message -> {
-                context.getLog().info(
-                    "Ignoring sensor activation while ENTRY_DELAY is active: sensor={}, type={}, zone={}",
-                    message.sensorInfo().id(),
-                    message.sensorInfo().type(),
-                    message.sensorInfo().zone()
-                );
-                return Behaviors.same();
+                return ignoreSensorActivation(context, AlarmState.ENTRY_DELAY, message.sensorInfo());
             })
             .onMessage(EntryDelayTimeout.class, message -> {
                 timers.cancel(ENTRY_DELAY_TIMER_KEY);
@@ -375,10 +339,7 @@ public final class ControlUnitActor {
                 return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, activeZones);
             })
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> {
-                message.replyTo().tell(new StateSnapshot(AlarmState.ENTRY_DELAY));
-                return Behaviors.same();
-            })
+            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.ENTRY_DELAY))
             .build();
     }
 
@@ -402,25 +363,62 @@ public final class ControlUnitActor {
                     return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
                 }
 
-                context.getLog().info("Ignoring PIN submission while ALARM is active");
-                return Behaviors.same();
+                return ignorePinSubmission(context, AlarmState.ALARM);
             })
             .onMessage(SensorActivated.class, message -> {
-                context.getLog().info(
-                    "Ignoring sensor activation while ALARM is active: sensor={}, type={}, zone={}",
-                    message.sensorInfo().id(),
-                    message.sensorInfo().type(),
-                    message.sensorInfo().zone()
-                );
-                return Behaviors.same();
+                return ignoreSensorActivation(context, AlarmState.ALARM, message.sensorInfo());
             })
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> {
-                message.replyTo().tell(new StateSnapshot(AlarmState.ALARM));
-                return Behaviors.same();
-            })
+            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.ALARM))
             .build();
+    }
+
+    /**
+     * Replies to a state query without changing the current behavior.
+     */
+    private static Behavior<Command> replyState(ActorRef<StateSnapshot> replyTo, AlarmState state) {
+        replyTo.tell(new StateSnapshot(state));
+        return Behaviors.same();
+    }
+
+    /**
+     * Logs and ignores a PIN submission in the given state.
+     */
+    private static Behavior<Command> ignorePinSubmission(ActorContext<Command> context, AlarmState state) {
+        context.getLog().info("Ignoring PIN submission while {} is active", state);
+        return Behaviors.same();
+    }
+
+    /**
+     * Logs and ignores a sensor activation in the given state.
+     */
+    private static Behavior<Command> ignoreSensorActivation(
+        ActorContext<Command> context,
+        AlarmState state,
+        SensorInfo sensorInfo
+    ) {
+        context.getLog().info(
+            "Ignoring sensor activation while {} is active: sensor={}, type={}, zone={}",
+            state,
+            sensorInfo.id(),
+            sensorInfo.type(),
+            sensorInfo.zone()
+        );
+        return Behaviors.same();
+    }
+
+    /**
+     * Logs and ignores a sensor activation in armed mode when the zone is inactive.
+     */
+    private static Behavior<Command> ignoreInactiveZone(ActorContext<Command> context, SensorInfo sensorInfo) {
+        context.getLog().info(
+            "Ignoring sensor activation while ARMED because zone {} is inactive: sensor={}, type={}",
+            sensorInfo.zone(),
+            sensorInfo.id(),
+            sensorInfo.type()
+        );
+        return Behaviors.same();
     }
 
     /**
