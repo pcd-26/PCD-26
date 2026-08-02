@@ -1,6 +1,14 @@
 \documentclass[11pt,a4paper]{article}
 
-\title{Report PCD 2026}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{array}
+
+\title{Assignment 02 Technical Report\\\large FSStatLib}
 \author{}
 \date{\today}
 
@@ -10,22 +18,291 @@
 
 \section{Introduction}
 
-% Write the assignment report here.
+Assignment 2 asks for an asynchronous library, \texttt{FSStatLib}, able to scan a
+directory recursively and return a report containing two pieces of information:
 
-\section{Analysis}
+\begin{itemize}[leftmargin=*]
+  \item the total number of regular files found in the directory tree;
+  \item the distribution of file sizes in \texttt{NB + 1} bands, where the range
+  \texttt{[0, MaxFS]} is divided into \texttt{NB} bands and the last band counts
+  files larger than \texttt{MaxFS}.
+\end{itemize}
 
-% Add the problem analysis, focusing on concurrent aspects.
+The project provides three implementations of the same behaviour:
+
+\begin{itemize}[leftmargin=*]
+  \item a Virtual Threads version;
+  \item a Reactive version based on RxJava;
+  \item an Event-Loop version based on Vert.x.
+\end{itemize}
+
+The repository also includes a command-line interface, a small Swing GUI, and a
+test suite that validates correctness, robustness, and cross-implementation
+consistency.
+
+\section{Problem Analysis}
+
+The task is concurrency-oriented because the scan is intrinsically asynchronous
+and because the implementation must expose three different programming styles.
+Even though the computation itself is conceptually simple, the filesystem
+introduces several complications:
+
+\begin{itemize}[leftmargin=*]
+  \item traversal is recursive and may encounter deep directory hierarchies;
+  \item the scan must remain responsive while data is being collected;
+  \item filesystem state may change during execution;
+  \item invalid paths, unreadable directories, symbolic links, and special files
+  must not crash the program;
+  \item the same logical result must be produced by all three paradigms.
+\end{itemize}
+
+The project keeps the report model independent from the execution strategy.
+This keeps the results comparable across implementations while still allowing
+each engine to use its own scheduling style.
+
+\subsection{Shared Data Model}
+
+The shared package \texttt{pcd.assignment2.common} contains the minimal common
+model:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{FSReport}: immutable report object containing directory, size
+  threshold, band count, band histogram, total file count, and elapsed time;
+  \item \texttt{FSReportListener}: callback contract for asynchronous updates,
+  completion, and errors;
+  \item \texttt{FSReportJob}: cancellation handle for imperative scanners;
+  \item \texttt{SizeUnit}: user-facing unit conversion and formatting helper;
+  \item \texttt{FSUtils}: small helpers used to build reports from mutable
+  counters.
+\end{itemize}
+
+The report stores the band counts in a defensive copy to avoid accidental
+mutation by callers.
 
 \section{Design}
 
-% Describe the adopted strategy and implementation choices.
+\subsection{Overview}
+
+The three implementations are intentionally separate:
+
+\begin{itemize}[leftmargin=*]
+  \item the Virtual Threads version uses imperative recursion and a task per
+  directory;
+  \item the Reactive version models the scan as a stream of files and uses an
+  immutable accumulator;
+  \item the Event-Loop version uses Vert.x callbacks and asynchronous file
+  system operations.
+\end{itemize}
+
+The CLI and GUI can select the implementation at runtime. Both user interfaces
+perform the same argument parsing and report rendering logic, while the scan
+engine changes underneath.
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm}}
+\toprule
+\textbf{Approach} & \textbf{State ownership} & \textbf{Scheduling model} & \textbf{Main trade-off} \\
+\midrule
+Virtual Threads & Shared counters with lock-free atomics and a task counter & Recursive task submission on a virtual-thread executor & Simple imperative code, but many tasks for very large trees \\
+Reactive & Immutable accumulator passed through the stream & Sequential observable generation with sampled updates & Clean functional model, but no parallel directory walk \\
+Event-Loop & Shared asynchronous state guarded by atomics and a visited-set & Vert.x callbacks with asynchronous I/O and periodic updates & Non-blocking design, but more coordination overhead \\
+\bottomrule
+\end{tabular}
+\caption{High-level comparison of the three implementations.}
+\end{table}
+
+\subsection{Virtual Threads Strategy}
+
+The Virtual Threads implementation uses a dedicated virtual-thread executor.
+The traversal is recursive: every subdirectory is scheduled as a separate task
+and the completion is tracked with:
+
+\begin{itemize}[leftmargin=*]
+  \item a shared cancellation flag;
+  \item an \texttt{AtomicInteger} used as task counter;
+  \item a \texttt{CountDownLatch} that releases the waiting thread when all work
+  is done;
+  \item a periodic reporting thread that emits intermediate snapshots.
+\end{itemize}
+
+The implementation uses canonical paths to avoid revisiting the same directory
+more than once. File sizes are measured through \texttt{File.length()} and each
+regular file is assigned to one band through \texttt{FSReport.getBandIndex()}.
+
+\subsection{Reactive Strategy}
+
+The Reactive version uses RxJava 3 and follows a functional style.
+
+The directory traversal is produced by an \texttt{Observable<File>}. The stream
+is then transformed into a sequence of immutable scan states with
+\texttt{scan(initial, ...)}. Each emitted state contains:
+
+\begin{itemize}[leftmargin=*]
+  \item the directory being scanned;
+  \item the threshold and the number of bands;
+  \item the current file count;
+  \item the current histogram;
+  \item the start time, used to compute elapsed time.
+\end{itemize}
+
+The stream is sampled every 100 ms so that user interfaces are not flooded by
+too many updates. Cancellation is handled by disposing the subscription.
+
+This implementation deliberately keeps the directory walk sequential inside the
+observable generator. The goal is to keep the reactive control flow explicit and
+simple, not to emulate the virtual-thread scheduling strategy.
+
+\subsection{Event-Loop Strategy}
+
+The Event-Loop version uses Vert.x to keep the traversal asynchronous.
+
+The scan starts by creating a fresh \texttt{Vertx} instance and a periodic timer
+that produces progress updates. Blocking filesystem checks, such as canonical
+path validation, are wrapped in \texttt{executeBlocking} so they do not block
+the event loop.
+
+The asynchronous state tracks:
+
+\begin{itemize}[leftmargin=*]
+  \item the number of outstanding tasks;
+  \item a cancellation flag;
+  \item a set of canonical paths already visited;
+  \item the current totals and band counters;
+  \item the timer identifier used for progress updates.
+\end{itemize}
+
+The directory tree is explored with asynchronous \texttt{readDir()} and
+\texttt{props()} calls. Completion is detected when the outstanding task counter
+reaches zero.
+
+\subsection{User Interfaces}
+
+The CLI accepts:
+
+\begin{itemize}[leftmargin=*]
+  \item the target directory;
+  \item the maximum file size threshold;
+  \item the number of bands;
+  \item an optional size unit;
+  \item an optional paradigm selector (\texttt{vt}, \texttt{rx}, or
+  \texttt{loop}).
+\end{itemize}
+
+The GUI exposes the same parameters and adds start/cancel controls. Callback
+delivery is marshalled back onto the Swing EDT with
+\texttt{SwingUtilities.invokeLater}.
 
 \section{Validation}
 
-% Summarize the tests and validation results.
+The repository contains a validation-oriented test suite:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{FSStatTest}: unit coverage for the shared model, parsing, and
+  the three engines on a small fixture;
+  \item \texttt{FSStatRobustnessCorrectnessTest}: edge cases and comparative
+  validation on identical datasets;
+  \item \texttt{FSStatCLITest}: CLI helper and parsing checks.
+\end{itemize}
+
+The suite verifies that all three implementations return the same logical
+report on:
+
+\begin{itemize}[leftmargin=*]
+  \item empty directories;
+  \item flat directories with boundary file sizes;
+  \item nested hierarchies;
+  \item a wider and deeper deterministic hierarchy;
+  \item invalid paths;
+  \item regular files used as input instead of directories;
+  \item unreadable directories, where the environment supports permission
+  changes;
+  \item symbolic-link cycles, where the environment supports them;
+  \item large sparse files;
+  \item concurrent file deletions while scanning;
+  \item special files and non-regular nodes, where the environment supports
+  them.
+\end{itemize}
+
+The final verification run executed \texttt{25} tests and all of them passed.
+
+\subsection{Benchmark Support}
+
+The repository also includes \texttt{FSStatBenchmark}, a small local utility
+that runs the three implementations repeatedly and prints timing summaries. It
+is useful for manual comparisons between paradigms, but the resulting numbers
+are necessarily environment-dependent, so this report does not claim a
+universal ordering between the engines.
+
+\subsection{Observed Limitations}
+
+Some checks depend on the host environment:
+
+\begin{itemize}[leftmargin=*]
+  \item permission changes may not be applied by the local filesystem;
+  \item symbolic links may be unavailable or restricted;
+  \item special files such as \texttt{/dev/null} are Unix-specific.
+\end{itemize}
+
+These limitations are documented in the validation notes and do not affect the
+core functional behaviour of the project.
+
+\section{Example Outputs}
+
+The following examples summarize the validated behaviour on deterministic test
+datasets.
+
+\subsection{Empty Directory}
+
+For an empty directory, the report contains zero files and zero counts in all
+bands.
+
+\begin{verbatim}
+Total files: 0
+Bands: [0, 0, 0, 0, 0]
+\end{verbatim}
+
+\subsection{Flat Directory With Boundary Sizes}
+
+With \texttt{MaxFS = 100} and \texttt{NB = 4}, the tested flat dataset produced
+the following distribution:
+
+\begin{verbatim}
+Total files: 8
+Bands: [2, 1, 1, 2, 2]
+\end{verbatim}
+
+This dataset includes files sized 0, 10, 25, 50, 75, 100, 101, and 250 bytes.
+
+\subsection{Nested Hierarchy}
+
+The nested test fixture confirmed that recursive traversal counts files in
+subdirectories correctly and produces identical results in all three
+implementations.
+
+\begin{verbatim}
+Total files: 5
+Bands: [1, 1, 1, 1, 1]
+\end{verbatim}
 
 \section{Conclusions}
 
-% Add final remarks.
+Assignment 2 is implemented as a small asynchronous filesystem statistics
+library with three distinct execution styles. The project satisfies the main
+requirements of the assignment:
+
+\begin{itemize}[leftmargin=*]
+  \item recursive filesystem scanning;
+  \item file-count and size-band statistics;
+  \item three implementations based on virtual threads, RxJava, and Vert.x;
+  \item a CLI and a GUI demo;
+  \item validation and comparative testing across identical datasets;
+  \item documentation of the main design choices and limitations.
+\end{itemize}
+
+The codebase keeps the report model and the filesystem logic separate from the
+execution strategy, which makes the three implementations comparable while still
+preserving their respective programming styles.
 
 \end{document}
