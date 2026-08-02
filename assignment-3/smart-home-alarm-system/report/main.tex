@@ -10,7 +10,7 @@
 \setlength{\parskip}{0.55em}
 \renewcommand{\arraystretch}{1.15}
 
-\title{\vspace{-1.5cm}Assignment 3 - Smart Home Alarm System}
+\title{\vspace{-1.5cm}Assignment 3 -- Smart Home Alarm System}
 \author{}
 \date{\today}
 
@@ -28,7 +28,13 @@
 The alarm system is modeled as a typed-actor controller for a home security domain.
 The core concurrent requirement is ownership of state: the control unit must serialize all transitions, while sensors, keypad, and siren remain separate actors that only exchange messages.
 The system has five states:
-\textit{DISARMED}, \textit{EXIT\_DELAY}, \textit{ARMED}, \textit{ENTRY\_DELAY}, and \textit{ALARM}.
+\begin{itemize}
+  \item \textit{DISARMED}
+  \item \textit{EXIT\_DELAY}
+  \item \textit{ARMED}
+  \item \textit{ENTRY\_DELAY}
+  \item \textit{ALARM}
+\end{itemize}
 Only a valid PIN or an internal timeout may change the state.
 Sensor events are state-dependent: they are ignored while disarmed, can start the entry delay only when they belong to an active zone, and have no effect once the alarm is active.
 This structure matches the assignment requirement that timing and sensor handling must be deterministic and driven by explicit state transitions rather than scattered conditional checks.
@@ -37,7 +43,7 @@ This structure matches the assignment requirement that timing and sensor handlin
 The implementation uses one actor per responsibility:
 \begin{itemize}
   \item the control unit owns the state machine, the PIN, the active-zone set, and the delay timers;
-  \item the keypad buffers local key presses and forwards only completed PIN submissions;
+  \item the keypad buffers local key presses, forwards completed PIN submissions, and can forward arming-mode requests;
   \item the sensor actor is a thin adapter that forwards intrusion events;
   \item the siren actor owns only the emergency-device on/off status.
 \end{itemize}
