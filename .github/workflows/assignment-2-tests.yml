@@ -55,9 +55,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
-    concurrency:
-      group: assignment-02-release-main
-      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -69,9 +66,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
-          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
-          echo "zip_name=Assignment-02-$stamp.zip" >> "$GITHUB_OUTPUT"
+          echo "zip_name=Assignment-02.zip" >> "$GITHUB_OUTPUT"
 
       - name: Install packaging tools
         run: |
@@ -128,21 +123,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: assignment-02-latest
-          RELEASE_TITLE: Assignment 02 Delivery Package
-          RELEASE_NOTES: Automated delivery zip for Assignment 02.
+          RELEASE_TAG: latest
           DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
         run: |
           set -euo pipefail
-
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" \
-              --title "$RELEASE_TITLE" \
-              --notes "$RELEASE_NOTES"
-          else
-            gh release create "$RELEASE_TAG" \
-              --title "$RELEASE_TITLE" \
-              --notes "$RELEASE_NOTES"
-          fi
 
           gh release upload "$RELEASE_TAG" "$DELIVERY_ZIP" --clobber
