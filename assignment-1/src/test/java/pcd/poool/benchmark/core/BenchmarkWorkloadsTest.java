@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.physics.common.Board;
-import pcd.poool.model.physics.sequential.PhysicsEngine;
+import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 
@@ -55,7 +55,7 @@ class BenchmarkWorkloadsTest {
     void allEnginesCanBeInitializedFromTheSameWorkloadDefinition() throws Exception {
         var workload = BenchmarkWorkloads.largeLowCollision();
 
-        var sequentialBoard = initialize(workload, new PhysicsEngine());
+        var sequentialBoard = initialize(workload, new SequentialPhysicsEngine());
         try (var threadedEngine = new ThreadedPhysicsEngine(2);
                 var taskBasedEngine = new TaskBasedPhysicsEngine(2)) {
             var threadedBoard = initialize(workload, threadedEngine);
@@ -81,7 +81,7 @@ class BenchmarkWorkloadsTest {
     }
 
     private static BoardState snapshot(BenchmarkWorkload workload) {
-        return snapshot(initialize(workload, new PhysicsEngine()));
+        return snapshot(initialize(workload, new SequentialPhysicsEngine()));
     }
 
     private static BoardState snapshot(Board board) {

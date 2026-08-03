@@ -12,7 +12,7 @@ import pcd.poool.model.physics.common.SpatialCollisionDetector;
  * <p>The engine is deliberately passive: runners decide whether steps are
  * executed sequentially, by a dedicated platform thread, or by tasks.
  */
-public class PhysicsEngine implements PhysicsStepper {
+public class SequentialPhysicsEngine implements PhysicsStepper {
 
     private final SpatialCollisionDetector collisionDetector;
     private final long maxStepMillis;
@@ -20,7 +20,7 @@ public class PhysicsEngine implements PhysicsStepper {
     /**
      * Creates a physics engine using the default maximum sub-step duration.
      */
-    public PhysicsEngine() {
+    public SequentialPhysicsEngine() {
         this(PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
@@ -29,7 +29,7 @@ public class PhysicsEngine implements PhysicsStepper {
      *
      * @param maxStepMillis maximum duration of one internal physics sub-step
      */
-    public PhysicsEngine(long maxStepMillis) {
+    public SequentialPhysicsEngine(long maxStepMillis) {
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
         }

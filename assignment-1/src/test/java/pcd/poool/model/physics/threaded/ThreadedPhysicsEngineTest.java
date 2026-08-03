@@ -19,7 +19,7 @@ import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.config.LargeBoardConf;
-import pcd.poool.model.physics.sequential.PhysicsEngine;
+import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.config.MinimalBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
@@ -68,7 +68,7 @@ class ThreadedPhysicsEngineTest {
         var conf = new SeparatedMotionBoardConf();
 
         try (var threadedEngine = new ThreadedPhysicsEngine(3)) {
-            var sequentialBoard = new Board(new PhysicsEngine());
+            var sequentialBoard = new Board(new SequentialPhysicsEngine());
             sequentialBoard.init(conf);
             sequentialBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
             sequentialBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
@@ -135,7 +135,7 @@ class ThreadedPhysicsEngineTest {
     void threadedPhysicsMatchesSequentialBaselineOnDenseCollisionScenario() {
         var conf = new LargeBoardConf();
 
-        var sequentialBoard = new Board(new PhysicsEngine());
+        var sequentialBoard = new Board(new SequentialPhysicsEngine());
         sequentialBoard.init(conf);
         sequentialBoard.kick(Player.HUMAN, new V2d(0.95, 0.15));
         sequentialBoard.kick(Player.BOT, new V2d(-0.9, -0.1));
