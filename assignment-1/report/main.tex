@@ -11,6 +11,7 @@
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
 \renewcommand{\arraystretch}{1.12}
 
 \definecolor{codebg}{RGB}{248,248,248}
@@ -133,13 +134,42 @@ The project separates what must stay authoritative from what can be scheduled di
     \item the view reads snapshots only, never the live board.
 \end{itemize}
 
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+    >=Stealth,
+    node distance=11mm and 14mm,
+    box/.style={rectangle,draw,thick,rounded corners,align=center,minimum width=28mm,minimum height=9mm},
+    runtimebox/.style={box,minimum width=34mm},
+    smallbox/.style={box,minimum width=22mm,fill=black!2}
+]
+    \node[smallbox] (input) {Human and bot\\inputs};
+    \node[runtimebox, right=of input] (runtime) {Runtime coordinator};
+    \node[smallbox, right=of runtime] (physics) {Physics engines\\Sequential / Threaded / Task-based};
+
+    \node[box, below=of runtime] (model) {Game model and\\board state};
+    \node[box, below=of physics] (snapshot) {Immutable snapshot};
+    \node[box, below=of snapshot] (view) {Swing view};
+
+    \draw[->,thick] (input) -- (runtime);
+    \draw[->,thick] (runtime) -- (physics);
+    \draw[->,thick] (physics) -- (snapshot);
+    \draw[->,thick] (snapshot) -- (view);
+    \draw[->,thick] (model) -- (physics);
+    \draw[->,thick] (model) -- (snapshot);
+    \draw[->,thick] (view.west) |- (runtime.south);
+\end{tikzpicture}
+\caption{High-level architecture of the delivered implementation. The runtime coordinates input, the physics engines mutate the authoritative model, and the view consumes only immutable snapshots.}
+\label{fig:architecture-overview}
+\end{figure}
+
 The sequential version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version is simple on purpose: it defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
 
 \subsection{Designing the concurrent solution}
 
 The design idea is simple: each tick has a part that can be split across workers and a part that must stay under one controller. The parallel part is the expensive physics work; the serial part is the coordination that keeps the match coherent.
 
-At design level, we do not yet care about how workers are implemented internally. We only care about the responsibilities of the phases: some phases read the current state and produce partial results, while other phases merge those results, apply the final state changes, and publish the next snapshot.
+At this level, the description is limited to phase responsibilities. Some phases read the current state and produce partial results, while other phases merge those results, apply the final state changes, and publish the next snapshot. The internal mechanics of worker execution are described in the implementation section.
 
 \begin{itemize}
     \item \textbf{Parallelizable}: local physics work over independent chunks of the simulation;
@@ -151,7 +181,7 @@ This separation is what makes the design effective. The concurrent versions avoi
 
 \subsection{Petri net of the concurrent tick}
 
-The following Petri net summarizes one controller tick at the level requested by the assignment. It deliberately abstracts away from the GUI and from the internal worker count, and it focuses on the control flow shared by the concurrent versions: the controller drains commands, starts the physics phase, waits for the worker-local results, publishes the snapshot, and then sleeps before the next tick.
+The following Petri net summarizes one controller tick at the level requested by the assignment. It deliberately abstracts away from the GUI and from the internal worker count, and it focuses on the control flow shared by the concurrent versions: the controller drains commands, starts the physics phase, waits for the worker-local results, publishes the snapshot, and then sleeps before the next tick. The model follows the standard place/transition interpretation of Petri nets \cite{petri1962,murata1989}.
 
 \begin{figure}[ht]
 \centering
@@ -332,12 +362,12 @@ The three public entry points are \texttt{SequentialPoool}, \texttt{ThreadedPooo
 \subsection{Core classes}
 
 \begin{itemize}
-    \item \texttt{GameModel} (\texttt{pcd.poool.model.game}): owns the gameplay rules, scoring, end-game conditions, and logical snapshot creation;
-    \item \texttt{Board} (\texttt{pcd.poool.model.physics.common}): owns the mutable physical state and delegates stepping to a \texttt{PhysicsStepper};
-    \item \texttt{SequentialPhysicsEngine} (\texttt{pcd.poool.model.physics.sequential}), \texttt{ThreadedPhysicsEngine} (\texttt{pcd.poool.model.physics.threaded}), and \texttt{TaskBasedPhysicsEngine} (\texttt{pcd.poool.model.physics.taskbased}): implement the sequential, platform-thread, and executor-based physics pipelines;
-    \item \texttt{ThreadedGameRunner} (\texttt{pcd.poool.threaded}) and \texttt{TaskBasedGameRunner} (\texttt{pcd.poool.taskbased}): coordinate command draining, controller ticks, and snapshot publication;
-    \item \texttt{RuntimeGameSnapshot} (\texttt{pcd.poool.runtime}): packages the logical snapshot together with the immutable render data;
-    \item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport} (\texttt{pcd.poool.runtime}): provide the monitor-based communication used by the concurrent runtimes.
+    \item \texttt{GameModel} (\path{pcd.poool.model.game}): owns the gameplay rules, scoring, end-game conditions, and logical snapshot creation;
+    \item \texttt{Board} (\path{pcd.poool.model.physics.common}): owns the mutable physical state and delegates stepping to a \texttt{PhysicsStepper};
+    \item \texttt{SequentialPhysicsEngine}, \texttt{ThreadedPhysicsEngine}, and \texttt{TaskBasedPhysicsEngine} (\path{pcd.poool.model.physics.sequential}, \path{pcd.poool.model.physics.threaded}, \path{pcd.poool.model.physics.taskbased}): implement the sequential, platform-thread, and executor-based physics pipelines;
+    \item \texttt{ThreadedGameRunner} and \texttt{TaskBasedGameRunner} (\path{pcd.poool.threaded}, \path{pcd.poool.taskbased}): coordinate command draining, controller ticks, and snapshot publication;
+    \item \texttt{RuntimeGameSnapshot} (\path{pcd.poool.runtime}): packages the logical snapshot together with the immutable render data;
+    \item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport} (\path{pcd.poool.runtime}): provide the monitor-based communication used by the concurrent runtimes.
 \end{itemize}
 
 The most relevant point is that \texttt{GameModel} remains the authoritative owner of the game rules, while the runners only coordinate access to it. This keeps the same behavior across all variants and avoids duplicating the domain logic.
@@ -410,7 +440,7 @@ for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
 }
 \end{lstlisting}
 
-\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/threaded/ThreadedPhysicsEngine.java}, lines 544--568.}
+\noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 544--568.}
 
 This is the part that decides how the balls are split among workers: the work is divided into contiguous index ranges of almost equal size, with the remainder distributed among the first workers.
 
@@ -429,7 +459,7 @@ for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
 completion.await();
 \end{lstlisting}
 
-\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/threaded/ThreadedPhysicsEngine.java}, lines 562--578.}
+\noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 562--578.}
 
 This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the completion barrier has been reached.
 
@@ -459,7 +489,7 @@ for (int i = 0; i < workerCount; i++) {
 }
 \end{lstlisting}
 
-\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/taskbased/TaskBasedPhysicsEngine.java}, lines 662--672.}
+\noindent\textit{Source: \path{TaskBasedPhysicsEngine.java}, lines 662--672.}
 
 Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a private local grid, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in deterministic order, and only then applies the accumulated deltas. Again, the local grid is built sequentially inside each task; the gain comes from running many task-local loops in parallel, not from parallelizing the single loop that fills one grid. The shared idea is still the same single-writer ownership rule; what changes is that futures replace worker joins and candidate pairs are materialized explicitly before replay.
 
@@ -506,48 +536,83 @@ The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. They
     \item \textbf{Coverage}: model, physics engines, runtime helpers, concurrent runners, view layer, benchmark utilities.
 \end{itemize}
 
-\subsection{Petri nets}
-
-The concurrent protocol can be described with an abstract Petri net. The purpose of the model is not to represent the full physics of the game, but to capture one simulation tick as a sequence of controlled phases. In particular, it records command draining, board ownership, worker execution, barrier synchronization, and snapshot publication.
-
-The abstraction is small enough to reason about, yet expressive enough to justify the most relevant safety properties. A tick starts only when the controller owns the board and the command queue has been drained. Worker or task phases then execute on private work units or partial results, and the snapshot is published only after the merge and commit point has been reached. This captures the intended single-writer discipline of the concurrent runtime.
-
-\begin{itemize}
-    \item \textbf{What is modeled}: one simulation tick as a sequence of controlled phases;
-    \item \textbf{What is not modeled}: full physics, numerical details, GUI rendering;
-    \item \textbf{Phases captured}: command draining, board ownership, worker execution, barrier synchronization, snapshot publication;
-    \item \textbf{Safety intuition}: the tick starts only when the controller owns the board, and publication happens only after merge and commit.
-\end{itemize}
-
 \subsection{JPF model checking}
 
-The repository also includes minimal JPF harnesses in the verification area of the working tree. These harnesses are deliberately smaller than the production runtime: they model a controller, a bounded amount of worker or task activity, a command queue, and the publication step. The goal is to verify the control protocol, not the full numerical physics behavior.
-
-The JPF models check that commands are not stranded, that publication happens after the tick is complete, and that the reduced protocol can terminate cleanly without deadlock. This is enough to validate the coordination pattern used by both the platform-thread and task-based implementations.
+The verification area contains two minimal JPF harnesses:
+\path{pcd.poool.verification.jpf.ThreadedMiniHarness} and
+\path{pcd.poool.verification.jpf.TaskBasedMiniHarness}. Both reuse
+\path{MinimalProtocolState}, whose assertions check the actual coordination
+rules of the reduced protocol:
 
 \begin{itemize}
-    \item \textbf{Harnesses}: minimal JPF models in the verification area of the working tree;
-    \item \textbf{Scope}: controller, bounded worker/task activity, command queue, publication step;
-    \item \textbf{Goal}: verify the control protocol, not the full numerical physics behavior;
-    \item \textbf{Properties checked}: no stranded commands, publication after tick completion, clean termination without deadlock.
+    \item the board cannot be owned twice at the same time;
+    \item the worker/task cannot complete before board ownership is established;
+    \item pending commands are drained before publication;
+    \item the final state must release ownership, publish the snapshot, and reach the finished flag.
 \end{itemize}
+
+The two JPF configuration files are \texttt{threaded-minimal.jpf} and
+\texttt{taskbased-minimal.jpf}. They use the same reduced setup:
+
+\begin{verbatim}
+target=pcd.poool.verification.jpf.ThreadedMiniHarness
+target=pcd.poool.verification.jpf.TaskBasedMiniHarness
+classpath=target/jpf-classes
+search.class=gov.nasa.jpf.search.DFSearch
+vm.storage.class=gov.nasa.jpf.vm.JenkinsStateSet
+vm.por=true
+vm.max_heap=64m
+search.depth_limit=40
+\end{verbatim}
+
+The actual JPF runs were executed through the Docker helper:
+\begin{verbatim}
+python assignment-1/verification/jpf/run_jpf.py --docker --model threaded
+python assignment-1/verification/jpf/run_jpf.py --docker --model taskbased
+\end{verbatim}
+Both runs completed with \texttt{no errors detected}.
+
+\begin{itemize}
+    \item \textbf{Threaded model}: \texttt{states: new=774, visited=1117, backtracked=1891, end=4}; \texttt{maxDepth=35}; \texttt{instructions=22411}.
+    \item \textbf{Task-based model}: \texttt{states: new=249, visited=288, backtracked=537, end=3}; \texttt{maxDepth=34}; \texttt{instructions=16409}.
+\end{itemize}
+
+The threaded model explores a larger state space because its worker thread stays alive across the protocol steps. The task-based model is smaller because the worker is represented as a short-lived task. In both cases, JPF confirms the bounded synchronization protocol reaches completion without deadlock or assertion failure, which is exactly the level of verification this report claims \cite{clarke1999,visser2003}.
 
 \section{Results and Discussion}
 
-The benchmark snapshot used for this report records results with seed \texttt{42}. The environment was:
+\subsection{Benchmark Methodology}
+
+All benchmark values come from the repository benchmark pipeline launched from the assignment root with
+\begin{verbatim}
+python scripts/run_benchmarks.py --mode speedup
+\end{verbatim}
+That profile clears and regenerates the benchmark
+snapshot, keeps the timed section limited to the simulation loop, and exports the median-centered speedup data
+used in this report.
 
 \begin{itemize}
+    \item \textbf{Profile}: speedup;
+    \item \textbf{Warmup runs}: 2;
+    \item \textbf{Measured runs}: 5;
     \item \textbf{Seed}: \texttt{42};
-    \item \textbf{Environment}: Java 17 on Windows 11, amd64;
-    \item \textbf{Visible cores}: 16.
+    \item \textbf{Environment}: OpenJDK 17.0.19+10 on Windows 11, amd64;
+    \item \textbf{Visible cores}: 16;
+    \item \textbf{Measured metrics}: median elapsed time, median throughput, speedup, and the worker-count derived speedup tables;
+    \item \textbf{Comparability rule}: sequential, threaded, and executor-based runs are compared only when they share the same deterministic workload parameters.
 \end{itemize}
 
-The tables below summarize the comparison between the sequential baseline and the concurrent implementations. The first table fixes the worker count and varies the board size; the second fixes the board size and varies the worker count.
+The first table summarizes the speedup snapshot for the larger speedup-gate workload subset in
+\texttt{speedup-results.csv} (\textbf{1000}, \textbf{1500}, \textbf{2000}, and \textbf{2500} balls) with
+\textbf{600} simulation steps and seed \texttt{42}. The second table uses the scalability snapshot
+for \textbf{2500 balls}, \textbf{1000} simulation steps, and seed \texttt{42}, varying the worker
+count over \textbf{1, 2, 4, 8, 16, 17}.
 
 \begin{itemize}
     \item \textbf{Speedup table}: compares the sequential median with the concurrent medians across workloads;
-    \item \textbf{Worker table}: shows how the two concurrent versions scale as worker count changes;
-    \item \textbf{Interpretation}: larger workloads benefit more because the parallelizable physics work outweighs the coordination cost.
+    \item \textbf{Worker table}: shows how the two concurrent versions scale as worker count changes on the 2500-ball workload;
+    \item \textbf{Interpretation}: larger workloads benefit more because the parallelizable physics work outweighs the remaining serial portion;
+    \item \textbf{Note}: the strict speedup profile disables per-step profiling, so the coordination columns in the exported CSV stay at zero and are not used as direct timing evidence.
 \end{itemize}
 
 The speedup snapshot contains the following values:
@@ -555,6 +620,7 @@ The speedup snapshot contains the following values:
 \begin{table}[htbp]
 \centering
 \small
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrrr}
 \hline
 Balls & Implementation & Seq. median ms & Concurrent median ms & Speedup \\
@@ -569,20 +635,23 @@ Balls & Implementation & Seq. median ms & Concurrent median ms & Speedup \\
 2500 & executor & 450.8448 & 237.5317 & 1.898 \\
 \hline
 \end{tabular}
-\caption{Median speedup values from the benchmark snapshot.}
+}%
+\caption{Median speedup values for the speedup-gate workload subset in \texttt{speedup-results.csv} (1000, 1500, 2000, and 2500 balls; 600 steps; seed 42) on Windows 11 amd64 with OpenJDK 17.0.19+10 and 16 visible cores.}
 \end{table}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.84\linewidth]{images/speedup-vs-balls.png}
-\caption{Speedup as the number of balls increases.}
+\caption{Speedup as the number of balls increases for the speedup-gate workload subset in \texttt{speedup-results.csv} (1000 to 2500 balls; 600 steps; seed 42) with 16 workers on Windows 11 amd64 and OpenJDK 17.0.19+10.}
 \end{figure}
 
-The worker-count snapshot contains the following medians for the largest workload in the repository:
+The worker-count snapshot contains the following medians for the scalability workload
+\textbf{2500 balls}, \textbf{1000} steps, seed \texttt{42}, and worker counts \textbf{1, 2, 4, 8, 16, 17}.
 
 \begin{table}[htbp]
 \centering
 \small
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{rrrr}
 \hline
 Implementation & Workers & Median ms & Speedup vs. seq. \\
@@ -601,24 +670,25 @@ executor & 16 & 472.7956  & 1.539 \\
 executor & 17 & 442.4130  & 1.645 \\
 \hline
 \end{tabular}
-\caption{Worker-count medians from the benchmark snapshot.}
+}%
+\caption{Worker-count medians for the 2500-ball scalability workload (1000 steps; seed 42) comparing sequential, threaded, and executor runs at 1, 2, 4, 8, 16, and 17 workers.}
 \end{table}
 
-These numbers also show that the benefit is not monotonic. On the largest workload, the threaded version is slower with 17 workers than with 16, while the executor-based version still improves slightly.
+These numbers show a clear trend: the concurrent versions start close to the sequential baseline on small workloads, then improve as the workload grows and the fixed serial portion is amortized. On the 2500-ball speedup snapshot, the executor-based row is slightly faster than the threaded row, reducing the median from 450.8448 ms sequential to 237.5317 ms instead of 242.6481 ms. On the worker-count snapshot, the threaded engine reaches its best median at 16 workers, with 427.2735 ms versus the 727.6794 ms sequential baseline, for a speedup of 1.703 and an efficiency of about 10.6 percent. The executor-based engine reaches 442.4130 ms at 17 workers, for a speedup of 1.645 and an efficiency of about 9.7 percent. Those efficiencies are far below 1, so the data still show a strong serial bottleneck and a meaningful coordination cost, even when the absolute runtime improves.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.84\linewidth]{images/speedup-vs-workers.png}
-\caption{Speedup as the worker count changes.}
+\caption{Speedup as the worker count changes for the 2500-ball scalability workload (1000 steps; seed 42).}
 \end{figure}
 
 \section{Conclusions}
 
-The repository contains a sequential implementation, a platform-thread implementation, and a task-based implementation. The shared domain model is reused across all three.
+The delivered project satisfies the three required execution strategies while keeping the shared game semantics stable across them. The report now reflects the actual implementation flow: the controller remains the single writer, the heavy physics phases are split into worker-local chunks, and the partial results are joined before the snapshot is published.
 
-The code uses single-writer ownership, immutable snapshots, explicit synchronization, and a separation between model and runtime.
+The benchmark evidence is consistent across the two exported snapshots. For the speedup-gate workloads, both concurrent versions beat the sequential baseline once the workload reaches 1000 balls and above, and the best snapshot value in that family is the task-based run on 2500 balls at 237.5317 ms. For the scalability snapshot, the threaded engine is best at 16 workers, while the executor-based engine is best at 17 workers; neither scales linearly, and both stay far from ideal efficiency, which points to non-negligible serial work and coordination overhead.
 
-The benchmark data in the repository shows different speedup values across workloads and worker counts.
+The verification story is also bounded in a controlled way. The Petri nets explain the control protocol at the level requested by the assignment, and the JPF harnesses confirm that the reduced synchronization models terminate without deadlock or assertion failure. What these results do not prove is the full numerical physics of the game, GUI performance, or large-scale scaling beyond the measured workloads.
 
 \section{How to Run}
 
@@ -652,6 +722,26 @@ make
 
 \section{References}
 
-No external bibliography items are used. The report is based on the delivered source tree under \texttt{src/main/java/pcd/poool} and \texttt{src/test/java/pcd/poool}.
+\begin{thebibliography}{9}
+\bibitem{petri1962}
+C. A. Petri.
+\newblock \emph{Kommunikation mit Automaten}.
+\newblock 1962.
+
+\bibitem{murata1989}
+T. Murata.
+\newblock Petri Nets: Properties, Analysis and Applications.
+\newblock \emph{Proceedings of the IEEE}, 77(4):541--580, 1989.
+
+\bibitem{clarke1999}
+E. M. Clarke, O. Grumberg, and D. A. Peled.
+\newblock \emph{Model Checking}.
+\newblock MIT Press, 1999.
+
+\bibitem{visser2003}
+W. Visser, K. Havelund, G. Brat, S. Park, and F. Lerda.
+\newblock Model Checking Programs with Java PathFinder.
+\newblock \emph{Automated Software Engineering}, 10(2):203--232, 2003.
+\end{thebibliography}
 
 \end{document}
