@@ -49,6 +49,14 @@ mvn compile
 mvn test
 ```
 
+If your environment cannot reach Maven Central directly, the repository ships
+with a Maven settings mirror used by the CI workflow and the helper scripts.
+From this module, you can invoke Maven with:
+
+```bash
+mvn -s ../../.mvn/settings.xml test
+```
+
 To run the current bootstrap entry point:
 
 ```bash

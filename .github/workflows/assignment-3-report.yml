@@ -36,12 +36,13 @@ jobs:
       - name: Build and test Smart Home Alarm System (Java)
         working-directory: assignment-3/smart-home-alarm-system
         env:
+          MAVEN_SETTINGS: ${{ github.workspace }}/.mvn/settings.xml
           TEST_SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.test_selector || '' }}
         run: |
           if [ -n "$TEST_SELECTOR" ]; then
-            mvn -B clean test -Dtest="$TEST_SELECTOR"
+            mvn -B -s "$MAVEN_SETTINGS" clean test -Dtest="$TEST_SELECTOR"
           else
-            mvn -B clean test
+            mvn -B -s "$MAVEN_SETTINGS" clean test
           fi
 
   test-hotc:
