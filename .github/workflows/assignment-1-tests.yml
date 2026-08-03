@@ -92,6 +92,8 @@ jobs:
           mkdir -p package/Assignment-01/doc
 
           cp -R assignment-1/src package/Assignment-01/src
+          rm -rf package/Assignment-01/src/main/java/pcd/poool/benchmark
+          rm -rf package/Assignment-01/src/test/java/pcd/poool/benchmark
           cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-01)
@@ -107,6 +109,8 @@ jobs:
           test -f package/Assignment-01/doc/report.pdf
           test -d package/Assignment-01/src/main
           test -d package/Assignment-01/src/test
+          test ! -e package/Assignment-01/src/main/java/pcd/poool/benchmark
+          test ! -e package/Assignment-01/src/test/java/pcd/poool/benchmark
           test ! -e package/Assignment-01/pom.xml
           test ! -e package/Assignment-01/docs
           test ! -e package/Assignment-01/report
