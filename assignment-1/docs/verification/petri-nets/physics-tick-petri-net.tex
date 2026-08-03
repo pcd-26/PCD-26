@@ -28,14 +28,14 @@
   \node[transition, right=of integrationdone] (holes) {Apply\\Holes};
   \node[place, right=of holes] (holephase) {Hole\\Phase\\Ready};
 
-  \node[transition, right=of holephase] (dispatchc1) {Dispatch\\Local\\Work};
+  \node[transition, right=of holephase] (dispatchc1) {Build\\Local Grid};
   \node[place, right=of dispatchc1] (localready) {Local\\Collision\\Work\\Ready};
-  \node[transition, right=of localready] (joinc1) {Join\\Local\\Work};
-  \node[place, right=of joinc1] (localdone) {Local\\Collision\\Done};
-  \node[transition, right=of localdone] (dispatchc2) {Dispatch\\Cross-\\Cell Work};
-  \node[place, right=of dispatchc2] (crossready) {Cross-Cell\\Collision\\Work\\Ready};
-  \node[transition, right=of crossready] (joinc2) {Join\\Cross-\\Cell Work};
-  \node[place, right=of joinc2] (crossdone) {Cross-Cell\\Collision\\Done};
+  \node[transition, right=of localready] (joinc1) {Merge\\Grids};
+  \node[place, right=of joinc1] (localdone) {Ordered\\Cells\\Ready};
+  \node[transition, right=of localdone] (dispatchc2) {Resolve\\Owned Cells};
+  \node[place, right=of dispatchc2] (crossready) {Sparse\\Deltas\\Ready};
+  \node[transition, right=of crossready] (joinc2) {Merge\\Deltas};
+  \node[place, right=of joinc2] (crossdone) {Commit\\Ready};
   \node[transition, right=of crossdone] (publish) {Publish\\Snapshot};
   \node[place, right=of publish] (snapready) {Snapshot\\Publish\\Ready};
   \node[transition, right=of snapready] (finish) {Finish\\Tick};
@@ -91,7 +91,7 @@
   % Annotations
   \node[note, below=22mm of localdone, xshift=-35mm] (initial) {$M_0$: \texttt{TickReady}=1, \texttt{CommandsPending}=$k \ge 0$, all phase places empty};
   \node[note, below=8mm of initial, xshift=0mm] (final) {$M_f$: \texttt{TickReady}=1, \texttt{SnapshotPublished}=1 after successful completion of the tick};
-  \node[note, below=8mm of final, xshift=28mm] (semantics) {Abstract meaning: one controller-owned tick, worker-private parallel chunks, and serialized commit};
+  \node[note, below=8mm of final, xshift=28mm] (semantics) {Abstract meaning: one controller-owned tick, worker-private parallel chunks, ordered cell resolution, and serialized commit};
 
   % Light grouping around the main pipeline.
   \begin{scope}[on background layer]

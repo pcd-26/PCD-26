@@ -44,11 +44,11 @@ flowchart TD
     B --> C[Collect active balls]
     C --> D[Integrate movement]
     D --> E[Apply hole interactions]
-    E --> F[Collect collision candidates]
-    F --> G[Build or merge spatial buckets]
-    G --> H[Order candidates deterministically]
-    H --> I[Resolve collisions]
-    I --> J[Merge results and apply deltas]
+    E --> F[Build local center-cell grids]
+    F --> G[Merge and order occupied cells]
+    G --> H[Resolve owned cells in parallel]
+    H --> I[Merge sparse deltas and replay collision pairs]
+    I --> J[Apply final board writes]
     J --> K[Release board lock]
     K --> L[Publish immutable snapshot / step profile]
 ```
@@ -119,8 +119,9 @@ The worker lifecycle is:
 The threaded engine parallelizes:
 
 - ball integration over contiguous ranges;
-- local spatial-grid construction;
-- collision contribution computation for owned cells;
+- local center-cell grid construction;
+- ordered cell resolution for owned cells;
+- sparse collision contribution computation;
 - final delta application when enough balls were touched.
 
 ### 5.2 Serialized phases
@@ -145,7 +146,7 @@ Workers never mutate the board structure directly. They only:
 The controller then performs the merge/application phase:
 
 - sparse deltas are merged on the coordinator;
-- collision pairs are ordered by stable encoded indexes;
+- collision pairs are replayed in stable encoded-index order;
 - the final board writes happen in a controlled phase.
 
 That means the mutable shared state stays centralized, while the parallel work
@@ -192,17 +193,21 @@ The task-based engine prefers range partitioning:
 That choice keeps task creation predictable and avoids scattering a single
 logical phase across too many tiny jobs.
 
-### 6.2 Small and large collision paths
+### 6.2 Staged collision pipeline
 
-The engine uses two collision strategies:
+The current task-based engine follows the same staged collision pipeline as
+the threaded engine:
 
-- for smaller contact sets, it groups candidate collisions into deterministic
-  non-conflicting rounds and resolves each round with executor tasks;
-- for larger contact sets, it switches to an accumulated-impulse solver that
-  computes private deltas and applies them in a controlled merge phase.
+- build private center-cell grids per task;
+- merge the local grids into one deterministic ordered view;
+- resolve owned cells in parallel over contiguous cell ranges;
+- accumulate sparse collision deltas and packed collision pairs locally;
+- merge the sparse results on the coordinator thread;
+- replay the recorded collision pairs in deterministic order;
+- apply the final merged deltas to the authoritative board.
 
-The key idea is that the expensive math can be parallelized, but the commit
-step is still serialized.
+There is also a helper for building collision rounds from a pair list, but it
+is supporting code rather than the live tick path.
 
 ### 6.3 Shutdown and cancellation behavior
 

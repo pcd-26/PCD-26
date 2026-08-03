@@ -13,7 +13,7 @@ The current implementation is designed to achieve the following goals:
 - clear ownership of the mutable game state;
 - deterministic behavior despite internal parallelism;
 - effective use of multiple CPU cores, especially on large boards;
-- lower collision-management overhead than the previous threaded pipeline.
+- lower collision-management overhead than an earlier candidate-pair-heavy pipeline.
 
 ## 2. Main Runtime Components
 The playable entry point is `pcd.poool.ThreadedPoool`.

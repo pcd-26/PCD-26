@@ -117,11 +117,10 @@ Per sub-step:
 5. A `WorkerCompletionMonitor` barrier waits for all workers to finish.
 6. Hole handling is still sequential on the controller thread.
 7. Collision detection builds per-worker spatial grids in parallel.
-8. The controller merges the local grids, deduplicates candidate pairs, and
-   sorts them.
-9. Collision resolution is parallelized again by accumulating per-worker
-   impulse deltas, then merging and applying the totals on the controller
-   thread.
+8. The controller merges the local grids, sorts the occupied cells, and
+   resolves owned cells in parallel.
+9. Collision resolution records packed contact pairs, merges sparse
+   per-worker deltas, and applies the totals on the controller thread.
 
 Important properties:
 
@@ -135,7 +134,7 @@ Important properties:
 The threaded engine parallelizes:
 
 - integration over disjoint active-ball ranges;
-- local grid construction for collision broad-phase;
+- local center-cell grid construction for collision broad-phase;
 - collision contribution computation for canonically owned cells;
 - final delta application only when the touched set is large enough.
 
@@ -143,8 +142,8 @@ The threaded engine keeps the following steps serial:
 
 - acquiring and holding the board monitor for the whole tick;
 - `board.applyHoleInteractions()`;
-- merging local grids into a global deterministic grid;
-- sorting cells and encoded candidate pairs;
+- merging local grids into a deterministic ordered grid;
+- sorting cells before resolution;
 - `board.recordCollision(...)` writes;
 - merging per-worker delta accumulators;
 - any small final apply phase that falls below the parallel threshold.
@@ -175,12 +174,12 @@ Per sub-step:
 4. It submits range tasks to the executor for integration.
 5. It submits range tasks again for hole detection and merges the per-task
    results on the coordinator thread.
-6. It builds one local spatial grid per task, merges those grids, and
-   generates deterministic candidate pairs.
-7. For small collision sets, it resolves rounds directly with executor tasks.
-8. For large collision sets, it switches to the accumulated-impulse solver,
-   which again uses executor tasks for per-range accumulation and final
-   application.
+6. It builds one local center-cell grid per task, merges those grids, and
+   resolves the ordered occupied cells.
+7. It records packed collision pairs in deterministic order and merges sparse
+   per-task deltas on the coordinator thread.
+8. It applies the final merged deltas, using a parallel final-apply phase only
+   when the touched set is large enough.
 
 Important properties:
 
@@ -210,8 +209,8 @@ The task-based engine keeps the following steps serial:
 ### Important nuance about helper methods
 
 The task-based class also contains helper methods such as
-`detectCollisionPairsPacked(...)`, `resolveCollisionsInParallelRounds(...)`,
-and the accumulated-impulse solver.
+`detectCollisionPairsPacked(...)`, `buildCollisionRounds(...)`, and the sparse
+delta accumulator support.
 
 In the current codebase, these helpers exist as supporting logic and testable
 building blocks, but the live tick path executed by `stepOnce(...)` goes
