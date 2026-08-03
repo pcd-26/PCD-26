@@ -58,76 +58,102 @@ Assignment 1 requires three execution strategies for \emph{Poool}: a sequential 
 The delivered project provides the following execution strategies:
 
 \begin{itemize}
-    \item a sequential baseline;
-    \item a platform-thread implementation;
-    \item a task-based implementation.
+    \item \textbf{Sequential baseline}: single-thread reference execution;
+    \item \textbf{Platform-thread version}: Master-Workers architecture;
+    \item \textbf{Task-based version}: Executor-based parallel execution.
 \end{itemize}
 
 All three launchers reuse the same game rules.
 
 \section{Problem Analysis}
 
-The board contains many small balls and two cue balls, one for the human player and one for the bot. The assignment rules are as follows:
+The main difficulty is not the rule set itself, but the combination of shared mutable state, asynchronous activity, and a potentially heavy simulation workload. The board contains many balls that move, collide, and change status during the same tick, so the system must combine concurrency with deterministic state transitions.
 
 \begin{itemize}
-    \item balls move, bounce, collide, and slow down because of friction;
-    \item the board has holes in the top corners;
-    \item when a player puts a small ball into a hole, that player's score increases;
-    \item if a cue ball enters a hole, the other player wins;
-    \item human and bot actions are asynchronous.
+    \item \textbf{High computational cost}: collision detection and collision resolution dominate the simulation when the number of balls grows;
+    \item \textbf{Shared mutable state}: the simulation must update the state consistently even when several events are active at the same time;
+    \item \textbf{Asynchronous inputs}: human and bot actions may arrive while the simulation is running;
+    \item \textbf{Deterministic behavior}: concurrency must not change the logical outcome of the match;
+    \item \textbf{Responsiveness}: the interface must keep reacting while the simulation progresses.
 \end{itemize}
 
-The concurrent part of the assignment requires controlled access to shared state. In this code base, \texttt{GameModel} is the authoritative state for game progression, while the runtime layer coordinates command submission and immutable snapshot publication.
+The concurrent part of the assignment therefore becomes a question of identifying which parts of the simulation can be parallelized and which parts must remain serialized. For example, collision processing can be split across independent chunks, while processing pending commands must remain serialized because it requires a consistent global view of the match.
+
+The key challenge is to exploit parallelism without breaking coherence.
 
 \section{Design}
 
-The architecture is structured around three functional layers: the shared model owns the rules and the mutable game state; the execution layer advances the match and serializes asynchronous actions; and the view layer consumes immutable snapshots rather than the live board.
+\noindent
+The architecture is organized into three layers with distinct responsibilities. The shared model owns the rules and the mutable game state, the execution layer advances the match and serializes asynchronous actions, and the view layer renders immutable snapshots instead of reading the live board directly.
 
-This separation allows the sequential, platform-thread, and task-based versions to share the same domain semantics. Command submission, snapshot publication, and physics stepping remain in distinct modules, which preserves clear ownership boundaries in the concurrent protocol.
+The main design choice is that the sequential, platform-thread, and task-based versions reuse the same semantics while changing only how work is scheduled. Command submission stays outside the model, which keeps ownership boundaries explicit throughout the concurrent protocol.
+
+\begin{itemize}
+    \item \textbf{Shared model}: owns the rules and the mutable game state;
+    \item \textbf{Execution layer}: advances the match and serializes asynchronous actions;
+    \item \textbf{View layer}: renders immutable snapshots instead of reading the live board directly.
+\end{itemize}
 
 \subsection{Shared model}
 
-The shared model contains the game rules, the board state, and the physics data structures. \texttt{GameModel} determines match progression, while the physics engine is supplied by the launcher.
+The shared model contains the game rules, the board state, and the physics data structures. It is the part of the system that decides what a legal state transition means, while the launcher selects the concrete physics engine used to perform the low-level step.
 
 \subsection{Sequential baseline}
 
-The sequential version advances the game on one thread. It serves as the reference point for validation and performance comparison.
+The sequential version is intentionally simple: one thread advances the match, applies the physics step, and updates the view. It is useful both as the semantic reference and as the baseline for performance comparison.
 
 \subsection{Platform-thread runtime}
 
-The platform-thread version uses a controller/worker structure. The controller advances the match and publishes snapshots, whereas worker threads execute bounded physics work under controlled synchronization.
+The platform-thread version adopts a Master-Workers architecture, with the controller acting as the master. The controller advances the match and publishes snapshots, while worker threads parallelize bounded physics work under controlled synchronization. This is where the design starts paying for itself, because the expensive part of the tick is split across long-lived workers while the controller keeps the authoritative state and the phase boundaries.
 
 \subsection{Task-based runtime}
 
-The task-based version follows the same ownership rule, but it expresses parallel work as executor tasks rather than long-lived workers. Tasks compute partial results, the controller merges them, and the new state is published only after the merge.
+The task-based version follows the same ownership rule, but it expresses the parallel physics work as executor tasks rather than long-lived workers. Tasks compute partial results, the controller merges them, and the new state is published only after the merge. This keeps the same semantic structure as the threaded version, while making the parallel phases easier to express as bounded jobs on an executor pool.
+
+\subsection{Parallelization strategy}
+
+The parallelization strategy is deliberately data-oriented rather than control-oriented. The goal is not to parallelize the whole game loop, but only the physics work that can be split into independent chunks without violating single-writer ownership of the board.
+
+The tick is therefore decomposed into phases with different coordination costs. Some phases are inherently sequential because they require a consistent global view of the match: command draining, score updates, game-over detection, snapshot publication, and the final commit of the tick. These operations stay on the controller side and are never handed to workers.
+
+The expensive physics work is handled differently. Movement integration is partitioned over disjoint ball ranges, so each worker can update its own subset without coordinating with the others. Collision handling uses spatial ownership instead of a global candidate list: each worker builds a private local grid, the controller merges those local grids into a deterministic global structure, and only then are collisions assigned to canonical cell owners. Each worker or task computes local collision contributions and sparse deltas instead of mutating the whole board directly.
+
+This is where most of the performance gain comes from. The design avoids the largest sources of overhead in a naive concurrent implementation: it does not let many threads write the same board state at the same time, it does not require fine-grained locks around individual balls, and it does not materialize a huge shared pair list before resolving contacts. The controller keeps the final merge, commit, and publication steps serialized, but the heavy numerical work runs in parallel on bounded chunks. The threaded version realizes this pattern with long-lived workers; the task-based version expresses the same pattern with executor tasks. In both cases, the protocol remains deterministic at phase boundaries and the work done by each participant is narrow enough to scale on large boards.
+
+\subsection{Why this design improves performance}
+
+The improvement is not produced by a different physics model, but by reducing coordination cost around the same physics model. The board is large enough that the cost of integrating motion and resolving collisions dominates the tick time. By splitting those phases into private chunks and postponing shared writes until the controller can merge them, the concurrent versions keep the workers busy on CPU work rather than on synchronization.
+
+The design also keeps overhead under control for smaller workloads. When the amount of work is not large enough to justify parallel scheduling, the serialized phases remain cheap, and the system avoids introducing unnecessary contention. In practice, this is why the concurrent versions scale better as the number of balls increases: the amount of parallelizable physics work grows, while the serial coordination cost stays bounded.
 
 \subsection{Snapshots and view data}
 
-The GUI reads immutable snapshots instead of the mutable board. Rendering remains separate from simulation and synchronization.
+The view never reads the mutable board directly. Instead, the concurrent runtimes publish immutable snapshots that the GUI can consume safely, which keeps rendering detached from simulation and synchronization.
 
 \section{Implementation}
 
 \subsection{Main launchers}
 
-The three main entry points are:
-
 \begin{itemize}
-    \item \texttt{pcd.poool.SequentialPoool};
-    \item \texttt{pcd.poool.ThreadedPoool};
-    \item \texttt{pcd.poool.TaskBasedPoool}.
+    \item \textbf{Sequential launcher}: \texttt{pcd.poool.SequentialPoool};
+    \item \textbf{Platform-thread launcher}: \texttt{pcd.poool.ThreadedPoool};
+    \item \textbf{Task-based launcher}: \texttt{pcd.poool.TaskBasedPoool}.
 \end{itemize}
 
 \subsection{Core modules}
 
-The \texttt{model/common/math} package contains the immutable geometric primitives used throughout the project. The \texttt{model/physics/common} package contains the board, balls, holes, and the shared physics abstractions. The \texttt{model/game} package defines the game rules and the logical snapshots.
-
-The physics implementations are split by execution strategy. \texttt{model/physics/sequential} provides the baseline stepping logic, \texttt{model/physics/threaded} contains the platform-thread engine, and \texttt{model/physics/taskbased} contains the executor-based engine.
-
-The \texttt{runtime} package provides command queues, command receipts, snapshot publication, and bot coordination. The \texttt{view} package contains the Swing-facing classes that render immutable state.
+\begin{itemize}
+    \item \textbf{\texttt{model/common/math}}: immutable geometric primitives;
+    \item \textbf{\texttt{model/physics/common}}: board, balls, holes, and shared physics abstractions;
+    \item \textbf{\texttt{model/game}}: game rules and logical snapshots;
+    \item \textbf{\texttt{model/physics/sequential}}: baseline stepping logic;
+    \item \textbf{\texttt{model/physics/threaded}}: platform-thread engine;
+    \item \textbf{\texttt{model/physics/taskbased}}: executor-based engine;
+    \item \textbf{\texttt{runtime}}: command queues, command receipts, snapshot publication, bot coordination;
+    \item \textbf{\texttt{view}}: Swing-facing rendering classes.
+\end{itemize}
 
 \subsection{Important classes}
-
-The principal classes are:
 
 \begin{itemize}
 \item \texttt{GameModel}: owns the game rules and advances the match state;
@@ -140,15 +166,25 @@ The principal classes are:
 
 \section{Verification and Testing}
 
-The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. They cover the game model, the physics engines, the runtime helpers, the view model, and the benchmark utilities.
+The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. They exercise the game model, the physics engines, the runtime helpers, the concurrent runners, the view layer, and the benchmark utilities.
 
-These tests cover the model, the physics engines, the runtime helpers, the concurrent runners, and the view layer.
+\begin{itemize}
+    \item \textbf{JUnit tests}: under \texttt{src/test/java/pcd/poool};
+    \item \textbf{Coverage}: model, physics engines, runtime helpers, concurrent runners, view layer, benchmark utilities.
+\end{itemize}
 
 \subsection{Petri nets}
 
-The behavior of the concurrent protocol can be described with an abstract Petri net. The model does not represent the full physics of the game; instead, it captures one simulation tick as a sequence of controlled phases. In particular, it represents command draining, ownership of the board during a tick, worker execution, barrier synchronization, and snapshot publication.
+The concurrent protocol can be described with an abstract Petri net. The purpose of the model is not to represent the full physics of the game, but to capture one simulation tick as a sequence of controlled phases. In particular, it records command draining, board ownership, worker execution, barrier synchronization, and snapshot publication.
 
-The resulting abstraction is small enough to reason about, but still expressive enough to justify the most relevant safety properties. A tick starts only when the controller owns the board and the command queue has been drained. Worker or task phases then execute on private work units or partial results, and the snapshot is published only after the merge and commit point has been reached. This captures the intended single-writer discipline of the concurrent runtime.
+The abstraction is small enough to reason about, yet expressive enough to justify the most relevant safety properties. A tick starts only when the controller owns the board and the command queue has been drained. Worker or task phases then execute on private work units or partial results, and the snapshot is published only after the merge and commit point has been reached. This captures the intended single-writer discipline of the concurrent runtime.
+
+\begin{itemize}
+    \item \textbf{What is modeled}: one simulation tick as a sequence of controlled phases;
+    \item \textbf{What is not modeled}: full physics, numerical details, GUI rendering;
+    \item \textbf{Phases captured}: command draining, board ownership, worker execution, barrier synchronization, snapshot publication;
+    \item \textbf{Safety intuition}: the tick starts only when the controller owns the board, and publication happens only after merge and commit.
+\end{itemize}
 
 \subsection{JPF model checking}
 
@@ -156,14 +192,29 @@ The repository also includes minimal JPF harnesses in the verification area of t
 
 The JPF models check that commands are not stranded, that publication happens after the tick is complete, and that the reduced protocol can terminate cleanly without deadlock. This is enough to validate the coordination pattern used by both the platform-thread and task-based implementations.
 
+\begin{itemize}
+    \item \textbf{Harnesses}: minimal JPF models in the verification area of the working tree;
+    \item \textbf{Scope}: controller, bounded worker/task activity, command queue, publication step;
+    \item \textbf{Goal}: verify the control protocol, not the numerical physics engine;
+    \item \textbf{Properties checked}: no stranded commands, publication after tick completion, clean termination without deadlock.
+\end{itemize}
+
 \section{Results and Discussion}
 
-The benchmark snapshot used for this report records results with seed \texttt{42}. The environment file records:
+The benchmark snapshot used for this report records results with seed \texttt{42}. The environment was:
 
 \begin{itemize}
-    \item JVM: OpenJDK 64-Bit Server VM 17.0.19+10;
-    \item operating system: Windows 11, amd64;
-    \item available processors: 16.
+    \item \textbf{Seed}: \texttt{42};
+    \item \textbf{Environment}: Java 17 on Windows 11, amd64;
+    \item \textbf{Visible cores}: 16.
+\end{itemize}
+
+The tables below summarize the comparison between the sequential baseline and the concurrent implementations. The first table fixes the worker count and varies the board size; the second fixes the board size and varies the worker count.
+
+\begin{itemize}
+    \item \textbf{Speedup table}: compares the sequential median with the concurrent medians across workloads;
+    \item \textbf{Worker table}: shows how the two concurrent versions scale as worker count changes;
+    \item \textbf{Interpretation}: larger workloads benefit more because the parallelizable physics work outweighs the coordination cost.
 \end{itemize}
 
 The speedup snapshot contains the following values:
@@ -236,13 +287,19 @@ The benchmark data in the repository shows different speedup values across workl
 
 \section{How to Run}
 
-From the assignment 1 directory, the project can be built and tested with:
+The project can be built and tested from the assignment 1 directory. The main launchers are the sequential, platform-thread, and task-based entry points. The report itself can be generated from the \texttt{report} directory.
+
+\begin{itemize}
+    \item \textbf{Build and test} from the assignment 1 directory:
+\end{itemize}
 
 \begin{verbatim}
 mvn -f assignment-1/pom.xml test
 \end{verbatim}
 
-The main classes are:
+\begin{itemize}
+    \item \textbf{Main classes}:
+\end{itemize}
 
 \begin{verbatim}
 pcd.poool.SequentialPoool
@@ -250,7 +307,9 @@ pcd.poool.ThreadedPoool
 pcd.poool.TaskBasedPoool
 \end{verbatim}
 
-The report itself can be generated from the \texttt{report} directory with:
+\begin{itemize}
+    \item \textbf{Report build} from the \texttt{report} directory:
+\end{itemize}
 
 \begin{verbatim}
 make
