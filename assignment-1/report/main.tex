@@ -195,7 +195,7 @@ For readability, the following net expands one worker subnet and indicates that 
 \centering
 \resizebox{0.99\linewidth}{!}{%
 \begin{tikzpicture}[
-    node distance=18mm and 28mm,
+    node distance=18mm and 24mm,
     >=Stealth,
     place/.style={circle,draw,thick,minimum size=9mm,align=center},
     transition/.style={rectangle,draw,thick,minimum width=5mm,minimum height=10mm,align=center},
@@ -203,42 +203,50 @@ For readability, the following net expands one worker subnet and indicates that 
 ]
     \node[place] (dispatchin) {Dispatch\\physics};
     \node[transition, right=of dispatchin] (split) {Split\\ranges};
-    \node[place, right=34mm of split, yshift=14mm] (w1in) {$W_1$\\ready};
+    \node[place, right=30mm of split, yshift=14mm] (w1in) {$W_1$\\ready};
     \node[transition, right=of w1in] (w1int) {Integrate\\slice};
     \node[transition, right=of w1int] (w1grid) {Build\\local grid};
     \node[transition, right=of w1grid] (w1res) {Resolve\\cells};
     \node[place, right=of w1res] (w1out) {$W_1$\\result};
 
-    \node[place, right=34mm of split] (wdotsin) {$\cdots$};
-    \node[transition, right=of wdotsin] (wdotsrun) {same\\worker\\pattern};
-    \node[place, right=of wdotsrun] (wdotsout) {$\cdots$};
+    \node[place, right=30mm of split] (w2in) {$\cdots$\\ready};
+    \node[transition, right=of w2in] (w2int) {Integrate\\slice};
+    \node[transition, right=of w2int] (w2grid) {Build\\local grid};
+    \node[transition, right=of w2grid] (w2res) {Resolve\\cells};
+    \node[place, right=of w2res] (w2out) {$...$\\result};
 
-    \node[place, right=34mm of split, yshift=-14mm] (wnin) {$W_N$\\ready};
-    \node[transition, right=of wnin] (wnrun) {$W_N$\\compute};
-    \node[place, right=of wnrun] (wnout) {$W_N$\\result};
+    \node[place, right=30mm of split, yshift=-14mm] (wnin) {$W_N$\\ready};
+    \node[transition, right=of wnin] (wnrun) {Integrate\\slice};
+    \node[transition, right=of wnrun] (wngrid) {Build\\local grid};
+    \node[transition, right=of wngrid] (wnres) {Resolve\\cells};
+    \node[place, right=of wnres] (wnout) {$W_N$\\result};
 
-    \node[transition, right=40mm of w1out] (merge) {Join \&\\merge};
+    \node[transition, right=38mm of w1out] (merge) {Join \&\\merge};
     \node[place, right=of merge] (done) {Parallel\\phase done};
 
     \draw[->,thick] (dispatchin) -- (split);
     \draw[->,thick] (split.east) -- ++(10mm,14mm) -- (w1in.west);
-    \draw[->,thick] (split.east) -- (wdotsin.west);
+    \draw[->,thick] (split.east) -- (w2in.west);
     \draw[->,thick] (split.east) -- ++(10mm,-14mm) -- (wnin.west);
     \draw[->,thick] (w1in) -- (w1int);
     \draw[->,thick] (w1int) -- (w1grid);
     \draw[->,thick] (w1grid) -- (w1res);
     \draw[->,thick] (w1res) -- (w1out);
-    \draw[->,thick] (wdotsin) -- (wdotsrun);
-    \draw[->,thick] (wdotsrun) -- (wdotsout);
+    \draw[->,thick] (w2in) -- (w2int);
+    \draw[->,thick] (w2int) -- (w2grid);
+    \draw[->,thick] (w2grid) -- (w2res);
+    \draw[->,thick] (w2res) -- (w2out);
     \draw[->,thick] (wnin) -- (wnrun);
-    \draw[->,thick] (wnrun) -- (wnout);
-    \draw[->,thick] (w1out.east) -- ++(12mm,0) |- (merge.north);
-    \draw[->,thick] (wdotsout.east) -- ++(12mm,0) |- (merge.west);
-    \draw[->,thick] (wnout.east) -- ++(12mm,0) |- (merge.south);
+    \draw[->,thick] (wnrun) -- (wngrid);
+    \draw[->,thick] (wngrid) -- (wnres);
+    \draw[->,thick] (wnres) -- (wnout);
+    \draw[->,thick] (w1out.east) -- ++(12mm,0) -- (merge.west);
+    \draw[->,thick] (w2out.east) -- ++(12mm,0) -- (merge.west);
+    \draw[->,thick] (wnout.east) -- ++(12mm,0) -- (merge.west);
     \draw[->,thick] (merge) -- (done);
 \end{tikzpicture}
 }%
-\caption{Zoom on the dispatch phase. The controller splits the work into ranges, each worker computes its own local physics slice and local grid, and the coordinator merges the ordered results before applying the final commit. The same pattern applies to an arbitrary number of workers or tasks.}
+\caption{Zoom on the dispatch phase. Every concurrent branch follows the same steps: split, integrate slice, build local grid, resolve cells, and only then join and merge. The coordinator performs the merge only after all branches have reached their result place.}
 \label{fig:petri-dispatch-zoom}
 \end{figure}
 
@@ -294,17 +302,20 @@ This is the actual staged pipeline used in both concurrent engines:
     \item the controller merges the sparse accumulators and applies the final board writes only after the join barrier completes.
 \end{enumerate}
 
+The important intuition is that each worker still executes its own local loop sequentially. The parallelism comes from the fact that many workers run those local loops at the same time on disjoint ranges, so the expensive physics work is spread across the available cores without sharing mutable state during the local phase.
+
 The same structure appears in both concurrent engines:
 
 \begin{itemize}
     \item \textbf{range partitioning}: the list of active balls is split into almost equal \textbf{contiguous chunks}, one per worker or task;
     \item \textbf{private local grids}: each worker builds its own center-cell map for the balls in its range;
+    \item \textbf{local broad phase}: the grid is a temporary structure that groups balls by nearby cells, so the engine can inspect only plausible collision candidates instead of comparing every ball against every other ball;
     \item \textbf{deterministic merge}: the controller merges the local grids into one ordered view of the occupied cells;
     \item \textbf{owned-cell resolution}: each occupied cell is resolved once, together with a fixed set of forward neighbors, so each relevant pair is considered exactly once;
     \item \textbf{sparse final commit}: workers accumulate deltas locally, the coordinator merges them, and the final board writes happen only after the join barrier completes.
 \end{itemize}
 
-The threaded engine implements the barriers with long-lived platform workers and a completion monitor. The task-based engine uses the same staged logic, but it submits each range to an executor and waits on `Future`s instead of worker joins. The task-based engine also keeps a small-workload fast path: when the workload is too small to justify parallel decomposition, it executes the single range directly instead of paying executor overhead.
+The threaded engine implements the barriers with long-lived platform workers and a completion monitor. The task-based engine uses the same staged logic, but it submits each range to an executor and waits on `Future`s instead of worker joins. In both cases, the local grid is built sequentially inside each worker, because the point is not to parallelize the inner loop of one worker, but to run many such worker-local loops in parallel. The task-based engine also keeps a small-workload fast path: when the workload is too small to justify parallel decomposition, it executes the single range directly instead of paying executor overhead.
 
 This keeps collision handling \textbf{deterministic}, avoids \textbf{duplicate writes}, and still lets the \textbf{expensive physics work} run in parallel. In other words, the workers compute the physics, while the coordinator preserves a \textbf{single authoritative state} and commits the final outcome.
 
@@ -422,7 +433,7 @@ completion.await();
 
 This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the completion barrier has been reached.
 
-The collision phase then follows the same idea on top of this handoff: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns. The controller only merges the sparse results and applies the final writes to the authoritative board.
+The collision phase then follows the same idea on top of this handoff: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns. That local grid is what lets the engine avoid comparing every ball with every other ball, while still keeping each worker's work sequential and self-contained. The controller only merges the sparse results and applies the final writes to the authoritative board.
 
 \subsection{Task-based implementation}
 
@@ -450,7 +461,7 @@ for (int i = 0; i < workerCount; i++) {
 
 \noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/taskbased/TaskBasedPhysicsEngine.java}, lines 662--672.}
 
-Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a private local grid, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in deterministic order, and only then applies the accumulated deltas. The shared idea is still the same single-writer ownership rule; what changes is that futures replace worker joins and candidate pairs are materialized explicitly before replay.
+Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a private local grid, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in deterministic order, and only then applies the accumulated deltas. Again, the local grid is built sequentially inside each task; the gain comes from running many task-local loops in parallel, not from parallelizing the single loop that fills one grid. The shared idea is still the same single-writer ownership rule; what changes is that futures replace worker joins and candidate pairs are materialized explicitly before replay.
 
 \begin{lstlisting}[style=codestyle,caption={Task submission and synchronization},label={lst:taskbased-futures}]
 var futures = new ArrayList<Future<T>>(ranges.size());
