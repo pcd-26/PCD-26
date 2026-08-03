@@ -5,6 +5,8 @@
 \usepackage{array}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
 \usepackage[hidelinks]{hyperref}
 
 \setlength{\parindent}{0pt}
@@ -86,7 +88,7 @@ The delivered project provides the following execution strategies:
 
 \begin{itemize}
     \item \textbf{Sequential baseline}: single-thread reference execution;
-    \item \textbf{Platform-thread version}: Master-Workers architecture;
+    \item \textbf{Platform-thread version}: controller-led platform-thread architecture with long-lived workers;
     \item \textbf{Task-based version}: Executor-based parallel execution.
 \end{itemize}
 
@@ -123,7 +125,7 @@ The same game logic is reused by the sequential, platform-thread, and task-based
 
 \subsection{Project architecture}
 
-The project separates what must stay authoritative from what can be scheduled differently. The model keeps the match state and the rules, the runtime layer drives the simulation and coordinates asynchronous actions, and the view consumes only stable snapshots. In this way, the graphical side never depends on the internal timing of the simulation.
+The project separates what must stay authoritative from what can be scheduled differently. The model keeps the match state and the rules, the runtime layer drives the simulation, serializes command handling, and coordinates asynchronous actions, while the view consumes only stable snapshots. In this way, the graphical side never depends on the internal timing of the simulation.
 
 \begin{itemize}
     \item the model owns the rules and the authoritative state;
@@ -131,25 +133,120 @@ The project separates what must stay authoritative from what can be scheduled di
     \item the view reads snapshots only, never the live board.
 \end{itemize}
 
-The sequential version is the reference architecture. A single execution flow processes commands, advances the physics, updates the logical state, and publishes the resulting snapshot. This version is simple on purpose: it defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
+The sequential version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version is simple on purpose: it defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
 
 \subsection{Designing the concurrent solution}
 
-The core design choice is to treat the simulation as a mix of local computation and global coordination. The local part, especially collision-related physics work, is where parallelism pays off; the global part remains serialized so that the match evolves through a single coherent sequence of states.
+The design idea is simple: each tick has a part that can be split across workers and a part that must stay under one controller. The parallel part is the expensive physics work; the serial part is the coordination that keeps the match coherent.
 
-Each tick is therefore divided into phases with different costs and responsibilities. Some phases require a coherent global view of the match and must remain serial: command processing, final state updates, score changes, game-over checks, and snapshot publication. Other phases are suitable for parallel execution because they operate on local portions of the simulation and do not need to modify the shared state at the same time.
+At design level, we do not yet care about how workers are implemented internally. We only care about the responsibilities of the phases: some phases read the current state and produce partial results, while other phases merge those results, apply the final state changes, and publish the next snapshot.
 
 \begin{itemize}
-    \item \textbf{Parallelizable}: local physics work, especially collision-related computations and other per-chunk updates;
-    \item \textbf{Not parallelizable}: command processing, score updates, game-over checks, merge/commit steps, and snapshot publication;
-    \item \textbf{Design goal}: keep the coordination points narrow and predictable.
+    \item \textbf{Parallelizable}: local physics work over independent chunks of the simulation;
+    \item \textbf{Not parallelizable}: command processing, merge/commit steps, score updates, game-over checks, and snapshot publication;
+    \item \textbf{Design goal}: keep one coherent game state while letting the heavy local work run in parallel.
 \end{itemize}
 
-This separation is what makes the design effective. The concurrent versions avoid letting multiple threads contend on the same mutable state, and they do not force the whole simulation to wait on fine-grained synchronization. Instead, they keep the coordination points narrow and predictable, while the heavy numerical work runs in parallel on bounded chunks.
+This separation is what makes the design effective. The concurrent versions avoid letting multiple threads contend on the same mutable state, and they do not force the whole simulation to wait on fine-grained synchronization. The price is that the local work must be joined again at the end of the tick, but that join is the exact point where the shared state becomes coherent again.
+
+\subsection{Petri net of the concurrent tick}
+
+The following Petri net summarizes one controller tick at the level requested by the assignment. It deliberately abstracts away from the GUI and from the internal worker count, and it focuses on the control flow shared by the concurrent versions: the controller drains commands, starts the physics phase, waits for the worker-local results, publishes the snapshot, and then sleeps before the next tick.
+
+\begin{figure}[ht]
+\centering
+\resizebox{0.95\linewidth}{!}{%
+\begin{tikzpicture}[
+    node distance=18mm,
+    >=Stealth,
+    place/.style={circle,draw,thick,minimum size=10mm,align=center},
+    transition/.style={rectangle,draw,thick,minimum width=5mm,minimum height=11mm,align=center},
+    every node/.style={font=\small}
+]
+    \node[place] (idle) {Idle};
+    \node[transition, right=of idle] (drain) {Drain\\commands};
+    \node[place, right=of drain] (ready) {Tick\\ready};
+    \node[transition, right=of ready] (dispatch) {Dispatch\\physics};
+    \node[place, right=of dispatch] (parallel) {Parallel\\physics};
+    \node[transition, right=of parallel] (join) {Join \&\\merge};
+    \node[place, right=of join] (published) {Snapshot\\published};
+    \node[transition, right=of published] (sleep) {Sleep};
+
+    \draw[->,thick] (idle) -- (drain);
+    \draw[->,thick] (drain) -- (ready);
+    \draw[->,thick] (ready) -- (dispatch);
+    \draw[->,thick] (dispatch) -- (parallel);
+    \draw[->,thick] (parallel) -- (join);
+    \draw[->,thick] (join) -- (published);
+    \draw[->,thick] (published) -- (sleep);
+    \draw[->,thick] (sleep) to[bend left=35] (idle);
+\end{tikzpicture}
+}%
+\caption{Petri net of the controller cycle in the concurrent versions. The initial marking places one token in \textit{Idle}.}
+\label{fig:petri-concurrent-tick}
+\end{figure}
+
+This abstraction matches both concurrent implementations. The threaded version realizes the dispatch/join phases with long-lived workers, while the task-based version realizes the same phases through executor tasks and futures. The concrete split, compute, and merge mechanics are described in the implementation section.
+
+\noindent\textbf{Zoom on \textit{Dispatch physics}.}
+For readability, the following net expands one worker subnet and indicates that the same pattern is replicated for an arbitrary number of workers or tasks in the implementation.
+
+\begin{figure}[ht]
+\centering
+\resizebox{0.99\linewidth}{!}{%
+\begin{tikzpicture}[
+    node distance=18mm and 28mm,
+    >=Stealth,
+    place/.style={circle,draw,thick,minimum size=9mm,align=center},
+    transition/.style={rectangle,draw,thick,minimum width=5mm,minimum height=10mm,align=center},
+    every node/.style={font=\small}
+]
+    \node[place] (dispatchin) {Dispatch\\physics};
+    \node[transition, right=of dispatchin] (split) {Split\\ranges};
+    \node[place, right=34mm of split, yshift=14mm] (w1in) {$W_1$\\ready};
+    \node[transition, right=of w1in] (w1int) {Integrate\\slice};
+    \node[transition, right=of w1int] (w1grid) {Build\\local grid};
+    \node[transition, right=of w1grid] (w1res) {Resolve\\cells};
+    \node[place, right=of w1res] (w1out) {$W_1$\\result};
+
+    \node[place, right=34mm of split] (wdotsin) {$\cdots$};
+    \node[transition, right=of wdotsin] (wdotsrun) {same\\worker\\pattern};
+    \node[place, right=of wdotsrun] (wdotsout) {$\cdots$};
+
+    \node[place, right=34mm of split, yshift=-14mm] (wnin) {$W_N$\\ready};
+    \node[transition, right=of wnin] (wnrun) {$W_N$\\compute};
+    \node[place, right=of wnrun] (wnout) {$W_N$\\result};
+
+    \node[transition, right=40mm of w1out] (merge) {Join \&\\merge};
+    \node[place, right=of merge] (done) {Parallel\\phase done};
+
+    \draw[->,thick] (dispatchin) -- (split);
+    \draw[->,thick] (split.east) -- ++(10mm,14mm) -- (w1in.west);
+    \draw[->,thick] (split.east) -- (wdotsin.west);
+    \draw[->,thick] (split.east) -- ++(10mm,-14mm) -- (wnin.west);
+    \draw[->,thick] (w1in) -- (w1int);
+    \draw[->,thick] (w1int) -- (w1grid);
+    \draw[->,thick] (w1grid) -- (w1res);
+    \draw[->,thick] (w1res) -- (w1out);
+    \draw[->,thick] (wdotsin) -- (wdotsrun);
+    \draw[->,thick] (wdotsrun) -- (wdotsout);
+    \draw[->,thick] (wnin) -- (wnrun);
+    \draw[->,thick] (wnrun) -- (wnout);
+    \draw[->,thick] (w1out.east) -- ++(12mm,0) |- (merge.north);
+    \draw[->,thick] (wdotsout.east) -- ++(12mm,0) |- (merge.west);
+    \draw[->,thick] (wnout.east) -- ++(12mm,0) |- (merge.south);
+    \draw[->,thick] (merge) -- (done);
+\end{tikzpicture}
+}%
+\caption{Zoom on the dispatch phase. The controller splits the work into ranges, each worker computes its own local physics slice and local grid, and the coordinator merges the ordered results before applying the final commit. The same pattern applies to an arbitrary number of workers or tasks.}
+\label{fig:petri-dispatch-zoom}
+\end{figure}
+
+The figure above is intentionally abstract. It says only that the controller hands out physics work, workers produce partial results, and the coordinator merges them before publishing the next snapshot. The detailed mechanics of how the workers split their local work, build grids, and resolve collisions belong to the implementation section.
 
 \subsection{Platform-thread version}
 
-The platform-thread version adopts a Master-Workers architecture, with the controller acting as the master. The controller keeps ownership of the global progression of the match, while workers handle the parallelizable part of the physics workload. This gives the runtime a clear control point while still allowing the expensive simulation work to run concurrently.
+The platform-thread version uses one controller thread plus long-lived worker platform threads. The controller keeps ownership of the global progression of the match, while workers handle the parallelizable part of the physics workload. This gives the runtime a clear control point while still allowing the expensive simulation work to run concurrently.
 
 \begin{itemize}
     \item the controller remains responsible for the global tick;
@@ -160,7 +257,7 @@ The platform-thread version adopts a Master-Workers architecture, with the contr
 
 \subsection{Task-based version}
 
-The task-based version keeps a single controller thread for the serial phases of the tick, while the parallelizable physics work is expressed as executor tasks. The controller submits the tasks, waits for completion, merges the partial results, and publishes the final snapshot only after the merge is complete. The difference is mainly in how the concurrent work is represented and scheduled.
+The task-based version keeps a single controller thread for the serial phases of the tick, while the parallelizable physics work is expressed as executor tasks. The controller submits the tasks, waits for completion, merges the partial results, and publishes the final snapshot only after the merge is complete. The difference is mainly in how the concurrent work is represented and scheduled, and the task-based engine also keeps a fast path for small workloads where the single range is executed directly.
 
 \begin{itemize}
     \item the controller keeps the serial phases of the tick;
@@ -182,20 +279,34 @@ The improvement does not come from changing the game rules, but from reducing co
 
 The implementation mirrors the design: the same game rules are reused by all launchers, while the execution strategy changes between the sequential, platform-thread, and task-based versions. The code is organized into separate packages for the model, the physics engines, the runtime helpers, and the Swing view, so the responsibilities remain visible in the source tree as well as in the report.
 
-The core of the project is the way the concurrent physics engines divide and reconcile work. They do \textbf{not} assign whole spatial zones to threads up front. Instead, they first split the active balls into \textbf{contiguous index ranges} so that each worker receives a \textbf{balanced slice} of the list. Each worker then performs the \textbf{expensive local work} on its own slice: it builds a private \textbf{spatial grid}, identifies the cells that matter, and computes the collision contributions for the cells it owns. The \textbf{coordinator} does not recompute that physics work from scratch; instead, it merges the \textbf{worker-local results} into one deterministic view, sorts the occupied cells, and applies the final shared updates to the \textbf{authoritative board state}.
+The core of the project is the way the concurrent physics engines divide, compute, and join work. Intuitively, the controller first decides which balls each worker should look at, then the workers do the expensive local physics work, and finally the controller gathers the partial results and commits them to the shared board. The workers never become owners of the global state: they work on private slices, produce partial results, and hand them back for a deterministic join.
 
-Before reaching this design, we also tried a more direct \textbf{cell-based partitioning} strategy, where each thread would own the work of a set of cells. In practice, that approach introduced too much \textbf{coordination overhead} for this project: the work was more fragmented, the ownership boundaries were harder to manage, and the final version with range-based partitioning and spatial reasoning performed better.
+This is the actual staged pipeline used in both concurrent engines:
 
-This two-level structure is the important part to keep in mind:
+\begin{enumerate}
+    \item the active balls are split into \textbf{contiguous index ranges};
+    \item each worker integrates the movement of its own range, so the ball positions are updated before any collision work starts;
+    \item hole interactions are applied serially on the authoritative board, because that part must stay globally ordered;
+    \item the remaining balls are projected into private \textbf{center-cell grids}, one per worker/task;
+    \item the controller merges those local grids into one deterministic occupied-cell view;
+    \item the occupied cells are sorted, so each cell is resolved in a stable order;
+    \item each worker resolves the cells it owns, computes the collision contribution for the relevant ball pairs, and stores the effect in a sparse private accumulator;
+    \item the controller merges the sparse accumulators and applies the final board writes only after the join barrier completes.
+\end{enumerate}
+
+The same structure appears in both concurrent engines:
 
 \begin{itemize}
-    \item \textbf{range partitioning}: the list of active balls is split into almost equal \textbf{contiguous chunks}, one per worker;
-    \item \textbf{spatial reasoning}: inside each chunk, balls are mapped to \textbf{grid cells} so the engine can inspect only likely collision candidates;
-    \item \textbf{canonical ownership}: each occupied cell is processed once, together with a fixed subset of neighboring cells, so cross-cell collisions are handled exactly once by the worker that owns that cell;
-    \item \textbf{deterministic merge}: the coordinator merges the \textbf{sparse worker-local results} and then applies the final writes to the authoritative board state.
+    \item \textbf{range partitioning}: the list of active balls is split into almost equal \textbf{contiguous chunks}, one per worker or task;
+    \item \textbf{private local grids}: each worker builds its own center-cell map for the balls in its range;
+    \item \textbf{deterministic merge}: the controller merges the local grids into one ordered view of the occupied cells;
+    \item \textbf{owned-cell resolution}: each occupied cell is resolved once, together with a fixed set of forward neighbors, so each relevant pair is considered exactly once;
+    \item \textbf{sparse final commit}: workers accumulate deltas locally, the coordinator merges them, and the final board writes happen only after the join barrier completes.
 \end{itemize}
 
-This keeps collision handling \textbf{deterministic}, avoids \textbf{duplicate checks}, and still lets the \textbf{expensive physics work} run in parallel. In other words, the workers compute the physics, while the coordinator preserves a \textbf{single authoritative state} and commits the final outcome.
+The threaded engine implements the barriers with long-lived platform workers and a completion monitor. The task-based engine uses the same staged logic, but it submits each range to an executor and waits on `Future`s instead of worker joins. The task-based engine also keeps a small-workload fast path: when the workload is too small to justify parallel decomposition, it executes the single range directly instead of paying executor overhead.
+
+This keeps collision handling \textbf{deterministic}, avoids \textbf{duplicate writes}, and still lets the \textbf{expensive physics work} run in parallel. In other words, the workers compute the physics, while the coordinator preserves a \textbf{single authoritative state} and commits the final outcome.
 
 \begin{itemize}
     \item \textbf{\texttt{pcd.poool.model}}: game rules, board state, and immutable snapshots;
@@ -224,7 +335,7 @@ The most relevant point is that \texttt{GameModel} remains the authoritative own
 
 The sequential launcher is intentionally direct: one loop advances the simulation, updates the view model, and renders the frame. The game model and the view share the same object graph, but the simulation still remains easy to reason about because everything happens in order.
 
-The helper \texttt{advanceGame} only triggers the tick update: \texttt{GameModel.step()} then delegates the actual physics computation to the sequential engine through \texttt{Board.updateState()}.
+The helper \texttt{advanceGame} only guards the finished-state check: \texttt{GameModel.step()} advances the board through \texttt{Board.updateState()}, then consumes score events and refreshes the game status.
 
 \begin{lstlisting}[style=codestyle,caption={Sequential main loop},label={lst:sequential-main-loop}]
 var game = gameRef.get();
@@ -292,7 +403,7 @@ for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
 
 This is the part that decides how the balls are split among workers: the work is divided into contiguous index ranges of almost equal size, with the remainder distributed among the first workers.
 
-In other words, a ball is assigned to the chunk identified by its position in \texttt{activeBalls}: the worker does not receive spatial zones, but a contiguous slice of the list, and it processes every ball in that slice in order.
+In other words, a ball is assigned to the chunk identified by its position in \texttt{activeBalls}: the worker does not receive spatial zones, but a contiguous slice of the list, and it processes every ball in that slice in order. The collision phase follows the same pattern: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns before the controller merges the sparse results and applies the final writes to the authoritative board.
 
 \begin{lstlisting}[style=codestyle,caption={Threaded handoff from controller to workers},label={lst:threaded-handoff}]
 for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
@@ -315,7 +426,7 @@ The collision phase then follows the same idea on top of this handoff: each work
 
 \subsection{Task-based implementation}
 
-The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled controller executor for the tick and a separate executor for the bot when enabled. The task-based physics engine still splits the active balls into contiguous ranges, but each range is submitted as a task rather than assigned to a long-lived worker thread.
+The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled single-thread controller executor for the tick and a separate executor for the bot when enabled. The task-based physics engine still splits the active balls into contiguous ranges, but each range is submitted as a task rather than assigned to a long-lived worker thread.
 
 \begin{lstlisting}[style=codestyle,caption={Task-based controller scheduling},label={lst:taskbased-scheduling}]
 running = true;
@@ -339,7 +450,7 @@ for (int i = 0; i < workerCount; i++) {
 
 \noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/taskbased/TaskBasedPhysicsEngine.java}, lines 662--672.}
 
-Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. The collision phase still uses the same spatial logic as the threaded version; what changes is only the scheduling mechanism.
+Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a private local grid, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in deterministic order, and only then applies the accumulated deltas. The shared idea is still the same single-writer ownership rule; what changes is that futures replace worker joins and candidate pairs are materialized explicitly before replay.
 
 \begin{lstlisting}[style=codestyle,caption={Task submission and synchronization},label={lst:taskbased-futures}]
 var futures = new ArrayList<Future<T>>(ranges.size());

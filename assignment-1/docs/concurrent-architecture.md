@@ -292,27 +292,29 @@ Input/Bot
 
 ## 6. Physics parallelization strategy
 Strategy:
-1. broad phase with spatial partitioning
-2. merge/deduplicate candidate pairs
-3. deterministic ordering of candidate pairs
-4. parallel resolution of independent collision rounds
+1. split active balls into contiguous ranges
+2. build private local center-cell grids
+3. merge and order occupied cells deterministically
+4. resolve owned cells in parallel
+5. merge sparse collision deltas and commit the final board writes
 
 An intuitive platform-thread variant is to divide the board into spatial
 regions, for example four quadrants, and assign each region to a worker thread.
 Each worker processes the balls currently belonging to its region and produces
-local movement/collision candidates. The coordinator then merges the partial
-results, handles balls near region boundaries, deduplicates cross-region
-collision pairs, and applies the final resolution in a deterministic order.
+its own local movement state and private grid. The coordinator then merges the
+partial grids, handles balls near region boundaries, orders the occupied cells
+deterministically, and applies the final resolution in a controlled commit
+phase.
 
 Region boundaries require an overlap/border policy. A worker must not consider
 only the balls whose centers are inside its region: balls close to a border can
 collide with balls owned by the adjacent region. For this reason, each region
 also inspects a border band at least as wide as the maximum collision distance
-used by the broad phase. Candidate pairs that cross a region boundary are
-reported to the coordinator together with local pairs. Since the same pair may
-be discovered by multiple workers, the merge phase stores pairs in a set and
-then sorts them by stable ball/index identifiers before contribution
-computation.
+used by the broad phase. Interactions that cross a region boundary are
+reported to the coordinator together with local ones. Since the same physical
+interaction may be observed by multiple workers, the merge phase keeps the
+sparse contributions private until the coordinator replays them in a stable
+order.
 
 For large configurations, a uniform grid is preferable to hard-coded quadrants:
 it generalizes to more workers, adapts better to thousands of balls, and
@@ -334,7 +336,7 @@ thread-based implementation:
 - `Board` exposes synchronized operations and immutable rendering snapshots,
   which provides a clear starting point for enforcing a single-writer model.
 - `SpatialCollisionDetector` already uses a deterministic uniform grid, making
-  spatial decomposition a natural extension rather than a new conceptual
+  the local-grid merge step a natural extension rather than a new conceptual
   subsystem.
 - `GameModel` centralizes scoring, cue-ball availability, and termination
   rules, so the concurrent version can preserve the same game semantics by
@@ -349,9 +351,10 @@ were acquired on multiple balls or regions during collision resolution.
 
 The recommended architecture is instead a staged parallel algorithm: workers
 perform computationally expensive, read-mostly phases on a stable view of the
-physical state, while the coordinator applies the resulting state transitions
-in a controlled deterministic phase. This approach preserves correctness and
-modularity while still exploiting multiple CPU cores.
+physical state, while the coordinator merges the local grids, orders the
+occupied cells, and applies the resulting state transitions in a controlled
+deterministic phase. This approach preserves correctness and modularity while
+still exploiting multiple CPU cores.
 
 ### 6.2 Proposed staged physics step
 A platform-thread physics step should be decomposed into explicit barriers:
@@ -362,29 +365,30 @@ GameControllerThread
   |-- drain command queue
   |-- create physics snapshot / stable work view
   |-- start phase A on PhysicsWorkerThread[]
-  |       integration candidates
+  |       integrate contiguous ranges
   |-- barrier
   |-- start phase B on PhysicsWorkerThread[]
-  |       spatial-grid buckets and collision candidates
+  |       build private local grids
   |-- barrier
-  |-- merge and order candidate pairs
-  |-- group ordered collision pairs into non-conflicting rounds
-  |-- for each round:
-  |       start phase C on PhysicsWorkerThread[] / Executor tasks
-  |           resolve disjoint collisions in parallel
-  |       barrier
+  |-- merge local grids and order occupied cells
+  |-- start phase C on PhysicsWorkerThread[] / Executor tasks
+  |       resolve owned cells in parallel
+  |-- barrier
+  |-- merge sparse collision deltas
+  |-- commit the final board writes
   |-- resolve hole interactions
   |-- apply game rules and scoring
   |-- publish immutable snapshot
 ```
 
-The task-based implementation uses this round-based variant for small contact
-sets. For larger contact sets, where per-round task overhead would dominate, it
-switches to a task-based accumulated-impulse solver: each task computes
-position and velocity deltas in private arrays, the coordinator merges those
-arrays deterministically, and a final task phase applies disjoint ball ranges.
-This keeps the implementation based on the Executor Framework while making the
-expensive impulse/displacement computation parallel under load.
+The task-based implementation now follows the same staged pipeline as the
+threaded implementation: the difference is the scheduling vehicle, not the
+physics semantics. The current executor path uses task submission and
+`Future` joins for the range phases, builds private local grids per task,
+merges them deterministically, resolves the ordered occupied cells, and
+applies the final board writes only after the join barrier. There is still a
+helper that can build collision rounds from a pair list, but it is supporting
+code rather than the live runtime path.
 
 The implemented threaded engine follows this staged idea. It does not let
 workers mutate colliding balls while they inspect candidate pairs. Instead, each
@@ -401,10 +405,10 @@ with several simultaneous contacts naturally receives the sum of all related
 contributions.
 
 After all workers finish, the controller merges the private arrays in a stable
-order and then assigns disjoint ball ranges back to the workers for the final
-apply phase. In that phase each ball is written by only one worker, so the
-implementation avoids fine-grained locks while still parallelizing the costly
-collision math.
+order and then applies the final board writes in a controlled phase. When the
+apply phase is parallelized, each touched ball index is assigned to exactly one
+worker, so the implementation avoids fine-grained locks while still
+parallelizing the costly collision math.
 
 This is different from immediate sequential collision resolution. The threaded
 solver treats one tick as a simultaneous set of contact contributions computed
@@ -418,13 +422,13 @@ The phases have different concurrency properties:
 - **Integration phase**: each worker computes the next kinematic state for a
   disjoint chunk of balls. This phase is embarrassingly parallel because each
   ball can be integrated independently against the board boundary.
-- **Broad-phase phase**: workers populate local spatial-grid buckets or local
-  candidate sets. No shared mutable grid is required during worker execution.
-- **Merge phase**: the coordinator combines local buckets/candidates,
-  deduplicates pairs, and sorts them by stable ball identifiers.
-- **Resolution phase**: collision resolution, pocket removal, score-event
-  production, and lifecycle transitions are applied in a single deterministic
-  order.
+- **Broad-phase phase**: workers populate private local grids. No shared
+  mutable grid is required during worker execution.
+- **Merge phase**: the coordinator combines local grids, orders occupied
+  cells deterministically, and merges sparse delta accumulators.
+- **Resolution phase**: ordered-cell collision resolution, pocket removal,
+  score-event production, and lifecycle transitions are applied in a single
+  deterministic order.
 - **Publication phase**: the latest immutable snapshot is atomically replaced
   for the GUI. Rendering never holds model locks.
 
@@ -451,9 +455,10 @@ The spatial partitioning policy should satisfy the following conditions:
   collisions.
 
 The existing `SpatialCollisionDetector` already follows the important
-principle of registering a ball in every occupied cell and sorting candidate
-pairs. A threaded implementation can preserve the same external contract while
-parallelizing the construction of local cell maps and local pair sets.
+principle of registering a ball in every occupied cell and sorting the final
+occupied-cell view. A threaded implementation can preserve the same external
+contract while parallelizing the construction of local cell maps and local
+delta sets.
 
 ### 6.4 Worker ownership and monitors
 The platform-thread version should use a fixed set of long-lived worker
@@ -564,10 +569,10 @@ and worker-based CPU exploitation for large physics configurations.
 
 Remaining design trade-offs:
 
-- collision resolution uses an accumulated-impulse solver, so the threaded
+- collision resolution uses sparse per-ball deltas, so the threaded
   trajectory can differ from the sequential immediate-resolution trajectory;
-- merging local spatial grids is serial and can become visible when almost all
-  balls occupy the same region;
+- merging local spatial grids and replaying ordered pairs is serial and can
+  become visible when almost all balls occupy the same region;
 - the implementation is expected to scale best on large or massive boards with
   spatially distributed balls.
 
