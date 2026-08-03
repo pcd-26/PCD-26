@@ -84,51 +84,70 @@ The key challenge is to exploit parallelism without breaking coherence.
 \section{Design}
 
 \noindent
-The architecture is organized into three layers with distinct responsibilities. The shared model owns the rules and the mutable game state, the execution layer advances the match and serializes asynchronous actions, and the view layer renders immutable snapshots instead of reading the live board directly.
-
-The main design choice is that the sequential, platform-thread, and task-based versions reuse the same semantics while changing only how work is scheduled. Command submission stays outside the model, which keeps ownership boundaries explicit throughout the concurrent protocol.
+The design separates responsibilities to keep the concurrent execution clear. The model owns the rules and the game state, the runtime advances the simulation, and the view reads only stable snapshots.
 
 \begin{itemize}
-    \item \textbf{Shared model}: owns the rules and the mutable game state;
-    \item \textbf{Execution layer}: advances the match and serializes asynchronous actions;
-    \item \textbf{View layer}: renders immutable snapshots instead of reading the live board directly.
+    \item \textbf{Game logic}: rules and state transitions;
+    \item \textbf{Runtime layer}: command handling and tick progression;
+    \item \textbf{View layer}: immutable snapshots.
 \end{itemize}
 
-\subsection{Shared model}
+The same game logic is reused by the sequential, platform-thread, and task-based versions; only the execution strategy changes.
 
-The shared model contains the game rules, the board state, and the physics data structures. It is the part of the system that decides what a legal state transition means, while the launcher selects the concrete physics engine used to perform the low-level step.
+\subsection{Project architecture}
 
-\subsection{Sequential baseline}
+The project separates what must stay authoritative from what can be scheduled differently. The model keeps the match state and the rules, the runtime layer drives the simulation and coordinates asynchronous actions, and the view consumes only stable snapshots. In this way, the graphical side never depends on the internal timing of the simulation.
 
-The sequential version is intentionally simple: one thread advances the match, applies the physics step, and updates the view. It is useful both as the semantic reference and as the baseline for performance comparison.
+\begin{itemize}
+    \item the model owns the rules and the authoritative state;
+    \item the runtime coordinates commands and tick progression;
+    \item the view reads snapshots only, never the live board.
+\end{itemize}
 
-\subsection{Platform-thread runtime}
+The sequential version is the reference architecture. A single execution flow processes commands, advances the physics, updates the logical state, and publishes the resulting snapshot. This version is simple on purpose: it defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
 
-The platform-thread version adopts a Master-Workers architecture, with the controller acting as the master. The controller advances the match and publishes snapshots, while worker threads parallelize bounded physics work under controlled synchronization. This is where the design starts paying for itself, because the expensive part of the tick is split across long-lived workers while the controller keeps the authoritative state and the phase boundaries.
+\subsection{Designing the concurrent solution}
 
-\subsection{Task-based runtime}
+The core design choice is to treat the simulation as a mix of local computation and global coordination. The local part, especially collision-related physics work, is where parallelism pays off; the global part remains serialized so that the match evolves through a single coherent sequence of states.
 
-The task-based version follows the same ownership rule, but it expresses the parallel physics work as executor tasks rather than long-lived workers. Tasks compute partial results, the controller merges them, and the new state is published only after the merge. This keeps the same semantic structure as the threaded version, while making the parallel phases easier to express as bounded jobs on an executor pool.
+Each tick is therefore divided into phases with different costs and responsibilities. Some phases require a coherent global view of the match and must remain serial: command processing, final state updates, score changes, game-over checks, and snapshot publication. Other phases are suitable for parallel execution because they operate on local portions of the simulation and do not need to modify the shared state at the same time.
 
-\subsection{Parallelization strategy}
+\begin{itemize}
+    \item \textbf{Parallelizable}: local physics work, especially collision-related computations and other per-chunk updates;
+    \item \textbf{Not parallelizable}: command processing, score updates, game-over checks, merge/commit steps, and snapshot publication;
+    \item \textbf{Design goal}: keep the coordination points narrow and predictable.
+\end{itemize}
 
-The parallelization strategy is deliberately data-oriented rather than control-oriented. The goal is not to parallelize the whole game loop, but only the physics work that can be split into independent chunks without violating single-writer ownership of the board.
+This separation is what makes the design effective. The concurrent versions avoid letting multiple threads contend on the same mutable state, and they do not force the whole simulation to wait on fine-grained synchronization. Instead, they keep the coordination points narrow and predictable, while the heavy numerical work runs in parallel on bounded chunks.
 
-The tick is therefore decomposed into phases with different coordination costs. Some phases are inherently sequential because they require a consistent global view of the match: command draining, score updates, game-over detection, snapshot publication, and the final commit of the tick. These operations stay on the controller side and are never handed to workers.
+\subsection{Platform-thread version}
 
-The expensive physics work is handled differently. Movement integration is partitioned over disjoint ball ranges, so each worker can update its own subset without coordinating with the others. Collision handling uses spatial ownership instead of a global candidate list: each worker builds a private local grid, the controller merges those local grids into a deterministic global structure, and only then are collisions assigned to canonical cell owners. Each worker or task computes local collision contributions and sparse deltas instead of mutating the whole board directly.
+The platform-thread version adopts a Master-Workers architecture, with the controller acting as the master. The controller keeps ownership of the global progression of the match, while workers handle the parallelizable part of the physics workload. This gives the runtime a clear control point while still allowing the expensive simulation work to run concurrently.
 
-This is where most of the performance gain comes from. The design avoids the largest sources of overhead in a naive concurrent implementation: it does not let many threads write the same board state at the same time, it does not require fine-grained locks around individual balls, and it does not materialize a huge shared pair list before resolving contacts. The controller keeps the final merge, commit, and publication steps serialized, but the heavy numerical work runs in parallel on bounded chunks. The threaded version realizes this pattern with long-lived workers; the task-based version expresses the same pattern with executor tasks. In both cases, the protocol remains deterministic at phase boundaries and the work done by each participant is narrow enough to scale on large boards.
+\begin{itemize}
+    \item the controller remains responsible for the global tick;
+    \item workers handle bounded pieces of the physics workload;
+    \item the controller also merges the partial results produced by the workers and applies the final state changes;
+    \item the phase boundaries stay explicit, so the protocol remains deterministic.
+\end{itemize}
 
-\subsection{Why this design improves performance}
+\subsection{Task-based version}
 
-The improvement is not produced by a different physics model, but by reducing coordination cost around the same physics model. The board is large enough that the cost of integrating motion and resolving collisions dominates the tick time. By splitting those phases into private chunks and postponing shared writes until the controller can merge them, the concurrent versions keep the workers busy on CPU work rather than on synchronization.
+The task-based version keeps a single controller thread for the serial phases of the tick, while the parallelizable physics work is expressed as executor tasks. The controller submits the tasks, waits for completion, merges the partial results, and publishes the final snapshot only after the merge is complete. The difference is mainly in how the concurrent work is represented and scheduled.
 
-The design also keeps overhead under control for smaller workloads. When the amount of work is not large enough to justify parallel scheduling, the serialized phases remain cheap, and the system avoids introducing unnecessary contention. In practice, this is why the concurrent versions scale better as the number of balls increases: the amount of parallelizable physics work grows, while the serial coordination cost stays bounded.
+\begin{itemize}
+    \item the controller keeps the serial phases of the tick;
+    \item tasks compute the parallelizable physics work independently;
+    \item the controller merges the partial results and publishes the next snapshot only after the merge is complete.
+\end{itemize}
 
-\subsection{Snapshots and view data}
+\subsection{Shared state and snapshots}
 
-The view never reads the mutable board directly. Instead, the concurrent runtimes publish immutable snapshots that the GUI can consume safely, which keeps rendering detached from simulation and synchronization.
+The model creates the logical game snapshot, while the runtime publishes the immutable runtime snapshot consumed by the view. This prevents rendering from seeing half-finished updates and gives the GUI a stable picture of the match at each publication point.
+
+\subsection{Why this design works}
+
+The improvement does not come from changing the game rules, but from reducing coordination overhead around the same rules. As the number of balls grows, the amount of parallelizable physics work grows as well, so the concurrent versions can better exploit the available cores on larger workloads.
 
 \section{Implementation}
 
@@ -270,6 +289,8 @@ executor & 17 & 442.4130  & 1.645 \\
 \end{tabular}
 \caption{Worker-count medians from the benchmark snapshot.}
 \end{table}
+
+These numbers also show that the benefit is not monotonic. On the largest workload, the threaded version is slower with 17 workers than with 16, while the executor-based version still improves slightly.
 
 \begin{figure}[htbp]
 \centering
