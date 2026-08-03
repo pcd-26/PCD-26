@@ -12,7 +12,7 @@ import pcd.poool.model.physics.common.SpatialCollisionDetector;
  * <p>The engine is deliberately passive: runners decide whether steps are
  * executed sequentially, by a dedicated platform thread, or by tasks.
  */
-public class PhysicsEngine implements PhysicsStepper {
+public class SequentialPhysicsEngine implements PhysicsStepper {
 
     private final SpatialCollisionDetector collisionDetector;
     private final long maxStepMillis;
@@ -20,7 +20,7 @@ public class PhysicsEngine implements PhysicsStepper {
     /**
      * Creates a physics engine using the default maximum sub-step duration.
      */
-    public PhysicsEngine() {
+    public SequentialPhysicsEngine() {
         this(PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
@@ -29,7 +29,7 @@ public class PhysicsEngine implements PhysicsStepper {
      *
      * @param maxStepMillis maximum duration of one internal physics sub-step
      */
-    public PhysicsEngine(long maxStepMillis) {
+    public SequentialPhysicsEngine(long maxStepMillis) {
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
         }
@@ -41,9 +41,7 @@ public class PhysicsEngine implements PhysicsStepper {
      * Advances the board by the given elapsed time.
      *
      * <p>The elapsed time is split into bounded sub-steps to reduce numerical
-     * instability when a caller provides a large delta. The whole operation is
-     * synchronized on the board so direct callers preserve the single-writer
-     * ownership rule used by the concurrent architecture.
+     * instability when a caller provides a large delta.
      *
      * @param board board to mutate
      * @param elapsedMillis elapsed time in milliseconds
@@ -53,14 +51,11 @@ public class PhysicsEngine implements PhysicsStepper {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
-        // The board stays single-writer for the whole step.
-        synchronized (board) {
-            long remaining = elapsedMillis;
-            while (remaining > 0) {
-                long dt = Math.min(maxStepMillis, remaining);
-                stepOnce(board, dt);
-                remaining -= dt;
-            }
+        long remaining = elapsedMillis;
+        while (remaining > 0) {
+            long dt = Math.min(maxStepMillis, remaining);
+            stepOnce(board, dt);
+            remaining -= dt;
         }
     }
 

@@ -10,7 +10,7 @@ import java.util.Map;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.Player;
-import pcd.poool.model.physics.sequential.PhysicsEngine;
+import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 
 /**
  * Mutable board state used by the physics loop.
@@ -59,7 +59,7 @@ public class Board {
      * a game or benchmark.
      */
     public Board(){
-        this(new PhysicsEngine());
+        this(new SequentialPhysicsEngine());
     }
 
     /**
