@@ -3,11 +3,38 @@
 \usepackage[margin=2.4cm]{geometry}
 \usepackage{graphicx}
 \usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
 \usepackage[hidelinks]{hyperref}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.55em}
 \renewcommand{\arraystretch}{1.12}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{215,215,215}
+\definecolor{codekeyword}{RGB}{0,92,168}
+\definecolor{codecomment}{RGB}{0,128,0}
+\definecolor{codestring}{RGB}{160,32,0}
+
+\lstdefinestyle{codestyle}{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    rulecolor=\color{codeframe},
+    backgroundcolor=\color{codebg},
+    numbers=left,
+    numberstyle=\tiny,
+    numbersep=8pt,
+    breaklines=true,
+    columns=fullflexible,
+    showstringspaces=false,
+    tabsize=4,
+    language=Java,
+    keywordstyle=\bfseries\color{codekeyword},
+    commentstyle=\itshape\color{codecomment},
+    stringstyle=\color{codestring},
+    captionpos=b
+}
 
 \title{Assignment 1 -- Poool Game\\Concurrent and Task-Based Implementations}
 \author{Alex Santini \\ Francesco Valentini}
@@ -151,37 +178,146 @@ The improvement does not come from changing the game rules, but from reducing co
 
 \section{Implementation}
 
-\subsection{Main launchers}
+\subsection{Implementation overview}
+
+The implementation mirrors the design: the same game rules are reused by all launchers, while the execution strategy changes between the sequential, platform-thread, and task-based versions. The code is organized into separate packages for the model, the physics engines, the runtime helpers, and the Swing view, so the responsibilities remain visible in the source tree as well as in the report.
 
 \begin{itemize}
-    \item \textbf{Sequential launcher}: \texttt{pcd.poool.SequentialPoool};
-    \item \textbf{Platform-thread launcher}: \texttt{pcd.poool.ThreadedPoool};
-    \item \textbf{Task-based launcher}: \texttt{pcd.poool.TaskBasedPoool}.
+    \item \textbf{\texttt{pcd.poool.model}}: game rules, board state, and immutable snapshots;
+    \item \textbf{\texttt{pcd.poool.model.physics}}: sequential, threaded, and task-based physics engines;
+    \item \textbf{\texttt{pcd.poool.runtime}}: command submission and snapshot publication helpers;
+    \item \textbf{\texttt{pcd.poool.threaded}} and \textbf{\texttt{pcd.poool.taskbased}}: concurrent runners;
+    \item \textbf{\texttt{pcd.poool.view}}: rendering and input handling.
 \end{itemize}
 
-\subsection{Core modules}
+The three public entry points are \texttt{SequentialPoool}, \texttt{ThreadedPoool}, and \texttt{TaskBasedPoool}. They build the corresponding runtime, connect it to the view, and keep the GUI loop separate from the simulation logic.
+
+\subsection{Core classes}
 
 \begin{itemize}
-    \item \textbf{\texttt{model/common/math}}: immutable geometric primitives;
-    \item \textbf{\texttt{model/physics/common}}: board, balls, holes, and shared physics abstractions;
-    \item \textbf{\texttt{model/game}}: game rules and logical snapshots;
-    \item \textbf{\texttt{model/physics/sequential}}: baseline stepping logic;
-    \item \textbf{\texttt{model/physics/threaded}}: platform-thread engine;
-    \item \textbf{\texttt{model/physics/taskbased}}: executor-based engine;
-    \item \textbf{\texttt{runtime}}: command queues, command receipts, snapshot publication, bot coordination;
-    \item \textbf{\texttt{view}}: Swing-facing rendering classes.
+    \item \texttt{GameModel} (\texttt{pcd.poool.model.game}): owns the gameplay rules, scoring, end-game conditions, and logical snapshot creation;
+    \item \texttt{Board} (\texttt{pcd.poool.model.physics.common}): owns the mutable physical state and delegates stepping to a \texttt{PhysicsStepper};
+    \item \texttt{SequentialPhysicsEngine} (\texttt{pcd.poool.model.physics.sequential}), \texttt{ThreadedPhysicsEngine} (\texttt{pcd.poool.model.physics.threaded}), and \texttt{TaskBasedPhysicsEngine} (\texttt{pcd.poool.model.physics.taskbased}): implement the sequential, platform-thread, and executor-based physics pipelines;
+    \item \texttt{ThreadedGameRunner} (\texttt{pcd.poool.threaded}) and \texttt{TaskBasedGameRunner} (\texttt{pcd.poool.taskbased}): coordinate command draining, controller ticks, and snapshot publication;
+    \item \texttt{RuntimeGameSnapshot} (\texttt{pcd.poool.runtime}): packages the logical snapshot together with the immutable render data;
+    \item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport} (\texttt{pcd.poool.runtime}): provide the monitor-based communication used by the concurrent runtimes.
 \end{itemize}
 
-\subsection{Important classes}
+The most relevant point is that \texttt{GameModel} remains the authoritative owner of the game rules, while the runners only coordinate access to it. This keeps the same behavior across all variants and avoids duplicating the domain logic.
 
-\begin{itemize}
-\item \texttt{GameModel}: owns the game rules and advances the match state;
-\item \texttt{Board}: owns the mutable physical state and delegates stepping to a physics engine;
-\item \texttt{PhysicsEngine}, \texttt{ThreadedPhysicsEngine}, and \texttt{TaskBasedPhysicsEngine}: implement the simulation strategies;
-\item \texttt{ThreadedGameRunner} and \texttt{TaskBasedGameRunner}: coordinate asynchronous commands, controller ticks, and snapshot publication;
-\item \texttt{RuntimeGameSnapshot}: packages immutable state for the GUI and asynchronous observers;
-\item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport}: implement the monitor-based coordination used by the concurrent runtime.
-\end{itemize}
+\subsection{Sequential implementation}
+
+The sequential launcher is intentionally direct: one loop advances the simulation, updates the view model, and renders the frame. The game model and the view share the same object graph, but the simulation still remains easy to reason about because everything happens in order.
+
+The helper \texttt{advanceGame} only triggers the tick update: \texttt{GameModel.step()} then delegates the actual physics computation to the sequential engine through \texttt{Board.updateState()}.
+
+\begin{lstlisting}[style=codestyle,caption={Sequential main loop},label={lst:sequential-main-loop}]
+var game = gameRef.get();
+long elapsedMillis = Math.max(PhysicsDefaults.FIXED_STEP_MILLIS, now - lastUpdateTime);
+lastUpdateTime = now;
+
+advanceGame(game, elapsedMillis);
+if (game.canBotShoot()) {
+    if (botAimStartedAt == 0) {
+        botAimStartedAt = now;
+    } else if (now - botAimStartedAt >= BOT_THINK_TIME_MILLIS) {
+        game.shootBot();
+        viewModel.clearShotPreview(Player.BOT);
+        botAimStartedAt = 0;
+    }
+} else {
+    viewModel.clearShotPreview(Player.BOT);
+    botAimStartedAt = 0;
+}
+
+renderedFrames++;
+int currentFramesPerSecond = getCurrentFPS(renderedFrames, startTime, now);
+viewModel.update(game.board(), game.snapshot(), currentFramesPerSecond);
+updateBotShotPreview(game, viewModel, botAimStartedAt > 0);
+view.render();
+\end{lstlisting}
+
+\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/SequentialPoool.java}, lines 61--82.}
+
+This version is useful as the semantic baseline. It defines the expected behavior of the game without introducing concurrency concerns, and it also shows the minimum amount of code needed to keep the GUI responsive.
+
+\subsection{Platform-thread implementation}
+
+The platform-thread version introduces a controller thread plus an optional bot thread. The controller is the only thread that mutates the model, while external producers submit commands through a monitor-backed queue. The threaded physics engine is still called from the controller, so the controller remains the single point where the match advances.
+
+\begin{lstlisting}[style=codestyle,caption={Threaded controller loop},label={lst:threaded-controller-loop}]
+while (running) {
+    drainPendingCommands();
+    if (!game.snapshot().isFinished()) {
+        game.step(config.tickMillis());
+    }
+    snapshots.publish(RuntimeGameSnapshot.from(game));
+    sleepTick();
+}
+\end{lstlisting}
+
+The key classes here are \texttt{ThreadedGameRunner} and \texttt{ThreadedPhysicsEngine}. The runner serializes the game protocol, and the threaded physics engine parallelizes the expensive simulation work internally. Its implementation uses long-lived worker threads, local grids for collision detection, and a final merge/apply phase on the controller side.
+
+\begin{lstlisting}[style=codestyle,caption={Threaded collision work partitioning},label={lst:threaded-partitioning}]
+runRanges(orderedCells.size(), (from, to, workerIndex) -> {
+    var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
+    var pairAccumulator = new LongBag();
+    for (int i = from; i < to; i++) {
+        resolveOwnedCell(orderedCells.get(i), mergedGrid, balls,
+                deltaAccumulator, pairAccumulator);
+    }
+    localDeltas[workerIndex] = deltaAccumulator;
+    localPairs[workerIndex] = pairAccumulator;
+}, profile);
+\end{lstlisting}
+
+This is the most interesting part of the threaded version: workers do not mutate the board directly. They compute local contributions, and the controller merges the sparse results before writing them back to the authoritative state.
+
+\subsection{Task-based implementation}
+
+The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled controller executor for the tick and a separate executor for the bot when enabled. The task-based physics engine then splits the work into bounded tasks and waits for their completion before merging the results.
+
+\begin{lstlisting}[style=codestyle,caption={Task-based controller scheduling},label={lst:taskbased-scheduling}]
+running = true;
+controllerExecutor.scheduleAtFixedRate(this::tick, 0,
+        config.tickMillis(), TimeUnit.MILLISECONDS);
+\end{lstlisting}
+
+Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied.
+
+\begin{lstlisting}[style=codestyle,caption={Task submission and synchronization},label={lst:taskbased-futures}]
+var futures = new ArrayList<Future<T>>(ranges.size());
+for (var range : ranges) {
+    futures.add(executor.submit(() ->
+            rangeTask.run(range.fromInclusive(), range.toExclusive(),
+                    range.workerIndex())));
+}
+for (var future : futures) {
+    results.add(future.get());
+}
+\end{lstlisting}
+
+Compared with the threaded implementation, the control protocol is almost the same from the report point of view. What changes is the execution style: long-lived workers on one side, scheduled tasks on the other. The shared idea is still the same single-writer ownership rule.
+
+\subsection{Runtime snapshots and coordination helpers}
+
+\texttt{RuntimeGameSnapshot} is the bridge between the model and the GUI. It combines the logical \texttt{GameSnapshot} with the copied board and preview data used by the view, so rendering never needs to inspect mutable state directly.
+
+\begin{lstlisting}[style=codestyle,caption={Runtime snapshot construction},label={lst:runtime-snapshot}]
+return new RuntimeGameSnapshot(
+        game.snapshot(),
+        List.copyOf(board.getBalls()),
+        board.getPlayerBall(),
+        board.getBotBall(),
+        List.copyOf(board.getHoles()),
+        game.previewBotShot());
+\end{lstlisting}
+
+The concurrent runners publish those snapshots through \texttt{SnapshotStoreSupport}, which acts as a simple monitor around the latest immutable state. Commands follow the same idea through \texttt{CommandQueueMonitorSupport}: external threads enqueue requests, and the controller drains them sequentially.
+
+\subsection{Implementation summary}
+
+Overall, the implementation keeps the domain model small and central, pushes concurrency into the runtime and physics layers, and uses immutable snapshots to isolate the view. The result is a code base where the sequential, threaded, and task-based versions differ mainly in scheduling, not in game semantics.
 
 \section{Verification and Testing}
 
@@ -207,14 +343,14 @@ The abstraction is small enough to reason about, yet expressive enough to justif
 
 \subsection{JPF model checking}
 
-The repository also includes minimal JPF harnesses in the verification area of the working tree. These harnesses are deliberately smaller than the production runtime: they model a controller, a bounded amount of worker or task activity, a command queue, and the publication step. The goal is to verify the control protocol, not the numerical physics engine.
+The repository also includes minimal JPF harnesses in the verification area of the working tree. These harnesses are deliberately smaller than the production runtime: they model a controller, a bounded amount of worker or task activity, a command queue, and the publication step. The goal is to verify the control protocol, not the full numerical physics behavior.
 
 The JPF models check that commands are not stranded, that publication happens after the tick is complete, and that the reduced protocol can terminate cleanly without deadlock. This is enough to validate the coordination pattern used by both the platform-thread and task-based implementations.
 
 \begin{itemize}
     \item \textbf{Harnesses}: minimal JPF models in the verification area of the working tree;
     \item \textbf{Scope}: controller, bounded worker/task activity, command queue, publication step;
-    \item \textbf{Goal}: verify the control protocol, not the numerical physics engine;
+    \item \textbf{Goal}: verify the control protocol, not the full numerical physics behavior;
     \item \textbf{Properties checked}: no stranded commands, publication after tick completion, clean termination without deadlock.
 \end{itemize}
 
