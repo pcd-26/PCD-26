@@ -53,9 +53,9 @@ During the development of the project and the preparation of this report, the au
 
 \section{Introduction}
 
-Assignment 1 asks for a concurrent version of \emph{Poool} with two implementations: one based on platform threads and one based on the Executor framework. The assignment brief also asks for a sequential version, performance tests, and verification with model checking.
+Assignment 1 requires three execution strategies for \emph{Poool}: a sequential baseline, a platform-thread implementation, and a task-based implementation built on the Executor framework. The brief also asks for performance measurements and verification with model checking.
 
-The delivered project contains three execution strategies:
+The delivered project provides the following execution strategies:
 
 \begin{itemize}
     \item a sequential baseline;
@@ -63,11 +63,11 @@ The delivered project contains three execution strategies:
     \item a task-based implementation.
 \end{itemize}
 
-The source tree separates the shared game model from the execution strategy. The same domain rules are reused by the three launchers.
+All three launchers reuse the same game rules.
 
 \section{Problem Analysis}
 
-The game board contains many small balls and two cue balls, one for the human player and one for the bot. The rules described in the assignment brief are the following:
+The board contains many small balls and two cue balls, one for the human player and one for the bot. The assignment rules are as follows:
 
 \begin{itemize}
     \item balls move, bounce, collide, and slow down because of friction;
@@ -81,40 +81,35 @@ The concurrent part of the assignment requires controlled access to shared state
 
 \section{Design}
 
-The code is organized into separate packages that separate domain logic, execution strategies, and presentation concerns. The main application modules under \texttt{src/main/java/pcd/poool} are the shared model, the runtime support layer, the sequential launcher, the platform-thread launcher and engine, the task-based launcher and engine, and the view layer.
+The architecture is structured around three functional layers: the shared model owns the rules and the mutable game state; the execution layer advances the match and serializes asynchronous actions; and the view layer consumes immutable snapshots rather than the live board.
+
+This separation allows the sequential, platform-thread, and task-based versions to share the same domain semantics. Command submission, snapshot publication, and physics stepping remain in distinct modules, which preserves clear ownership boundaries in the concurrent protocol.
 
 \subsection{Shared model}
 
-The shared model contains the game rules and the physics data structures. The implementation reuses the same model classes across the sequential, threaded, and task-based versions.
+The shared model contains the game rules, the board state, and the physics data structures. \texttt{GameModel} determines match progression, while the physics engine is supplied by the launcher.
 
 \subsection{Sequential baseline}
 
-The sequential runtime owns a single \texttt{GameModel} and advances the board on one thread. It is the baseline used in the benchmark data.
+The sequential version advances the game on one thread. It serves as the reference point for validation and performance comparison.
 
 \subsection{Platform-thread runtime}
 
-The platform-thread implementation uses a controller/worker structure. The controller advances the match and the workers compute bounded pieces of the physics work. The runtime support classes include:
-
-\begin{itemize}
-    \item \texttt{CommandQueueMonitorSupport};
-    \item \texttt{CommandReceiptSupport};
-    \item \texttt{SnapshotStoreSupport};
-    \item \texttt{WorkerCompletionMonitor}.
-\end{itemize}
+The platform-thread version uses a controller/worker structure. The controller advances the match and publishes snapshots, whereas worker threads execute bounded physics work under controlled synchronization.
 
 \subsection{Task-based runtime}
 
-The task-based implementation uses the Executor framework. The controller serializes the match state, and the expensive work is split into tasks submitted to an executor.
+The task-based version follows the same ownership rule, but it expresses parallel work as executor tasks rather than long-lived workers. Tasks compute partial results, the controller merges them, and the new state is published only after the merge.
 
 \subsection{Snapshots and view data}
 
-The GUI reads snapshot data rather than the mutable board directly. The view layer uses separate view model and snapshot classes.
+The GUI reads immutable snapshots instead of the mutable board. Rendering remains separate from simulation and synchronization.
 
 \section{Implementation}
 
 \subsection{Main launchers}
 
-The project contains three main entry points:
+The three main entry points are:
 
 \begin{itemize}
     \item \texttt{pcd.poool.SequentialPoool};
@@ -122,41 +117,44 @@ The project contains three main entry points:
     \item \texttt{pcd.poool.TaskBasedPoool}.
 \end{itemize}
 
-\subsection{Physics pipeline}
+\subsection{Core modules}
 
-Each simulation tick follows the same sequence:
+The \texttt{model/common/math} package contains the immutable geometric primitives used throughout the project. The \texttt{model/physics/common} package contains the board, balls, holes, and the shared physics abstractions. The \texttt{model/game} package defines the game rules and the logical snapshots.
 
-\begin{enumerate}
-    \item collect the active balls;
-    \item integrate movement and friction;
-    \item apply boundary interactions and hole effects;
-    \item build collision candidates;
-    \item resolve collisions;
-    \item commit the resulting state;
-    \item publish a snapshot.
-\end{enumerate}
+The physics implementations are split by execution strategy. \texttt{model/physics/sequential} provides the baseline stepping logic, \texttt{model/physics/threaded} contains the platform-thread engine, and \texttt{model/physics/taskbased} contains the executor-based engine.
 
-The concurrent implementations parallelize the expensive portions of this pipeline and keep the merge and commit phases serialized.
+The \texttt{runtime} package provides command queues, command receipts, snapshot publication, and bot coordination. The \texttt{view} package contains the Swing-facing classes that render immutable state.
 
-\subsection{Project structure}
+\subsection{Important classes}
 
-The source tree is organized into the following areas:
+The principal classes are:
 
 \begin{itemize}
-    \item \texttt{model}: rules, physics, and domain objects;
-    \item \texttt{runtime}: command queues and snapshot support;
-    \item \texttt{sequential}: sequential execution entry points and baseline runtime;
-    \item \texttt{threaded}: platform-thread orchestration;
-    \item \texttt{taskbased}: executor-oriented orchestration;
-    \item \texttt{view}: rendering and UI-facing view models;
-    \item \texttt{verification}: JPF harnesses and Petri-net notes.
+\item \texttt{GameModel}: owns the game rules and advances the match state;
+\item \texttt{Board}: owns the mutable physical state and delegates stepping to a physics engine;
+\item \texttt{PhysicsEngine}, \texttt{ThreadedPhysicsEngine}, and \texttt{TaskBasedPhysicsEngine}: implement the simulation strategies;
+\item \texttt{ThreadedGameRunner} and \texttt{TaskBasedGameRunner}: coordinate asynchronous commands, controller ticks, and snapshot publication;
+\item \texttt{RuntimeGameSnapshot}: packages immutable state for the GUI and asynchronous observers;
+\item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport}: implement the monitor-based coordination used by the concurrent runtime.
 \end{itemize}
 
 \section{Verification and Testing}
 
-The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. The tests cover the game model, the physics engines, the runtime helpers, the view model, and the benchmark utilities.
+The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. They cover the game model, the physics engines, the runtime helpers, the view model, and the benchmark utilities.
 
-The repository also includes JPF harnesses and Petri-net notes in the verification area of the working tree. These materials describe the concurrent coordination protocol at a smaller level of abstraction than the full simulation.
+These tests cover the model, the physics engines, the runtime helpers, the concurrent runners, and the view layer.
+
+\subsection{Petri nets}
+
+The behavior of the concurrent protocol can be described with an abstract Petri net. The model does not represent the full physics of the game; instead, it captures one simulation tick as a sequence of controlled phases. In particular, it represents command draining, ownership of the board during a tick, worker execution, barrier synchronization, and snapshot publication.
+
+The resulting abstraction is small enough to reason about, but still expressive enough to justify the most relevant safety properties. A tick starts only when the controller owns the board and the command queue has been drained. Worker or task phases then execute on private work units or partial results, and the snapshot is published only after the merge and commit point has been reached. This captures the intended single-writer discipline of the concurrent runtime.
+
+\subsection{JPF model checking}
+
+The repository also includes minimal JPF harnesses in the verification area of the working tree. These harnesses are deliberately smaller than the production runtime: they model a controller, a bounded amount of worker or task activity, a command queue, and the publication step. The goal is to verify the control protocol, not the numerical physics engine.
+
+The JPF models check that commands are not stranded, that publication happens after the tick is complete, and that the reduced protocol can terminate cleanly without deadlock. This is enough to validate the coordination pattern used by both the platform-thread and task-based implementations.
 
 \section{Results and Discussion}
 
