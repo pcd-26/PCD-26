@@ -205,6 +205,16 @@ state. Input and bot actions are queued as commands, the controller thread
 drains them, physics is stepped through the threaded physics engine, and the
 view receives immutable snapshots.
 
+The current threaded physics pipeline is staged:
+
+- active balls are split into contiguous index ranges;
+- each worker integrates its range and builds a private center-cell grid;
+- the controller merges the local grids into one deterministic ordered view;
+- occupied cells are assigned to workers again for collision resolution;
+- each worker accumulates sparse deltas and local collision pairs;
+- the controller merges the sparse results, records collisions in order, and
+  applies the final board writes after the barrier.
+
 ### 6.3 Task-based runtime
 
 The task-based runtime mirrors the threaded one, but uses an executor-backed
@@ -214,7 +224,13 @@ The important point for the report is that:
 
 - the execution policy changes;
 - the shared game semantics do not;
-- the same high-level state ownership rules still apply.
+- the same high-level state ownership rules still apply;
+- the worker barrier is implemented with `Future` joins instead of
+  long-lived thread joins;
+- the task-based engine follows the same staged grid/merge/resolve/commit
+  logic as the threaded engine;
+- small workloads may execute a single range directly to avoid executor
+  overhead.
 
 ### 6.4 View model and snapshots
 
@@ -424,10 +440,12 @@ big physics method".
 
 What to say in the report:
 
-- a tick integrates movement;
-- holes are applied;
-- collision candidates are built;
-- collisions are resolved;
+- a tick starts from a controller-owned board state;
+- active balls are partitioned into contiguous ranges;
+- each range is integrated in parallel;
+- hole interactions are applied serially on the authoritative board;
+- collision work builds private local grids and then merges them deterministically;
+- occupied cells are resolved once, with sparse per-worker delta accumulation;
 - the resulting state is committed;
 - only after that a snapshot is published.
 
@@ -445,9 +463,10 @@ computationally heavy parts of the tick.
 
 What to say in the report:
 
-- the board is split into disjoint work ranges or cells;
+- the board is split into disjoint work ranges first, then into ordered
+  occupied cells for collision resolution;
 - workers compute in parallel on private or disjoint data;
-- the coordinator merges the results deterministically;
+- the coordinator merges local grids and sparse deltas deterministically;
 - this is where the speedup comes from.
 
 This is the right place to mention:

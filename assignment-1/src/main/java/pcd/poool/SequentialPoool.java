@@ -6,6 +6,7 @@ import pcd.poool.model.game.Player;
 import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.config.StandardGameBoardConf;
+import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
 
@@ -90,7 +91,7 @@ public class SequentialPoool {
      * @return a new GameModel
      */
     private static GameModel newGame() {
-        return new GameModel(new StandardGameBoardConf());
+        return new GameModel(new StandardGameBoardConf(), new SequentialPhysicsEngine());
     }
 
     /**

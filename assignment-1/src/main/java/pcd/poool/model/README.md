@@ -55,7 +55,7 @@ These types are shared by physics, view, and tests.
 
 ### `physics/sequential`
 
-- `PhysicsEngine.java`
+- `SequentialPhysicsEngine.java`
   Sequential implementation of `PhysicsStepper`.
 
 ### `physics/threaded`

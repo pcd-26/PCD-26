@@ -19,7 +19,7 @@ import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.SpatialCollisionDetector.Pair;
-import pcd.poool.model.physics.sequential.PhysicsEngine;
+import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
 class TaskBasedPhysicsEngineTest {
@@ -53,7 +53,7 @@ class TaskBasedPhysicsEngineTest {
     void taskBasedPhysicsMatchesSequentialOutcomeWithoutCollisions() {
         var conf = new SeparatedMotionBoardConf();
 
-        var sequentialBoard = new Board(new PhysicsEngine());
+        var sequentialBoard = new Board(new SequentialPhysicsEngine());
         sequentialBoard.init(conf);
         sequentialBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
         sequentialBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
@@ -82,7 +82,7 @@ class TaskBasedPhysicsEngineTest {
     void taskBasedPhysicsMatchesSequentialOutcomeWithSingleWorker() {
         var conf = new SeparatedMotionBoardConf();
 
-        var sequentialBoard = new Board(new PhysicsEngine());
+        var sequentialBoard = new Board(new SequentialPhysicsEngine());
         sequentialBoard.init(conf);
         sequentialBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
         sequentialBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
@@ -273,7 +273,7 @@ class TaskBasedPhysicsEngineTest {
     void taskBasedPhysicsMatchesSequentialOutcomeWithSimpleCollision() {
         var conf = new SimpleCollisionBoardConf();
 
-        var sequentialBoard = new Board(new PhysicsEngine());
+        var sequentialBoard = new Board(new SequentialPhysicsEngine());
         sequentialBoard.init(conf);
 
         try (var taskEngine = new TaskBasedPhysicsEngine(4)) {
@@ -297,7 +297,7 @@ class TaskBasedPhysicsEngineTest {
     void taskBasedPhysicsMatchesSequentialOutcomeWhenBallsArePocketed() {
         var conf = new PocketingBoardConf();
 
-        var sequentialBoard = new Board(new PhysicsEngine());
+        var sequentialBoard = new Board(new SequentialPhysicsEngine());
         sequentialBoard.init(conf);
 
         try (var taskEngine = new TaskBasedPhysicsEngine(4)) {

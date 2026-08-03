@@ -15,7 +15,7 @@ The project is split into four main layers:
 3. `model.game`
    Game rules built on top of the board and physics layer.
 4. `view` and runtime launchers
-   Swing rendering plus the sequential and multithreaded execution policies.
+   Swing rendering plus the sequential, platform-thread, and task-based execution policies.
 
 The key design choice is that the game model and the physics logic stay shared,
 while the execution strategy changes around them.
@@ -25,7 +25,9 @@ That means:
 - `SequentialPoool` runs the whole game from one loop.
 - `ThreadedGameRunner` runs the same logical game from a controller thread and
   delegates expensive physics phases to worker threads.
-- `Board` and `GameModel` are reused in both modes.
+- `TaskBasedGameRunner` runs the same logical game from a controller executor
+  and delegates expensive physics phases to executor tasks.
+- `Board` and `GameModel` are reused in all modes.
 
 ## 2. Package map
 
@@ -35,6 +37,8 @@ That means:
   Playable sequential launcher.
 - `ThreadedPoool`
   Playable platform-thread launcher.
+- `TaskBasedPoool`
+  Playable task-based launcher.
 
 These classes are application entry points. They assemble the runtime, create
 the Swing view, and keep refreshing the `ViewModel`.
@@ -101,6 +105,15 @@ termination, and winner calculation.
 
 This package contains the concurrency-specific runtime around the shared game
 model.
+
+### `pcd.poool.taskbased`
+
+- `TaskBasedGameRunner`
+  Main executor-based runtime coordinator.
+
+This package mirrors `pcd.poool.threaded`, but the controller uses a scheduled
+executor and the physics phase uses task submission and futures instead of
+long-lived worker threads.
 
 ### `pcd.poool.runtime`
 
@@ -220,7 +233,7 @@ In this mode, one loop owns all mutations. Swing still runs on the EDT for
 painting and input, but game state progression remains serialized by the main
 runtime loop.
 
-### 4.2 Multithreaded runtime
+### 4.2 Concurrent runtimes
 
 `ThreadedPoool` builds:
 
@@ -236,6 +249,11 @@ runtime loop.
 - one optional bot thread;
 - one `CommandQueueMonitorSupport`;
 - one `SnapshotStoreSupport`.
+
+`TaskBasedPoool` follows the same overall shape, but replaces the controller
+platform thread with a scheduled executor and replaces long-lived worker
+threads with a fixed executor pool inside `TaskBasedGameRunner` and
+`TaskBasedPhysicsEngine`.
 
 The controller thread is the single writer of `GameModel`.
 
@@ -256,6 +274,7 @@ This preserves a clear ownership rule:
 
 - `SequentialPoool` uses `GameModel`, `View`, and `ViewModel`.
 - `ThreadedPoool` uses `ThreadedGameRunner`, `View`, and `ViewModel`.
+- `TaskBasedPoool` uses `TaskBasedGameRunner`, `View`, and `ViewModel`.
 
 ### Game model
 
@@ -269,14 +288,17 @@ This preserves a clear ownership rule:
 - `PhysicsEngine` uses `Board` and `SpatialCollisionDetector`.
 - `ThreadedPhysicsEngine` uses `Board`, `PhysicsWorker`, and `WorkerCompletionMonitor`.
 
-### Threaded runtime
+### Concurrent runtimes
 
 - `ThreadedGameRunner` uses `GameModel`, `ThreadedPhysicsEngine`,
+  `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, and `BotAgent`.
+- `TaskBasedGameRunner` uses `GameModel`, `TaskBasedPhysicsEngine`,
   `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, and `BotAgent`.
 - `BotAgent` uses `SnapshotStoreSupport` snapshots and runner callbacks.
 - `CommandQueueMonitorSupport` stores `GameCommand` objects.
 - `GameCommand` executes against `GameModel`.
 - `ThreadedGameRunner` publishes `RuntimeGameSnapshot` into `SnapshotStoreSupport`.
+- `TaskBasedGameRunner` publishes `RuntimeGameSnapshot` into `SnapshotStoreSupport`.
 
 ### View
 
@@ -296,7 +318,9 @@ This preserves a clear ownership rule:
 4. In sequential mode, the launcher calls `GameModel.shootHuman(...)`.
 5. In threaded mode, the launcher calls `ThreadedGameRunner.shootHuman(...)`,
    which enqueues a `GameCommand`.
-6. The controller thread eventually executes the command on `GameModel`.
+6. In task-based mode, the launcher calls `TaskBasedGameRunner.shootHuman(...)`,
+   which enqueues a `GameCommand`.
+7. The controller eventually executes the command on `GameModel`.
 
 ### 6.2 Physics progression
 
