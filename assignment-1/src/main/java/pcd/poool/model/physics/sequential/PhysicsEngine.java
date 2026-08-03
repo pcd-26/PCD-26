@@ -41,9 +41,7 @@ public class PhysicsEngine implements PhysicsStepper {
      * Advances the board by the given elapsed time.
      *
      * <p>The elapsed time is split into bounded sub-steps to reduce numerical
-     * instability when a caller provides a large delta. The whole operation is
-     * synchronized on the board so direct callers preserve the single-writer
-     * ownership rule used by the concurrent architecture.
+     * instability when a caller provides a large delta.
      *
      * @param board board to mutate
      * @param elapsedMillis elapsed time in milliseconds
@@ -53,14 +51,11 @@ public class PhysicsEngine implements PhysicsStepper {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
-        // The board stays single-writer for the whole step.
-        synchronized (board) {
-            long remaining = elapsedMillis;
-            while (remaining > 0) {
-                long dt = Math.min(maxStepMillis, remaining);
-                stepOnce(board, dt);
-                remaining -= dt;
-            }
+        long remaining = elapsedMillis;
+        while (remaining > 0) {
+            long dt = Math.min(maxStepMillis, remaining);
+            stepOnce(board, dt);
+            remaining -= dt;
         }
     }
 
