@@ -182,6 +182,21 @@ The improvement does not come from changing the game rules, but from reducing co
 
 The implementation mirrors the design: the same game rules are reused by all launchers, while the execution strategy changes between the sequential, platform-thread, and task-based versions. The code is organized into separate packages for the model, the physics engines, the runtime helpers, and the Swing view, so the responsibilities remain visible in the source tree as well as in the report.
 
+The core of the project is the way the concurrent physics engines divide and reconcile work. They do \textbf{not} assign whole spatial zones to threads up front. Instead, they first split the active balls into \textbf{contiguous index ranges} so that each worker receives a \textbf{balanced slice} of the list. Each worker then performs the \textbf{expensive local work} on its own slice: it builds a private \textbf{spatial grid}, identifies the cells that matter, and computes the collision contributions for the cells it owns. The \textbf{coordinator} does not recompute that physics work from scratch; instead, it merges the \textbf{worker-local results} into one deterministic view, sorts the occupied cells, and applies the final shared updates to the \textbf{authoritative board state}.
+
+Before reaching this design, we also tried a more direct \textbf{cell-based partitioning} strategy, where each thread would own the work of a set of cells. In practice, that approach introduced too much \textbf{coordination overhead} for this project: the work was more fragmented, the ownership boundaries were harder to manage, and the final version with range-based partitioning and spatial reasoning performed better.
+
+This two-level structure is the important part to keep in mind:
+
+\begin{itemize}
+    \item \textbf{range partitioning}: the list of active balls is split into almost equal \textbf{contiguous chunks}, one per worker;
+    \item \textbf{spatial reasoning}: inside each chunk, balls are mapped to \textbf{grid cells} so the engine can inspect only likely collision candidates;
+    \item \textbf{canonical ownership}: each occupied cell is processed once, together with a fixed subset of neighboring cells, so cross-cell collisions are handled exactly once by the worker that owns that cell;
+    \item \textbf{deterministic merge}: the coordinator merges the \textbf{sparse worker-local results} and then applies the final writes to the authoritative board state.
+\end{itemize}
+
+This keeps collision handling \textbf{deterministic}, avoids \textbf{duplicate checks}, and still lets the \textbf{expensive physics work} run in parallel. In other words, the workers compute the physics, while the coordinator preserves a \textbf{single authoritative state} and commits the final outcome.
+
 \begin{itemize}
     \item \textbf{\texttt{pcd.poool.model}}: game rules, board state, and immutable snapshots;
     \item \textbf{\texttt{pcd.poool.model.physics}}: sequential, threaded, and task-based physics engines;
@@ -256,26 +271,51 @@ while (running) {
 }
 \end{lstlisting}
 
-The key classes here are \texttt{ThreadedGameRunner} and \texttt{ThreadedPhysicsEngine}. The runner serializes the game protocol, and the threaded physics engine parallelizes the expensive simulation work internally. Its implementation uses long-lived worker threads, local grids for collision detection, and a final merge/apply phase on the controller side.
+The key classes here are \texttt{ThreadedGameRunner} and \texttt{ThreadedPhysicsEngine}. The runner serializes the game protocol, and the threaded physics engine parallelizes the expensive simulation work internally. The most explicit handoff happens inside \texttt{runRanges()}, where the controller assigns one range of work to each worker thread.
 
-\begin{lstlisting}[style=codestyle,caption={Threaded collision work partitioning},label={lst:threaded-partitioning}]
-runRanges(orderedCells.size(), (from, to, workerIndex) -> {
-    var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
-    var pairAccumulator = new LongBag();
-    for (int i = from; i < to; i++) {
-        resolveOwnedCell(orderedCells.get(i), mergedGrid, balls,
-                deltaAccumulator, pairAccumulator);
-    }
-    localDeltas[workerIndex] = deltaAccumulator;
-    localPairs[workerIndex] = pairAccumulator;
-}, profile);
+\begin{lstlisting}[style=codestyle,caption={Range partitioning for worker assignment},label={lst:threaded-range-partition}]
+int workerCount = Math.min(workers.length, itemCount);
+int baseChunk = itemCount / workerCount;
+int remainder = itemCount % workerCount;
+int from = 0;
+for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
+    int chunkSize = baseChunk + (workerIndex < remainder ? 1 : 0);
+    int start = from;
+    int end = start + chunkSize;
+    int assignedWorker = workerIndex;
+    workers[workerIndex].assign(() -> rangeTask.run(start, end, assignedWorker), completion);
+    from = end;
+}
 \end{lstlisting}
 
-This is the most interesting part of the threaded version: workers do not mutate the board directly. They compute local contributions, and the controller merges the sparse results before writing them back to the authoritative state.
+\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/threaded/ThreadedPhysicsEngine.java}, lines 544--568.}
+
+This is the part that decides how the balls are split among workers: the work is divided into contiguous index ranges of almost equal size, with the remainder distributed among the first workers.
+
+In other words, a ball is assigned to the chunk identified by its position in \texttt{activeBalls}: the worker does not receive spatial zones, but a contiguous slice of the list, and it processes every ball in that slice in order.
+
+\begin{lstlisting}[style=codestyle,caption={Threaded handoff from controller to workers},label={lst:threaded-handoff}]
+for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
+    int chunkSize = baseChunk + (workerIndex < remainder ? 1 : 0);
+    int start = from;
+    int end = start + chunkSize;
+    int assignedWorker = workerIndex;
+    workers[workerIndex].assign(() -> rangeTask.run(start, end, assignedWorker), completion);
+    from = end;
+}
+
+completion.await();
+\end{lstlisting}
+
+\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/threaded/ThreadedPhysicsEngine.java}, lines 562--578.}
+
+This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the completion barrier has been reached.
+
+The collision phase then follows the same idea on top of this handoff: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns. The controller only merges the sparse results and applies the final writes to the authoritative board.
 
 \subsection{Task-based implementation}
 
-The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled controller executor for the tick and a separate executor for the bot when enabled. The task-based physics engine then splits the work into bounded tasks and waits for their completion before merging the results.
+The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled controller executor for the tick and a separate executor for the bot when enabled. The task-based physics engine still splits the active balls into contiguous ranges, but each range is submitted as a task rather than assigned to a long-lived worker thread.
 
 \begin{lstlisting}[style=codestyle,caption={Task-based controller scheduling},label={lst:taskbased-scheduling}]
 running = true;
@@ -283,7 +323,23 @@ controllerExecutor.scheduleAtFixedRate(this::tick, 0,
         config.tickMillis(), TimeUnit.MILLISECONDS);
 \end{lstlisting}
 
-Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied.
+\begin{lstlisting}[style=codestyle,caption={Task-based range partitioning},label={lst:taskbased-range-partition}]
+int workerCount = itemCount < MIN_ITEMS_FOR_PARALLEL_RANGES ? 1 : Math.min(poolSize, itemCount);
+int baseChunk = itemCount / workerCount;
+int remainder = itemCount % workerCount;
+var chunks = new ArrayList<RangeChunk>(workerCount);
+int from = 0;
+for (int i = 0; i < workerCount; i++) {
+    int chunkSize = baseChunk + (i < remainder ? 1 : 0);
+    int to = from + chunkSize;
+    chunks.add(new RangeChunk(from, to, i));
+    from = to;
+}
+\end{lstlisting}
+
+\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/model/physics/taskbased/TaskBasedPhysicsEngine.java}, lines 662--672.}
+
+Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. The collision phase still uses the same spatial logic as the threaded version; what changes is only the scheduling mechanism.
 
 \begin{lstlisting}[style=codestyle,caption={Task submission and synchronization},label={lst:taskbased-futures}]
 var futures = new ArrayList<Future<T>>(ranges.size());
