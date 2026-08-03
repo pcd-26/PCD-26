@@ -306,7 +306,7 @@ public final class ScalabilityBenchmarkRunner {
 
     private static void printUsage() {
         System.out.println("""
-                Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.ScalabilityBenchmarkRunner \
+                Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.runner.ScalabilityBenchmarkRunner \
                   [--implementation threads|executor|all] \
                   [--balls 2500] \
                   [--workers 1,2,4,8,...] \

@@ -195,7 +195,7 @@ public final class BenchmarkPipeline {
 
     private static void printUsage() {
         System.out.println("""
-                Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.BenchmarkPipeline \
+                Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.runner.BenchmarkPipeline \
                   [--mode full|speedup] \
                   [--profile full|speedup] \
                   [--results-root benchmarks/results] \
