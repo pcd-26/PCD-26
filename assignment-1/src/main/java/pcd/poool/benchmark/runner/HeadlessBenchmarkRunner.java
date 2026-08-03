@@ -344,7 +344,7 @@ public final class HeadlessBenchmarkRunner {
 
     private static void printUsage() {
         System.out.println("""
-                Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.HeadlessBenchmarkRunner \
+                Usage: java -cp assignment-1/target/classes pcd.poool.benchmark.runner.HeadlessBenchmarkRunner \
                   [--implementation all|sequential|threads|executor] \
                   [--balls 100,500,...] \
                   [--steps N] \
