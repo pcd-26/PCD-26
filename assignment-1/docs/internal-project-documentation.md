@@ -48,6 +48,17 @@ The game rules described in the brief are:
 The deliverable must include the source code and a `doc` directory with the
 final PDF report.
 
+## 2.1 Center of the work
+
+The center of the work of this project is the runtime flow:
+
+- one controller serializes the commands;
+- the physics phase handles the parallelizable simulation work;
+- snapshots isolate the view from live state;
+- the whole design preserves determinism while exploiting concurrency.
+
+This is the idea we should keep recovering when refining the report.
+
 ## 3. What the professor asked for, and where it is covered
 
 | Requirement from the brief | Where it is covered | Status |
