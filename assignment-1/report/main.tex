@@ -18,11 +18,13 @@
 \setlength{\emergencystretch}{2em}
 \renewcommand{\arraystretch}{1.12}
 
-\definecolor{codebg}{RGB}{248,248,248}
-\definecolor{codeframe}{RGB}{215,215,215}
-\definecolor{codekeyword}{RGB}{0,92,168}
-\definecolor{codecomment}{RGB}{0,128,0}
-\definecolor{codestring}{RGB}{160,32,0}
+\definecolor{codebg}{RGB}{249,250,252}
+\definecolor{codeframe}{RGB}{205,211,219}
+\definecolor{codekeyword}{RGB}{0,102,204}
+\definecolor{codetype}{RGB}{124,58,237}
+\definecolor{codecomment}{RGB}{92,104,120}
+\definecolor{codestring}{RGB}{196,52,43}
+\definecolor{codeaccent}{RGB}{0,145,145}
 
 \lstdefinestyle{codestyle}{
     basicstyle=\ttfamily\small,
@@ -38,8 +40,12 @@
     tabsize=4,
     language=Java,
     keywordstyle=\bfseries\color{codekeyword},
+    keywordstyle=[2]\bfseries\color{codetype},
     commentstyle=\itshape\color{codecomment},
     stringstyle=\color{codestring},
+    emph={game,board,executor,completion,rangeTask,viewModel,gameRef,workers,snapshot,controllerExecutor,botExecutor,physicsEngine},
+    morekeywords=[2]{List,ArrayList,Future,RuntimeException,TimeUnit,Math,Objects,TimeUnit,AtomicReference,Duration,V2d,Player,PhysicsDefaults,RuntimeGameSnapshot,SnapshotStoreSupport,CommandQueueMonitorSupport,ThreadedPhysicsEngine,TaskBasedPhysicsEngine,ThreadedGameRunner,TaskBasedGameRunner,GameModel,Board,BoardConf},
+    emphstyle=\color{codeaccent},
     captionpos=b
 }
 
@@ -310,11 +316,11 @@ This design keeps \textbf{one authoritative state} while moving the expensive ph
 
 \subsection{Implementation overview}
 
-The implementation mirrors the design: the same game rules are reused by all launchers, while the execution strategy changes between the sequential, \textbf{platform-thread}, and \textbf{task-based} versions. The code is split into the \textbf{model}, the \textbf{physics engines}, the \textbf{runtime helpers}, and the \textbf{Swing view}, so the responsibilities stay visible in the source tree.
+The implementation mirrors the design: the same \textbf{game rules} are reused by all launchers, while the \textbf{execution strategy} changes between the sequential, \textbf{platform-thread}, and \textbf{task-based} versions. The code is split into the \textbf{model}, the \textbf{physics engines}, the \textbf{runtime helpers}, and the \textbf{Swing view}, so the responsibilities stay visible in the source tree.
 
 The concurrent engines follow the same rule: the \textbf{controller} assigns work, the workers process \textbf{private slices}, and the controller merges the partial results into one \textbf{authoritative state}. The work is split into \textbf{contiguous ranges}, then into \textbf{private center-cell grids}, and finally into a \textbf{deterministic join} and commit phase.
 
-The difference between the two concurrent versions is the execution style. The threaded engine uses long-lived \textbf{platform workers} and a completion monitor; the task-based engine submits the same ranges to an \textbf{executor} and waits on \textbf{Future}s. In both cases, the local loop stays sequential inside each worker, and the task-based engine keeps a small-workload \textbf{fast path} when parallel decomposition is not worth the overhead.
+The difference between the two concurrent versions is the \textbf{execution style}. The threaded engine uses long-lived \textbf{platform workers} and a \textbf{completion monitor}; the task-based engine submits the same ranges to an \textbf{executor} and waits on \textbf{Future}s. In both cases, the local loop stays \textbf{sequential} inside each worker, and the task-based engine keeps a small-workload \textbf{fast path} when \textbf{parallel decomposition} is not worth the overhead.
 
 \begin{itemize}
     \item \textbf{\texttt{pcd.poool.model}}: game rules, board state, and immutable snapshots;
@@ -324,11 +330,11 @@ The difference between the two concurrent versions is the execution style. The t
     \item \textbf{\texttt{pcd.poool.view}} and \textbf{\texttt{pcd.poool.view.board}}: rendering and input handling.
 \end{itemize}
 
-The three public entry points are \texttt{SequentialPoool}, \texttt{ThreadedPoool}, and \texttt{TaskBasedPoool}. They build the corresponding runtime, connect it to the view, and keep the GUI loop separate from the simulation logic.
+The three public entry points are \texttt{SequentialPoool}, \texttt{ThreadedPoool}, and \texttt{TaskBasedPoool}. They build the corresponding \textbf{runtime}, connect it to the \textbf{view}, and keep the \textbf{GUI loop} separate from the \textbf{simulation logic}.
 
 \subsection{Core classes}
 
-The core classes reflect the separation between rules, mutable state, execution, and publication:
+The core classes reflect the separation between \textbf{rules}, \textbf{mutable state}, \textbf{execution}, and \textbf{publication}:
 
 \begin{itemize}
     \item \texttt{GameModel} (\path{pcd.poool.model.game}): game rules, scoring, end-game conditions, and logical snapshots;
@@ -341,9 +347,9 @@ The core classes reflect the separation between rules, mutable state, execution,
 
 \subsection{Sequential implementation}
 
-The sequential launcher is intentionally direct: one loop advances the simulation, updates the view model, and renders the frame. The game model and the view share the same object graph, but the simulation still remains easy to reason about because everything happens in order.
+The sequential version is the \textbf{baseline}: one loop advances the \textbf{simulation}, updates the \textbf{view state}, and renders the frame.
 
-The helper \texttt{advanceGame} only guards the finished-state check: \texttt{GameModel.step()} advances the board through \texttt{Board.updateState()}, then consumes score events and refreshes the game status.
+The helper \texttt{advanceGame} handles the \textbf{simulation step} and the \textbf{finished-state check}: \texttt{GameModel.step()} advances the board through \texttt{Board.updateState()}, then consumes score events and refreshes the game status.
 
 \begin{lstlisting}[style=codestyle,caption={Sequential main loop},label={lst:sequential-main-loop}]
 var game = gameRef.get();
@@ -373,11 +379,11 @@ view.render();
 
 \noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/SequentialPoool.java}, lines 61--82.}
 
-This version is useful as the semantic baseline. It defines the expected behavior of the game without introducing concurrency concerns, and it also shows the minimum amount of code needed to keep the GUI responsive.
+This version defines the expected behavior of the game without concurrency concerns.
 
 \subsection{Platform-thread implementation}
 
-The platform-thread version introduces a controller thread plus an optional bot thread. The controller is the only thread that mutates the model, while external producers submit commands through a monitor-backed queue. The threaded physics engine is still called from the controller, so the controller remains the single point where the match advances.
+The platform-thread version introduces a \textbf{controller thread} plus an optional \textbf{bot thread}. The controller is the only thread that mutates the \textbf{model}, while external producers submit commands through a \textbf{monitor-backed queue}. The threaded physics engine is still called from the controller, so the controller remains the \textbf{single point} where the match advances.
 
 \begin{lstlisting}[style=codestyle,caption={Threaded controller loop},label={lst:threaded-controller-loop}]
 while (running) {
@@ -390,26 +396,9 @@ while (running) {
 }
 \end{lstlisting}
 
-The key classes here are \texttt{ThreadedGameRunner} and \texttt{ThreadedPhysicsEngine}. The runner serializes the game protocol, and the threaded physics engine parallelizes the expensive simulation work internally. The most explicit handoff happens inside \texttt{runRanges()}, where the controller assigns one range of work to each worker thread.
+\noindent\textit{Source: \texttt{assignment-1/src/main/java/pcd/poool/threaded/ThreadedGameRunner.java}, lines 161--174.}
 
-\begin{lstlisting}[style=codestyle,caption={Range partitioning for worker assignment},label={lst:threaded-range-partition}]
-int workerCount = Math.min(workers.length, itemCount);
-int baseChunk = itemCount / workerCount;
-int remainder = itemCount % workerCount;
-int from = 0;
-for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
-    int chunkSize = baseChunk + (workerIndex < remainder ? 1 : 0);
-    int start = from;
-    int end = start + chunkSize;
-    int assignedWorker = workerIndex;
-    workers[workerIndex].assign(() -> rangeTask.run(start, end, assignedWorker), completion);
-    from = end;
-}
-\end{lstlisting}
-
-\noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 544--568.}
-
-This divides the work into contiguous index ranges of almost equal size, with the remainder distributed among the first workers. A worker does not receive spatial zones, but a contiguous slice of \texttt{activeBalls}, which it processes in order.
+The key classes here are \texttt{ThreadedGameRunner} and \texttt{ThreadedPhysicsEngine}. The runner serializes the game protocol, and the threaded physics engine parallelizes the expensive simulation work internally. The handoff happens inside \texttt{runRanges()}, where the controller assigns one \textbf{contiguous slice} to each \textbf{worker thread}.
 
 \begin{lstlisting}[style=codestyle,caption={Threaded handoff from controller to workers},label={lst:threaded-handoff}]
 for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
@@ -426,35 +415,45 @@ completion.await();
 
 \noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 562--578.}
 
-This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the completion barrier has been reached. The collision phase follows the same idea: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns before the controller merges the sparse results and applies the final writes to the authoritative board.
+This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the \textbf{completion barrier} has been reached. The collision phase follows the same idea: each worker computes local contributions on its own slice, builds a \textbf{private spatial view}, and resolves the cells it owns before the controller merges the sparse results and applies the final writes to the \textbf{authoritative board}.
+
+\begin{lstlisting}[style=codestyle,caption={Threaded cell reconstruction and collision dispatch},label={lst:threaded-cell-reconstruction}]
+var mergedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
+for (var localGrid : localGrids) {
+    if (localGrid == null) {
+        continue;
+    }
+    for (var entry : localGrid.entrySet()) {
+        mergedGrid.computeIfAbsent(entry.getKey(), ignored -> new IntBag()).addAll(entry.getValue());
+    }
+}
+
+var orderedCells = new ArrayList<CellBucket>(mergedGrid.size());
+for (var entry : mergedGrid.entrySet()) {
+    orderedCells.add(new CellBucket(entry.getKey(), entry.getValue()));
+}
+orderedCells.sort((first, second) -> first.cell().compareTo(second.cell()));
+
+var localDeltas = new SparseCollisionDeltaAccumulator[Math.min(workers.length, orderedCells.size())];
+var localPairs = new LongBag[Math.min(workers.length, orderedCells.size())];
+// Workers compute collision contributions from the same tick-start
+// state, but the authoritative board is still untouched here.
+runRanges(orderedCells.size(), (from, to, workerIndex) -> {
+    var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
+    var pairAccumulator = new LongBag();
+    for (int i = from; i < to; i++) {
+        resolveOwnedCell(orderedCells.get(i), mergedGrid, balls, deltaAccumulator, pairAccumulator);
+    }
+    localDeltas[workerIndex] = deltaAccumulator;
+    localPairs[workerIndex] = pairAccumulator;
+}, profile);
+\end{lstlisting}
+
+\noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 205--241.}
 
 \subsection{Task-based implementation}
 
-The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled single-thread controller executor for the tick and a separate executor for the bot. The task-based physics engine still splits the active balls into contiguous ranges, but each range is submitted as a task rather than assigned to a long-lived worker thread.
-
-\begin{lstlisting}[style=codestyle,caption={Task-based controller scheduling},label={lst:taskbased-scheduling}]
-running = true;
-controllerExecutor.scheduleAtFixedRate(this::tick, 0,
-        config.tickMillis(), TimeUnit.MILLISECONDS);
-\end{lstlisting}
-
-\begin{lstlisting}[style=codestyle,caption={Task-based range partitioning},label={lst:taskbased-range-partition}]
-int workerCount = itemCount < MIN_ITEMS_FOR_PARALLEL_RANGES ? 1 : Math.min(poolSize, itemCount);
-int baseChunk = itemCount / workerCount;
-int remainder = itemCount % workerCount;
-var chunks = new ArrayList<RangeChunk>(workerCount);
-int from = 0;
-for (int i = 0; i < workerCount; i++) {
-    int chunkSize = baseChunk + (i < remainder ? 1 : 0);
-    int to = from + chunkSize;
-    chunks.add(new RangeChunk(from, to, i));
-    from = to;
-}
-\end{lstlisting}
-
-\noindent\textit{Source: \path{TaskBasedPhysicsEngine.java}, lines 662--672.}
-
-Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. Tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a private local grid, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in deterministic order, and applies the accumulated deltas. The local grid is still built sequentially inside each task; the gain comes from running many task-local loops in parallel.
+The task-based version keeps the same \textbf{controller-driven protocol}, but the parallel physics phase is expressed as \textbf{executor tasks}. The runner uses a scheduled single-thread controller executor for the tick and a separate executor for the bot. Inside the physics engine, the work is executed through \textbf{Futures}: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a \textbf{private local grid}, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in \textbf{deterministic order}, and applies the accumulated deltas.
 
 \begin{lstlisting}[style=codestyle,caption={Task submission and synchronization},label={lst:taskbased-futures}]
 var futures = new ArrayList<Future<T>>(ranges.size());
@@ -468,27 +467,21 @@ for (var future : futures) {
 }
 \end{lstlisting}
 
-Compared with the threaded implementation, the control protocol is the same at the report level. What changes is the execution style: long-lived workers on one side, scheduled tasks on the other.
+\noindent\textit{Source: \path{TaskBasedPhysicsEngine.java}, lines 552--566.}
+
+Compared with the threaded implementation, the \textbf{control protocol} is the same at the report level. What changes is the \textbf{execution style}: long-lived workers on one side, scheduled tasks on the other.
 
 \subsection{Runtime snapshots and coordination helpers}
 
-\texttt{RuntimeGameSnapshot} is the bridge between the model and the GUI. It combines the logical \texttt{GameSnapshot} with the copied board and preview data used by the view, so rendering never needs to inspect mutable state directly.
+\texttt{RuntimeGameSnapshot} is the bridge between the \textbf{model} and the \textbf{GUI}. It combines the logical \texttt{GameSnapshot} with the copied board and preview data used by the view, so rendering never needs to inspect \textbf{mutable state} directly.
 
-\begin{lstlisting}[style=codestyle,caption={Runtime snapshot construction},label={lst:runtime-snapshot}]
-return new RuntimeGameSnapshot(
-        game.snapshot(),
-        List.copyOf(board.getBalls()),
-        board.getPlayerBall(),
-        board.getBotBall(),
-        List.copyOf(board.getHoles()),
-        game.previewBotShot());
-\end{lstlisting}
+The concurrent runners publish those snapshots through \texttt{SnapshotStoreSupport}, which acts as a \textbf{monitor} around the latest \textbf{immutable state}. Commands follow the same idea through \texttt{CommandQueueMonitorSupport}: external threads enqueue requests, and the controller drains them \textbf{sequentially}.
 
-The concurrent runners publish those snapshots through \texttt{SnapshotStoreSupport}, which acts as a monitor around the latest immutable state. Commands follow the same idea through \texttt{CommandQueueMonitorSupport}: external threads enqueue requests, and the controller drains them sequentially.
+In practice, \texttt{RuntimeGameSnapshot} is the only consistent state exposed to the view, while the mutable board remains internal to the controller and physics layers.
 
 \subsection{Implementation summary}
 
-Overall, the implementation keeps the domain model small and central, pushes concurrency into the runtime and physics layers, and uses immutable snapshots to isolate the view. The result is a code base where the sequential, threaded, and task-based versions differ mainly in scheduling, not in game semantics.
+Overall, the implementation keeps the \textbf{domain model} small and central, pushes \textbf{concurrency} into the runtime and physics layers, and uses \textbf{immutable snapshots} to isolate the view. The result is a code base where the sequential, threaded, and task-based versions differ mainly in \textbf{scheduling}, while the game semantics and the authoritative state remain the same.
 
 \clearpage
 \section{Verification and Testing}
