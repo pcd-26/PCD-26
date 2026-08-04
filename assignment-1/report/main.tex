@@ -542,36 +542,25 @@ The threaded model explores a larger state space because its worker thread stays
 
 \subsection{Benchmark Methodology}
 
-All benchmark values come from the repository benchmark pipeline launched from the assignment root with
-\begin{verbatim}
-python scripts/run_benchmarks.py --mode speedup
-\end{verbatim}
-That profile clears and regenerates the benchmark
-snapshot, keeps the timed section limited to the simulation loop, and exports the median-centered speedup data
-used in this report.
+All benchmark values come from the CSV files in \texttt{assignment-1/report/data/}, and the figures in
+\texttt{assignment-1/report/images/} visualize the same summaries. The report uses a speedup snapshot with
+\textbf{1000}, \textbf{1500}, \textbf{2000}, and \textbf{2500} balls at \textbf{600} steps, seed \texttt{42}, and a
+worker-count snapshot for \textbf{2500} balls at \textbf{1000} steps, seed \texttt{42}.
 
 \begin{itemize}
-    \item \textbf{Profile}: speedup;
-    \item \textbf{Warmup runs}: 2;
-    \item \textbf{Measured runs}: 5;
-    \item \textbf{Seed}: \texttt{42};
     \item \textbf{Environment}: OpenJDK 17.0.19+10 on Windows 11, amd64;
     \item \textbf{Visible cores}: 16;
-    \item \textbf{Measured metrics}: median elapsed time, median throughput, speedup, and the worker-count derived speedup tables;
-    \item \textbf{Comparability rule}: sequential, threaded, and executor-based runs are compared only when they share the same deterministic workload parameters.
+    \item \textbf{Measured metrics}: median elapsed time, median throughput, and speedup;
+    \item \textbf{Comparability rule}: only runs with the same workload parameters are compared.
 \end{itemize}
 
-The first table summarizes the speedup snapshot for the larger speedup-gate workload subset in
-\texttt{speedup-results.csv} (\textbf{1000}, \textbf{1500}, \textbf{2000}, and \textbf{2500} balls) with
-\textbf{600} simulation steps and seed \texttt{42}. The second table uses the scalability snapshot
-for \textbf{2500 balls}, \textbf{1000} simulation steps, and seed \texttt{42}, varying the worker
-count over \textbf{1, 2, 4, 8, 16, 17}.
+The first table summarizes the speedup snapshot; the second table and the second figure summarize the worker-count
+snapshot.
 
 \begin{itemize}
     \item \textbf{Speedup table}: compares the sequential median with the concurrent medians across workloads;
-    \item \textbf{Worker table}: shows how the two concurrent versions scale as worker count changes on the 2500-ball workload;
-    \item \textbf{Interpretation}: larger workloads benefit more because the parallelizable physics work outweighs the remaining serial portion;
-    \item \textbf{Note}: the strict speedup profile disables per-step profiling, so the coordination columns in the exported CSV stay at zero and are not used as direct timing evidence.
+    \item \textbf{Worker table}: shows the 2500-ball scaling trend as worker count changes;
+    \item \textbf{Interpretation}: larger workloads benefit more because the parallelizable physics work outweighs the remaining serial portion.
 \end{itemize}
 
 The speedup snapshot contains the following values:
@@ -586,32 +575,32 @@ The speedup snapshot contains the following values:
 Balls & Implementation & Seq. median [ms] &
 Concurrent median [ms] & Speedup \\
 \hline
-1000 & threads  & 138.3033 & 123.2250 & 1.122 \\
-1000 & executor & 138.3033 & 122.5104 & 1.129 \\
-1500 & threads  & 227.0506 & 153.1364 & 1.483 \\
-1500 & executor & 227.0506 & 153.9437 & 1.475 \\
-2000 & threads  & 335.7996 & 193.4836 & 1.736 \\
-2000 & executor & 335.7996 & 197.4687 & 1.701 \\
-2500 & threads  & 450.8448 & 242.6481 & 1.858 \\
-2500 & executor & 450.8448 & 237.5317 & 1.898 \\
+1000 & threads  & 160.7222 & 121.9934 & 1.317 \\
+1000 & executor & 160.7222 & 122.5032 & 1.312 \\
+1500 & threads  & 218.5564 & 147.9144 & 1.478 \\
+1500 & executor & 218.5564 & 152.4402 & 1.434 \\
+2000 & threads  & 333.9983 & 189.0304 & 1.767 \\
+2000 & executor & 333.9983 & 195.0706 & 1.712 \\
+2500 & threads  & 442.0050 & 248.3088 & 1.780 \\
+2500 & executor & 442.0050 & 242.8611 & 1.820 \\
 \hline
 \end{tabular}
 \caption{
-    Median speedup values for the speedup-gate workload subset in
-    \texttt{speedup-results.csv} (1000, 1500, 2000, and 2500 balls;
-    600 steps; seed 42) on Windows 11 amd64 with OpenJDK 17.0.19+10
-    and 16 visible cores.
+    Median speedup values for the local speedup snapshot (1000, 1500,
+    2000, and 2500 balls; 600 steps; seed 42) on Windows 11 amd64 with
+    OpenJDK 17.0.19+10 and 16 visible cores.
 }
 \end{table}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=\linewidth]{images/speedup-vs-balls.png}
-\caption{Speedup as the number of balls increases for the speedup-gate workload subset in \texttt{speedup-results.csv} (1000 to 2500 balls; 600 steps; seed 42) with 16 workers on Windows 11 amd64 and OpenJDK 17.0.19+10.}
+\caption{Speedup as the number of balls increases for the local speedup snapshot
+(1000 to 2500 balls; 600 steps; seed 42) with 16 workers.}
 \end{figure}
 
-The worker-count snapshot contains the following medians for the scalability workload
-\textbf{2500 balls}, \textbf{1000} steps, seed \texttt{42}, and worker counts \textbf{1, 2, 4, 8, 16, 17}.
+The worker-count snapshot contains the medians for the 2500-ball scalability workload with \textbf{1000} steps and
+seed \texttt{42}.
 
 \begin{table}[htbp]
 \centering
@@ -622,43 +611,44 @@ The worker-count snapshot contains the following medians for the scalability wor
 \hline
 Implementation & Workers & Median [ms] & Speedup vs. seq. \\
 \hline
-threads  & 1  & 1194.7983 & 0.609 \\
-threads  & 2  & 760.2068  & 0.957 \\
-threads  & 4  & 470.0837  & 1.548 \\
-threads  & 8  & 498.5102  & 1.460 \\
-threads  & 16 & 427.2735  & 1.703 \\
-threads  & 17 & 491.0370  & 1.482 \\
-executor & 1  & 1424.2474 & 0.511 \\
-executor & 2  & 843.0608  & 0.863 \\
-executor & 4  & 582.6597  & 1.249 \\
-executor & 8  & 522.3624  & 1.393 \\
-executor & 16 & 472.7956  & 1.539 \\
-executor & 17 & 442.4130  & 1.645 \\
+threads  & 1  & 1199.2934 & 0.644 \\
+threads  & 2  & 740.1627  & 1.044 \\
+threads  & 4  & 479.0954  & 1.612 \\
+threads  & 8  & 428.8478  & 1.801 \\
+threads  & 16 & 407.5252  & 1.895 \\
+threads  & 17 & 427.0086  & 1.809 \\
+executor & 1  & 1220.2477 & 0.633 \\
+executor & 2  & 759.3341  & 1.017 \\
+executor & 4  & 498.3909  & 1.550 \\
+executor & 8  & 451.4644  & 1.711 \\
+executor & 16 & 409.4617  & 1.886 \\
+executor & 17 & 413.8571  & 1.866 \\
 \hline
 \end{tabular}
 \caption{
-    Worker-count medians for the 2500-ball scalability workload
-    (1000 steps; seed 42) comparing sequential, threaded, and
-    executor runs at 1, 2, 4, 8, 16, and 17 workers.
+    Worker-count medians for the local 2500-ball scalability workload
+    (1000 steps; seed 42) comparing the concurrent runs against the
+    sequential baseline at 1, 2, 4, 8, 16, and 17 workers.
 }
 \end{table}
 
-These numbers show a clear trend: the concurrent versions start close to the sequential baseline on small workloads, then improve as the workload grows and the fixed serial portion is amortized. On the 2500-ball speedup snapshot, the executor-based row is slightly faster than the threaded row, reducing the median from 450.8448 ms sequential to 237.5317 ms instead of 242.6481 ms. On the worker-count snapshot, the threaded engine reaches its best median at 16 workers, with 427.2735 ms versus the 727.6794 ms sequential baseline, for a speedup of 1.703 and an efficiency of about 10.6 percent. The executor-based engine reaches 442.4130 ms at 17 workers, for a speedup of 1.645 and an efficiency of about 9.7 percent. Those efficiencies are far below 1, so the data still show a strong serial bottleneck and a meaningful coordination cost, even when the absolute runtime improves.
+The \textbf{benchmark evidence} shows a real but \textbf{sublinear} gain. On the speedup snapshot, both concurrent versions improve as the workload grows, with the executor-based engine slightly ahead at 2500 balls and the threaded engine slightly ahead on the smaller workloads. On the worker-count snapshot, both versions improve up to 16 workers, then flatten or regress at 17, which is consistent with a \textbf{serial bottleneck} and \textbf{coordination overhead}.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.84\linewidth]{images/speedup-vs-workers.png}
-\caption{Speedup as the worker count changes for the 2500-ball scalability workload (1000 steps; seed 42).}
+\caption{Speedup as the worker count changes for the local 2500-ball scalability
+workload (1000 steps; seed 42).}
 \end{figure}
 
 \clearpage
 \section{Conclusions}
 
-The delivered project satisfies the three required execution strategies while keeping the shared game semantics stable across them. The report now reflects the actual implementation flow: the controller remains the single writer, the heavy physics phases are split into worker-local chunks, and the partial results are joined before the snapshot is published.
+This project implements the three required execution strategies: sequential, platform-thread, and task-based. In both concurrent versions, the \textbf{controller} is the \textbf{single writer} of the game flow and preserves the \textbf{authoritative state} deterministically, while workers only execute bounded physics slices.
 
-The benchmark evidence is consistent across the two exported snapshots. For the speedup-gate workloads, both concurrent versions beat the sequential baseline once the workload reaches 1000 balls and above, and the best snapshot value in that family is the task-based run on 2500 balls at 237.5317 ms. For the scalability snapshot, the threaded engine is best at 16 workers, while the executor-based engine is best at 17 workers; neither scales linearly, and both stay far from ideal efficiency, which points to non-negligible serial work and coordination overhead.
+The benchmark files and figures in \texttt{assignment-1/report/data/} and \texttt{assignment-1/report/images/} show consistent but limited gains. For the speedup workloads, both concurrent versions beat the sequential baseline from 1000 balls upward, and the best median in that set is the executor run on 2500 balls (\texttt{242.8611 ms}, \texttt{1.819991} speedup). For the 2500-ball scalability run, performance improves up to 16 workers and then flattens or slightly regresses at 17, so scaling remains \textbf{sublinear}.
 
-The verification story is also bounded in a controlled way. The Petri nets explain the control protocol at the level requested by the assignment, and the JPF harnesses confirm that the reduced synchronization models terminate without deadlock or assertion failure. What these results do not prove is the full numerical physics of the game, GUI performance, or large-scale scaling beyond the measured workloads.
+The verification evidence is intentionally narrower than the full game. The \textbf{Petri nets} and \textbf{JPF harnesses} model \textbf{reduced synchronization models} for the coordination protocol, but they do not prove the full game, the numerical physics, or general performance. The report therefore establishes a deterministic concurrent design with measured speedups, while also making its limits explicit.
 
 \clearpage
 \section{How to Run}
