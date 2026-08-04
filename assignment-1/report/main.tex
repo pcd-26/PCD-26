@@ -278,23 +278,24 @@ The figure above keeps only the control flow: \textit{Tick ready} enters the box
 
 \subsection{Platform-thread version}
 
-The platform-thread version uses one controller thread plus long-lived worker platform threads. The controller keeps ownership of the global progression of the match, while workers handle the parallelizable part of the physics workload. This gives the runtime a clear control point while still allowing the expensive simulation work to run concurrently.
+The platform-thread version uses one \textbf{controller thread} plus long-lived \textbf{worker platform threads} inside the physics engine. The controller keeps ownership of the global progression of the match, while workers handle the \textbf{parallelizable physics work}. This matches the actual implementation: commands are queued in the shared \textbf{commands} monitor, executed on the controller thread, physics workers stay confined to private chunks, and the controller publishes the \textbf{immutable snapshot} after each tick.
 
 \begin{itemize}
-    \item the controller remains responsible for the global tick;
+    \item the controller executes pending commands and advances the global tick;
     \item workers handle bounded pieces of the physics workload;
-    \item the controller also merges the partial results produced by the workers and applies the final state changes;
-    \item the phase boundaries stay explicit, so the protocol remains deterministic.
+    \item the physics engine keeps the \textbf{merge} and \textbf{apply} phases serialized;
+    \item the bot runs on a separate platform thread and submits commands to the shared \textbf{commands} queue.
 \end{itemize}
 
 \subsection{Task-based version}
 
-The task-based version keeps a single controller thread for the serial phases of the tick, while the parallelizable physics work is expressed as executor tasks. The controller submits the tasks, waits for completion, merges the partial results, and publishes the final snapshot only after the merge is complete. The difference is mainly in how the concurrent work is represented and scheduled, and the task-based engine also keeps a fast path for small workloads where the single range is executed directly.
+The task-based version keeps the same \textbf{single-writer rule}, but it schedules the controller tick with a \textbf{single-thread scheduled executor}. The parallelizable physics work is expressed as \textbf{executor tasks}, and the controller waits on \textbf{Futures} before merging the partial results and publishing the next snapshot. The bot is separate from the physics tasks: it runs on a dedicated single-thread executor and submits commands to the shared \textbf{commands} queue. The implementation also keeps a \textbf{fast path} for workloads below the parallelization threshold or with a single worker, where the range decomposition produces one range that is executed directly.
 
 \begin{itemize}
-    \item the controller keeps the serial phases of the tick;
+    \item the controller tick is scheduled periodically by the executor;
     \item tasks compute the parallelizable physics work independently;
-    \item the controller merges the partial results and publishes the next snapshot only after the merge is complete.
+    \item the controller merges the partial results and publishes the next snapshot only after the join barrier;
+    \item the bot runs on a dedicated single-thread executor and still submits commands to the shared \textbf{commands} queue.
 \end{itemize}
 
 \subsection{Shared state and snapshots}
