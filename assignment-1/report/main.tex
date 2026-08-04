@@ -6,7 +6,7 @@
 \usepackage{xcolor}
 \usepackage{listings}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning}
+\usetikzlibrary{arrows.meta, positioning, fit}
 \usepackage[hidelinks]{hyperref}
 
 \newcommand{\italiantoday}{%
@@ -118,7 +118,7 @@ The concurrent part of the assignment is therefore a matter of separating the si
 \section{Design}
 
 \noindent
-The design is based on a clear separation of responsibilities. The model contains the game rules and state, while the rest of the architecture is organized around a controller/runtime and a view.
+The design is based on separation of responsibilities. The model contains the game rules and state, while the rest of the architecture is organized around a controller/runtime and a view.
 
 The three implementations share the same game logic and differ only in their runtime organization.
 
@@ -134,13 +134,11 @@ The project architecture is built around three stable elements:
 
 The same structure is reused by the \textbf{sequential}, \textbf{platform-thread}, and \textbf{task-based} launchers, while only the \textbf{execution policy} changes.
 
-The \textbf{sequential} version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version is simple on purpose: it defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
+The \textbf{sequential} version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
 
 \subsection{Designing the concurrent solution}
 
-The design idea is simple: each tick has a part that can be split across workers and a part that must stay under one controller. The parallel part is the expensive physics work; the serial part is the coordination that keeps the match coherent.
-
-At this level, the description is limited to phase responsibilities. Some phases read the current state and produce partial results, while other phases merge those results, apply the final state changes, and publish the next snapshot. The internal mechanics of worker execution are described in the implementation section.
+Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. We carried out an analysis of the \textbf{parallelizable} and \textbf{non parallelizable} parts of the system.
 
 \begin{table}[ht]
 \centering
@@ -165,14 +163,13 @@ At this level, the description is limited to phase responsibilities. Some phases
 \begin{itemize}
     \item \textbf{Parallelizable}: local physics work over independent chunks of the simulation;
     \item \textbf{Not parallelizable}: command processing, merge/commit steps, score updates, game-over checks, and snapshot publication;
-    \item \textbf{Design goal}: keep one coherent game state while letting the heavy local work run in parallel.
 \end{itemize}
 
-This separation is what makes the design effective. The concurrent versions avoid letting multiple threads contend on the same mutable state, and they do not force the whole simulation to wait on fine-grained synchronization. The price is that the local work must be joined again at the end of the tick, but that join is the exact point where the shared state becomes coherent again.
+The design goal is to keep one game state while letting the heavy local work run in parallel.
 
 \subsection{Petri net of the concurrent tick}
 
-The following Petri net summarizes one controller tick at the level requested by the assignment. It deliberately abstracts away from the GUI and from the internal worker count, and it focuses on the control flow shared by the concurrent versions: the controller drains commands, starts the physics phase, waits for the worker-local results, publishes the snapshot, and then sleeps before the next tick. The model follows the standard place/transition interpretation of Petri nets \cite{petri1962,murata1989}.
+The following Petri net summarizes one controller tick. It abstracts away from implementation details and focuses on the shared control flow: drain commands, run the physics phase, join results, publish the snapshot, sleep. The model follows the standard place/transition interpretation of Petri nets \cite{petri1962,murata1989}. The detailed net below expands the dispatch phase.
 
 \begin{figure}[ht]
 \centering
@@ -184,14 +181,14 @@ The following Petri net summarizes one controller tick at the level requested by
     transition/.style={rectangle,draw,thick,minimum width=5mm,minimum height=11mm,align=center},
     every node/.style={font=\small}
 ]
-    \node[place] (idle) {Idle};
-    \node[transition, right=of idle] (drain) {Drain\\commands};
+    \node[place] (idle) {Controller\\idle};
+    \node[transition, right=of idle] (drain) {Collect\\commands};
     \node[place, right=of drain] (ready) {Tick\\ready};
     \node[transition, right=of ready] (dispatch) {Dispatch\\physics};
-    \node[place, right=of dispatch] (parallel) {Parallel\\physics};
-    \node[transition, right=of parallel] (join) {Join \&\\merge};
-    \node[place, right=of join] (published) {Snapshot\\published};
-    \node[transition, right=of published] (sleep) {Sleep};
+    \node[place, right=of dispatch] (parallel) {Physics\\done};
+    \node[transition, right=of parallel] (join) {Commit\\results};
+    \node[place, right=of join] (published) {Snapshot\\ready};
+    \node[transition, right=of published] (sleep) {Wait\\next tick};
 
     \draw[->,thick] (idle) -- (drain);
     \draw[->,thick] (drain) -- (ready);
@@ -203,14 +200,14 @@ The following Petri net summarizes one controller tick at the level requested by
     \draw[->,thick] (sleep) to[bend left=35] (idle);
 \end{tikzpicture}
 }%
-\caption{Petri net of the controller cycle in the concurrent versions. The initial marking places one token in \textit{Idle}.}
+\caption{Petri net of the controller cycle in the concurrent versions. The initial marking places one token in \textit{Controller idle}.}
 \label{fig:petri-concurrent-tick}
 \end{figure}
 
-This abstraction matches both concurrent implementations. The threaded version realizes the dispatch/join phases with long-lived workers, while the task-based version realizes the same phases through executor tasks and futures. The concrete split, compute, and merge mechanics are described in the implementation section.
+This abstraction matches both concurrent implementations: long-lived workers on one side, executor tasks and futures on the other. The concrete split, compute, and merge mechanics are described in the implementation section.
 
-\noindent\textbf{Zoom on \textit{Dispatch physics}.}
-For readability, the following net expands one worker subnet and indicates that the same pattern is replicated for an arbitrary number of workers or tasks in the implementation.
+\noindent\textbf{Dispatch physics.}
+The following net expands the physics phase into the actual alternation used by the concurrent engines: a first parallel step builds local cell views, the master serializes the merge, a second parallel step resolves the cell work, and the master closes the phase with the final commit.
 
 \begin{figure}[ht]
 \centering
@@ -222,56 +219,36 @@ For readability, the following net expands one worker subnet and indicates that 
     transition/.style={rectangle,draw,thick,minimum width=5mm,minimum height=10mm,align=center},
     every node/.style={font=\small}
 ]
-    \node[place] (dispatchin) {Dispatch\\physics};
-    \node[transition, right=of dispatchin] (split) {Split\\ranges};
-    \node[place, right=30mm of split, yshift=14mm] (w1in) {$W_1$\\ready};
-    \node[transition, right=of w1in] (w1int) {Integrate\\slice};
-    \node[transition, right=of w1int] (w1grid) {Build\\local grid};
-    \node[transition, right=of w1grid] (w1res) {Resolve\\cells};
-    \node[place, right=of w1res] (w1out) {$W_1$\\result};
+    \node[place] (ready) {Tick\\ready};
+    \node[transition, right=of ready] (split) {Assign\\ranges};
+    \node[place, right=of split] (ranges) {Ranges\\assigned};
+    \node[transition, right=of ranges] (build) {Build\\local cells};
+    \node[place, right=of build] (local) {Local cells\\ready};
+    \node[transition, right=of local] (merge) {Master\\merges views};
+    \node[place, right=of merge] (cells) {Cells\\assigned};
+    \node[transition, right=of cells] (resolve) {Resolve\\collisions};
+    \node[place, right=of resolve] (resolved) {Cells\\resolved};
+    \node[transition, right=of resolved] (commit) {Master\\commits\\state};
+    \node[place, right=of commit] (done) {Physics\\done};
 
-    \node[place, right=30mm of split] (w2in) {$\cdots$\\ready};
-    \node[transition, right=of w2in] (w2int) {Integrate\\slice};
-    \node[transition, right=of w2int] (w2grid) {Build\\local grid};
-    \node[transition, right=of w2grid] (w2res) {Resolve\\cells};
-    \node[place, right=of w2res] (w2out) {$...$\\result};
-
-    \node[place, right=30mm of split, yshift=-14mm] (wnin) {$W_N$\\ready};
-    \node[transition, right=of wnin] (wnrun) {Integrate\\slice};
-    \node[transition, right=of wnrun] (wngrid) {Build\\local grid};
-    \node[transition, right=of wngrid] (wnres) {Resolve\\cells};
-    \node[place, right=of wnres] (wnout) {$W_N$\\result};
-
-    \node[transition, right=38mm of w1out] (merge) {Join \&\\merge};
-    \node[place, right=of merge] (done) {Parallel\\phase done};
-
-    \draw[->,thick] (dispatchin) -- (split);
-    \draw[->,thick] (split.east) -- ++(10mm,14mm) -- (w1in.west);
-    \draw[->,thick] (split.east) -- (w2in.west);
-    \draw[->,thick] (split.east) -- ++(10mm,-14mm) -- (wnin.west);
-    \draw[->,thick] (w1in) -- (w1int);
-    \draw[->,thick] (w1int) -- (w1grid);
-    \draw[->,thick] (w1grid) -- (w1res);
-    \draw[->,thick] (w1res) -- (w1out);
-    \draw[->,thick] (w2in) -- (w2int);
-    \draw[->,thick] (w2int) -- (w2grid);
-    \draw[->,thick] (w2grid) -- (w2res);
-    \draw[->,thick] (w2res) -- (w2out);
-    \draw[->,thick] (wnin) -- (wnrun);
-    \draw[->,thick] (wnrun) -- (wngrid);
-    \draw[->,thick] (wngrid) -- (wnres);
-    \draw[->,thick] (wnres) -- (wnout);
-    \draw[->,thick] (w1out.east) -- ++(12mm,0) -- (merge.west);
-    \draw[->,thick] (w2out.east) -- ++(12mm,0) -- (merge.west);
-    \draw[->,thick] (wnout.east) -- ++(12mm,0) -- (merge.west);
-    \draw[->,thick] (merge) -- (done);
+    \draw[->,thick] (ready) -- (split);
+    \draw[->,thick] (split) -- node[above] {$(N)$} (ranges);
+    \draw[->,thick] (ranges) -- (build);
+    \draw[->,thick] (build) -- (local);
+    \draw[->,thick] (local) -- node[above] {$(N)$} (merge);
+    \draw[->,thick] (merge) -- node[above] {$(N)$} (cells);
+    \draw[->,thick] (cells) -- (resolve);
+    \draw[->,thick] (resolve) -- (resolved);
+    \draw[->,thick] (resolved) -- node[above] {$(N)$} (commit);
+    \draw[->,thick] (commit) -- (done);
+    \node[draw, thick, rounded corners, fit=(split)(ranges)(build)(local)(merge)(cells)(resolve)(resolved)(commit), inner sep=6mm, label=above:{Dispatch physics}] {};
 \end{tikzpicture}
 }%
-\caption{Zoom on the dispatch phase. Every concurrent branch follows the same steps: split, integrate slice, build local grid, resolve cells, and only then join and merge. The coordinator performs the merge only after all branches have reached their result place.}
+\caption{Dispatch phase of the concurrent tick. Weighted arcs marked $(N)$ represent the aggregated worker synchronization points, while the repeated worker executions are collapsed into single transitions.}
 \label{fig:petri-dispatch-zoom}
 \end{figure}
 
-The figure above is intentionally abstract. It says only that the controller hands out physics work, workers produce partial results, and the coordinator merges them before publishing the next snapshot. The detailed mechanics of how the workers split their local work, build grids, and resolve collisions belong to the implementation section.
+The figure above keeps only the control flow: the controller enters the dispatch box from \textit{Tick ready}, the assigned ranges are expanded into an aggregated worker phase, the master waits for all local cell views before merging them, the same pattern is used for collision resolution, and the phase closes with the final commit.
 
 \subsection{Platform-thread version}
 
