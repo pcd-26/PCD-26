@@ -118,15 +118,15 @@ The concurrent part of the assignment is therefore a matter of separating the si
 \section{Design}
 
 \noindent
-The design separates responsibilities to keep the concurrent execution clear. The model owns the rules and the game state, the runtime advances the simulation, and the view reads only stable snapshots.
+The design is based on a clear separation of responsibilities. The model contains the game rules and state, the controller/runtime drives the execution and serializes commands, and the view observes the system through snapshots.
 
 \begin{itemize}
-    \item \textbf{Game logic}: rules and state transitions;
-    \item \textbf{Runtime layer}: command handling and tick progression;
-    \item \textbf{View layer}: immutable snapshots.
+    \item \textbf{Game model}: rules and state;
+    \item \textbf{Controller/runtime}: execution control and command serialization;
+    \item \textbf{View layer}: snapshots.
 \end{itemize}
 
-The same game logic is reused by the sequential, platform-thread, and task-based versions; only the execution strategy changes.
+The three implementations share the same game logic and differ only in their runtime organization.
 
 \subsection{Project architecture}
 
