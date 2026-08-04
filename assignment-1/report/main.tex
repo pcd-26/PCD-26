@@ -578,11 +578,13 @@ The speedup snapshot contains the following values:
 
 \begin{table}[htbp]
 \centering
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{rrrrr}
+\fontsize{12}{9.5}\selectfont
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{rlrrr}
 \hline
-Balls & Implementation & Seq. median ms & Concurrent median ms & Speedup \\
+Balls & Implementation & Seq. median [ms] &
+Concurrent median [ms] & Speedup \\
 \hline
 1000 & threads  & 138.3033 & 123.2250 & 1.122 \\
 1000 & executor & 138.3033 & 122.5104 & 1.129 \\
@@ -594,8 +596,12 @@ Balls & Implementation & Seq. median ms & Concurrent median ms & Speedup \\
 2500 & executor & 450.8448 & 237.5317 & 1.898 \\
 \hline
 \end{tabular}
-}%
-\caption{Median speedup values for the speedup-gate workload subset in \texttt{speedup-results.csv} (1000, 1500, 2000, and 2500 balls; 600 steps; seed 42) on Windows 11 amd64 with OpenJDK 17.0.19+10 and 16 visible cores.}
+\caption{
+    Median speedup values for the speedup-gate workload subset in
+    \texttt{speedup-results.csv} (1000, 1500, 2000, and 2500 balls;
+    600 steps; seed 42) on Windows 11 amd64 with OpenJDK 17.0.19+10
+    and 16 visible cores.
+}
 \end{table}
 
 \begin{figure}[htbp]
@@ -609,11 +615,12 @@ The worker-count snapshot contains the following medians for the scalability wor
 
 \begin{table}[htbp]
 \centering
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{rrrr}
+\fontsize{12}{10.5}\selectfont
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{lrrr}
 \hline
-Implementation & Workers & Median ms & Speedup vs. seq. \\
+Implementation & Workers & Median [ms] & Speedup vs. seq. \\
 \hline
 threads  & 1  & 1194.7983 & 0.609 \\
 threads  & 2  & 760.2068  & 0.957 \\
@@ -629,8 +636,11 @@ executor & 16 & 472.7956  & 1.539 \\
 executor & 17 & 442.4130  & 1.645 \\
 \hline
 \end{tabular}
-}%
-\caption{Worker-count medians for the 2500-ball scalability workload (1000 steps; seed 42) comparing sequential, threaded, and executor runs at 1, 2, 4, 8, 16, and 17 workers.}
+\caption{
+    Worker-count medians for the 2500-ball scalability workload
+    (1000 steps; seed 42) comparing sequential, threaded, and
+    executor runs at 1, 2, 4, 8, 16, and 17 workers.
+}
 \end{table}
 
 These numbers show a clear trend: the concurrent versions start close to the sequential baseline on small workloads, then improve as the workload grows and the fixed serial portion is amortized. On the 2500-ball speedup snapshot, the executor-based row is slightly faster than the threaded row, reducing the median from 450.8448 ms sequential to 237.5317 ms instead of 242.6481 ms. On the worker-count snapshot, the threaded engine reaches its best median at 16 workers, with 427.2735 ms versus the 727.6794 ms sequential baseline, for a speedup of 1.703 and an efficiency of about 10.6 percent. The executor-based engine reaches 442.4130 ms at 17 workers, for a speedup of 1.645 and an efficiency of about 9.7 percent. Those efficiencies are far below 1, so the data still show a strong serial bottleneck and a meaningful coordination cost, even when the absolute runtime improves.
