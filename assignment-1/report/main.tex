@@ -115,6 +115,7 @@ The concurrent part of the assignment is therefore a matter of separating the si
 
 \textbf{The objective} is to \textbf{exploit parallelism} while preserving \textbf{coherence} and \textbf{determinism}.
 
+\clearpage
 \section{Design}
 
 \noindent
@@ -302,52 +303,25 @@ The task-based version keeps the same \textbf{single-writer rule}, but it schedu
 
 \subsection{Why this design works}
 
-The improvement does not come from changing the game rules, but from reducing coordination overhead around the same rules. As the number of balls grows, the amount of parallelizable physics work grows as well, so the concurrent versions can better exploit the available cores on larger workloads.
+This design keeps \textbf{one authoritative state} while moving the expensive physics work into \textbf{parallel worker phases}. The controller is the only component that works on the shared state, so it runs the serial phases and keeps the outcome \textbf{deterministic}. As the number of balls grows, the parallel portion grows with it, and the concurrent versions can exploit the available cores more effectively without exposing the view to partial updates.
 
+\clearpage
 \section{Implementation}
 
 \subsection{Implementation overview}
 
-The implementation mirrors the design: the same game rules are reused by all launchers, while the execution strategy changes between the sequential, platform-thread, and task-based versions. The code is organized into separate packages for the model, the physics engines, the runtime helpers, and the Swing view, so the responsibilities remain visible in the source tree as well as in the report.
+The implementation mirrors the design: the same game rules are reused by all launchers, while the execution strategy changes between the sequential, \textbf{platform-thread}, and \textbf{task-based} versions. The code is split into the \textbf{model}, the \textbf{physics engines}, the \textbf{runtime helpers}, and the \textbf{Swing view}, so the responsibilities stay visible in the source tree.
 
-The core of the project is the way the concurrent physics engines divide, compute, and join work. Intuitively, the controller first decides which balls each worker should look at, then the workers do the expensive local physics work, and finally the controller gathers the partial results and commits them to the shared board. The workers never become owners of the global state: they work on private slices, produce partial results, and hand them back for a deterministic join.
+The concurrent engines follow the same rule: the \textbf{controller} assigns work, the workers process \textbf{private slices}, and the controller merges the partial results into one \textbf{authoritative state}. The work is split into \textbf{contiguous ranges}, then into \textbf{private center-cell grids}, and finally into a \textbf{deterministic join} and commit phase.
 
-This is the actual staged pipeline used in both concurrent engines:
-
-\begin{enumerate}
-    \item the active balls are split into \textbf{contiguous index ranges};
-    \item each worker integrates the movement of its own range, so the ball positions are updated before any collision work starts;
-    \item hole interactions are applied serially on the authoritative board, because that part must stay globally ordered;
-    \item the remaining balls are projected into private \textbf{center-cell grids}, one per worker/task;
-    \item the controller merges those local grids into one deterministic occupied-cell view;
-    \item the occupied cells are sorted, so each cell is resolved in a stable order;
-    \item each worker resolves the cells it owns, computes the collision contribution for the relevant ball pairs, and stores the effect in a sparse private accumulator;
-    \item the controller merges the sparse accumulators and applies the final board writes only after the join barrier completes.
-\end{enumerate}
-
-The important intuition is that each worker still executes its own local loop sequentially. The parallelism comes from the fact that many workers run those local loops at the same time on disjoint ranges, so the expensive physics work is spread across the available cores without sharing mutable state during the local phase.
-
-The same structure appears in both concurrent engines:
-
-\begin{itemize}
-    \item \textbf{range partitioning}: the list of active balls is split into almost equal \textbf{contiguous chunks}, one per worker or task;
-    \item \textbf{private local grids}: each worker builds its own center-cell map for the balls in its range;
-    \item \textbf{local broad phase}: the grid is a temporary structure that groups balls by nearby cells, so the engine can inspect only plausible collision candidates instead of comparing every ball against every other ball;
-    \item \textbf{deterministic merge}: the controller merges the local grids into one ordered view of the occupied cells;
-    \item \textbf{owned-cell resolution}: each occupied cell is resolved once, together with a fixed set of forward neighbors, so each relevant pair is considered exactly once;
-    \item \textbf{sparse final commit}: workers accumulate deltas locally, the coordinator merges them, and the final board writes happen only after the join barrier completes.
-\end{itemize}
-
-The threaded engine implements the barriers with long-lived platform workers and a completion monitor. The task-based engine uses the same staged logic, but it submits each range to an executor and waits on `Future`s instead of worker joins. In both cases, the local grid is built sequentially inside each worker, because the point is not to parallelize the inner loop of one worker, but to run many such worker-local loops in parallel. The task-based engine also keeps a small-workload fast path: when the workload is too small to justify parallel decomposition, it executes the single range directly instead of paying executor overhead.
-
-This keeps collision handling \textbf{deterministic}, avoids \textbf{duplicate writes}, and still lets the \textbf{expensive physics work} run in parallel. In other words, the workers compute the physics, while the coordinator preserves a \textbf{single authoritative state} and commits the final outcome.
+The difference between the two concurrent versions is the execution style. The threaded engine uses long-lived \textbf{platform workers} and a completion monitor; the task-based engine submits the same ranges to an \textbf{executor} and waits on \textbf{Future}s. In both cases, the local loop stays sequential inside each worker, and the task-based engine keeps a small-workload \textbf{fast path} when parallel decomposition is not worth the overhead.
 
 \begin{itemize}
     \item \textbf{\texttt{pcd.poool.model}}: game rules, board state, and immutable snapshots;
-    \item \textbf{\texttt{pcd.poool.model.physics}}: sequential, threaded, and task-based physics engines;
+    \item \textbf{\texttt{pcd.poool.model.physics}}: sequential, threaded, and task-based physics engines, plus shared physics helpers;
     \item \textbf{\texttt{pcd.poool.runtime}}: command submission and snapshot publication helpers;
     \item \textbf{\texttt{pcd.poool.threaded}} and \textbf{\texttt{pcd.poool.taskbased}}: concurrent runners;
-    \item \textbf{\texttt{pcd.poool.view}}: rendering and input handling.
+    \item \textbf{\texttt{pcd.poool.view}} and \textbf{\texttt{pcd.poool.view.board}}: rendering and input handling.
 \end{itemize}
 
 The three public entry points are \texttt{SequentialPoool}, \texttt{ThreadedPoool}, and \texttt{TaskBasedPoool}. They build the corresponding runtime, connect it to the view, and keep the GUI loop separate from the simulation logic.
@@ -435,9 +409,7 @@ for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
 
 \noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 544--568.}
 
-This is the part that decides how the balls are split among workers: the work is divided into contiguous index ranges of almost equal size, with the remainder distributed among the first workers.
-
-In other words, a ball is assigned to the chunk identified by its position in \texttt{activeBalls}: the worker does not receive spatial zones, but a contiguous slice of the list, and it processes every ball in that slice in order. The collision phase follows the same pattern: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns before the controller merges the sparse results and applies the final writes to the authoritative board.
+This divides the work into contiguous index ranges of almost equal size, with the remainder distributed among the first workers. A worker does not receive spatial zones, but a contiguous slice of \texttt{activeBalls}, which it processes in order.
 
 \begin{lstlisting}[style=codestyle,caption={Threaded handoff from controller to workers},label={lst:threaded-handoff}]
 for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
@@ -454,13 +426,11 @@ completion.await();
 
 \noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 562--578.}
 
-This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the completion barrier has been reached.
-
-The collision phase then follows the same idea on top of this handoff: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns. That local grid is what lets the engine avoid comparing every ball with every other ball, while still keeping each worker's work sequential and self-contained. The controller only merges the sparse results and applies the final writes to the authoritative board.
+This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the completion barrier has been reached. The collision phase follows the same idea: each worker computes local contributions on its own slice, builds a private spatial view, and resolves the cells it owns before the controller merges the sparse results and applies the final writes to the authoritative board.
 
 \subsection{Task-based implementation}
 
-The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled single-thread controller executor for the tick and a separate executor for the bot when enabled. The task-based physics engine still splits the active balls into contiguous ranges, but each range is submitted as a task rather than assigned to a long-lived worker thread.
+The task-based version keeps the same controller-driven protocol, but the parallel physics phase is expressed as executor tasks. The runner uses a scheduled single-thread controller executor for the tick and a separate executor for the bot. The task-based physics engine still splits the active balls into contiguous ranges, but each range is submitted as a task rather than assigned to a long-lived worker thread.
 
 \begin{lstlisting}[style=codestyle,caption={Task-based controller scheduling},label={lst:taskbased-scheduling}]
 running = true;
@@ -484,7 +454,7 @@ for (int i = 0; i < workerCount; i++) {
 
 \noindent\textit{Source: \path{TaskBasedPhysicsEngine.java}, lines 662--672.}
 
-Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. This keeps the concurrency model explicit: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a private local grid, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in deterministic order, and only then applies the accumulated deltas. Again, the local grid is built sequentially inside each task; the gain comes from running many task-local loops in parallel, not from parallelizing the single loop that fills one grid. The shared idea is still the same single-writer ownership rule; what changes is that futures replace worker joins and candidate pairs are materialized explicitly before replay.
+Inside the task-based physics engine, the work is partitioned into ranges and executed through futures. Tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a private local grid, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in deterministic order, and applies the accumulated deltas. The local grid is still built sequentially inside each task; the gain comes from running many task-local loops in parallel.
 
 \begin{lstlisting}[style=codestyle,caption={Task submission and synchronization},label={lst:taskbased-futures}]
 var futures = new ArrayList<Future<T>>(ranges.size());
@@ -498,7 +468,7 @@ for (var future : futures) {
 }
 \end{lstlisting}
 
-Compared with the threaded implementation, the control protocol is almost the same from the report point of view. What changes is the execution style: long-lived workers on one side, scheduled tasks on the other. The shared idea is still the same single-writer ownership rule.
+Compared with the threaded implementation, the control protocol is the same at the report level. What changes is the execution style: long-lived workers on one side, scheduled tasks on the other.
 
 \subsection{Runtime snapshots and coordination helpers}
 
@@ -514,12 +484,13 @@ return new RuntimeGameSnapshot(
         game.previewBotShot());
 \end{lstlisting}
 
-The concurrent runners publish those snapshots through \texttt{SnapshotStoreSupport}, which acts as a simple monitor around the latest immutable state. Commands follow the same idea through \texttt{CommandQueueMonitorSupport}: external threads enqueue requests, and the controller drains them sequentially.
+The concurrent runners publish those snapshots through \texttt{SnapshotStoreSupport}, which acts as a monitor around the latest immutable state. Commands follow the same idea through \texttt{CommandQueueMonitorSupport}: external threads enqueue requests, and the controller drains them sequentially.
 
 \subsection{Implementation summary}
 
 Overall, the implementation keeps the domain model small and central, pushes concurrency into the runtime and physics layers, and uses immutable snapshots to isolate the view. The result is a code base where the sequential, threaded, and task-based versions differ mainly in scheduling, not in game semantics.
 
+\clearpage
 \section{Verification and Testing}
 
 The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. They exercise the game model, the physics engines, the runtime helpers, the concurrent runners, the view layer, and the benchmark utilities.
@@ -572,6 +543,7 @@ Both runs completed with \texttt{no errors detected}.
 
 The threaded model explores a larger state space because its worker thread stays alive across the protocol steps. The task-based model is smaller because the worker is represented as a short-lived task. In both cases, JPF confirms the bounded synchronization protocol reaches completion without deadlock or assertion failure, which is exactly the level of verification this report claims \cite{clarke1999,visser2003}.
 
+\clearpage
 \section{Results and Discussion}
 
 \subsection{Benchmark Methodology}
@@ -675,6 +647,7 @@ These numbers show a clear trend: the concurrent versions start close to the seq
 \caption{Speedup as the worker count changes for the 2500-ball scalability workload (1000 steps; seed 42).}
 \end{figure}
 
+\clearpage
 \section{Conclusions}
 
 The delivered project satisfies the three required execution strategies while keeping the shared game semantics stable across them. The report now reflects the actual implementation flow: the controller remains the single writer, the heavy physics phases are split into worker-local chunks, and the partial results are joined before the snapshot is published.
@@ -683,6 +656,7 @@ The benchmark evidence is consistent across the two exported snapshots. For the 
 
 The verification story is also bounded in a controlled way. The Petri nets explain the control protocol at the level requested by the assignment, and the JPF harnesses confirm that the reduced synchronization models terminate without deadlock or assertion failure. What these results do not prove is the full numerical physics of the game, GUI performance, or large-scale scaling beyond the measured workloads.
 
+\clearpage
 \section{How to Run}
 
 The project can be built and tested from the assignment 1 directory. The main launchers are the sequential, platform-thread, and task-based entry points. The report itself can be generated from the \texttt{report} directory.
@@ -713,6 +687,7 @@ pcd.poool.TaskBasedPoool
 make
 \end{verbatim}
 
+\clearpage
 \section{References}
 
 \begin{thebibliography}{9}
