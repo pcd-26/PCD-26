@@ -118,62 +118,49 @@ The concurrent part of the assignment is therefore a matter of separating the si
 \section{Design}
 
 \noindent
-The design is based on a clear separation of responsibilities. The model contains the game rules and state, the controller/runtime drives the execution and serializes commands, and the view observes the system through snapshots.
-
-\begin{itemize}
-    \item \textbf{Game model}: rules and state;
-    \item \textbf{Controller/runtime}: execution control and command serialization;
-    \item \textbf{View layer}: snapshots.
-\end{itemize}
+The design is based on a clear separation of responsibilities. The model contains the game rules and state, while the rest of the architecture is organized around a controller/runtime and a view.
 
 The three implementations share the same game logic and differ only in their runtime organization.
 
 \subsection{Project architecture}
 
-The project separates what must stay authoritative from what can be scheduled differently. The model keeps the match state and the rules, the runtime layer drives the simulation, serializes command handling, and coordinates asynchronous actions, while the view consumes only stable snapshots. In this way, the graphical side never depends on the internal timing of the simulation.
+The project architecture is built around three stable elements:
 
 \begin{itemize}
-    \item the model owns the rules and the authoritative state;
-    \item the runtime coordinates commands and tick progression;
-    \item the view reads snapshots only, never the live board.
+    \item the \textbf{shared game model};
+    \item the \textbf{controller/runtime};
+    \item the \textbf{view}.
 \end{itemize}
 
-\begin{figure}[ht]
-\centering
-\begin{tikzpicture}[
-    >=Stealth,
-    node distance=11mm and 14mm,
-    box/.style={rectangle,draw,thick,rounded corners,align=center,minimum width=28mm,minimum height=9mm},
-    runtimebox/.style={box,minimum width=34mm},
-    smallbox/.style={box,minimum width=22mm,fill=black!2}
-]
-    \node[smallbox] (input) {Human and bot\\inputs};
-    \node[runtimebox, right=of input] (runtime) {Runtime coordinator};
-    \node[smallbox, right=of runtime] (physics) {Physics engines\\Sequential / Threaded / Task-based};
+The same structure is reused by the \textbf{sequential}, \textbf{platform-thread}, and \textbf{task-based} launchers, while only the \textbf{execution policy} changes.
 
-    \node[box, below=of runtime] (model) {Game model and\\board state};
-    \node[box, below=of physics] (snapshot) {Immutable snapshot};
-    \node[box, below=of snapshot] (view) {Swing view};
-
-    \draw[->,thick] (input) -- (runtime);
-    \draw[->,thick] (runtime) -- (physics);
-    \draw[->,thick] (physics) -- (snapshot);
-    \draw[->,thick] (snapshot) -- (view);
-    \draw[->,thick] (model) -- (physics);
-    \draw[->,thick] (model) -- (snapshot);
-    \draw[->,thick] (view.west) |- (runtime.south);
-\end{tikzpicture}
-\caption{High-level architecture of the delivered implementation. The runtime coordinates input, the physics engines mutate the authoritative model, and the view consumes only immutable snapshots.}
-\label{fig:architecture-overview}
-\end{figure}
-
-The sequential version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version is simple on purpose: it defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
+The \textbf{sequential} version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version is simple on purpose: it defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
 
 \subsection{Designing the concurrent solution}
 
 The design idea is simple: each tick has a part that can be split across workers and a part that must stay under one controller. The parallel part is the expensive physics work; the serial part is the coordination that keeps the match coherent.
 
 At this level, the description is limited to phase responsibilities. Some phases read the current state and produce partial results, while other phases merge those results, apply the final state changes, and publish the next snapshot. The internal mechanics of worker execution are described in the implementation section.
+
+\begin{table}[ht]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{@{}p{0.34\linewidth}>{\centering\arraybackslash}p{0.16\linewidth}p{0.40\linewidth}@{}}
+\hline
+\textbf{Aspect} & \textbf{Parallelizable?} & \textbf{Reason} \\
+\hline
+\textbf{Parallelizable simulation work} & \textbf{Yes} & It can be executed in worker phases without changing the game semantics. \\
+\textbf{Command handling} & \textbf{No} & Commands must be serialized on a \textbf{single controller} to preserve consistency. \\
+\textbf{State commit} & \textbf{No} & The authoritative board is updated only after the current phase completes. \\
+\textbf{Snapshot publication} & \textbf{No} & The view must observe a \textbf{stable} and fully committed state. \\
+\textbf{View rendering} & \textbf{No} & Rendering consumes snapshots; it does not mutate the simulation. \\
+\hline
+\end{tabular}
+\caption{High-level classification of the main activities in the concurrent solution.}
+\label{tab:parallelizable-vs-nonparallelizable}
+\end{table}
 
 \begin{itemize}
     \item \textbf{Parallelizable}: local physics work over independent chunks of the simulation;
