@@ -328,16 +328,16 @@ The three public entry points are \texttt{SequentialPoool}, \texttt{ThreadedPooo
 
 \subsection{Core classes}
 
-\begin{itemize}
-    \item \texttt{GameModel} (\path{pcd.poool.model.game}): owns the gameplay rules, scoring, end-game conditions, and logical snapshot creation;
-    \item \texttt{Board} (\path{pcd.poool.model.physics.common}): owns the mutable physical state and delegates stepping to a \texttt{PhysicsStepper};
-    \item \texttt{SequentialPhysicsEngine}, \texttt{ThreadedPhysicsEngine}, and \texttt{TaskBasedPhysicsEngine} (\path{pcd.poool.model.physics.sequential}, \path{pcd.poool.model.physics.threaded}, \path{pcd.poool.model.physics.taskbased}): implement the sequential, platform-thread, and executor-based physics pipelines;
-    \item \texttt{ThreadedGameRunner} and \texttt{TaskBasedGameRunner} (\path{pcd.poool.threaded}, \path{pcd.poool.taskbased}): coordinate command draining, controller ticks, and snapshot publication;
-    \item \texttt{RuntimeGameSnapshot} (\path{pcd.poool.runtime}): packages the logical snapshot together with the immutable render data;
-    \item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport} (\path{pcd.poool.runtime}): provide the monitor-based communication used by the concurrent runtimes.
-\end{itemize}
+The core classes reflect the separation between rules, mutable state, execution, and publication:
 
-The most relevant point is that \texttt{GameModel} remains the authoritative owner of the game rules, while the runners only coordinate access to it. This keeps the same behavior across all variants and avoids duplicating the domain logic.
+\begin{itemize}
+    \item \texttt{GameModel} (\path{pcd.poool.model.game}): game rules, scoring, end-game conditions, and logical snapshots;
+    \item \texttt{Board} (\path{pcd.poool.model.physics.common}): mutable physical state, advanced through a \texttt{PhysicsStepper};
+    \item \texttt{SequentialPhysicsEngine}, \texttt{ThreadedPhysicsEngine}, and \texttt{TaskBasedPhysicsEngine} (\path{pcd.poool.model.physics.sequential}, \path{pcd.poool.model.physics.threaded}, \path{pcd.poool.model.physics.taskbased}): sequential, platform-thread, and executor-based physics steps;
+    \item \texttt{ThreadedGameRunner} and \texttt{TaskBasedGameRunner} (\path{pcd.poool.threaded}, \path{pcd.poool.taskbased}): command draining, controller ticks, and snapshot publication;
+    \item \texttt{RuntimeGameSnapshot} (\path{pcd.poool.runtime}): immutable data consumed by the view;
+    \item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport} (\path{pcd.poool.runtime}): monitor-based command and snapshot coordination.
+\end{itemize}
 
 \subsection{Sequential implementation}
 
