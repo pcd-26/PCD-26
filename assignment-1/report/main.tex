@@ -167,9 +167,7 @@ Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. We carr
 
 The design goal is to keep one game state while letting the heavy local work run in parallel.
 
-\subsection{Petri net of the concurrent tick}
-
-The following Petri net summarizes one controller tick. It abstracts away from implementation details and focuses on the shared control flow: drain commands, run the physics phase, join results, publish the snapshot, sleep. The model follows the standard place/transition interpretation of Petri nets \cite{petri1962,murata1989}. The detailed net below expands the dispatch phase.
+The first Petri net captures the controller loop: \textbf{collect commands}, \textbf{dispatch physics}, \textbf{update state and score}, \textbf{publish the snapshot}, then \textbf{wait for the next tick}.
 
 \begin{figure}[ht]
 \centering
@@ -186,7 +184,7 @@ The following Petri net summarizes one controller tick. It abstracts away from i
     \node[place, right=of drain] (ready) {Tick\\ready};
     \node[transition, right=of ready] (dispatch) {Dispatch\\physics};
     \node[place, right=of dispatch] (parallel) {Physics\\done};
-    \node[transition, right=of parallel] (join) {Commit\\results};
+    \node[transition, right=of parallel] (join) {Update\\state and score};
     \node[place, right=of join] (published) {Snapshot\\ready};
     \node[transition, right=of published] (sleep) {Wait\\next tick};
 
@@ -204,10 +202,10 @@ The following Petri net summarizes one controller tick. It abstracts away from i
 \label{fig:petri-concurrent-tick}
 \end{figure}
 
-This abstraction matches both concurrent implementations: long-lived workers on one side, executor tasks and futures on the other. The concrete split, compute, and merge mechanics are described in the implementation section.
+This abstraction matches both concurrent implementations: \textbf{long-lived workers} in one case, \textbf{executor tasks and futures} in the other.
 
 \noindent\textbf{Dispatch physics.}
-The following net expands the physics phase into the actual alternation used by the concurrent engines: a first parallel step builds local cell views, the master serializes the merge, a second parallel step resolves the cell work, and the master closes the phase with the final commit.
+The second Petri net zooms into the physics dispatch: \textbf{assign ranges}, \textbf{build local cells}, \textbf{merge views}, \textbf{resolve collisions}, and \textbf{commit the state}. The two \textit{$N$ tokens} labels mark the fan-out to the worker branches.
 
 \begin{figure}[ht]
 \centering
@@ -222,33 +220,61 @@ The following net expands the physics phase into the actual alternation used by 
     \node[place] (ready) {Tick\\ready};
     \node[transition, right=of ready] (split) {Assign\\ranges};
     \node[place, right=of split] (ranges) {Ranges\\assigned};
-    \node[transition, right=of ranges] (build) {Build\\local cells};
-    \node[place, right=of build] (local) {Local cells\\ready};
-    \node[transition, right=of local] (merge) {Master\\merges views};
-    \node[place, right=of merge] (cells) {Cells\\assigned};
-    \node[transition, right=of cells] (resolve) {Resolve\\collisions};
-    \node[place, right=of resolve] (resolved) {Cells\\resolved};
-    \node[transition, right=of resolved] (commit) {Master\\commits\\state};
+
+    \node[transition, right=32mm of ranges, yshift=16mm] (w1proc) {Build\\local cells};
+    \node[place, right=of w1proc] (w1out) {Worker 1\\local cells};
+
+    \node[transition, right=32mm of ranges] (w2proc) {Build\\local cells};
+    \node[place, right=of w2proc] (w2out) {Worker $i$\\local cells};
+
+    \node[transition, right=32mm of ranges, yshift=-16mm] (wnproc) {Build\\local cells};
+    \node[place, right=of wnproc] (wnout) {Worker N\\local cells};
+
+    \node[transition, right=35mm of w2out] (merge) {Master\\merges views};
+    \node[place, right=of merge] (cells) {Cells\\ready};
+
+    \node[transition, right=32mm of cells, yshift=16mm] (w1rproc) {Resolve\\collisions};
+    \node[place, right=of w1rproc] (w1rout) {Worker 1\\resolved};
+
+    \node[transition, right=32mm of cells] (w2rproc) {Resolve\\collisions};
+    \node[place, right=of w2rproc] (w2rout) {Worker $i$\\resolved};
+
+    \node[transition, right=32mm of cells, yshift=-16mm] (wnrproc) {Resolve\\collisions};
+    \node[place, right=of wnrproc] (wnrout) {Worker N\\resolved};
+
+    \node[transition, right=35mm of w2rout] (commit) {Master\\commits\\state};
     \node[place, right=of commit] (done) {Physics\\done};
 
     \draw[->,thick] (ready) -- (split);
-    \draw[->,thick] (split) -- node[above] {$(N)$} (ranges);
-    \draw[->,thick] (ranges) -- (build);
-    \draw[->,thick] (build) -- (local);
-    \draw[->,thick] (local) -- node[above] {$(N)$} (merge);
-    \draw[->,thick] (merge) -- node[above] {$(N)$} (cells);
-    \draw[->,thick] (cells) -- (resolve);
-    \draw[->,thick] (resolve) -- (resolved);
-    \draw[->,thick] (resolved) -- node[above] {$(N)$} (commit);
+    \draw[->,thick] (split) -- node[font=\scriptsize, above] {$N$ tokens} (ranges);
+    \draw[->,thick] (ranges.east) -- ++(12mm,16mm) -- (w1proc.west);
+    \draw[->,thick] (ranges.east) -- (w2proc.west);
+    \draw[->,thick] (ranges.east) -- ++(12mm,-16mm) -- (wnproc.west);
+    \draw[->,thick] (w1proc) -- (w1out);
+    \draw[->,thick] (w2proc) -- (w2out);
+    \draw[->,thick] (wnproc) -- (wnout);
+    \draw[->,thick] (w1out.east) -- ++(12mm,0) -- (merge.west);
+    \draw[->,thick] (w2out.east) -- (merge.west);
+    \draw[->,thick] (wnout.east) -- ++(12mm,0) -- (merge.west);
+    \draw[->,thick] (merge) -- node[font=\scriptsize, above] {$N$ tokens} (cells);
+    \draw[->,thick] (cells.east) -- ++(12mm,16mm) -- (w1rproc.west);
+    \draw[->,thick] (cells.east) -- (w2rproc.west);
+    \draw[->,thick] (cells.east) -- ++(12mm,-16mm) -- (wnrproc.west);
+    \draw[->,thick] (w1rproc) -- (w1rout);
+    \draw[->,thick] (w2rproc) -- (w2rout);
+    \draw[->,thick] (wnrproc) -- (wnrout);
+    \draw[->,thick] (w1rout.east) -- ++(12mm,0) -- (commit.west);
+    \draw[->,thick] (w2rout.east) -- (commit.west);
+    \draw[->,thick] (wnrout.east) -- ++(12mm,0) -- (commit.west);
     \draw[->,thick] (commit) -- (done);
-    \node[draw, thick, rounded corners, fit=(split)(ranges)(build)(local)(merge)(cells)(resolve)(resolved)(commit), inner sep=6mm, label=above:{Dispatch physics}] {};
+    \node[draw, thick, rounded corners, fit=(split)(ranges)(w1proc)(w1out)(w2proc)(w2out)(wnproc)(wnout)(merge)(cells)(w1rproc)(w1rout)(w2rproc)(w2rout)(wnrproc)(wnrout)(commit), inner sep=6mm, label=above:{Dispatch physics}] {};
 \end{tikzpicture}
 }%
-\caption{Dispatch phase of the concurrent tick. Weighted arcs marked $(N)$ represent the aggregated worker synchronization points, while the repeated worker executions are collapsed into single transitions.}
+\caption{Dispatch phase of the concurrent tick. The box highlights the alternation between parallel worker phases and serial master phases, and each node is labeled with its role in the phase.}
 \label{fig:petri-dispatch-zoom}
 \end{figure}
 
-The figure above keeps only the control flow: the controller enters the dispatch box from \textit{Tick ready}, the assigned ranges are expanded into an aggregated worker phase, the master waits for all local cell views before merging them, the same pattern is used for collision resolution, and the phase closes with the final commit.
+The figure above keeps only the control flow: \textit{Tick ready} enters the box, ranges fan out to the worker branches, the coordinator merges the local views, the next fan-out feeds collision resolution, and the coordinator commits the result before leaving the box.
 
 \subsection{Platform-thread version}
 
