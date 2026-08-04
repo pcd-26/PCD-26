@@ -101,19 +101,19 @@ All three launchers reuse the same game rules.
 
 \section{Problem Analysis}
 
-The main difficulty is not the rule set itself, but the combination of shared mutable state, asynchronous activity, and a potentially heavy simulation workload. The board contains many balls that move, collide, and change status during the same tick, so the system must combine concurrency with deterministic state transitions.
+The main difficulty is the management of a shared mutable board under asynchronous input and a non-trivial simulation workload. During each tick, many balls move, collide, and change status, so the implementation must preserve deterministic state transitions while still allowing useful concurrency.
 
 \begin{itemize}
-    \item \textbf{High computational cost}: collision detection and collision resolution dominate the simulation when the number of balls grows;
-    \item \textbf{Shared mutable state}: the simulation must update the state consistently even when several events are active at the same time;
-    \item \textbf{Asynchronous inputs}: human and bot actions may arrive while the simulation is running;
-    \item \textbf{Deterministic behavior}: concurrency must not change the logical outcome of the match;
-    \item \textbf{Responsiveness}: the interface must keep reacting while the simulation progresses.
+    \item \textbf{Computational cost}: collision detection and resolution become the dominant cost as the number of balls increases;
+    \item \textbf{Shared state}: the board must be updated consistently even when multiple events are active;
+    \item \textbf{Asynchronous input}: human and bot actions arrive while the simulation is running;
+    \item \textbf{Determinism}: concurrency must not alter the logical outcome of the match;
+    \item \textbf{Responsiveness}: the interface must remain reactive while the simulation progresses.
 \end{itemize}
 
-The concurrent part of the assignment therefore becomes a question of identifying which parts of the simulation can be parallelized and which parts must remain serialized. For example, collision processing can be split across independent chunks, while processing pending commands must remain serialized because it requires a consistent global view of the match.
+The concurrent part of the assignment is therefore a matter of separating the simulation work that can be parallelized from the coordination that must remain serialized. The implementation must preserve a consistent global view of the match while keeping the simulation efficient.
 
-The key challenge is to exploit parallelism without breaking coherence.
+\textbf{The objective} is to \textbf{exploit parallelism} while preserving \textbf{coherence} and \textbf{determinism}.
 
 \section{Design}
 
