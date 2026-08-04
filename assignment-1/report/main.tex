@@ -160,7 +160,7 @@ Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. We carr
 \hline
 \textbf{Parallelizable simulation work} & \textbf{Yes} & It can be executed in worker phases without changing the game semantics. \\
 \textbf{Command handling} & \textbf{No} & Commands must be serialized on a \textbf{single controller} to preserve consistency. \\
-\textbf{State commit} & \textbf{No} & The authoritative board is updated only after the current phase completes. \\
+\textbf{State commit} & \textbf{Partly} & Collision deltas are merged by the coordinator; the final apply can run in parallel on disjoint touched-ball indexes when the touched set is large. \\
 \textbf{Snapshot publication} & \textbf{No} & The view must observe a \textbf{stable} and fully committed state. \\
 \textbf{View rendering} & \textbf{No} & Rendering consumes snapshots; it does not mutate the simulation. \\
 \hline
@@ -171,10 +171,10 @@ Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. We carr
 
 \begin{itemize}
     \item \textbf{Parallelizable}: local physics work over independent chunks of the simulation;
-    \item \textbf{Not parallelizable}: command processing, merge/commit steps, score updates, game-over checks, and snapshot publication;
+    \item \textbf{Not parallelizable}: command processing, sparse-delta merge, score updates, game-over checks, and snapshot publication;
 \end{itemize}
 
-The design goal is to keep one game state while letting the heavy local work run in parallel.
+The design goal is to keep one authoritative game protocol while letting the heavy local work run in parallel. The coordinator owns the tick order and the rule-level transitions; worker threads or tasks operate only inside bounded physics phases, either on disjoint ranges or on private accumulators.
 
 The first Petri net captures the controller loop: \textbf{collect commands}, \textbf{dispatch physics}, \textbf{update state and score}, \textbf{publish the snapshot}, then \textbf{wait for the next tick}.
 
@@ -214,7 +214,7 @@ The first Petri net captures the controller loop: \textbf{collect commands}, \te
 This abstraction matches both concurrent implementations: \textbf{long-lived workers} in one case, \textbf{executor tasks and futures} in the other.
 
 \noindent\textbf{Dispatch physics.}
-The second Petri net zooms into the physics dispatch: \textbf{assign ranges}, \textbf{build local cells}, \textbf{merge views}, \textbf{resolve collisions}, and \textbf{commit the state}. The two \textit{$N$ tokens} labels mark the fan-out to the worker branches.
+The second Petri net zooms into the physics dispatch: \textbf{assign ranges}, \textbf{build local cells}, \textbf{merge views}, \textbf{resolve collisions}, and \textbf{apply the merged result}. The two \textit{$N$ tokens} labels mark the fan-out to the worker branches.
 
 \begin{figure}[ht]
 \centering
@@ -251,7 +251,7 @@ The second Petri net zooms into the physics dispatch: \textbf{assign ranges}, \t
     \node[transition, right=32mm of cells, yshift=-16mm] (wnrproc) {Resolve\\collisions};
     \node[place, right=of wnrproc] (wnrout) {Worker N\\resolved};
 
-    \node[transition, right=35mm of w2rout] (commit) {Master\\commits\\state};
+    \node[transition, right=35mm of w2rout] (commit) {Apply\\merged\\deltas};
     \node[place, right=of commit] (done) {Physics\\done};
 
     \draw[->,thick] (ready) -- (split);
@@ -279,26 +279,26 @@ The second Petri net zooms into the physics dispatch: \textbf{assign ranges}, \t
     \node[draw, thick, rounded corners, fit=(split)(ranges)(w1proc)(w1out)(w2proc)(w2out)(wnproc)(wnout)(merge)(cells)(w1rproc)(w1rout)(w2rproc)(w2rout)(wnrproc)(wnrout)(commit), inner sep=6mm, label=above:{Dispatch physics}] {};
 \end{tikzpicture}
 }%
-\caption{Dispatch phase of the concurrent tick. The box highlights the alternation between parallel worker phases and serial master phases, and each node is labeled with its role in the phase.}
+\caption{Dispatch phase of the concurrent tick. The box highlights the alternation between parallel worker phases, coordinator merge phases, and the final apply of the merged physics deltas.}
 \label{fig:petri-dispatch-zoom}
 \end{figure}
 
-The figure above keeps only the control flow: \textit{Tick ready} enters the box, ranges fan out to the worker branches, the coordinator merges the local views, the next fan-out feeds collision resolution, and the coordinator commits the result before leaving the box.
+The figure above keeps only the control flow: \textit{Tick ready} enters the box, ranges fan out to the worker branches, the coordinator merges the local views, the next fan-out feeds collision resolution, and the merged deltas are applied before leaving the box. In the implementation this last apply is serial for small touched sets and parallel over disjoint touched-ball indexes for larger touched sets.
 
 \subsection{Platform-thread version}
 
-The platform-thread version uses one \textbf{controller thread} plus long-lived \textbf{worker platform threads} inside the physics engine. The controller keeps ownership of the global progression of the match, while workers handle the \textbf{parallelizable physics work}. This matches the actual implementation: commands are queued in the shared \textbf{commands} monitor, executed on the controller thread, physics workers stay confined to private chunks, and the controller publishes the \textbf{immutable snapshot} after each tick.
+The platform-thread version uses one \textbf{controller thread} plus long-lived \textbf{worker platform threads} inside the physics engine. The controller keeps ownership of the global progression of the match, while workers handle the \textbf{parallelizable physics work}. This matches the actual implementation: commands are queued in the shared \textbf{commands} monitor, executed on the controller thread, physics workers stay confined to private chunks or private collision accumulators, and the controller publishes the \textbf{immutable snapshot} after each tick.
 
 \begin{itemize}
     \item the controller executes pending commands and advances the global tick;
     \item workers handle bounded pieces of the physics workload;
-    \item the physics engine keeps the \textbf{merge} and \textbf{apply} phases serialized;
+    \item the physics engine keeps the \textbf{merge} phase serialized and applies merged deltas either serially or in parallel over disjoint touched-ball indexes;
     \item the bot runs on a separate platform thread and submits commands to the shared \textbf{commands} queue.
 \end{itemize}
 
 \subsection{Task-based version}
 
-The task-based version keeps the same \textbf{single-writer rule}, but it schedules the controller tick with a \textbf{single-thread scheduled executor}. The parallelizable physics work is expressed as \textbf{executor tasks}, and the controller waits on \textbf{Futures} before merging the partial results and publishing the next snapshot. The bot is separate from the physics tasks: it runs on a dedicated single-thread executor and submits commands to the shared \textbf{commands} queue. The implementation also keeps a \textbf{fast path} for workloads below the parallelization threshold or with a single worker, where the range decomposition produces one range that is executed directly.
+The task-based version keeps the same \textbf{controller-driven game protocol}, but it schedules the controller tick with a \textbf{single-thread scheduled executor}. The parallelizable physics work is expressed as \textbf{executor tasks}, and the controller waits on \textbf{Futures} before merging the partial results and publishing the next snapshot. The bot is separate from the physics tasks: it runs on a dedicated single-thread executor and submits commands to the shared \textbf{commands} queue. The implementation also keeps a \textbf{fast path} for workloads below the parallelization threshold or with a single worker, where the range decomposition produces one range that is executed directly.
 
 \begin{itemize}
     \item the controller tick is scheduled periodically by the executor;
@@ -309,7 +309,7 @@ The task-based version keeps the same \textbf{single-writer rule}, but it schedu
 
 \subsection{Why this design works}
 
-This design keeps \textbf{one authoritative state} while moving the expensive physics work into \textbf{parallel worker phases}. The controller is the only component that works on the shared state, so it runs the serial phases and keeps the outcome \textbf{deterministic}. As the number of balls grows, the parallel portion grows with it, and the concurrent versions can exploit the available cores more effectively without exposing the view to partial updates.
+This design keeps \textbf{one authoritative game flow} while moving the expensive physics work into \textbf{parallel worker phases}. The controller is the only component that executes commands, advances the tick protocol, updates scores and game-over state, and publishes snapshots. Physics workers or tasks operate only inside that tick on disjoint ranges or private accumulators, and the deterministic merge/apply order keeps the outcome stable. As the number of balls grows, the parallel portion grows with it, and the concurrent versions can exploit the available cores more effectively without exposing the view to partial updates.
 
 \clearpage
 \section{Implementation}
@@ -318,7 +318,7 @@ This design keeps \textbf{one authoritative state} while moving the expensive ph
 
 The implementation mirrors the design: the same \textbf{game rules} are reused by all launchers, while the \textbf{execution strategy} changes between the sequential, \textbf{platform-thread}, and \textbf{task-based} versions. The code is split into the \textbf{model}, the \textbf{physics engines}, the \textbf{runtime helpers}, and the \textbf{Swing view}, so the responsibilities stay visible in the source tree.
 
-The concurrent engines follow the same rule: the \textbf{controller} assigns work, the workers process \textbf{private slices}, and the controller merges the partial results into one \textbf{authoritative state}. The work is split into \textbf{contiguous ranges}, then into \textbf{private center-cell grids}, and finally into a \textbf{deterministic join} and commit phase.
+The concurrent engines follow the same rule: the \textbf{controller} starts the physics step, workers process \textbf{private slices} or private accumulators, and the coordinator merges the partial results into one \textbf{authoritative board state}. The work is split into \textbf{contiguous ranges}, then into \textbf{private center-cell grids}, and finally into a \textbf{deterministic join}, merge, and delta-apply phase.
 
 The difference between the two concurrent versions is the \textbf{execution style}. The threaded engine uses long-lived \textbf{platform workers} and a \textbf{completion monitor}; the task-based engine submits the same ranges to an \textbf{executor} and waits on \textbf{Future}s. In both cases, the local loop stays \textbf{sequential} inside each worker, and the task-based engine keeps a small-workload \textbf{fast path} when \textbf{parallel decomposition} is not worth the overhead.
 
@@ -383,7 +383,7 @@ This version defines the expected behavior of the game without concurrency conce
 
 \subsection{Platform-thread implementation}
 
-The platform-thread version introduces a \textbf{controller thread} plus an optional \textbf{bot thread}. The controller is the only thread that mutates the \textbf{model}, while external producers submit commands through a \textbf{monitor-backed queue}. The threaded physics engine is still called from the controller, so the controller remains the \textbf{single point} where the match advances.
+The platform-thread version introduces a \textbf{controller thread} plus an optional \textbf{bot thread}. The controller is the only thread that executes game commands, scoring, game-over checks, and snapshot publication, while external producers submit commands through a \textbf{monitor-backed queue}. The threaded physics engine is still called from the controller, but its internal workers can mutate disjoint ball ranges or private accumulators during the bounded physics phases.
 
 \begin{lstlisting}[style=codestyle,caption={Threaded controller loop},label={lst:threaded-controller-loop}]
 while (running) {
@@ -415,7 +415,7 @@ completion.await();
 
 \noindent\textit{Source: \path{ThreadedPhysicsEngine.java}, lines 562--578.}
 
-This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the \textbf{completion barrier} has been reached. The collision phase follows the same idea: each worker computes local contributions on its own slice, builds a \textbf{private spatial view}, and resolves the cells it owns before the controller merges the sparse results and applies the final writes to the \textbf{authoritative board}.
+This is the actual point where the controller passes the physics work to the worker threads. The workers run their assigned range independently, and the controller resumes only after the \textbf{completion barrier} has been reached. The collision phase follows the same idea: each worker computes local contributions on its own slice, builds a \textbf{private spatial view}, and resolves the cells it owns before the coordinator merges the sparse results. The final writes are then applied to the \textbf{authoritative board}; for large touched sets, that apply step is also split over disjoint ball indexes.
 
 \begin{lstlisting}[style=codestyle,caption={Threaded cell reconstruction and collision dispatch},label={lst:threaded-cell-reconstruction}]
 var mergedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
@@ -453,7 +453,7 @@ runRanges(orderedCells.size(), (from, to, workerIndex) -> {
 
 \subsection{Task-based implementation}
 
-The task-based version keeps the same \textbf{controller-driven protocol}, but the parallel physics phase is expressed as \textbf{executor tasks}. The runner uses a scheduled single-thread controller executor for the tick and a separate executor for the bot. Inside the physics engine, the work is executed through \textbf{Futures}: tasks do the independent work, the coordinator waits, and only then are the shared updates applied. For collision detection, each task builds a \textbf{private local grid}, the coordinator merges those grids, sorts the packed candidate pairs, records collisions in \textbf{deterministic order}, and applies the accumulated deltas.
+The task-based version keeps the same \textbf{controller-driven protocol}, but the parallel physics phase is expressed as \textbf{executor tasks}. The runner uses a scheduled single-thread controller executor for the tick and a separate executor for the bot. Inside the physics engine, the work is executed through \textbf{Futures}: tasks do the independent work, the coordinator waits, and only then are the merged updates applied. For collision handling, each task builds a \textbf{private local grid}, the coordinator merges those grids, sorts the owned cells, records the actual contact pairs in \textbf{deterministic order}, and applies the accumulated deltas serially or in parallel over disjoint touched-ball indexes.
 
 \begin{lstlisting}[style=codestyle,caption={Task submission and synchronization},label={lst:taskbased-futures}]
 var futures = new ArrayList<Future<T>>(ranges.size());
@@ -509,10 +509,20 @@ full game; instead, they reuse \path{MinimalProtocolState} to check the
 \end{itemize}
 
 The two JPF configuration files are \texttt{threaded-minimal.jpf} and
-\texttt{taskbased-minimal.jpf}. They use the same reduced setup:
+\texttt{taskbased-minimal.jpf}. They use the same reduced setup, but each file
+has its own target harness:
 
 \begin{verbatim}
+# threaded-minimal.jpf
 target=pcd.poool.verification.jpf.ThreadedMiniHarness
+classpath=target/jpf-classes
+search.class=gov.nasa.jpf.search.DFSearch
+vm.storage.class=gov.nasa.jpf.vm.JenkinsStateSet
+vm.por=true
+vm.max_heap=64m
+search.depth_limit=40
+
+# taskbased-minimal.jpf
 target=pcd.poool.verification.jpf.TaskBasedMiniHarness
 classpath=target/jpf-classes
 search.class=gov.nasa.jpf.search.DFSearch
@@ -529,6 +539,8 @@ python assignment-1/verification/jpf/run_jpf.py --docker --model taskbased
 \end{verbatim}
 Here, \texttt{Python} acts as a lightweight automation layer: the project was developed across heterogeneous environments, namely Windows and Linux, so the verification workflow needed a portable scripting entry point.
 Both runs completed with \texttt{no errors detected}.
+The Docker verification log for the reported run is stored at
+\path{assignment-1/verification/jpf/logs/jpf-docker-both-20260804-clean.log}.
 
 \begin{itemize}
     \item \textbf{Threaded model}: \texttt{states: new=774, visited=1117, backtracked=1891, end=4}; \texttt{maxDepth=35}; \texttt{instructions=22411}.
@@ -644,26 +656,70 @@ workload (1000 steps; seed 42).}
 \clearpage
 \section{Conclusions}
 
-This project implements the three required execution strategies: sequential, platform-thread, and task-based. In both concurrent versions, the \textbf{controller} is the \textbf{single writer} of the game flow and preserves the \textbf{authoritative state} deterministically, while workers only execute bounded physics slices.
+This project implements the three required execution strategies: sequential, platform-thread, and task-based. In both concurrent versions, the \textbf{controller} is the \textbf{single writer} of the game protocol: it executes commands, advances ticks, updates scores and terminal state, and publishes snapshots. Physics workers only execute bounded phases on disjoint ranges or private accumulators, with deterministic merge and apply steps before publication.
 
-The benchmark files and figures in \texttt{assignment-1/report/data/} and \texttt{assignment-1/report/images/} show consistent but limited gains. For the speedup workloads, both concurrent versions beat the sequential baseline from 1000 balls upward, and the best median in that set is the executor run on 2500 balls (\texttt{242.8611 ms}, \texttt{1.819991} speedup). For the 2500-ball scalability run, both implementations reach their best measured point at \textbf{16 workers}, and performance then flattens or slightly regresses at 17, so scaling remains \textbf{sublinear}.
+The benchmark files and figures in \path{assignment-1/report/data/} and
+\path{assignment-1/report/images/} show consistent but limited gains. For the
+speedup workloads, both concurrent versions beat the sequential baseline from
+1000 balls upward, and the best median in that set is the executor run on 2500
+balls (\texttt{242.8611 ms}, \texttt{1.819991} speedup). For the 2500-ball
+scalability run, both implementations reach their best measured point at
+\textbf{16 workers}, and performance then flattens or slightly regresses at 17,
+so scaling remains \textbf{sublinear}.
 
 The verification evidence is intentionally narrower than the full game. The \textbf{Petri nets} and \textbf{JPF harnesses} model \textbf{reduced synchronization models} for the coordination protocol, but they do not prove the full game, the numerical physics, or general performance. The report therefore establishes a deterministic concurrent design with measured speedups, while also making its limits explicit.
 
 \clearpage
 \section{How to Run}
 
-The project can be built and tested from the assignment 1 directory. The three launchers share the same compiled classes; the task-based version accepts an optional worker count. The report is generated from the \texttt{report} directory.
+The project can be built and tested either from the repository root with
+\path{-f assignment-1/pom.xml}, or from the \path{assignment-1} directory with
+plain Maven commands. The three launchers share the same compiled classes; the
+task-based version accepts an optional worker count. The benchmark command below
+regenerates the local speedup snapshot and refreshes \path{benchmarks/results/}
+and \path{benchmarks/charts/}. The report is generated from the
+\path{assignment-1/report} directory.
 
-\begin{itemize}
-    \item \textbf{Run the test suite}: \texttt{mvn -f assignment-1/pom.xml test}
-    \item \textbf{Compile the application classes}: \texttt{mvn -f assignment-1/pom.xml compile}
-    \item \textbf{Start the sequential launcher}: \texttt{java -cp assignment-1/target/classes pcd.poool.SequentialPoool}
-    \item \textbf{Start the platform-thread launcher}: \texttt{java -cp assignment-1/target/classes pcd.poool.ThreadedPoool}
-    \item \textbf{Start the task-based launcher}: \texttt{java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool}
-    \item \textbf{Start the task-based launcher with an explicit worker count}: \texttt{java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool 16}
-    \item \textbf{Build the PDF report}: \texttt{make}
-\end{itemize}
+\textbf{Run the test suite}
+\begin{verbatim}
+mvn -f assignment-1/pom.xml test
+\end{verbatim}
+
+\textbf{Compile the application classes}
+\begin{verbatim}
+mvn -f assignment-1/pom.xml compile
+\end{verbatim}
+
+\textbf{Regenerate the speedup benchmark snapshot}
+\begin{verbatim}
+python assignment-1/scripts/run_benchmarks.py --mode speedup
+\end{verbatim}
+
+\textbf{Start the sequential launcher}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.SequentialPoool
+\end{verbatim}
+
+\textbf{Start the platform-thread launcher}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.ThreadedPoool
+\end{verbatim}
+
+\textbf{Start the task-based launcher}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool
+\end{verbatim}
+
+\textbf{Start the task-based launcher with an explicit worker count}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool 16
+\end{verbatim}
+
+\textbf{Build the PDF report}
+\begin{verbatim}
+cd assignment-1/report
+make
+\end{verbatim}
 
 \clearpage
 \section{References}
