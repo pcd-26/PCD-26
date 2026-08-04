@@ -132,6 +132,8 @@ The project architecture is built around three stable elements:
     \item the \textbf{view}.
 \end{itemize}
 
+The controller/runtime publishes \textbf{immutable snapshots} after each tick, and the view consumes only those snapshots. This keeps rendering separate from simulation updates and prevents the GUI from observing half-finished state changes.
+
 The same structure is reused by the \textbf{sequential}, \textbf{platform-thread}, and \textbf{task-based} launchers, while only the \textbf{execution policy} changes.
 
 The \textbf{sequential} version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
@@ -297,10 +299,6 @@ The task-based version keeps the same \textbf{single-writer rule}, but it schedu
     \item the controller merges the partial results and publishes the next snapshot only after the join barrier;
     \item the bot runs on a dedicated single-thread executor and still submits commands to the shared \textbf{commands} queue.
 \end{itemize}
-
-\subsection{Shared state and snapshots}
-
-The model creates the logical game snapshot, while the runtime publishes the immutable runtime snapshot consumed by the view. This prevents rendering from seeing half-finished updates and gives the GUI a stable picture of the match at each publication point.
 
 \subsection{Why this design works}
 
