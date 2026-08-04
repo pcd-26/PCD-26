@@ -539,8 +539,8 @@ python assignment-1/verification/jpf/run_jpf.py --docker --model taskbased
 \end{verbatim}
 Here, \texttt{Python} acts as a lightweight automation layer: the project was developed across heterogeneous environments, namely Windows and Linux, so the verification workflow needed a portable scripting entry point.
 Both runs completed with \texttt{no errors detected}.
-The Docker verification log for the reported run is stored at
-\path{assignment-1/verification/jpf/logs/jpf-docker-both-20260804-clean.log}.
+The verification artifacts used for this report are available in the
+repository: \href{https://github.com/pcd-26/PCD-26}{pcd-26/PCD-26}.
 
 \begin{itemize}
     \item \textbf{Threaded model}: \texttt{states: new=774, visited=1117, backtracked=1891, end=4}; \texttt{maxDepth=35}; \texttt{instructions=22411}.
@@ -554,7 +554,8 @@ The threaded model explores a larger state space because its worker thread stays
 
 \subsection{Benchmark Methodology}
 
-All benchmark values come from the CSV files in \texttt{assignment-1/report/data/}, and the figures in
+All benchmark values used for this report are available in the repository:
+\href{https://github.com/pcd-26/PCD-26}{pcd-26/PCD-26}. The figures in
 \texttt{assignment-1/report/images/} visualize the same summaries. The report uses a speedup snapshot with
 \textbf{1000}, \textbf{1500}, \textbf{2000}, and \textbf{2500} balls at \textbf{600} steps, seed \texttt{42}, and a
 worker-count snapshot for \textbf{2500} balls at \textbf{1000} steps, seed \texttt{42}.
@@ -658,8 +659,7 @@ workload (1000 steps; seed 42).}
 
 This project implements the three required execution strategies: sequential, platform-thread, and task-based. In both concurrent versions, the \textbf{controller} is the \textbf{single writer} of the game protocol: it executes commands, advances ticks, updates scores and terminal state, and publishes snapshots. Physics workers only execute bounded phases on disjoint ranges or private accumulators, with deterministic merge and apply steps before publication.
 
-The benchmark files and figures in \path{assignment-1/report/data/} and
-\path{assignment-1/report/images/} show consistent but limited gains. For the
+The benchmark evidence in the repository and the rendered figures show consistent but limited gains. For the
 speedup workloads, both concurrent versions beat the sequential baseline from
 1000 balls upward, and the best median in that set is the executor run on 2500
 balls (\texttt{242.8611 ms}, \texttt{1.819991} speedup). For the 2500-ball
