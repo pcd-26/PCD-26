@@ -495,11 +495,11 @@ The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. They
 
 \subsection{JPF model checking}
 
-The verification area contains two minimal JPF harnesses:
+The verification area contains two \textbf{reduced JPF harnesses}:
 \path{pcd.poool.verification.jpf.ThreadedMiniHarness} and
-\path{pcd.poool.verification.jpf.TaskBasedMiniHarness}. Both reuse
-\path{MinimalProtocolState}, whose assertions check the actual coordination
-rules of the reduced protocol:
+\path{pcd.poool.verification.jpf.TaskBasedMiniHarness}. They do not model the
+full game; instead, they reuse \path{MinimalProtocolState} to check the
+\textbf{essential coordination protocol}:
 
 \begin{itemize}
     \item the board cannot be owned twice at the same time;
@@ -527,6 +527,7 @@ The actual JPF runs were executed through the Docker helper:
 python assignment-1/verification/jpf/run_jpf.py --docker --model threaded
 python assignment-1/verification/jpf/run_jpf.py --docker --model taskbased
 \end{verbatim}
+Here, \texttt{Python} acts as a lightweight automation layer: the project was developed across heterogeneous environments, namely Windows and Linux, so the verification workflow needed a portable scripting entry point.
 Both runs completed with \texttt{no errors detected}.
 
 \begin{itemize}
@@ -534,7 +535,7 @@ Both runs completed with \texttt{no errors detected}.
     \item \textbf{Task-based model}: \texttt{states: new=249, visited=288, backtracked=537, end=3}; \texttt{maxDepth=34}; \texttt{instructions=16409}.
 \end{itemize}
 
-The threaded model explores a larger state space because its worker thread stays alive across the protocol steps. The task-based model is smaller because the worker is represented as a short-lived task. In both cases, JPF confirms the bounded synchronization protocol reaches completion without deadlock or assertion failure, which is exactly the level of verification this report claims \cite{clarke1999,visser2003}.
+The threaded model explores a larger state space because its worker thread stays alive across the protocol steps. The task-based model is smaller because the parallel work is represented by a short-lived thread that is created only when needed and joined immediately after. In both cases, JPF confirms that the bounded synchronization protocol reaches completion without deadlock or assertion failure, which is exactly the level of verification this report claims \cite{clarke1999,visser2003}.
 
 \clearpage
 \section{Results and Discussion}
