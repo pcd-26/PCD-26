@@ -653,33 +653,17 @@ The verification evidence is intentionally narrower than the full game. The \tex
 \clearpage
 \section{How to Run}
 
-The project can be built and tested from the assignment 1 directory. The main launchers are the sequential, platform-thread, and task-based entry points. The report itself can be generated from the \texttt{report} directory.
+The project can be built and tested from the assignment 1 directory. The three launchers share the same compiled classes; the task-based version accepts an optional worker count. The report is generated from the \texttt{report} directory.
 
 \begin{itemize}
-    \item \textbf{Build and test} from the assignment 1 directory:
+    \item \textbf{Run the test suite}: \texttt{mvn -f assignment-1/pom.xml test}
+    \item \textbf{Compile the application classes}: \texttt{mvn -f assignment-1/pom.xml compile}
+    \item \textbf{Start the sequential launcher}: \texttt{java -cp assignment-1/target/classes pcd.poool.SequentialPoool}
+    \item \textbf{Start the platform-thread launcher}: \texttt{java -cp assignment-1/target/classes pcd.poool.ThreadedPoool}
+    \item \textbf{Start the task-based launcher}: \texttt{java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool}
+    \item \textbf{Start the task-based launcher with an explicit worker count}: \texttt{java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool 16}
+    \item \textbf{Build the PDF report}: \texttt{make}
 \end{itemize}
-
-\begin{verbatim}
-mvn -f assignment-1/pom.xml test
-\end{verbatim}
-
-\begin{itemize}
-    \item \textbf{Main classes}:
-\end{itemize}
-
-\begin{verbatim}
-pcd.poool.SequentialPoool
-pcd.poool.ThreadedPoool
-pcd.poool.TaskBasedPoool
-\end{verbatim}
-
-\begin{itemize}
-    \item \textbf{Report build} from the \texttt{report} directory:
-\end{itemize}
-
-\begin{verbatim}
-make
-\end{verbatim}
 
 \clearpage
 \section{References}
