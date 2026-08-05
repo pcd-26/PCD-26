@@ -3,7 +3,7 @@
 
 \subsection{Implementation overview}
 
-The implementation mirrors the design: the same \textbf{game rules} are reused by all launchers, while the \textbf{execution strategy} changes between the sequential, \textbf{platform-thread}, and \textbf{task-based} versions. The code is split into the \textbf{model}, the \textbf{physics engines}, the \textbf{runtime helpers}, and the \textbf{Swing view}, so the responsibilities stay visible in the source tree.
+The code is split into the \textbf{model}, the \textbf{physics engines}, the \textbf{runtime helpers}, and the \textbf{Swing view}, so the responsibilities stay visible in the source tree.
 
 The concurrent engines follow the same rule: the \textbf{controller} starts the physics step, workers process \textbf{private slices} or private accumulators, and the coordinator merges the partial results into one \textbf{authoritative board state}. The work is split into \textbf{contiguous ranges}, then into \textbf{private center-cell grids}, and finally into a \textbf{deterministic join}, merge, and delta-apply phase.
 
@@ -16,8 +16,6 @@ The difference between the two concurrent versions is the \textbf{execution styl
     \item \textbf{\texttt{pcd.poool.threaded}} and \textbf{\texttt{pcd.poool.taskbased}}: concurrent runners;
     \item \textbf{\texttt{pcd.poool.view}} and \textbf{\texttt{pcd.poool.view.board}}: rendering and input handling.
 \end{itemize}
-
-The three public entry points are \texttt{SequentialPoool}, \texttt{ThreadedPoool}, and \texttt{TaskBasedPoool}. They build the corresponding \textbf{runtime}, connect it to the \textbf{view}, and keep the \textbf{GUI loop} separate from the \textbf{simulation logic}.
 
 \subsection{Core classes}
 

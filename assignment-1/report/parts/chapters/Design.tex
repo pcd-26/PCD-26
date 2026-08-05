@@ -2,8 +2,6 @@
 \section{Design}
 
 \noindent
-The design is based on separation of responsibilities. The model contains the game rules and state, while the rest of the architecture is organized around a controller/runtime and a view.
-
 The three implementations share the same game logic and differ only in their runtime organization.
 
 \subsection{Project architecture}
@@ -17,8 +15,6 @@ The project architecture is built around three stable elements:
 \end{itemize}
 
 The controller/runtime publishes \textbf{immutable snapshots} after each tick, and the view consumes only those snapshots. This keeps rendering separate from simulation updates and prevents the GUI from observing half-finished state changes.
-
-The same structure is reused by the \textbf{sequential}, \textbf{platform-thread}, and \textbf{task-based} launchers, while only the \textbf{execution policy} changes.
 
 The \textbf{sequential} version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
 

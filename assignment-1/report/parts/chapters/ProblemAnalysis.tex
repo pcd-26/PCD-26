@@ -10,6 +10,6 @@ The main difficulty is the management of a shared mutable board under asynchrono
     \item \textbf{Responsiveness}: the interface must remain reactive while the simulation progresses.
 \end{itemize}
 
-The concurrent part of the assignment is therefore a matter of separating the simulation work that can be parallelized from the coordination that must remain serialized. The implementation must preserve a consistent global view of the match while keeping the simulation efficient.
+The concurrent part of the assignment starts from identifying which simulation work can be parallelized and which coordination must remain serialized. This is the first step toward preserving a consistent global view of the match while keeping the simulation efficient.
 
 \textbf{The objective} is to \textbf{exploit parallelism} while preserving \textbf{coherence} and \textbf{determinism}.
