@@ -1,0 +1,51 @@
+\clearpage
+\section{How to Run}
+
+The project can be built and tested either from the repository root with
+\path{-f assignment-1/pom.xml}, or from the \path{assignment-1} directory with
+plain Maven commands. The three launchers share the same compiled classes; the
+task-based version accepts an optional worker count. The benchmark command below
+regenerates the local speedup snapshot and refreshes \path{benchmarks/results/}
+and \path{benchmarks/charts/}. The report is generated from the
+\path{assignment-1/report} directory.
+
+\textbf{Run the test suite}
+\begin{verbatim}
+mvn -f assignment-1/pom.xml test
+\end{verbatim}
+
+\textbf{Compile the application classes}
+\begin{verbatim}
+mvn -f assignment-1/pom.xml compile
+\end{verbatim}
+
+\textbf{Regenerate the speedup benchmark snapshot}
+\begin{verbatim}
+python assignment-1/scripts/run_benchmarks.py --mode speedup
+\end{verbatim}
+
+\textbf{Start the sequential launcher}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.SequentialPoool
+\end{verbatim}
+
+\textbf{Start the platform-thread launcher}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.ThreadedPoool
+\end{verbatim}
+
+\textbf{Start the task-based launcher}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool
+\end{verbatim}
+
+\textbf{Start the task-based launcher with an explicit worker count}
+\begin{verbatim}
+java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool 16
+\end{verbatim}
+
+\textbf{Build the PDF report}
+\begin{verbatim}
+cd assignment-1/report
+make
+\end{verbatim}

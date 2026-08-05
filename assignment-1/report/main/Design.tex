@@ -1,0 +1,189 @@
+\clearpage
+\section{Design}
+
+\noindent
+The design is based on separation of responsibilities. The model contains the game rules and state, while the rest of the architecture is organized around a controller/runtime and a view.
+
+The three implementations share the same game logic and differ only in their runtime organization.
+
+\subsection{Project architecture}
+
+The project architecture is built around three stable elements:
+
+\begin{itemize}
+    \item the \textbf{shared game model};
+    \item the \textbf{controller/runtime};
+    \item the \textbf{view}.
+\end{itemize}
+
+The controller/runtime publishes \textbf{immutable snapshots} after each tick, and the view consumes only those snapshots. This keeps rendering separate from simulation updates and prevents the GUI from observing half-finished state changes.
+
+The same structure is reused by the \textbf{sequential}, \textbf{platform-thread}, and \textbf{task-based} launchers, while only the \textbf{execution policy} changes.
+
+The \textbf{sequential} version is the reference architecture. A single execution flow reacts to the input callbacks, advances the physics, updates the logical state, and publishes the resulting snapshot. This version defines the expected semantics and provides the baseline used to evaluate the concurrent versions.
+
+\subsection{Designing the concurrent solution}
+
+Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. We carried out an analysis of the \textbf{parallelizable} and \textbf{non parallelizable} parts of the system.
+
+\begin{table}[ht]
+    \centering
+    \small
+    \setlength{\tabcolsep}{5pt}
+    \renewcommand{\arraystretch}{1.18}
+    \begin{tabular}{@{}p{0.34\linewidth}>{\centering\arraybackslash}p{0.16\linewidth}p{0.40\linewidth}@{}}
+        \hline
+        \textbf{Aspect} & \textbf{Parallelizable?} & \textbf{Reason} \\
+        \hline
+        \textbf{Parallelizable simulation work} & \textbf{Yes} & It can be executed in worker phases without changing the game semantics. \\
+        \textbf{Command handling} & \textbf{No} & Commands must be serialized on a \textbf{single controller} to preserve consistency. \\
+        \textbf{State commit} & \textbf{Partly} & Collision deltas are merged by the coordinator; the final apply can run in parallel on disjoint touched-ball indexes when the touched set is large. \\
+        \textbf{Snapshot publication} & \textbf{No} & The view must observe a \textbf{stable} and fully committed state. \\
+        \textbf{View rendering} & \textbf{No} & Rendering consumes snapshots; it does not mutate the simulation. \\
+        \hline
+    \end{tabular}
+    \caption{High-level classification of the main activities in the concurrent solution.}
+    \label{tab:parallelizable-vs-nonparallelizable}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{Parallelizable}: local physics work over independent chunks of the simulation;
+    \item \textbf{Not parallelizable}: command processing, sparse-delta merge, score updates, game-over checks, and snapshot publication;
+\end{itemize}
+
+The design goal is to keep one authoritative game protocol while letting the heavy local work run in parallel. The coordinator owns the tick order and the rule-level transitions; worker threads or tasks operate only inside bounded physics phases, either on disjoint ranges or on private accumulators.
+
+The first Petri net captures the controller loop: \textbf{collect commands}, \textbf{dispatch physics}, \textbf{update state and score}, \textbf{publish the snapshot}, then \textbf{wait for the next tick}.
+
+\begin{figure}[ht]
+    \centering
+    \resizebox{0.95\linewidth}{!}{%
+        \begin{tikzpicture}[
+            node distance=18mm,
+            >=Stealth,
+            place/.style={circle,draw,thick,minimum size=10mm,align=center},
+            transition/.style={rectangle,draw,thick,minimum width=5mm,minimum height=11mm,align=center},
+            every node/.style={font=\small}
+        ]
+            \node[place] (idle) {Controller\\idle};
+            \node[transition, right=of idle] (drain) {Collect\\commands};
+            \node[place, right=of drain] (ready) {Tick\\ready};
+            \node[transition, right=of ready] (dispatch) {Dispatch\\physics};
+            \node[place, right=of dispatch] (parallel) {Physics\\done};
+            \node[transition, right=of parallel] (join) {Update\\state and score};
+            \node[place, right=of join] (published) {Snapshot\\ready};
+            \node[transition, right=of published] (sleep) {Wait\\next tick};
+
+            \draw[->,thick] (idle) -- (drain);
+            \draw[->,thick] (drain) -- (ready);
+            \draw[->,thick] (ready) -- (dispatch);
+            \draw[->,thick] (dispatch) -- (parallel);
+            \draw[->,thick] (parallel) -- (join);
+            \draw[->,thick] (join) -- (published);
+            \draw[->,thick] (published) -- (sleep);
+            \draw[->,thick] (sleep) to[bend left=35] (idle);
+        \end{tikzpicture}
+    }%
+    \caption{Petri net of the controller cycle in the concurrent versions. The initial marking places one token in \textit{Controller idle}.}
+    \label{fig:petri-concurrent-tick}
+\end{figure}
+
+This abstraction matches both concurrent implementations: \textbf{long-lived workers} in one case, \textbf{executor tasks and futures} in the other.
+
+\noindent\textbf{Dispatch physics.}
+The second Petri net zooms into the physics dispatch: \textbf{assign ranges}, \textbf{build local cells}, \textbf{merge views}, \textbf{resolve collisions}, and \textbf{apply the merged result}. The two \textit{$N$ tokens} labels mark the fan-out to the worker branches.
+
+\begin{figure}[ht]
+    \centering
+    \resizebox{0.99\linewidth}{!}{%
+        \begin{tikzpicture}[
+            node distance=18mm and 24mm,
+            >=Stealth,
+            place/.style={circle,draw,thick,minimum size=9mm,align=center},
+            transition/.style={rectangle,draw,thick,minimum width=5mm,minimum height=10mm,align=center},
+            every node/.style={font=\small}
+        ]
+            \node[place] (ready) {Tick\\ready};
+            \node[transition, right=of ready] (split) {Assign\\ranges};
+            \node[place, right=of split] (ranges) {Ranges\\assigned};
+
+            \node[transition, right=32mm of ranges, yshift=16mm] (w1proc) {Build\\local cells};
+            \node[place, right=of w1proc] (w1out) {Worker 1\\local cells};
+
+            \node[transition, right=32mm of ranges] (w2proc) {Build\\local cells};
+            \node[place, right=of w2proc] (w2out) {Worker $i$\\local cells};
+
+            \node[transition, right=32mm of ranges, yshift=-16mm] (wnproc) {Build\\local cells};
+            \node[place, right=of wnproc] (wnout) {Worker N\\local cells};
+
+            \node[transition, right=35mm of w2out] (merge) {Master\\merges views};
+            \node[place, right=of merge] (cells) {Cells\\ready};
+
+            \node[transition, right=32mm of cells, yshift=16mm] (w1rproc) {Resolve\\collisions};
+            \node[place, right=of w1rproc] (w1rout) {Worker 1\\resolved};
+
+            \node[transition, right=32mm of cells] (w2rproc) {Resolve\\collisions};
+            \node[place, right=of w2rproc] (w2rout) {Worker $i$\\resolved};
+
+            \node[transition, right=32mm of cells, yshift=-16mm] (wnrproc) {Resolve\\collisions};
+            \node[place, right=of wnrproc] (wnrout) {Worker N\\resolved};
+
+            \node[transition, right=35mm of w2rout] (commit) {Apply\\merged\\deltas};
+            \node[place, right=of commit] (done) {Physics\\done};
+
+            \draw[->,thick] (ready) -- (split);
+            \draw[->,thick] (split) -- node[font=\scriptsize, above] {$N$ tokens} (ranges);
+            \draw[->,thick] (ranges.east) -- ++(12mm,16mm) -- (w1proc.west);
+            \draw[->,thick] (ranges.east) -- (w2proc.west);
+            \draw[->,thick] (ranges.east) -- ++(12mm,-16mm) -- (wnproc.west);
+            \draw[->,thick] (w1proc) -- (w1out);
+            \draw[->,thick] (w2proc) -- (w2out);
+            \draw[->,thick] (wnproc) -- (wnout);
+            \draw[->,thick] (w1out.east) -- ++(12mm,0) -- (merge.west);
+            \draw[->,thick] (w2out.east) -- (merge.west);
+            \draw[->,thick] (wnout.east) -- ++(12mm,0) -- (merge.west);
+            \draw[->,thick] (merge) -- node[font=\scriptsize, above] {$N$ tokens} (cells);
+            \draw[->,thick] (cells.east) -- ++(12mm,16mm) -- (w1rproc.west);
+            \draw[->,thick] (cells.east) -- (w2rproc.west);
+            \draw[->,thick] (cells.east) -- ++(12mm,-16mm) -- (wnrproc.west);
+            \draw[->,thick] (w1rproc) -- (w1rout);
+            \draw[->,thick] (w2rproc) -- (w2rout);
+            \draw[->,thick] (wnrproc) -- (wnrout);
+            \draw[->,thick] (w1rout.east) -- ++(12mm,0) -- (commit.west);
+            \draw[->,thick] (w2rout.east) -- (commit.west);
+            \draw[->,thick] (wnrout.east) -- ++(12mm,0) -- (commit.west);
+            \draw[->,thick] (commit) -- (done);
+            \node[draw, thick, rounded corners, fit=(split)(ranges)(w1proc)(w1out)(w2proc)(w2out)(wnproc)(wnout)(merge)(cells)(w1rproc)(w1rout)(w2rproc)(w2rout)(wnrproc)(wnrout)(commit), inner sep=6mm, label=above:{Dispatch physics}] {};
+        \end{tikzpicture}
+    }%
+    \caption{Dispatch phase of the concurrent tick. The box highlights the alternation between parallel worker phases, coordinator merge phases, and the final apply of the merged physics deltas.}
+    \label{fig:petri-dispatch-zoom}
+\end{figure}
+
+The figure above keeps only the control flow: \textit{Tick ready} enters the box, ranges fan out to the worker branches, the coordinator merges the local views, the next fan-out feeds collision resolution, and the merged deltas are applied before leaving the box. In the implementation this last apply is serial for small touched sets and parallel over disjoint touched-ball indexes for larger touched sets.
+
+\subsection{Platform-thread version}
+
+The platform-thread version uses one \textbf{controller thread} plus long-lived \textbf{worker platform threads} inside the physics engine. The controller keeps ownership of the global progression of the match, while workers handle the \textbf{parallelizable physics work}. This matches the actual implementation: commands are queued in the shared \textbf{commands} monitor, executed on the controller thread, physics workers stay confined to private chunks or private collision accumulators, and the controller publishes the \textbf{immutable snapshot} after each tick.
+
+\begin{itemize}
+    \item the controller executes pending commands and advances the global tick;
+    \item workers handle bounded pieces of the physics workload;
+    \item the physics engine keeps the \textbf{merge} phase serialized and applies merged deltas either serially or in parallel over disjoint touched-ball indexes;
+    \item the bot runs on a separate platform thread and submits commands to the shared \textbf{commands} queue.
+\end{itemize}
+
+\subsection{Task-based version}
+
+The task-based version keeps the same \textbf{controller-driven game protocol}, but it schedules the controller tick with a \textbf{single-thread scheduled executor}. The parallelizable physics work is expressed as \textbf{executor tasks}, and the controller waits on \textbf{Futures} before merging the partial results and publishing the next snapshot. The bot is separate from the physics tasks: it runs on a dedicated single-thread executor and submits commands to the shared \textbf{commands} queue. The implementation also keeps a \textbf{fast path} for workloads below the parallelization threshold or with a single worker, where the range decomposition produces one range that is executed directly.
+
+\begin{itemize}
+    \item the controller tick is scheduled periodically by the executor;
+    \item tasks compute the parallelizable physics work independently;
+    \item the controller merges the partial results and publishes the next snapshot only after the join barrier;
+    \item the bot runs on a dedicated single-thread executor and still submits commands to the shared \textbf{commands} queue.
+\end{itemize}
+
+\subsection{Why this design works}
+
+This design keeps \textbf{one authoritative game flow} while moving the expensive physics work into \textbf{parallel worker phases}. The controller is the only component that executes commands, advances the tick protocol, updates scores and game-over state, and publishes snapshots. Physics workers or tasks operate only inside that tick on disjoint ranges or private accumulators, and the deterministic merge/apply order keeps the outcome stable. As the number of balls grows, the parallel portion grows with it, and the concurrent versions can exploit the available cores more effectively without exposing the view to partial updates.
