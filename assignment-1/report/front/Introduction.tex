@@ -1,0 +1,13 @@
+\section{Introduction}
+
+Assignment 1 requires three execution strategies for \emph{Poool}: a sequential baseline, a platform-thread implementation, and a task-based implementation built on the Executor framework. The brief also asks for performance measurements and model checking with Java PathFinder (JPF).
+
+This report presents the implemented strategies:
+
+\begin{itemize}
+    \item \textbf{Sequential baseline}: single-thread reference execution;
+    \item \textbf{Platform-thread version}: controller-led platform-thread architecture with long-lived workers;
+    \item \textbf{Task-based version}: concurrent execution using the Executor framework.
+\end{itemize}
+
+All three launchers reuse the same game rules.
