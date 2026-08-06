@@ -20,7 +20,7 @@ The \textbf{sequential} version is the reference architecture. A single executio
 
 \subsection{Designing the concurrent solution}
 
-Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. We carried out an analysis of the \textbf{parallelizable} and \textbf{non parallelizable} parts of the system.
+Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. The \textbf{parallelizable} and \textbf{non parallelizable} parts of the system were analysed separately.
 
 \begin{table}[ht]
     \centering
@@ -33,7 +33,7 @@ Each tick has a \textbf{parallelizable} part and a \textbf{serial} part. We carr
         \hline
         \textbf{Parallelizable simulation work} & \textbf{Yes} & It can be executed in worker phases without changing the game semantics. \\
         \textbf{Command handling} & \textbf{No} & Commands must be serialized on a \textbf{single controller} to preserve consistency. \\
-        \textbf{State commit} & \textbf{Partly} & Collision deltas are merged by the coordinator; the final apply can run in parallel on disjoint touched-ball indexes when the touched set is large. \\
+        \textbf{State commit} & \textbf{Partly} & Collision deltas are merged by the coordinator; the resulting writes are then applied in a deterministic final step. \\
         \textbf{Snapshot publication} & \textbf{No} & The view must observe a \textbf{stable} and fully committed state. \\
         \textbf{View rendering} & \textbf{No} & Rendering consumes snapshots; it does not mutate the simulation. \\
         \hline
