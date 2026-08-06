@@ -20,16 +20,18 @@
 - `pcd.poool.threaded`: `ThreadedGameRunner`
 - `pcd.poool.runtime`: shared bot, command, receipt, queue, and snapshot supports
   used by the threaded and task-based runners
-- `pcd.poool.benchmark`: `BenchmarkConfig`, `PhysicsBenchmark`,
-  `SequentialGameBenchmark`, `ThreadedPhysicsBenchmark`,
-  `HeadlessSimulationRunner`
 - `pcd.poool`: `SequentialPoool`, `ThreadedPoool`
 
 ## Excluded from `pcd.poool`
 - sketch02 counter demo artifacts
 - sketch bootstrap/demo launchers
+- `pcd.poool.benchmark`: benchmark configuration, runners, post-processing,
+  and CSV/chart export flow
 
 They remain under `assignment-1/reference/sketch01` and `assignment-1/reference/sketch02`, outside the Maven source tree.
+The benchmark tooling and generated outputs remain available in the repository
+for the report and local analysis, but they are not part of the final delivery
+zip.
 
 For a component-level explanation of responsibilities and runtime relations,
 see [`docs/runtime-architecture.md`](runtime-architecture.md).
