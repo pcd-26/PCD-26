@@ -32,5 +32,8 @@
                 "%DIR%"
             ]
         }
-    ]
+    ],
+    "files.watcherExclude": {
+        "**/target/**": true
+    }
 }
