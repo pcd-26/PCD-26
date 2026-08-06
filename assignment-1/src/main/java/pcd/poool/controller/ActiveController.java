@@ -1,24 +1,14 @@
 package pcd.poool.controller;
 
-import pcd.poool.model.concurrent.BoundedBuffer;
-import pcd.poool.model.concurrent.BoundedBufferImpl;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import pcd.poool.model.concurrent.BoundedBuffer;
+import pcd.poool.model.concurrent.BoundedBufferImpl;
 
 /**
- * Generic active controller based on a producer/consumer queue.
+ * Active controller backed by a blocking command queue.
  *
- * <p>External producers enqueue {@link Cmd} instances through
- * {@link #notifyNewCmd(Cmd)}. This thread is the single consumer: it takes
- * commands from the bounded buffer and executes them one at a time on the
- * configured target object.
- *
- * <p>The target can be a model object, such as a board, or a higher-level
- * service that owns the game state. This pattern keeps asynchronous inputs
- * ordered and avoids having multiple producer threads mutate the same state
- * directly.
- *
- * @param <T> target state/service type updated by commands
+ * @param <T> target type handled by this controller
  */
 public class ActiveController<T> extends Thread {
 
@@ -28,21 +18,12 @@ public class ActiveController<T> extends Thread {
     private final T target;
     private volatile boolean running;
 
-    /**
-     * Creates an active controller for a target object.
-     *
-     * @param target object on which commands are executed
-     * @param queueSize maximum number of pending commands
-     */
     public ActiveController(T target, int queueSize) {
         this.cmdBuffer = new BoundedBufferImpl<>(queueSize);
         this.target = target;
         this.running = true;
     }
 
-    /**
-     * Consumes commands until the controller is shut down or interrupted.
-     */
     @Override
     public void run() {
         log("started");
@@ -60,11 +41,6 @@ public class ActiveController<T> extends Thread {
         log("stopped");
     }
 
-    /**
-     * Enqueues a command for asynchronous execution.
-     *
-     * @param cmd command to execute on the controller target
-     */
     public void notifyNewCmd(Cmd<T> cmd) {
         try {
             cmdBuffer.put(cmd);
@@ -74,9 +50,6 @@ public class ActiveController<T> extends Thread {
         }
     }
 
-    /**
-     * Requests controller termination and interrupts any blocking buffer wait.
-     */
     public void shutdown() {
         running = false;
         interrupt();
