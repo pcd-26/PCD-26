@@ -44,6 +44,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
     // Moves balls, applies holes, then resolves collisions.
     private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
+
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }
@@ -54,8 +55,10 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
             ball.updateState(dt, bounds);
         }
 
+        // Pocketing.
         board.applyHoleInteractions();
 
+        // Collision resolution.
         var allBalls = board.getCollisionBalls();
         for (var pair : collisionDetector.detectCollisionPairs(allBalls)) {
             var first = allBalls.get(pair.firstIndex());

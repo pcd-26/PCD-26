@@ -107,18 +107,18 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private void stepOnce(Board board, long dt, StepProfileAccumulator profile) {
-        // Read the shared bounds once for this sub-step.
         var bounds = board.getBounds();
-        // Read the active balls once for this sub-step.
+
         long stateReadStart = profile == null ? 0 : System.nanoTime();
         var activeBalls = activeBalls(board);
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - stateReadStart;
             profile.activeBalls += activeBalls.size();
         }
-        // Integrate motion in parallel, one slice per task.
+
+        // Movement.
         long integrationStart = profile == null ? 0 : System.nanoTime();
-        runRanges(activeBalls.size(), (from, to, workerIndex) -> {
+        executeParallelRanges(activeBalls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
                 activeBalls.get(i).updateState(dt, bounds);
@@ -135,17 +135,17 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.movementNanos += integrationNanos;
         }
 
-        // Apply pocketing after movement.
+        // Pocketing.
         long holeStart = profile == null ? 0 : System.nanoTime();
         board.applyHoleInteractions();
         if (profile != null) {
             profile.holeInteractionNanos += System.nanoTime() - holeStart;
         }
 
-        // Rebuild the collision list from the updated board state.
+        // Collision detection.
         long collisionReadStart = profile == null ? 0 : System.nanoTime();
         var collisionBalls = activeBallsBuffer.get();
-        board.fillCollisionBalls(collisionBalls);
+        board.fillCandidateCollisionBalls(collisionBalls); // Fills the collision candidates.
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - collisionReadStart;
             profile.collisionBalls += collisionBalls.size();
@@ -153,13 +153,14 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (collisionBalls.size() < 2) {
             return;
         }
-        // Resolve the collisions from the updated positions.
+
+        // Collision resolution.
         detectAndResolveCollisions(board, collisionBalls, profile);
     }
 
     private List<Ball> activeBalls(Board board) {
         var activeBalls = activeBallsBuffer.get();
-        board.fillCollisionBalls(activeBalls);
+        board.fillCandidateCollisionBalls(activeBalls);
         return activeBalls;
     }
 
@@ -182,7 +183,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
         long localGridStart = profile == null ? 0 : System.nanoTime();
         // Each task writes to a private grid, then the coordinator merges it.
-        runRanges(balls.size(), (from, to, workerIndex) -> {
+        executeParallelRanges(balls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             var localGrid = new java.util.HashMap<SpatialGridSupport.GridCell, List<Integer>>();
             for (int i = from; i < to; i++) {
@@ -237,23 +238,21 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private void detectAndResolveCollisions(Board board, List<Ball> balls, StepProfileAccumulator profile) {
         long collisionStart = profile == null ? 0 : System.nanoTime();
-        // Start from the positions produced by the movement phase.
-        // Build a spatial partition so nearby balls are checked together.
         double cellSize = computeOwnershipCellSize(balls);
 
+        // Broad phase: build one private grid per task.
         @SuppressWarnings("unchecked")
-        Map<SpatialGridSupport.GridCell, IntBag>[] localGrids = new Map[poolSize];
+        Map<SpatialGridSupport.GridCell, IntBag>[] workerGrids = new Map[poolSize];
 
         long localGridStart = profile == null ? 0 : System.nanoTime();
-        // Each task builds a private grid for its own slice.
-        runRanges(balls.size(), (from, to, workerIndex) -> {
+        executeParallelRanges(balls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
             for (int i = from; i < to; i++) {
                 var centerCell = computeCenterCell(balls.get(i), cellSize);
                 localGrid.computeIfAbsent(centerCell.cell(), ignored -> new IntBag()).add(i);
             }
-            localGrids[workerIndex] = localGrid;
+            workerGrids[workerIndex] = localGrid;
             if (profile != null) {
                 profile.localGridWorkerItems[workerIndex] += to - from;
                 profile.localGridWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
@@ -264,65 +263,65 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.localGridBuildNanos += System.nanoTime() - localGridStart;
         }
 
-        // Merge the private grids into one ordered view.
+        // Merge the private grids and keep the cells in a stable order.
         long aggregationStart = profile == null ? 0 : System.nanoTime();
-        var mergedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
-        for (var localGrid : localGrids) {
+        var combinedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
+        for (var localGrid : workerGrids) {
             if (localGrid == null) {
                 continue;
             }
             for (var entry : localGrid.entrySet()) {
-                mergedGrid.computeIfAbsent(entry.getKey(), ignored -> new IntBag()).addAll(entry.getValue());
+                combinedGrid.computeIfAbsent(entry.getKey(), ignored -> new IntBag()).addAll(entry.getValue());
             }
         }
 
-        var orderedCells = new ArrayList<CellBucket>(mergedGrid.size());
+        var orderedCellBuckets = new ArrayList<CellBucket>(combinedGrid.size());
         int maxCellOccupancy = 0;
-        for (var entry : mergedGrid.entrySet()) {
-            orderedCells.add(new CellBucket(entry.getKey(), entry.getValue()));
+        for (var entry : combinedGrid.entrySet()) {
+            orderedCellBuckets.add(new CellBucket(entry.getKey(), entry.getValue()));
             maxCellOccupancy = Math.max(maxCellOccupancy, entry.getValue().size());
         }
-        orderedCells.sort((first, second) -> first.cell().compareTo(second.cell()));
+        orderedCellBuckets.sort((first, second) -> first.cell().compareTo(second.cell()));
         if (profile != null) {
             profile.gridMergeNanos += System.nanoTime() - aggregationStart;
             profile.aggregationNanos += System.nanoTime() - aggregationStart;
             profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
         }
 
-        // Resolve the owned cells in parallel.
+        // Narrow phase: resolve the owned cells in parallel.
         long resolutionStart = profile == null ? 0 : System.nanoTime();
-        var localDeltas = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCells.size())];
-        var localPairs = new LongBag[Math.min(poolSize, orderedCells.size())];
-        runRanges(orderedCells.size(), (from, to, workerIndex) -> {
+        var workerDeltas = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCellBuckets.size())];
+        var workerPairs = new LongBag[Math.min(poolSize, orderedCellBuckets.size())];
+        executeParallelRanges(orderedCellBuckets.size(), (from, to, workerIndex) -> {
             var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
             var pairAccumulator = new LongBag();
             for (int i = from; i < to; i++) {
-                resolveOwnedCell(orderedCells.get(i), mergedGrid, balls, deltaAccumulator, pairAccumulator);
+                resolveOwnedCell(orderedCellBuckets.get(i), combinedGrid, balls, deltaAccumulator, pairAccumulator);
             }
-            localDeltas[workerIndex] = deltaAccumulator;
-            localPairs[workerIndex] = pairAccumulator;
+            workerDeltas[workerIndex] = deltaAccumulator;
+            workerPairs[workerIndex] = pairAccumulator;
             return null;
         }, profile);
         if (profile != null) {
             profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
         }
 
-        // Collect all worker results, then commit them to the live balls.
+        // Commit: merge local results, record contacts, then apply the deltas.
         long mergeApplyStart = profile == null ? 0 : System.nanoTime();
-        var mergedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
+        var combinedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
         int pairCount = 0;
-        for (int i = 0; i < localDeltas.length; i++) {
-            if (localDeltas[i] != null) {
-                mergedDeltas.merge(localDeltas[i]);
+        for (int i = 0; i < workerDeltas.length; i++) {
+            if (workerDeltas[i] != null) {
+                combinedDeltas.merge(workerDeltas[i]);
             }
-            if (localPairs[i] != null) {
-                pairCount += localPairs[i].size();
+            if (workerPairs[i] != null) {
+                pairCount += workerPairs[i].size();
             }
         }
 
         long[] contactPairs = new long[pairCount];
         int offset = 0;
-        for (var localPairBag : localPairs) {
+        for (var localPairBag : workerPairs) {
             if (localPairBag == null) {
                 continue;
             }
@@ -332,7 +331,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         for (long packedPair : contactPairs) {
             board.recordCollision(balls.get(firstIndex(packedPair)), balls.get(secondIndex(packedPair)));
         }
-        applyMergedDeltas(balls, mergedDeltas, profile);
+        applyMergedDeltas(balls, combinedDeltas, profile);
         if (profile != null) {
             profile.candidatePairs += pairCount;
             profile.mergedCells += orderedCells.size();
@@ -418,7 +417,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return;
         }
         // Each touched ball index goes to exactly one task.
-        runRanges(merged.touchedCount(), (from, to, workerIndex) -> {
+        executeParallelRanges(merged.touchedCount(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
                 int ballIndex = merged.touchedIndex(i);
@@ -499,7 +498,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return rounds;
     }
 
-    private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask, StepProfileAccumulator profile) {
+    // Builds the ranges, runs them in parallel, then waits for the results.
+    private <T> List<T> executeParallelRanges(int itemCount, RangeTask<T> rangeTask, StepProfileAccumulator profile) {
         if (itemCount == 0) {
             // Nothing to split.
             return List.of();
