@@ -37,14 +37,14 @@ The speedup snapshot contains the following values:
         Balls & Implementation & Seq. median [ms] &
         Concurrent median [ms] & Speedup \\
         \hline
-        1000 & threads  & 160.7222 & 121.9934 & 1.317 \\
-        1000 & executor & 160.7222 & 122.5032 & 1.312 \\
-        1500 & threads  & 218.5564 & 147.9144 & 1.478 \\
-        1500 & executor & 218.5564 & 152.4402 & 1.434 \\
-        2000 & threads  & 333.9983 & 189.0304 & 1.767 \\
-        2000 & executor & 333.9983 & 195.0706 & 1.712 \\
-        2500 & threads  & 442.0050 & 248.3088 & 1.780 \\
-        2500 & executor & 442.0050 & 242.8611 & 1.820 \\
+        1000 & threads  & 129.4819 & 117.7674 & 1.099 \\
+        1000 & executor & 129.4819 & 107.5256 & 1.204 \\
+        1500 & threads  & 207.5886 & 145.7583 & 1.424 \\
+        1500 & executor & 207.5886 & 148.2290 & 1.400 \\
+        2000 & threads  & 323.5650 & 182.7458 & 1.771 \\
+        2000 & executor & 323.5650 & 189.7117 & 1.706 \\
+        2500 & threads  & 433.9208 & 230.3475 & 1.884 \\
+        2500 & executor & 433.9208 & 232.9631 & 1.863 \\
         \hline
     \end{tabular}
     \caption{
@@ -73,18 +73,18 @@ seed \texttt{42}.
         \hline
         Implementation & Workers & Median [ms] & Speedup vs. seq. \\
         \hline
-        threads  & 1  & 1199.2934 & 0.644 \\
-        threads  & 2  & 740.1627  & 1.044 \\
-        threads  & 4  & 479.0954  & 1.612 \\
-        threads  & 8  & 428.8478  & 1.801 \\
-        threads  & 16 & 407.5252  & 1.895 \\
-        threads  & 17 & 427.0086  & 1.809 \\
-        executor & 1  & 1220.2477 & 0.633 \\
-        executor & 2  & 759.3341  & 1.017 \\
-        executor & 4  & 498.3909  & 1.550 \\
-        executor & 8  & 451.4644  & 1.711 \\
-        executor & 16 & 409.4617  & 1.886 \\
-        executor & 17 & 413.8571  & 1.866 \\
+        threads  & 1  & 1191.1281 & 0.612 \\
+        threads  & 2  & 727.4179  & 1.003 \\
+        threads  & 4  & 462.9961  & 1.575 \\
+        threads  & 8  & 367.9059  & 1.982 \\
+        threads  & 16 & 383.0851  & 1.904 \\
+        threads  & 17 & 394.2740  & 1.850 \\
+        executor & 1  & 1179.4044 & 0.618 \\
+        executor & 2  & 726.8271  & 1.003 \\
+        executor & 4  & 496.5341  & 1.469 \\
+        executor & 8  & 384.8939  & 1.895 \\
+        executor & 16 & 387.3602  & 1.883 \\
+        executor & 17 & 415.1978  & 1.756 \\
         \hline
     \end{tabular}
     \caption{
@@ -94,7 +94,7 @@ seed \texttt{42}.
     }
 \end{table}
 
-The \textbf{benchmark evidence} shows a real but \textbf{sublinear} gain. On the speedup snapshot, both concurrent versions improve as the workload grows, with the executor-based engine slightly ahead at 2500 balls and the threaded engine slightly ahead on the smaller workloads. On the worker-count snapshot, both versions improve up to 16 workers, then flatten or regress at 17, which is consistent with a \textbf{serial bottleneck} and \textbf{coordination overhead}.
+The \textbf{benchmark evidence} shows a real but \textbf{sublinear} gain. On the speedup snapshot, both concurrent versions beat the sequential baseline at every measured workload. The executor-based engine is ahead at 1000 balls, while the threaded engine is ahead from 1500 through 2500 balls and reaches the largest speedup, \texttt{1.883766}. On the worker-count snapshot, both versions improve through 8 workers, where they reach their best medians, then regress at 16 and 17 workers. This saturation is consistent with the remaining \textbf{serial bottleneck}, scheduling costs, and contention once the useful parallelism of this workload is exhausted.
 
 \begin{figure}[htbp]
     \centering
