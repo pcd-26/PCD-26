@@ -11,7 +11,8 @@ In this context, "reused" means concrete source artifacts (files/classes), not o
 
 Final-delivery code under `pcd.poool` reuses mainly:
 - from `pcd.sketch01`: physics/domain + board view artifacts (`Ball`, `Board`, `BoardConf`, board configs, `Boundary`, `P2d`, `V2d`, `ViewModel`, `View`, `ViewFrame`, `RenderSynch`)
-- from `pcd.sketch02`: concurrency/controller pattern artifacts (`Cmd`, `ActiveController`, `BoundedBuffer`, `BoundedBufferImpl`)
+- from `pcd.sketch02`: the active-controller idea, adapted into the specialized
+  `CommandQueueMonitorSupport` used by the playable runtimes
 
 Non-final demo artifacts remain under `assignment-1/reference/sketch01` and `assignment-1/reference/sketch02`; they are not part of the Maven build or the `pcd.poool` final-delivery scope.
 
@@ -64,71 +65,20 @@ Conceptual baseline from `sketch-02`:
 - `PhysicsEngine -> GUIRenderer` (snapshot)
 - `GameController -> GUIRenderer` (logical state)
 
-### 3.3 Command-based controller pattern
-The current controller foundation is based on a combination of the Command
-pattern and the Active Object pattern.
+### 3.3 Command monitor
 
-`Cmd<T>` represents a request to perform an action on a target object of type
-`T`. The command stores the parameters of the action, but does not execute the
-action immediately. Execution happens only when the active controller consumes
-the command from its queue.
-
-Example conceptual flow:
+The playable runtimes use one specialized monitor instead of retaining the
+generic sketch controller and bounded buffer in production. Swing and the bot
+submit `GameCommand` values to `CommandQueueMonitorSupport`; the controller
+drains that queue and is the only component allowed to mutate `GameModel`.
 
 ```text
-keyboard input / bot decision / GUI event
-        |
-        v
-      Cmd<T>
-        |
-        v
- ActiveController<T>
-        |
-        v
-   target model/service
+Swing / bot -> command monitor -> controller -> GameModel -> snapshot -> view
 ```
 
-For example, a future `KickPlayerCmd` should not need to own or directly expose
-the player ball. It can be a `Cmd<Board>` that stores the desired velocity and,
-when executed, calls a board-level operation such as `board.kickPlayer(velocity)`.
-The `Board` then applies the change to its internal `playerBall`.
-
-This keeps the ownership clear:
-
-- producers such as the input handler and the bot create commands
-- the active controller serializes command execution
-- model objects are modified through a controlled entry point
-- the view observes model snapshots instead of driving game logic directly
-
-The resulting path is:
-
-```text
-InputHandler/Bot/View event
-        |
-        v
-      command
-        |
-        v
- controller queue
-        |
-        v
- ActiveController.run()
-        |
-        v
- command.execute(target)
-        |
-        v
- model state update
-        |
-        v
- ViewModel snapshot -> View rendering
-```
-
-Not every internal operation must be represented as a command. Internal model
-logic, such as collision resolution inside `Ball` or physics integration inside
-`Board`, can remain regular domain methods. Commands are mainly useful for
-external asynchronous requests that may come from different threads, such as
-user input, bot actions, reset, pause, resume, or turn-management events.
+The original generic `ActiveController` and `BoundedBuffer` remain available in
+`reference/sketch02`, where they document the course example without adding
+unused concepts to the delivered runtime.
 
 ### 3.4 Physics execution strategy
 `PhysicsEngine` is intentionally not a `Thread`. It is a synchronous,

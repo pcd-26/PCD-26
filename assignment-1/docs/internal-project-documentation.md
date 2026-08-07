@@ -65,7 +65,7 @@ This is the idea we should keep recovering when refining the report.
 | --- | --- | --- |
 | concurrent platform-thread version | `pcd.poool.ThreadedPoool`, `pcd.poool.threaded.*`, `pcd.poool.model.physics.threaded.*` | implemented |
 | concurrent task-based version | `pcd.poool.TaskBasedPoool`, `pcd.poool.taskbased.*`, `pcd.poool.model.physics.taskbased.*` | implemented |
-| use high-level coordination where possible | `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, `WorkerCompletionMonitor`, `BoundedBufferImpl` | implemented |
+| use high-level coordination where possible | `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, `WorkerCompletionMonitor` | implemented |
 | preserve modularity and encapsulation | shared model packages under `pcd.poool.model.*` | implemented |
 | performance comparison against sequential baseline | benchmark package and CSV/chart export flow | implemented |
 | report with problem analysis and design | `docs/concurrent-architecture.md`, `docs/runtime-architecture.md` | documented |
@@ -148,10 +148,6 @@ tree.
 
 ### 5.3 Concurrency support
 
-- `pcd.poool.model.concurrent`
-  - reusable bounded-buffer monitor.
-- `pcd.poool.controller`
-  - sketch-derived active controller abstraction.
 - `pcd.poool.threaded`
   - threaded runtime coordinator, command queue, snapshot publication, bot.
 - `pcd.poool.taskbased`
