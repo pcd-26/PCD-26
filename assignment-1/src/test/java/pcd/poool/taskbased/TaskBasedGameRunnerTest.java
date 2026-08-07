@@ -24,7 +24,7 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
-import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.CommandMailbox;
 import pcd.poool.runtime.GameRuntimeConfig;
 
 class TaskBasedGameRunnerTest {
@@ -39,7 +39,7 @@ class TaskBasedGameRunnerTest {
         try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().simulatedSteps() >= 2,
                     SHORT_TIMEOUT);
 
@@ -54,7 +54,7 @@ class TaskBasedGameRunnerTest {
             runner.start();
 
             var accepted = runner.shootHuman(new V2d(1.6, 0)).await(SHORT_TIMEOUT);
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().status() == GameStatus.BALLS_MOVING,
                     SHORT_TIMEOUT);
 
@@ -73,7 +73,7 @@ class TaskBasedGameRunnerTest {
             int shotsPerProducer = 12;
             var startGate = new CountDownLatch(1);
             var readyGate = new CountDownLatch(producers);
-            var receipts = Collections.synchronizedList(new ArrayList<CommandReceiptSupport<Boolean>>());
+            var receipts = Collections.synchronizedList(new ArrayList<CommandMailbox.Receipt<Boolean>>());
             ExecutorService executor = Executors.newFixedThreadPool(producers);
 
             try {
@@ -120,7 +120,7 @@ class TaskBasedGameRunnerTest {
         var startGate = new CountDownLatch(1);
         var firstBatchGate = new CountDownLatch(producers);
         var readyGate = new CountDownLatch(producers);
-        var receipts = Collections.synchronizedList(new ArrayList<CommandReceiptSupport<Boolean>>());
+        var receipts = Collections.synchronizedList(new ArrayList<CommandMailbox.Receipt<Boolean>>());
         ExecutorService executor = Executors.newFixedThreadPool(producers);
 
         try {
@@ -189,7 +189,7 @@ class TaskBasedGameRunnerTest {
         try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().status() == GameStatus.BALLS_MOVING,
                     SHORT_TIMEOUT);
 
@@ -203,7 +203,7 @@ class TaskBasedGameRunnerTest {
         try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().botCanShoot(),
                     SHORT_TIMEOUT);
 
@@ -243,7 +243,7 @@ class TaskBasedGameRunnerTest {
                 executor.shutdown();
                 assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
 
-                var snapshot = runner.snapshots().awaitUntil(
+                var snapshot = runner.awaitSnapshot(
                         state -> state.game().simulatedSteps() >= 4,
                         SHORT_TIMEOUT);
 
@@ -262,7 +262,7 @@ class TaskBasedGameRunnerTest {
                 new FailingPhysicsEngine())) {
             runner.start();
 
-            runner.snapshots().awaitUntil(state -> runner.failure() != null, SHORT_TIMEOUT);
+            runner.awaitSnapshot(state -> runner.failure() != null, SHORT_TIMEOUT);
 
             var failure = assertThrows(IllegalStateException.class, runner::snapshot);
             assertTrue(failure.getMessage().contains("task-based game runner failed"));

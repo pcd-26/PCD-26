@@ -1,16 +1,16 @@
 package pcd.poool.threaded;
 
 import java.time.Duration;
+import java.util.function.Predicate;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
 import pcd.poool.runtime.BotAgent;
-import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.CommandMailbox;
 import pcd.poool.runtime.GameLoop;
 import pcd.poool.runtime.GameRuntime;
 import pcd.poool.runtime.GameRuntimeConfig;
 import pcd.poool.runtime.RuntimeGameSnapshot;
-import pcd.poool.runtime.SnapshotStoreSupport;
 
 /** Platform-thread driver around the shared {@link GameLoop}. */
 public final class ThreadedGameRunner implements GameRuntime {
@@ -55,11 +55,11 @@ public final class ThreadedGameRunner implements GameRuntime {
     }
 
     @Override
-    public CommandReceiptSupport<Boolean> shootHuman(V2d velocity) {
+    public CommandMailbox.Receipt<Boolean> shootHuman(V2d velocity) {
         return loop.shootHuman(velocity);
     }
 
-    public CommandReceiptSupport<Boolean> shootBot() {
+    public CommandMailbox.Receipt<Boolean> shootBot() {
         return loop.shootBot();
     }
 
@@ -68,8 +68,11 @@ public final class ThreadedGameRunner implements GameRuntime {
         return loop.snapshot();
     }
 
-    public SnapshotStoreSupport<RuntimeGameSnapshot> snapshots() {
-        return loop.snapshots();
+    @Override
+    public RuntimeGameSnapshot awaitSnapshot(
+            Predicate<RuntimeGameSnapshot> condition,
+            Duration timeout) throws InterruptedException {
+        return loop.awaitSnapshot(condition, timeout);
     }
 
     public void requestStop() {

@@ -12,7 +12,7 @@ In this context, "reused" means concrete source artifacts (files/classes), not o
 Final-delivery code under `pcd.poool` reuses mainly:
 - from `pcd.sketch01`: physics/domain + board view artifacts (`Ball`, `Board`, `BoardConf`, board configs, `Boundary`, `P2d`, `V2d`, `ViewModel`, `View`, `ViewFrame`, `RenderSynch`)
 - from `pcd.sketch02`: the active-controller idea, adapted into the specialized
-  `CommandQueueMonitorSupport` used by the playable runtimes
+  `CommandMailbox` used by the playable runtimes
 
 Non-final demo artifacts remain under `assignment-1/reference/sketch01` and `assignment-1/reference/sketch02`; they are not part of the Maven build or the `pcd.poool` final-delivery scope.
 
@@ -69,7 +69,7 @@ Conceptual baseline from `sketch-02`:
 
 The playable runtimes use one specialized monitor instead of retaining the
 generic sketch controller and bounded buffer in production. Swing and the bot
-submit `GameCommand` values to `CommandQueueMonitorSupport`; the controller
+submit model operations to `CommandMailbox`; the controller
 drains that queue and is the only component allowed to mutate `GameModel`.
 
 ```text

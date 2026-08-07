@@ -22,7 +22,7 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
-import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.CommandMailbox;
 import pcd.poool.runtime.GameRuntimeConfig;
 
 class ThreadedGameRunnerTest {
@@ -41,7 +41,7 @@ class ThreadedGameRunnerTest {
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().simulatedSteps() >= 2,
                     SHORT_TIMEOUT);
 
@@ -61,7 +61,7 @@ class ThreadedGameRunnerTest {
             runner.start();
 
             var accepted = runner.shootHuman(new V2d(1.6, 0)).await(SHORT_TIMEOUT);
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().status() == GameStatus.BALLS_MOVING,
                     SHORT_TIMEOUT);
 
@@ -84,7 +84,7 @@ class ThreadedGameRunnerTest {
             int shotsPerProducer = 12;
             var startGate = new CountDownLatch(1);
             var readyGate = new CountDownLatch(producers);
-            var receipts = Collections.synchronizedList(new ArrayList<CommandReceiptSupport<Boolean>>());
+            var receipts = Collections.synchronizedList(new ArrayList<CommandMailbox.Receipt<Boolean>>());
             ExecutorService executor = Executors.newFixedThreadPool(producers);
 
             try {
@@ -131,7 +131,7 @@ class ThreadedGameRunnerTest {
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().status() == GameStatus.BALLS_MOVING,
                     SHORT_TIMEOUT);
 
@@ -149,7 +149,7 @@ class ThreadedGameRunnerTest {
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
-            var snapshot = runner.snapshots().awaitUntil(
+            var snapshot = runner.awaitSnapshot(
                     state -> state.game().botCanShoot(),
                     SHORT_TIMEOUT);
 
@@ -171,7 +171,7 @@ class ThreadedGameRunnerTest {
         int shotsPerProducer = 20;
         var startGate = new CountDownLatch(1);
         var readyGate = new CountDownLatch(producers);
-        var receipts = Collections.synchronizedList(new ArrayList<CommandReceiptSupport<Boolean>>());
+        var receipts = Collections.synchronizedList(new ArrayList<CommandMailbox.Receipt<Boolean>>());
         ExecutorService executor = Executors.newFixedThreadPool(producers);
 
         try {

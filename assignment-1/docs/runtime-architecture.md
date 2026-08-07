@@ -120,8 +120,8 @@ long-lived worker threads.
 
 ### `pcd.poool.runtime`
 
-- `GameCommand`
-  Controller-owned command abstraction.
+- `CommandMailbox`
+  Monitor that queues model operations and owns their completion receipts.
 - `GameRuntime`
   Small common API implemented by both concurrent runners and consumed by the
   shared application.
@@ -133,15 +133,6 @@ long-lived worker threads.
   drivers.
 - `BotAgent`
   Active bot component that observes snapshots and submits bot shots.
-- `CommandQueueMonitorSupport`
-  Monitor for asynchronous command submission.
-- `CommandSubmissionSupport`
-  Shared helper that wraps game-model operations into queued commands and
-  completion receipts.
-- `CommandReceiptSupport`
-  Completion handle for submitted commands.
-- `SnapshotStoreSupport`
-  Monitor that stores and publishes the latest immutable snapshot.
 - `RuntimeGameSnapshot`
   Immutable snapshot published by concurrent runners.
 
@@ -259,8 +250,7 @@ runtime loop.
 - one `ThreadedPhysicsEngine`;
 - one controller thread;
 - one optional bot thread;
-- one `CommandQueueMonitorSupport`;
-- one `SnapshotStoreSupport`.
+- one `CommandMailbox` inside the shared `GameLoop`.
 
 `TaskBasedPoool` uses the same `GameLoop` and changes only the driver: a
 scheduled executor invokes the tick, while `TaskBasedPhysicsEngine` uses a
@@ -272,7 +262,7 @@ External threads never mutate the game directly:
 
 - Swing input submits commands through `shootHuman(...)`;
 - the bot thread submits commands through `shootBot(...)`;
-- the GUI reads `RuntimeGameSnapshot` objects from `SnapshotStoreSupport`.
+- the GUI reads the latest `RuntimeGameSnapshot` published by `GameLoop`.
 
 This preserves a clear ownership rule:
 
@@ -301,15 +291,13 @@ This preserves a clear ownership rule:
 
 ### Concurrent runtimes
 
-- `ThreadedGameRunner` uses `GameModel`, `ThreadedPhysicsEngine`,
-  `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, and `BotAgent`.
-- `TaskBasedGameRunner` uses `GameModel`, `TaskBasedPhysicsEngine`,
-  `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, and `BotAgent`.
-- `BotAgent` uses `SnapshotStoreSupport` snapshots and runner callbacks.
-- `CommandQueueMonitorSupport` stores `GameCommand` objects.
-- `GameCommand` executes against `GameModel`.
-- `ThreadedGameRunner` publishes `RuntimeGameSnapshot` into `SnapshotStoreSupport`.
-- `TaskBasedGameRunner` publishes `RuntimeGameSnapshot` into `SnapshotStoreSupport`.
+- Both runners use the shared `GameLoop`, their physics engine, and `BotAgent`.
+- `BotAgent` reads the latest loop snapshot and submits its shot to
+  `CommandMailbox` through the loop.
+- `CommandMailbox` executes queued model operations only when `GameLoop` drains
+  it on the controller owner.
+- `GameLoop` publishes `RuntimeGameSnapshot` and provides monitor-based waiting
+  for tests and other observers.
 
 ### View
 
@@ -328,9 +316,9 @@ This preserves a clear ownership rule:
 3. The shot callback reaches the current launcher.
 4. In sequential mode, the launcher calls `GameModel.shootHuman(...)`.
 5. In threaded mode, the launcher calls `ThreadedGameRunner.shootHuman(...)`,
-   which enqueues a `GameCommand`.
+   which enqueues a model operation in `CommandMailbox`.
 6. In task-based mode, the launcher calls `TaskBasedGameRunner.shootHuman(...)`,
-   which enqueues a `GameCommand`.
+   which enqueues the same model operation in `CommandMailbox`.
 7. The controller eventually executes the command on `GameModel`.
 
 ### 6.2 Physics progression

@@ -1,6 +1,8 @@
 package pcd.poool.runtime;
 
 import java.util.Objects;
+import java.time.Duration;
+import java.util.function.Predicate;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameModel;
 import pcd.poool.model.physics.common.BoardConf;
@@ -15,8 +17,8 @@ import pcd.poool.model.physics.common.PhysicsStepper;
 public final class GameLoop {
 
     private final GameModel game;
-    private final CommandQueueMonitorSupport<GameCommand> commands = new CommandQueueMonitorSupport<>();
-    private final SnapshotStoreSupport<RuntimeGameSnapshot> snapshots;
+    private final CommandMailbox commands = new CommandMailbox();
+    private RuntimeGameSnapshot snapshot;
 
     public GameLoop(
             BoardConf boardConf,
@@ -26,7 +28,7 @@ public final class GameLoop {
                 Objects.requireNonNull(boardConf, "boardConf"),
                 Objects.requireNonNull(physics, "physics"),
                 Objects.requireNonNull(startupCountdown, "startupCountdown"));
-        snapshots = new SnapshotStoreSupport<>(RuntimeGameSnapshot.from(game));
+        snapshot = RuntimeGameSnapshot.from(game);
     }
 
     /** Executes all commands, advances physics, and publishes one snapshot. */
@@ -38,20 +40,30 @@ public final class GameLoop {
         publishSnapshot();
     }
 
-    public CommandReceiptSupport<Boolean> shootHuman(V2d velocity) {
-        return CommandSubmissionSupport.submit(commands, model -> model.shootHuman(velocity), false);
+    public CommandMailbox.Receipt<Boolean> shootHuman(V2d velocity) {
+        return commands.submit(model -> model.shootHuman(velocity), false);
     }
 
-    public CommandReceiptSupport<Boolean> shootBot() {
-        return CommandSubmissionSupport.submit(commands, GameModel::shootBot, false);
+    public CommandMailbox.Receipt<Boolean> shootBot() {
+        return commands.submit(GameModel::shootBot, false);
     }
 
-    public RuntimeGameSnapshot snapshot() {
-        return snapshots.get();
+    public synchronized RuntimeGameSnapshot snapshot() {
+        return snapshot;
     }
 
-    public SnapshotStoreSupport<RuntimeGameSnapshot> snapshots() {
-        return snapshots;
+    public synchronized RuntimeGameSnapshot awaitSnapshot(
+            Predicate<RuntimeGameSnapshot> condition,
+            Duration timeout) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        while (!condition.test(snapshot)) {
+            long remaining = deadline - System.currentTimeMillis();
+            if (remaining <= 0) {
+                throw new IllegalStateException("snapshot condition was not reached before timeout");
+            }
+            wait(remaining);
+        }
+        return snapshot;
     }
 
     /** Rejects pending commands and publishes the final state. */
@@ -61,13 +73,11 @@ public final class GameLoop {
     }
 
     private void drainCommands() {
-        GameCommand command;
-        while ((command = commands.poll()) != null) {
-            command.execute(game);
-        }
+        commands.drain(game);
     }
 
-    private void publishSnapshot() {
-        snapshots.publish(RuntimeGameSnapshot.from(game));
+    private synchronized void publishSnapshot() {
+        snapshot = RuntimeGameSnapshot.from(game);
+        notifyAll();
     }
 }
