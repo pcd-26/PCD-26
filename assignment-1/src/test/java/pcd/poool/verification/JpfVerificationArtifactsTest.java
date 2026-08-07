@@ -62,6 +62,8 @@ class JpfVerificationArtifactsTest {
         assertTrue(runScript.contains("\"docker\", \"build\""));
         assertTrue(runScript.contains("run_model_in_docker"));
         assertTrue(runScript.contains("docker_command"));
+        assertTrue(runScript.contains("compile_minimal_harnesses(repo_root)"));
+        assertTrue(runScript.contains("--release"));
         assertTrue(runScript.contains("sed -i 's/\\\\r$//' gradlew"));
     }
 
