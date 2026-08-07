@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -57,6 +58,29 @@ def host_java_major_version() -> int | None:
     if major == 1 and match.group(2) is not None:
         return int(match.group(2))
     return major
+
+
+def compile_minimal_harnesses(repo_root: Path) -> None:
+    """Compile the Java 11 verification models before launching JPF."""
+    source_root = repo_root / "assignment-1" / "verification" / "jpf" / "src"
+    output_root = repo_root / "assignment-1" / "target" / "jpf-classes"
+    sources = sorted(source_root.rglob("*.java"))
+    if not sources:
+        raise SystemExit(f"No JPF harness sources found under {source_root}")
+
+    shutil.rmtree(output_root, ignore_errors=True)
+    output_root.mkdir(parents=True)
+    command = [
+        str(Path(java_executable()).with_name("javac.exe"))
+        if os.name == "nt" and Path(java_executable()).name.lower() == "java.exe"
+        else "javac",
+        "--release",
+        "11",
+        "-d",
+        str(output_root),
+        *(str(source) for source in sources),
+    ]
+    subprocess.run(command, cwd=repo_root, check=True)
 
 def run_model(jpf_root: Path, workdir: Path, config_file: Path) -> None:
     command = [
@@ -125,6 +149,7 @@ def main() -> int:
         )
 
     repo_root = verification_dir.parents[2]
+    compile_minimal_harnesses(repo_root)
 
     use_docker = args.docker
     if not use_docker:

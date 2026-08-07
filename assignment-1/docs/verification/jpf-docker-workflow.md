@@ -68,13 +68,15 @@ The harnesses live under:
 
 - `assignment-1/verification/jpf/src/pcd/poool/verification/jpf`
 
-They are compiled by the JUnit integration test into:
+They are compiled by `run_jpf.py` (and independently by the JUnit integration
+test) into:
 
 - `assignment-1/target/jpf-classes`
 
 The important point is that these runtime entries must come from `jpf-core`,
-not from the full application build. The harness classes are compiled by the
-JUnit test into `assignment-1/target/jpf-classes`.
+not from the full application build. The launcher performs the harness
+compilation automatically, so the documented Docker command also works from a
+clean Maven target directory.
 
 ## 3. Run The Thread-Based Model
 
