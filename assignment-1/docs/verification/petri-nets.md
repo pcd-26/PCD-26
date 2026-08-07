@@ -240,12 +240,12 @@ This subnet is reusable for all worker phases:
 | Petri net element | Implementation mapping |
 | --- | --- |
 | `TickReady`, `StartTick`, `FinishTick` | `pcd.poool.threaded.ThreadedGameRunner.runController()` |
-| `CommandsPending`, `DrainCommands` | `pcd.poool.runtime.CommandQueueMonitorSupport` plus `drainPendingCommands()` |
-| `BoardWriteOwned` | `synchronized (board)` inside `pcd.poool.model.physics.threaded.ThreadedPhysicsEngine.stepInternal(...)` |
-| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `ThreadedPhysicsEngine.runRanges(...)` |
+| `CommandsPending`, `DrainCommands` | `CommandMailbox` plus `GameLoop.tick(...)` |
+| `BoardWriteOwned` | `synchronized (board)` inside `ParallelPhysicsEngine` |
+| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `ParallelPhysicsEngine` plus `PlatformThreadRangeScheduler.execute(...)` |
 | worker chunk places and transitions | `pcd.poool.model.physics.threaded.PhysicsWorker` |
 | barrier places and joins | `pcd.poool.model.physics.threaded.WorkerCompletionMonitor.await()` |
-| `PublishSnapshot`, `SnapshotPublished` | `pcd.poool.runtime.SnapshotStoreSupport.publish(...)` and `RuntimeGameSnapshot.from(game)` |
+| `PublishSnapshot`, `SnapshotPublished` | `GameLoop.publishSnapshot()` and `RuntimeGameSnapshot.from(game)` |
 | immutable reader state | `pcd.poool.runtime.RuntimeGameSnapshot` |
 
 The threaded engine uses long-lived platform threads. The controller thread
@@ -257,12 +257,12 @@ results, applies the final writes, and only then publishes the snapshot.
 | Petri net element | Implementation mapping |
 | --- | --- |
 | `TickReady`, `StartTick`, `FinishTick` | `pcd.poool.taskbased.TaskBasedGameRunner.tick()` |
-| `CommandsPending`, `DrainCommands` | `pcd.poool.runtime.CommandQueueMonitorSupport` plus `drainPendingCommands()` |
-| `BoardWriteOwned` | `synchronized (board)` inside `pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine.stepInternal(...)` |
-| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `TaskBasedPhysicsEngine.runRanges(...)` and executor tasks |
-| worker chunk places and transitions | fixed `ExecutorService` workers inside `TaskBasedPhysicsEngine` |
-| barrier places and joins | `Future` joins and internal task aggregation in `TaskBasedPhysicsEngine` |
-| `PublishSnapshot`, `SnapshotPublished` | `pcd.poool.runtime.SnapshotStoreSupport.publish(...)` and `RuntimeGameSnapshot.from(game)` |
+| `CommandsPending`, `DrainCommands` | `CommandMailbox` plus `GameLoop.tick(...)` |
+| `BoardWriteOwned` | `synchronized (board)` inside `ParallelPhysicsEngine` |
+| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `ParallelPhysicsEngine` plus `ExecutorRangeScheduler.execute(...)` |
+| worker chunk places and transitions | fixed `ExecutorService` workers inside `ExecutorRangeScheduler` |
+| barrier places and joins | `Future.get()` inside `ExecutorRangeScheduler` |
+| `PublishSnapshot`, `SnapshotPublished` | `GameLoop.publishSnapshot()` and `RuntimeGameSnapshot.from(game)` |
 | immutable reader state | `pcd.poool.runtime.RuntimeGameSnapshot` |
 
 The executor-based engine keeps the same ownership discipline as the threaded
@@ -274,20 +274,17 @@ of manually owned platform threads.
 The abstract tick pipeline maps onto the following concrete methods:
 
 - integration phase:
-  - `ThreadedPhysicsEngine.stepOnce(...)`
-  - `TaskBasedPhysicsEngine.stepOnce(...)`
+  - `ParallelPhysicsEngine.stepOnce(...)`
 - hole phase:
   - `board.applyHoleInteractions()`
 - local-grid phase:
-  - `ThreadedPhysicsEngine.stepInternal(...)`
-  - `TaskBasedPhysicsEngine.stepInternal(...)`
+  - `ParallelPhysicsEngine.detectAndResolveCollisions(...)`
 - ordered-cell resolution phase:
   - `resolveOwnedCell(...)`
   - `collectPairsWithinBag(...)`
   - `collectCrossPairs(...)`
 - snapshot publication:
-  - `ThreadedGameRunner.runController()`
-  - `TaskBasedGameRunner.tick()`
+  - `GameLoop.tick(...)`
   - `RuntimeGameSnapshot.from(game)`
 
 ## 6. Safety properties
