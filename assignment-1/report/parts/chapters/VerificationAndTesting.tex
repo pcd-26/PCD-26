@@ -47,13 +47,14 @@ vm.max_heap=64m
 search.depth_limit=40
 \end{verbatim}
 
-The actual JPF runs were executed through the Docker helper:
+The actual JPF run was executed through the Docker helper. The launcher first
+compiles the reduced Java 11 harnesses and then checks both models:
 \begin{verbatim}
-python assignment-1/verification/jpf/run_jpf.py --docker --model threaded
-python assignment-1/verification/jpf/run_jpf.py --docker --model taskbased
+python assignment-1/verification/jpf/run_jpf.py --model both
 \end{verbatim}
-Here, \texttt{Python} acts as a lightweight automation layer: the project was developed across heterogeneous environments, namely Windows and Linux, so the verification workflow needed a portable scripting entry point.
-Both runs completed with \texttt{no errors detected}.
+The helper selects Docker when the host JVM is unsuitable, which keeps the
+command portable across Windows and Linux. Both runs completed with
+\texttt{no errors detected}.
 The verification artifacts used for this report are available in the
 repository: \href{https://github.com/pcd-26/PCD-26}{pcd-26/PCD-26}.
 
