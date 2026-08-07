@@ -40,7 +40,11 @@ public class ThreadedPoool {
      */
     public static void main(String[] args) {
         var boardProfile = BOARD_PROFILE.createConfiguration();
-        var runnerRef = new AtomicReference<>(newStartedRunner(boardProfile));
+        var runner = new ThreadedGameRunner(boardProfile);
+        // Starts the runner.
+        runner.start();
+        // Stores the started runner so the loop can use and restart it.
+        var runnerRef = new AtomicReference<>(runner);
         var restartRequested = new AtomicBoolean(false);
         var viewModel = new ViewModel();
         var view = new View(
@@ -52,6 +56,7 @@ public class ThreadedPoool {
                 () -> canStartHumanAiming(runnerRef.get()), // Human aiming gate.
                 () -> viewModel.clearShotPreview(Player.HUMAN)); // Clears the human shot preview.
 
+        // Registers a shutdown hook so the runner closes when the JVM exits.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-threaded-shutdown"));
 
         long startTime = System.currentTimeMillis();
@@ -62,8 +67,12 @@ public class ThreadedPoool {
             long now = System.currentTimeMillis();
             // Recreate the runner if the user requested a restart.
             if (restartRequested.getAndSet(false)) {
-                var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile));
+                var oldRunner = runnerRef.get();
                 oldRunner.close();
+                var newRunner = new ThreadedGameRunner(boardProfile);
+                // Starts the runner.
+                newRunner.start();
+                runnerRef.set(newRunner);
                 viewModel.clearShotPreview();
                 startTime = now;
                 renderedFrames = 0;
@@ -85,18 +94,6 @@ public class ThreadedPoool {
             view.render();
             sleepFrame();
         }
-    }
-
-    /**
-     * Instantiates and starts a new ThreadedGameRunner with the given board configuration.
-     *
-     * @param boardProfile the initial layout and setup of the board
-     * @return the started ThreadedGameRunner instance
-     */
-    private static ThreadedGameRunner newStartedRunner(BoardConf boardProfile) {
-        var runner = new ThreadedGameRunner(boardProfile);
-        runner.start();
-        return runner;
     }
 
     private enum BoardProfile {
