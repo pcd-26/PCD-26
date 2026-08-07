@@ -9,9 +9,7 @@ import pcd.poool.model.game.Player;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.Hole;
 
-/**
- * Mutable snapshot read by the Swing renderer.
- */
+// Mutable snapshot read by the Swing renderer.
 public class ViewModel {
 
 	public static record BallViewInfo(P2d pos, double radius) {}

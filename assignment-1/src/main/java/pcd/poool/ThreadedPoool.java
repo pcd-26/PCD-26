@@ -23,8 +23,8 @@ public class ThreadedPoool {
 
     private static final int VIEW_WIDTH = 1200;
     private static final int VIEW_HEIGHT = 800;
-    private static final long FRAME_SLEEP_MILLIS = 4; // Small pause between frames so the render loop does not spin at full speed.
-    private static final double BOT_PREVIEW_SCALE = 0.35; // Shrinks the bot preview arrow to keep the hint readable on screen.
+    private static final long FRAME_SLEEP_MILLIS = 4; // Limits the render loop update rate.
+    private static final double BOT_PREVIEW_SCALE = 0.35; // Scales the bot preview arrow.
     private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
 
     /**
@@ -47,10 +47,10 @@ public class ThreadedPoool {
                 viewModel,
                 VIEW_WIDTH,
                 VIEW_HEIGHT,
-                velocity -> runnerRef.get().shootHuman(velocity), // Callback for submitting a human shot to the runner.
-                () -> restartRequested.set(true), // Callback that marks the game for restart.
-                () -> canStartHumanAiming(runnerRef.get()), // Callback that checks if the human may start aiming.
-                () -> viewModel.clearShotPreview(Player.HUMAN)); // Callback that clears the human shot preview.
+                velocity -> runnerRef.get().shootHuman(velocity), // Human shot callback.
+                () -> restartRequested.set(true), // Restart callback.
+                () -> canStartHumanAiming(runnerRef.get()), // Human aiming gate.
+                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clears the human shot preview.
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-threaded-shutdown"));
 

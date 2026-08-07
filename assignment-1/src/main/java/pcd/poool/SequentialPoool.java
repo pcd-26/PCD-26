@@ -15,8 +15,8 @@ public class SequentialPoool {
     private static final int VIEW_WIDTH = 1200;
     private static final int VIEW_HEIGHT = 800;
     private static final long BOT_THINK_TIME_MILLIS = 600;
-    private static final long FRAME_SLEEP_MILLIS = 4; // Small pause between iterations to avoid a busy loop and cap the update rate.
-    private static final double BOT_PREVIEW_SCALE = 0.35; // Scales the bot preview arrow so the visual hint stays readable on screen.
+    private static final long FRAME_SLEEP_MILLIS = 4; // Limits the render loop update rate.
+    private static final double BOT_PREVIEW_SCALE = 0.35; // Scales the bot preview arrow.
 
     public static void main(String[] args) {
         var gameRef = new AtomicReference<>(newGame());
@@ -26,10 +26,10 @@ public class SequentialPoool {
                 viewModel,
                 VIEW_WIDTH,
                 VIEW_HEIGHT,
-                velocity -> gameRef.get().shootHuman(velocity), // Callback for the human shot action.
-                () -> restartRequested.set(true), // Callback that asks the loop to restart the game.
-                () -> gameRef.get().canHumanShoot(), // Callback that checks whether the human can start aiming.
-                () -> viewModel.clearShotPreview(Player.HUMAN)); // Callback that clears the human shot preview.
+                velocity -> gameRef.get().shootHuman(velocity), // Human shot callback.
+                () -> restartRequested.set(true), // Restart callback.
+                () -> gameRef.get().canHumanShoot(), // Human aiming gate.
+                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clears the human shot preview.
 
         long startTime = System.currentTimeMillis();
         long lastUpdateTime = startTime;

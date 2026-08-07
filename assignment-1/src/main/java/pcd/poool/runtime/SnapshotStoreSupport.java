@@ -3,12 +3,7 @@ package pcd.poool.runtime;
 import java.time.Duration;
 import java.util.function.Predicate;
 
-/**
- * Monitor that stores the latest immutable snapshot published by the
- * simulation controller.
- *
- * @param <S> snapshot type
- */
+// Monitor that stores the latest immutable snapshot published by the controller.
 public class SnapshotStoreSupport<S> {
 
     private S snapshot;
@@ -17,34 +12,18 @@ public class SnapshotStoreSupport<S> {
         snapshot = initialSnapshot;
     }
 
-    /**
-     * Publishes a new snapshot and wakes readers waiting for state changes.
-     *
-     * @param snapshot latest immutable state
-     */
+    // Publishes a new snapshot.
     public synchronized void publish(S snapshot) {
         this.snapshot = snapshot;
         notifyAll();
     }
 
-    /**
-     * Gets the latest snapshot.
-     *
-     * @return latest published snapshot
-     */
+    // Returns the latest snapshot.
     public synchronized S get() {
         return snapshot;
     }
 
-    /**
-     * Waits until a snapshot satisfies the given predicate.
-     *
-     * @param predicate condition evaluated on the latest snapshot
-     * @param timeout maximum wait duration
-     * @return matching snapshot
-     * @throws InterruptedException if interrupted while waiting
-     * @throws IllegalStateException if the timeout expires
-     */
+    // Waits until a snapshot satisfies the given predicate.
     public synchronized S awaitUntil(Predicate<S> predicate, Duration timeout) throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         while (!predicate.test(snapshot)) {

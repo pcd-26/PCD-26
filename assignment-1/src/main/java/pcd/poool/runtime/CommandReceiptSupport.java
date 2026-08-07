@@ -2,12 +2,7 @@ package pcd.poool.runtime;
 
 import java.time.Duration;
 
-/**
- * Shared monitor-backed completion receipt for asynchronously executed
- * commands.
- *
- * @param <T> command result type
- */
+// Monitor-backed completion receipt for asynchronously executed commands.
 public class CommandReceiptSupport<T> {
 
     private boolean completed;
@@ -17,11 +12,7 @@ public class CommandReceiptSupport<T> {
     public CommandReceiptSupport() {
     }
 
-    /**
-     * Marks the command execution as successfully completed with the given result and notifies waiting threads.
-     *
-     * @param result the result of the command execution
-     */
+    // Marks the command as completed successfully.
     public synchronized void complete(T result) {
         if (completed) {
             return;
@@ -31,11 +22,7 @@ public class CommandReceiptSupport<T> {
         notifyAll();
     }
 
-    /**
-     * Marks the command execution as failed with the given runtime exception and notifies waiting threads.
-     *
-     * @param failure the exception that occurred during execution
-     */
+    // Marks the command as failed.
     public synchronized void fail(RuntimeException failure) {
         if (completed) {
             return;
@@ -45,14 +32,7 @@ public class CommandReceiptSupport<T> {
         notifyAll();
     }
 
-    /**
-     * Waits until the command has been executed.
-     *
-     * @param timeout maximum wait duration
-     * @return command result
-     * @throws InterruptedException if the caller is interrupted while waiting
-     * @throws IllegalStateException if the timeout expires before completion
-     */
+    // Waits until the command completes.
     public synchronized T await(Duration timeout) throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         while (!completed) {

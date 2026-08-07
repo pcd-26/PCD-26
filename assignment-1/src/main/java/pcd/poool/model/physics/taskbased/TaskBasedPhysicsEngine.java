@@ -18,32 +18,7 @@ import pcd.poool.model.physics.common.SpatialCollisionDetector;
 import pcd.poool.model.physics.common.SpatialGridSupport;
 import pcd.poool.model.common.math.V2d;
 
-/**
- * Task-based physics stepper for board state updates.
- *
- * <p>The engine keeps the same single-writer ownership rule used by the other
- * physics implementations: callers synchronize on the board for the whole
- * update, while internal task execution is limited to disjoint work ranges or
- * read-only coordination phases.
- *
- * <p>Task pipeline:
- * <ol>
- *   <li>integrate balls in parallel over disjoint index ranges;</li>
- *   <li>detect hole interactions in parallel and merge local results on the
- *       coordinator thread;</li>
- *   <li>build one local ownership grid per task and merge the buckets on the
- *       coordinator thread;</li>
- *   <li>resolve only canonically owned cell interactions in parallel, while
- *       workers accumulate sparse collision deltas instead of mutating the
- *       board directly;</li>
- *   <li>merge the sparse deltas on the coordinator thread and apply the final
- *       deterministic writes to the authoritative board state.</li>
- * </ol>
- *
- * <p>The coordinator thread is the caller of {@link #step(Board, long)} and
- * owns global board state. Worker tasks mutate only disjoint balls inside a
- * collision round or disjoint ball ranges in other phases.
- */
+/** Task-based physics stepper for board state updates. */
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
@@ -57,28 +32,17 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private final ThreadLocal<ArrayList<Ball>> activeBallsBuffer = ThreadLocal.withInitial(ArrayList::new);
     private boolean closed;
 
-    /**
-     * Creates a task-based physics engine using the default pool size.
-     */
+    /** Creates a task-based physics engine using the default pool size. */
     public TaskBasedPhysicsEngine() {
         this(defaultPoolSize());
     }
 
-    /**
-     * Creates a task-based physics engine.
-     *
-     * @param poolSize number of executor workers available for task phases
-     */
+    /** Creates a task-based physics engine. */
     public TaskBasedPhysicsEngine(int poolSize) {
         this(poolSize, PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
-    /**
-     * Creates a task-based physics engine.
-     *
-     * @param poolSize number of executor workers available for task phases
-     * @param maxStepMillis maximum duration of one internal physics sub-step
-     */
+    /** Creates a task-based physics engine. */
     public TaskBasedPhysicsEngine(int poolSize, long maxStepMillis) {
         if (poolSize < MIN_POOL_SIZE) {
             throw new IllegalArgumentException("poolSize must be >= 1");
@@ -101,14 +65,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         stepInternal(board, elapsedMillis, false);
     }
 
-    /**
-     * Advances the board and returns a profiling snapshot for the executed
-     * step. The board mutation semantics are identical to {@link #step(Board, long)}.
-     *
-     * @param board board to mutate
-     * @param elapsedMillis elapsed time in milliseconds
-     * @return per-phase timings and workload counters for the executed step
-     */
+    /** Advances the board and returns a profiling snapshot for the executed step. */
     public StepProfile profileStep(Board board, long elapsedMillis) {
         return stepInternal(board, elapsedMillis, true);
     }
@@ -119,8 +76,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         ensureOpen();
         StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(poolSize) : null;
-        // The board monitor spans the full tick; tasks only run inside that
-        // critical section on disjoint ranges or private accumulators.
+        // The board lock spans the full tick; tasks stay on private work.
         synchronized (board) {
             ensureOpen();
             long remaining = elapsedMillis;
@@ -133,9 +89,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return profilingEnabled ? profile.toProfile() : null;
     }
 
-    /**
-     * Stops the executor and prevents further steps from being accepted.
-     */
+    /** Stops the executor and prevents further steps from being accepted. */
     @Override
     public synchronized void close() {
         if (closed) {
@@ -145,11 +99,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         executor.shutdown();
     }
 
-    /**
-     * Gets the configured executor pool size.
-     *
-     * @return number of executor workers available for task phases
-     */
+    /** Gets the configured executor pool size. */
     public int poolSize() {
         return poolSize;
     }
@@ -223,8 +173,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 new java.util.Map[poolSize];
 
         long localGridStart = profile == null ? 0 : System.nanoTime();
-        // Each task writes only to a private local grid, then the coordinator
-        // merges the buckets before any deterministic ordering happens.
+        // Each task writes to a private grid, then the coordinator merges it.
         runRanges(balls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             var localGrid = new java.util.HashMap<SpatialGridSupport.GridCell, List<Integer>>();
@@ -261,8 +210,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         long pairStart = profile == null ? 0 : System.nanoTime();
         var pairs = new LongPairSet();
         int maxCellOccupancy = 0;
-        // Sorting the packed pairs keeps collision resolution deterministic,
-        // even though the candidate generation ran in parallel.
+        // Sort packed pairs to keep resolution deterministic.
         for (var indexes : mergedGrid.values()) {
             maxCellOccupancy = Math.max(maxCellOccupancy, indexes.size());
             collectPairs(indexes, pairs);
@@ -549,8 +497,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return result;
         }
         try {
-            // Futures are the phase barrier: the coordinator can only merge or
-            // apply shared state after every range has completed.
+        // Futures are the phase barrier: merge only after every range ends.
             long submissionStart = profile == null ? 0 : System.nanoTime();
             var futures = new ArrayList<Future<T>>(ranges.size());
             for (var range : ranges) {
@@ -898,33 +845,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /**
-     * Immutable per-step profiling data for the task-based physics pipeline.
-     *
-     * @param activeBalls number of balls integrated across all internal sub-steps
-     * @param collisionBalls number of balls considered for collision detection
-     * @param candidatePairs number of candidate collision pairs generated
-     * @param mergedCells number of populated cells in the merged spatial grid
-     * @param maxCellOccupancy maximum number of balls registered in one cell
-     * @param integrationMillis total integration time in milliseconds
-     * @param holeInteractionMillis hole interaction time in milliseconds
-     * @param localGridBuildMillis local per-task grid-build time in milliseconds
-     * @param gridMergeMillis merged-grid assembly time in milliseconds
-     * @param pairCollectionMillis candidate-pair generation and sorting time in milliseconds
-     * @param collisionResolutionMillis collision resolution time in milliseconds
-     * @param syncTimeMillis total coordination time in milliseconds
-     * @param aggregationTimeMillis result aggregation and merge time in milliseconds
-     * @param taskSubmissionTimeMillis task submission time in milliseconds
-     * @param joinOrFutureWaitMillis worker wait time in milliseconds
-     * @param lockAcquisitions estimated number of lock acquisitions
-     * @param submittedTasks estimated number of submitted tasks
-     * @param integrationWorkerMillis per-task integration time in milliseconds
-     * @param localGridWorkerMillis per-task local-grid build time in milliseconds
-     * @param applyWorkerMillis per-task final application time in milliseconds
-     * @param integrationWorkerItems per-task ball counts integrated
-     * @param localGridWorkerItems per-task ball counts used for local-grid population
-     * @param applyWorkerItems per-task ball counts written in the final apply phase
-     */
+    /** Immutable per-step profiling data for the task-based physics pipeline. */
     public record StepProfile(
             int activeBalls,
             int collisionBalls,
