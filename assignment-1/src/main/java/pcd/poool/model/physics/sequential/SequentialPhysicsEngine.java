@@ -32,6 +32,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
+        // Process the whole elapsed time in fixed-size chunks.
         long remaining = elapsedMillis;
         while (remaining > 0) {
             long dt = Math.min(maxStepMillis, remaining);
@@ -42,7 +43,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
 
     private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
-        // Move first, then pocket, then resolve contacts.
+        // Move every active ball for this sub-step.
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }
@@ -53,8 +54,10 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
             ball.updateState(dt, bounds);
         }
 
+        // Remove balls that ended up in a hole.
         board.applyHoleInteractions();
 
+        // Detect overlap pairs and resolve them one by one.
         var allBalls = board.getCollisionBalls();
         for (var pair : collisionDetector.detectCollisionPairs(allBalls)) {
             var first = allBalls.get(pair.firstIndex());

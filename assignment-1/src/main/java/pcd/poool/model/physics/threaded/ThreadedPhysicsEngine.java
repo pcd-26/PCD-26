@@ -81,6 +81,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(workers.length) : null;
         // One writer at a time: workers only operate on private ranges.
         synchronized (board) {
+            // Split the elapsed time into fixed sub-steps.
             long remaining = elapsedMillis;
             while (remaining > 0) {
                 long dt = Math.min(maxStepMillis, remaining);
@@ -93,12 +94,14 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private void stepOnce(Board board, long dt, StepProfileAccumulator profile) {
         var bounds = board.getBounds();
+        // Read the active balls once for this sub-step.
         long stateReadStart = profile == null ? 0 : System.nanoTime();
         var activeBalls = activeBalls(board);
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - stateReadStart;
         }
 
+        // Integrate motion in parallel, one slice per worker.
         long integrationStart = profile == null ? 0 : System.nanoTime();
         runRanges(activeBalls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
@@ -115,12 +118,14 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.movementNanos += integrationNanos;
         }
 
+        // Apply pocketing after movement.
         long holeStart = profile == null ? 0 : System.nanoTime();
         board.applyHoleInteractions();
         if (profile != null) {
             profile.holeInteractionNanos += System.nanoTime() - holeStart;
         }
 
+        // Rebuild the collision list from the updated board state.
         long collisionStateReadStart = profile == null ? 0 : System.nanoTime();
         var collisionBalls = activeBallsBuffer.get();
         board.fillCollisionBalls(collisionBalls);
@@ -135,6 +140,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private void detectAndResolveCollisions(Board board, List<Ball> balls, StepProfileAccumulator profile) {
         long collisionStart = profile == null ? 0 : System.nanoTime();
+        // Build a spatial partition so nearby balls are compared together.
         double cellSize = computeOwnershipCellSize(balls);
         CenterCell[] centerCells = new CenterCell[balls.size()];
 
@@ -197,6 +203,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         long mergeApplyStart = profile == null ? 0 : System.nanoTime();
+        // Combine all worker results and apply them to the live balls.
         var mergedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
         int pairCount = 0;
         for (int i = 0; i < localDeltas.length; i++) {
