@@ -188,8 +188,10 @@ computed.
 
 Implementations:
 
-- `PhysicsEngine`: sequential stepping.
-- `ThreadedPhysicsEngine`: multithreaded stepping.
+- `SequentialPhysicsEngine`: sequential stepping.
+- `ParallelPhysicsEngine`: one shared parallel algorithm.
+- `ThreadedPhysicsEngine`: facade selecting reusable platform-thread workers.
+- `TaskBasedPhysicsEngine`: facade selecting a fixed Executor pool.
 
 Both mutate the same `Board` API and preserve the same game semantics at the
 board level.
@@ -287,7 +289,10 @@ This preserves a clear ownership rule:
 
 - `Board` uses `PhysicsStepper` through `updateState(...)`.
 - `PhysicsEngine` uses `Board` and `SpatialCollisionDetector`.
-- `ThreadedPhysicsEngine` uses `Board`, `PhysicsWorker`, and `WorkerCompletionMonitor`.
+- `ParallelPhysicsEngine` uses `Board` and delegates ranges to `RangeScheduler`.
+- `ThreadedPhysicsEngine` selects `PlatformThreadRangeScheduler`,
+  `PhysicsWorker`, and `WorkerCompletionMonitor`.
+- `TaskBasedPhysicsEngine` selects `ExecutorRangeScheduler`.
 
 ### Concurrent runtimes
 

@@ -1,6 +1,6 @@
 package pcd.poool.model.physics.threaded;
 
-/** Long-lived platform thread used by {@link ThreadedPhysicsEngine}. */
+/** Long-lived platform thread used by {@link PlatformThreadRangeScheduler}. */
 class PhysicsWorker implements AutoCloseable {
 
     private static final long JOIN_TIMEOUT_MILLIS = 1_000;
