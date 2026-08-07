@@ -27,7 +27,7 @@ The core classes reflect the separation between \textbf{rules}, \textbf{mutable 
     \item \texttt{SequentialPhysicsEngine}, \texttt{ThreadedPhysicsEngine}, and \texttt{TaskBasedPhysicsEngine} (\path{pcd.poool.model.physics.sequential}, \path{pcd.poool.model.physics.threaded}, \path{pcd.poool.model.physics.taskbased}): sequential, platform-thread, and executor-based physics steps;
     \item \texttt{ThreadedGameRunner} and \texttt{TaskBasedGameRunner} (\path{pcd.poool.threaded}, \path{pcd.poool.taskbased}): command draining, controller ticks, and snapshot publication;
     \item \texttt{RuntimeGameSnapshot} (\path{pcd.poool.runtime}): immutable data consumed by the view;
-    \item \texttt{CommandQueueMonitorSupport} and \texttt{SnapshotStoreSupport} (\path{pcd.poool.runtime}): monitor-based command and snapshot coordination.
+    \item \texttt{CommandMailbox} and \texttt{GameLoop} (\path{pcd.poool.runtime}): command receipts, single-writer ticks, and snapshot coordination.
 \end{itemize}
 
 \subsection{Sequential implementation}
@@ -72,7 +72,7 @@ The platform-thread version introduces a \textbf{controller thread} plus an opti
 
 \begin{lstlisting}[style=codestyle,caption={Threaded controller loop},label={lst:threaded-controller-loop}]
 while (running) {
-    drainPendingCommands();
+    gameLoop.tick(tickMillis);
     if (!game.snapshot().isFinished()) {
         game.step(config.tickMillis());
     }
@@ -160,7 +160,7 @@ Compared with the threaded implementation, the \textbf{control protocol} is the 
 
 \texttt{RuntimeGameSnapshot} is the bridge between the \textbf{model} and the \textbf{GUI}. It combines the logical \texttt{GameSnapshot} with the copied board and preview data used by the view, so rendering never needs to inspect \textbf{mutable state} directly.
 
-The concurrent runners publish those snapshots through \texttt{SnapshotStoreSupport}, which acts as a \textbf{monitor} around the latest \textbf{immutable state}. Commands follow the same idea through \texttt{CommandQueueMonitorSupport}: external threads enqueue requests, and the controller drains them \textbf{sequentially}.
+The shared \texttt{GameLoop} publishes snapshots through its monitor-protected latest-state field. External threads submit operations through \texttt{CommandMailbox}; the controller drains them \textbf{sequentially} and the mailbox completes the associated receipts.
 
 In practice, \texttt{RuntimeGameSnapshot} is the only consistent state exposed to the view, while the mutable board remains internal to the controller and physics layers.
 

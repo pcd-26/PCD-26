@@ -65,7 +65,7 @@ This is the idea we should keep recovering when refining the report.
 | --- | --- | --- |
 | concurrent platform-thread version | `pcd.poool.ThreadedPoool`, `pcd.poool.threaded.*`, `pcd.poool.model.physics.threaded.*` | implemented |
 | concurrent task-based version | `pcd.poool.TaskBasedPoool`, `pcd.poool.taskbased.*`, `pcd.poool.model.physics.taskbased.*` | implemented |
-| use high-level coordination where possible | `CommandQueueMonitorSupport`, `SnapshotStoreSupport`, `WorkerCompletionMonitor` | implemented |
+| use high-level coordination where possible | `CommandMailbox`, `GameLoop`, `WorkerCompletionMonitor` | implemented |
 | preserve modularity and encapsulation | shared model packages under `pcd.poool.model.*` | implemented |
 | performance comparison against sequential baseline | benchmark package and CSV/chart export flow | implemented |
 | report with problem analysis and design | `docs/concurrent-architecture.md`, `docs/runtime-architecture.md` | documented |
@@ -204,8 +204,8 @@ The platform-thread runtime is centered around:
 - `ThreadedGameRunner`;
 - `ThreadedPhysicsEngine`;
 - `BotAgent`;
-- `CommandQueueMonitorSupport`;
-- `SnapshotStoreSupport`.
+- `CommandMailbox` for queued operations and receipts;
+- `GameLoop` for snapshot publication and monitor-based waiting.
 
 The key design idea is single-writer ownership of the authoritative game
 state. Input and bot actions are queued as commands, the controller thread
