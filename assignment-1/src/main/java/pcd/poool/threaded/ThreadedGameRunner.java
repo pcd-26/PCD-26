@@ -69,7 +69,11 @@ public class ThreadedGameRunner implements AutoCloseable {
         controllerThread.start();
         if (config.botEnabled()) {
             botThread = new Thread(
-                    new BotAgent(snapshots::get, () -> shootBot(), this::isRunning, config.botThinkTimeMillis()),
+                    new BotAgent(
+                            snapshots::get, // Latest snapshot supplier.
+                            () -> shootBot(), // Bot shot action.
+                            this::isRunning, // Runner active flag.
+                            config.botThinkTimeMillis()), // Delay before shooting.
                     "poool-threaded-bot");
             botThread.start();
         }

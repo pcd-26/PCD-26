@@ -100,7 +100,11 @@ public class TaskBasedGameRunner implements AutoCloseable {
         running = true;
         controllerExecutor.scheduleAtFixedRate(this::tick, 0, config.tickMillis(), TimeUnit.MILLISECONDS);
         if (botExecutor != null) {
-            botExecutor.submit(new BotAgent(snapshots::get, () -> shootBot(), this::isRunning, config.botThinkTimeMillis()));
+            botExecutor.submit(new BotAgent(
+                    snapshots::get, // Latest snapshot supplier.
+                    () -> shootBot(), // Bot shot action.
+                    this::isRunning, // Runner active flag.
+                    config.botThinkTimeMillis())); // Delay before shooting.
         }
     }
 

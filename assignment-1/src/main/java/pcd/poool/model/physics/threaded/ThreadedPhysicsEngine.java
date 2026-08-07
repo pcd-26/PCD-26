@@ -12,7 +12,7 @@ import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialGridSupport;
 
-/** Platform-threaded physics engine focused on lowering collision coordination cost. */
+// Platform-threaded physics engine.
 public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_WORKER_COUNT = 1;
@@ -24,17 +24,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private final ThreadLocal<ArrayList<Ball>> activeBallsBuffer = ThreadLocal.withInitial(ArrayList::new);
     private boolean closed;
 
-    /** Creates a threaded engine using a CPU-oriented default worker count. */
+    // Uses the default worker count.
     public ThreadedPhysicsEngine() {
         this(defaultWorkerCount());
     }
 
-    /** Creates a threaded engine. */
+    // Creates a threaded engine with a custom worker count.
     public ThreadedPhysicsEngine(int workerCount) {
         this(workerCount, PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
-    /** Creates a threaded engine. */
+    // Creates a threaded engine with custom worker count and sub-step duration.
     public ThreadedPhysicsEngine(int workerCount, long maxStepMillis) {
         if (workerCount < MIN_WORKER_COUNT) {
             throw new IllegalArgumentException("workerCount must be >= 1");
@@ -54,17 +54,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         stepInternal(board, elapsedMillis, false);
     }
 
-    /** Advances the board and returns a profiling snapshot for the executed step. */
+    // Runs the same step flow, but also measures the main phases.
     public StepProfile profileStep(Board board, long elapsedMillis) {
         return stepInternal(board, elapsedMillis, true);
     }
 
-    /** Gets the number of worker threads owned by this engine. */
+    // Returns the number of owned workers.
     public int workerCount() {
         return workers.length;
     }
 
-    /** Closes the owned workers and rejects future physics steps. */
+    // Closes the owned workers.
     @Override
     public void close() {
         closed = true;
@@ -78,6 +78,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
         ensureOpen();
+        // Create timing storage only when profiling is requested.
         StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(workers.length) : null;
         // One writer at a time: workers only operate on private ranges.
         synchronized (board) {
@@ -93,6 +94,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private void stepOnce(Board board, long dt, StepProfileAccumulator profile) {
+        // Read the shared bounds once for this sub-step.
         var bounds = board.getBounds();
         // Read the active balls once for this sub-step.
         long stateReadStart = profile == null ? 0 : System.nanoTime();
@@ -135,6 +137,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (collisionBalls.size() < 2) {
             return;
         }
+        // Resolve the collisions from the updated positions.
         detectAndResolveCollisions(board, collisionBalls, profile);
     }
 
@@ -235,7 +238,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /** Resolves collisions for one cell and its owned neighbors. */
+    // Resolves one cell and the neighboring cells it owns.
     private void resolveOwnedCell(
             CellBucket bucket,
             Map<SpatialGridSupport.GridCell, IntBag> mergedGrid,
@@ -254,7 +257,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 balls, deltas, contactPairs);
     }
 
-    /** Collects same-cell collision candidates. */
+    // Checks all pairs inside the same cell.
     private void collectPairsWithinBag(
             IntBag indexes,
             List<Ball> balls,
@@ -268,7 +271,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /** Collects cross-cell collision candidates. */
+    // Checks pairs that span two adjacent cells.
     private void collectCrossPairs(
             IntBag firstBag,
             IntBag secondBag,
@@ -286,7 +289,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /** Tests two balls and records a collision contribution if needed. */
+    // Keeps only the pairs that are really colliding.
     private void addContributionIfColliding(
             List<Ball> balls,
             int first,
@@ -301,7 +304,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         contactPairs.add(encodePair(first, second));
     }
 
-    /** Applies accumulated position and velocity deltas to the balls. */
+    // Applies the collision deltas to the live balls.
     private void applyMergedDeltas(List<Ball> balls, SparseCollisionDeltaAccumulator merged, StepProfileAccumulator profile) {
         if (merged.touchedCount() == 0) {
             return;
@@ -321,7 +324,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }, profile);
     }
 
-    /** Sequentially applies accumulated position and velocity deltas. */
+    // Applies the deltas directly when the touched set is small.
     private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
         for (int i = 0; i < merged.touchedCount(); i++) {
             int ballIndex = merged.touchedIndex(i);
@@ -330,7 +333,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /** Calculates the position and velocity deltas for one elastic collision. */
+    // Computes the overlap correction and the elastic impulse.
     private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
         var a = balls.get(firstIndex);
         var b = balls.get(secondIndex);
@@ -384,21 +387,21 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 secondVelocityDeltaY);
     }
 
-    /** Extracts the active balls from the board. */
+    // Reuses a buffer to collect the active balls.
     private List<Ball> activeBalls(Board board) {
         var activeBalls = activeBallsBuffer.get();
         board.fillCollisionBalls(activeBalls);
         return activeBalls;
     }
 
-    /** Maps a ball to its grid cell. */
+    // Places a ball in the grid cell that contains its center.
     private CenterCell computeCenterCell(Ball ball, double cellSize) {
         return new CenterCell(new SpatialGridSupport.GridCell(
                 SpatialGridSupport.toCellCoordinate(ball.getPos().x(), cellSize),
                 SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize)));
     }
 
-    /** Computes grid cell size from the largest ball. */
+    // Uses a cell size large enough for the biggest ball.
     private double computeOwnershipCellSize(List<Ball> balls) {
         double maxRadius = Double.NEGATIVE_INFINITY;
         for (var ball : balls) {
@@ -410,13 +413,16 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
-    /** Splits the work across workers and waits for them. */
+    // Splits the work across workers and waits for all of them.
     private void runRanges(int itemCount, RangeTask rangeTask, StepProfileAccumulator profile) {
         if (itemCount == 0) {
+            // Nothing to split.
             return;
         }
+        // Use only as many workers as the current work can fill.
         int workerCount = Math.min(workers.length, itemCount);
         if (workerCount == 1) {
+            // Run directly when there is no real split to make.
             long partitionStart = profile == null ? 0 : System.nanoTime();
             if (profile != null) {
                 profile.partitionNanos += System.nanoTime() - partitionStart;
@@ -424,28 +430,34 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             rangeTask.run(0, itemCount, 0);
             return;
         }
+        // Track when every worker has finished its range.
         var completion = new WorkerCompletionMonitor(workerCount);
+        // Compute contiguous chunks of roughly equal size.
         long partitionStart = profile == null ? 0 : System.nanoTime();
-        int baseChunk = itemCount / workerCount;
-        int remainder = itemCount % workerCount;
-        int from = 0;
+        int itemsPerWorker = itemCount / workerCount;
+        int extraItems = itemCount % workerCount;
+        int rangeStart = 0;
         if (profile != null) {
             profile.partitionNanos += System.nanoTime() - partitionStart;
         }
+        // Hand one chunk to each worker.
         long submissionStart = profile == null ? 0 : System.nanoTime();
         for (int workerIndex = 0; workerIndex < workerCount; workerIndex++) {
-            int chunkSize = baseChunk + (workerIndex < remainder ? 1 : 0);
-            int start = from;
-            int end = start + chunkSize;
+            // Spread the extra items over the first workers.
+            int chunkSize = itemsPerWorker + (workerIndex < extraItems ? 1 : 0);
+            // Each worker gets a contiguous slice of the input.
+            int start = rangeStart;
+            int rangeEnd = start + chunkSize;
             int assignedWorker = workerIndex;
-            workers[workerIndex].assign(() -> rangeTask.run(start, end, assignedWorker), completion);
-            from = end;
+            workers[workerIndex].assign(() -> rangeTask.run(start, rangeEnd, assignedWorker), completion);
+            rangeStart = rangeEnd;
         }
         if (profile != null) {
             profile.taskSubmissionNanos += System.nanoTime() - submissionStart;
             profile.submittedTasks += workerCount;
             profile.lockAcquisitions += workerCount + 1L;
         }
+        // Wait for all workers before returning.
         long waitStart = profile == null ? 0 : System.nanoTime();
         // Phase barrier: merge only after every worker finishes.
         completion.await();
@@ -651,23 +663,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /**
-     * Immutable per-step profiling data for the threaded physics pipeline.
-     *
-     * @param syncTimeMillis total coordination time in milliseconds
-     * @param aggregationTimeMillis result aggregation and merge time in milliseconds
-     * @param taskSubmissionTimeMillis task assignment time in milliseconds
-     * @param joinOrFutureWaitMillis worker wait time in milliseconds
-     * @param lockAcquisitions estimated number of lock acquisitions
-     * @param submittedTasks estimated number of submitted tasks
-     * @param stateReadMillis board snapshot read time in milliseconds
-     * @param partitionMillis work partitioning time in milliseconds
-     * @param movementMillis movement phase time in milliseconds
-     * @param holeInteractionMillis hole interaction time in milliseconds
-     * @param collisionDetectionMillis broad-phase detection time in milliseconds
-     * @param collisionResolutionMillis collision resolution time in milliseconds
-     * @param mergeApplyMillis delta merge and apply time in milliseconds
-     */
+    // Per-step timing summary for the threaded pipeline.
     public record StepProfile(
             double syncTimeMillis,
             double aggregationTimeMillis,

@@ -45,7 +45,11 @@ public class TaskBasedPoool {
                 config.physicsWorkerCount(),
                 BOARD_PROFILE.name().toLowerCase());
 
-        var runnerRef = new AtomicReference<>(newStartedRunner(boardProfile, config));
+        var runner = new TaskBasedGameRunner(boardProfile, config);
+        // Starts the runner.
+        runner.start();
+        // Stores the started runner so the loop can use and restart it.
+        var runnerRef = new AtomicReference<>(runner);
         var restartRequested = new AtomicBoolean(false);
         var viewModel = new ViewModel();
         var view = new View(
@@ -57,6 +61,7 @@ public class TaskBasedPoool {
                 () -> canStartHumanAiming(runnerRef.get()), // Human aiming gate.
                 () -> viewModel.clearShotPreview(Player.HUMAN)); // Clears the human shot preview.
 
+        // Registers a shutdown hook so the runner closes when the JVM exits.
         Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-task-based-shutdown"));
 
         long startTime = System.currentTimeMillis();
@@ -67,8 +72,12 @@ public class TaskBasedPoool {
             long now = System.currentTimeMillis();
             // Recreate the task-based runner if the user requested a restart.
             if (restartRequested.getAndSet(false)) {
-                var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile, config));
+                var oldRunner = runnerRef.get();
                 oldRunner.close();
+                var newRunner = new TaskBasedGameRunner(boardProfile, config);
+                // Starts the runner.
+                newRunner.start();
+                runnerRef.set(newRunner);
                 viewModel.clearShotPreview();
                 startTime = now;
                 renderedFrames = 0;
@@ -110,12 +119,6 @@ public class TaskBasedPoool {
             throw new IllegalArgumentException("worker count must be >= 1");
         }
         return workers;
-    }
-
-    private static TaskBasedGameRunner newStartedRunner(BoardConf boardProfile, TaskBasedGameRunner.Config config) {
-        var runner = new TaskBasedGameRunner(boardProfile, config);
-        runner.start();
-        return runner;
     }
 
     private enum BoardProfile {

@@ -18,7 +18,7 @@ import pcd.poool.model.physics.common.SpatialCollisionDetector;
 import pcd.poool.model.physics.common.SpatialGridSupport;
 import pcd.poool.model.common.math.V2d;
 
-/** Task-based physics stepper for board state updates. */
+// Task-based physics engine.
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_POOL_SIZE = 1;
@@ -32,17 +32,17 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private final ThreadLocal<ArrayList<Ball>> activeBallsBuffer = ThreadLocal.withInitial(ArrayList::new);
     private boolean closed;
 
-    /** Creates a task-based physics engine using the default pool size. */
+    // Uses the default pool size.
     public TaskBasedPhysicsEngine() {
         this(defaultPoolSize());
     }
 
-    /** Creates a task-based physics engine. */
+    // Creates a task-based physics engine with a custom pool size.
     public TaskBasedPhysicsEngine(int poolSize) {
         this(poolSize, PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
-    /** Creates a task-based physics engine. */
+    // Creates a task-based physics engine with custom pool size and sub-step duration.
     public TaskBasedPhysicsEngine(int poolSize, long maxStepMillis) {
         if (poolSize < MIN_POOL_SIZE) {
             throw new IllegalArgumentException("poolSize must be >= 1");
@@ -65,7 +65,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         stepInternal(board, elapsedMillis, false);
     }
 
-    /** Advances the board and returns a profiling snapshot for the executed step. */
+    // Runs the same step flow, but also measures the main phases.
     public StepProfile profileStep(Board board, long elapsedMillis) {
         return stepInternal(board, elapsedMillis, true);
     }
@@ -75,6 +75,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
         ensureOpen();
+        // Create timing storage only when profiling is requested.
         StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(poolSize) : null;
         // The board lock spans the full tick; tasks stay on private work.
         synchronized (board) {
@@ -90,7 +91,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return profilingEnabled ? profile.toProfile() : null;
     }
 
-    /** Stops the executor and prevents further steps from being accepted. */
+    // Stops the executor.
     @Override
     public synchronized void close() {
         if (closed) {
@@ -100,12 +101,13 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         executor.shutdown();
     }
 
-    /** Gets the configured executor pool size. */
+    // Returns the configured pool size.
     public int poolSize() {
         return poolSize;
     }
 
     private void stepOnce(Board board, long dt, StepProfileAccumulator profile) {
+        // Read the shared bounds once for this sub-step.
         var bounds = board.getBounds();
         // Read the active balls once for this sub-step.
         long stateReadStart = profile == null ? 0 : System.nanoTime();
@@ -151,6 +153,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (collisionBalls.size() < 2) {
             return;
         }
+        // Resolve the collisions from the updated positions.
         detectAndResolveCollisions(board, collisionBalls, profile);
     }
 
@@ -234,6 +237,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private void detectAndResolveCollisions(Board board, List<Ball> balls, StepProfileAccumulator profile) {
         long collisionStart = profile == null ? 0 : System.nanoTime();
+        // Start from the positions produced by the movement phase.
         // Build a spatial partition so nearby balls are checked together.
         double cellSize = computeOwnershipCellSize(balls);
 
@@ -400,6 +404,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         contactPairs.add(encodePair(first, second));
     }
 
+    // Applies the collision deltas to the live balls.
     private void applyMergedDeltas(
             List<Ball> balls,
             SparseCollisionDeltaAccumulator merged,
@@ -429,7 +434,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
-        // Apply the accumulated position and velocity deltas directly.
+        // Applies the deltas directly when the touched set is small.
         for (int i = 0; i < merged.touchedCount(); i++) {
             int ballIndex = merged.touchedIndex(i);
             balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
@@ -437,6 +442,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    // Packs collision pairs into rounds that do not touch the same ball twice.
     List<List<SpatialCollisionDetector.Pair>> buildCollisionRounds(
             List<SpatialCollisionDetector.Pair> pairs,
             int ballCount) {
@@ -495,25 +501,30 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private <T> List<T> runRanges(int itemCount, RangeTask<T> rangeTask, StepProfileAccumulator profile) {
         if (itemCount == 0) {
+            // Nothing to split.
             return List.of();
         }
 
+        // Build the ranges that will be executed in parallel.
         long partitionStart = profile == null ? 0 : System.nanoTime();
         var ranges = buildRangeChunks(itemCount);
         if (profile != null) {
             profile.partitionNanos += System.nanoTime() - partitionStart;
         }
         if (ranges.size() == 1) {
+            // Run directly when the split would create only one task.
             var range = ranges.get(0);
             var result = new ArrayList<T>(1);
             result.add(rangeTask.run(range.fromInclusive(), range.toExclusive(), 0));
             return result;
         }
         try {
-        // Futures are the phase barrier: merge only after every range ends.
+            // Submit every range to the executor.
+            // Futures are the phase barrier: merge only after every range ends.
             long submissionStart = profile == null ? 0 : System.nanoTime();
             var futures = new ArrayList<Future<T>>(ranges.size());
             for (var range : ranges) {
+                // Each future represents one contiguous slice of the work.
                 futures.add(executor.submit(() -> rangeTask.run(range.fromInclusive(), range.toExclusive(), range.workerIndex())));
             }
             if (profile != null) {
@@ -521,9 +532,11 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 profile.submittedTasks += ranges.size();
                 profile.lockAcquisitions += ranges.size() + 1L;
             }
+            // Wait for all tasks before continuing.
             long waitStart = profile == null ? 0 : System.nanoTime();
             var results = new ArrayList<T>(futures.size());
             for (var future : futures) {
+                // Join one task at a time.
                 results.add(future.get());
             }
             if (profile != null) {
@@ -538,6 +551,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    // Collects the candidate pairs inside one occupied cell.
     private void collectPairs(List<Integer> indexes, LongPairSet pairs) {
         if (indexes == null) {
             return;
@@ -549,12 +563,14 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
+    // Places a ball in the grid cell that contains its center.
     private CenterCell computeCenterCell(Ball ball, double cellSize) {
         return new CenterCell(new SpatialGridSupport.GridCell(
                 SpatialGridSupport.toCellCoordinate(ball.getPos().x(), cellSize),
                 SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize)));
     }
 
+    // Uses a cell size large enough for the biggest ball.
     private double computeOwnershipCellSize(List<Ball> balls) {
         double maxRadius = Double.NEGATIVE_INFINITY;
         for (var ball : balls) {
@@ -566,6 +582,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
+    // Computes the overlap correction and the elastic impulse.
     private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
         var a = balls.get(firstIndex);
         var b = balls.get(secondIndex);
@@ -621,15 +638,15 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private List<RangeChunk> buildRangeChunks(int itemCount) {
         int workerCount = itemCount < MIN_ITEMS_FOR_PARALLEL_RANGES ? 1 : Math.min(poolSize, itemCount);
-        int baseChunk = itemCount / workerCount;
-        int remainder = itemCount % workerCount;
+        int itemsPerWorker = itemCount / workerCount;
+        int extraItems = itemCount % workerCount;
         var chunks = new ArrayList<RangeChunk>(workerCount);
-        int from = 0;
+        int rangeStart = 0;
         for (int i = 0; i < workerCount; i++) {
-            int chunkSize = baseChunk + (i < remainder ? 1 : 0);
-            int to = from + chunkSize;
-            chunks.add(new RangeChunk(from, to, i));
-            from = to;
+            int chunkSize = itemsPerWorker + (i < extraItems ? 1 : 0);
+            int rangeEnd = rangeStart + chunkSize;
+            chunks.add(new RangeChunk(rangeStart, rangeEnd, i));
+            rangeStart = rangeEnd;
         }
         return List.copyOf(chunks);
     }
@@ -858,7 +875,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /** Immutable per-step profiling data for the task-based physics pipeline. */
+    // Per-step timing summary for the task-based pipeline.
     public record StepProfile(
             int activeBalls,
             int collisionBalls,

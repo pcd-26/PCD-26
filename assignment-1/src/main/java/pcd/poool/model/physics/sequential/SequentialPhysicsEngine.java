@@ -6,18 +6,18 @@ import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialCollisionDetector;
 
-/** Deterministic physics stepper for board state updates. */
+// Deterministic physics stepper for board updates.
 public class SequentialPhysicsEngine implements PhysicsStepper {
 
     private final SpatialCollisionDetector collisionDetector;
     private final long maxStepMillis;
 
-    /** Creates a physics engine using the default maximum sub-step duration. */
+    // Uses the default sub-step duration.
     public SequentialPhysicsEngine() {
         this(PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
-    /** Creates a physics engine. */
+    // Creates a physics engine with a custom sub-step duration.
     public SequentialPhysicsEngine(long maxStepMillis) {
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
@@ -26,7 +26,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
         this.maxStepMillis = maxStepMillis;
     }
 
-    /** Advances the board by splitting large deltas into smaller sub-steps. */
+    // Advances the board in fixed-size chunks.
     @Override
     public void step(Board board, long elapsedMillis) {
         if (elapsedMillis < 0) {
@@ -41,9 +41,9 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
         }
     }
 
+    // Moves balls, applies holes, then resolves collisions.
     private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
-        // Move every active ball for this sub-step.
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }
@@ -54,10 +54,8 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
             ball.updateState(dt, bounds);
         }
 
-        // Remove balls that ended up in a hole.
         board.applyHoleInteractions();
 
-        // Detect overlap pairs and resolve them one by one.
         var allBalls = board.getCollisionBalls();
         for (var pair : collisionDetector.detectCollisionPairs(allBalls)) {
             var first = allBalls.get(pair.firstIndex());
