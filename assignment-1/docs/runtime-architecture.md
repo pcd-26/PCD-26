@@ -125,6 +125,12 @@ long-lived worker threads.
 - `GameRuntime`
   Small common API implemented by both concurrent runners and consumed by the
   shared application.
+- `GameLoop`
+  Shared single-writer tick: drain commands, advance `GameModel`, and publish
+  the immutable snapshot.
+- `GameRuntimeConfig`
+  One validated configuration shared by the platform-thread and Executor
+  drivers.
 - `BotAgent`
   Active bot component that observes snapshots and submits bot shots.
 - `CommandQueueMonitorSupport`
@@ -249,17 +255,16 @@ runtime loop.
 
 `ThreadedGameRunner` then assembles:
 
-- one `GameModel`;
+- one shared `GameLoop`, which owns `GameModel`;
 - one `ThreadedPhysicsEngine`;
 - one controller thread;
 - one optional bot thread;
 - one `CommandQueueMonitorSupport`;
 - one `SnapshotStoreSupport`.
 
-`TaskBasedPoool` follows the same overall shape, but replaces the controller
-platform thread with a scheduled executor and replaces long-lived worker
-threads with a fixed executor pool inside `TaskBasedGameRunner` and
-`TaskBasedPhysicsEngine`.
+`TaskBasedPoool` uses the same `GameLoop` and changes only the driver: a
+scheduled executor invokes the tick, while `TaskBasedPhysicsEngine` uses a
+fixed executor pool for physics work.
 
 The controller thread is the single writer of `GameModel`.
 
