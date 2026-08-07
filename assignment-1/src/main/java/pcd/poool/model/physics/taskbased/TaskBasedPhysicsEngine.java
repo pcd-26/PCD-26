@@ -334,7 +334,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         applyMergedDeltas(balls, combinedDeltas, profile);
         if (profile != null) {
             profile.candidatePairs += pairCount;
-            profile.mergedCells += orderedCells.size();
+            profile.mergedCells += orderedCellBuckets.size();
             profile.collisionDetectionNanos += mergeApplyStart - collisionStart;
             profile.mergeApplyNanos += System.nanoTime() - mergeApplyStart;
             profile.aggregationNanos += System.nanoTime() - mergeApplyStart;
