@@ -151,10 +151,10 @@ turns user input into callbacks.
 
 - `pcd.poool.benchmark`
   Micro-benchmarks and integrated runtime benchmarks.
-- `pcd.poool.controller`
-  Sketch-derived active-controller abstractions kept as reusable reference code.
-- `pcd.poool.model.concurrent`
-  Sketch-derived monitor-based bounded buffer abstractions.
+- `assignment-1/reference/sketch02`
+  Original active-controller and bounded-buffer examples, kept outside the
+  production source tree because the playable runtimes use their specialized
+  command monitor instead.
 
 ## 3. Core responsibilities
 

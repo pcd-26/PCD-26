@@ -113,13 +113,6 @@ These types are shared by physics, view, and tests.
 - `GameOverReason.java`
   Explicit terminal reason for a finished game.
 
-### `concurrent`
-
-- `BoundedBuffer.java`
-  Minimal blocking producer/consumer buffer interface.
-- `BoundedBufferImpl.java`
-  Monitor-based bounded buffer implementation.
-
 ## Relationships
 
 - `game.GameModel` uses `physics.common.Board`.

@@ -13,10 +13,8 @@
   `MassiveBoardConf`
 - `pcd.poool.model.game`: `GameModel`, `GameSnapshot`, `Player`,
   `GameStatus`, `GameOverReason`
-- `pcd.poool.model.concurrent`: `BoundedBuffer`, `BoundedBufferImpl`
 - `pcd.poool.view`: `RenderSynch`
 - `pcd.poool.view.board`: `ViewModel`, `View`, `ViewFrame`
-- `pcd.poool.controller`: `Cmd`, `ActiveController`
 - `pcd.poool.threaded`: `ThreadedGameRunner`
 - `pcd.poool.runtime`: shared bot, command, receipt, queue, and snapshot supports
   used by the threaded and task-based runners
@@ -24,6 +22,7 @@
 
 ## Excluded from `pcd.poool`
 - sketch02 counter demo artifacts
+- sketch-derived generic controller and bounded-buffer examples
 - sketch bootstrap/demo launchers
 - `pcd.poool.benchmark`: benchmark configuration, runners, post-processing,
   and CSV/chart export flow
