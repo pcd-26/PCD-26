@@ -202,12 +202,16 @@ public class TaskBasedGameRunner implements AutoCloseable {
             return;
         }
         try {
+            // Scheduled controller tick: drain commands, advance the model, and publish the next snapshot.
             // One controller thread drains commands, advances physics, and
             // publishes the next immutable snapshot.
+            // First execute all pending commands in order.
             drainPendingCommands();
+            // Then advance the shared game model by one scheduled tick.
             if (!game.snapshot().isFinished()) {
                 game.step(config.tickMillis());
             }
+            // Publish the immutable state that the UI and bot will read next.
             snapshots.publish(RuntimeGameSnapshot.from(game));
         } catch (RuntimeException ex) {
             failure.compareAndSet(null, ex);

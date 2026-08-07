@@ -166,14 +166,19 @@ public class ThreadedGameRunner implements AutoCloseable {
      */
     private void runController() {
         try {
+            // Controller loop: serialize commands, advance the model, publish a snapshot, then wait for the next tick.
             while (running) {
                 // The controller serializes command execution and rule updates;
                 // worker threads are confined to the physics engine internals.
+                // First execute every pending command submitted by the UI or bot.
                 drainPendingCommands();
+                // Then advance the shared game model by one fixed tick.
                 if (!game.snapshot().isFinished()) {
                     game.step(config.tickMillis());
                 }
+                // Publish a fresh immutable snapshot for the view and tests.
                 snapshots.publish(RuntimeGameSnapshot.from(game));
+                // Sleep until the next tick so the controller keeps a steady rate.
                 sleepTick();
             }
         } finally {

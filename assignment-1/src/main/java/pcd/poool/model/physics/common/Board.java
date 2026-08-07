@@ -12,31 +12,11 @@ import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.Player;
 import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 
-/**
- * Mutable board state used by the physics loop.
- *
- * <p>The board owns the physical entities and records low-level events needed
- * by game rules, such as cue balls being pocketed and small balls that are
- * eligible to score. Higher-level lifecycle decisions remain in
- * {@code GameModel}.
- */
+/** Mutable board state used by the physics loop. */
 public class Board {
 
-    /**
-     * Immutable ball data used by rendering and tests.
-     *
-     * @param pos ball center position
-     * @param radius ball radius
-     */
     public static record BallSnapshot(P2d pos, double radius) {}
 
-    /**
-     * Immutable hole-interaction summary produced by a physics coordinator.
-     *
-     * @param playerBallPocketed whether the human cue ball entered a hole
-     * @param botBallPocketed whether the bot cue ball entered a hole
-     * @param pocketedSmallBalls small balls that entered holes, in deterministic order
-     */
     public static record HoleInteractions(
             boolean playerBallPocketed,
             boolean botBallPocketed,
@@ -53,12 +33,9 @@ public class Board {
     private boolean playerBallPocketed;
     private boolean botBallPocketed;
     private final Map<Ball, Player> lastDirectCueTouch;
-    
-    /**
-     * Creates an empty board. Call {@link #init(BoardConf)} before using it in
-     * a game or benchmark.
-     */
-    public Board(){
+
+    /** Creates an empty board using the default sequential physics engine. */
+    public Board() {
         this(new SequentialPhysicsEngine());
     }
 
@@ -67,7 +44,7 @@ public class Board {
      *
      * @param physicsEngine physics strategy used by {@link #updateState(long)}
      */
-    public Board(PhysicsStepper physicsEngine){
+    public Board(PhysicsStepper physicsEngine) {
         if (physicsEngine == null) {
             throw new IllegalArgumentException("physicsEngine must not be null");
         }
@@ -77,17 +54,17 @@ public class Board {
         pendingScoredSmallBalls = new EnumMap<>(Player.class);
         lastDirectCueTouch = new HashMap<>();
     }
-    
+
     /**
      * Reinitializes this board from a configuration.
      *
      * @param conf board layout and initial ball entities
      */
     public void init(BoardConf conf) {
-    	balls = new ArrayList<>(conf.getSmallBalls());
-    	playerBall = conf.getPlayerBall();
+        balls = new ArrayList<>(conf.getSmallBalls());
+        playerBall = conf.getPlayerBall();
         botBall = conf.getBotBall();
-    	bounds = conf.getBoardBoundary();
+        bounds = conf.getBoardBoundary();
         holes = new ArrayList<>(conf.getHoles());
         pocketedSmallBalls = 0;
         pendingScoredSmallBalls.clear();
@@ -95,52 +72,33 @@ public class Board {
         botBallPocketed = false;
         lastDirectCueTouch.clear();
     }
-    
-    /**
-     * Advances the board physics by the given elapsed time.
-     *
-     * @param dt elapsed time in milliseconds
-     */
+
+    /** Advances the board physics by the given elapsed time. */
     public synchronized void updateState(long dt) {
-        // The actual stepping policy is injected, so the board only owns the
-        // mutable state and the monitor around it.
         physicsEngine.step(this, dt);
     }
-    
-    /**
-     * Returns immutable rendering data instead of exposing mutable ball objects.
-     *
-     * @return immutable snapshots of all small balls currently on the board
-     */
-    public synchronized List<BallSnapshot> getBalls(){
+
+    /** Returns immutable rendering data instead of exposing mutable ball objects. */
+    public synchronized List<BallSnapshot> getBalls() {
         if (balls == null) {
             return Collections.emptyList();
         }
-        // Rendering gets copies, not live Ball references.
         var snapshots = new ArrayList<BallSnapshot>();
-        for (var ball: balls) {
+        for (var ball : balls) {
             snapshots.add(new BallSnapshot(ball.getPos(), ball.getRadius()));
         }
         return Collections.unmodifiableList(snapshots);
     }
-    
-    /**
-     * Gets the human cue-ball snapshot.
-     *
-     * @return immutable human cue-ball snapshot, or {@code null} when pocketed
-     */
+
+    /** Gets the human cue-ball snapshot. */
     public synchronized BallSnapshot getPlayerBall() {
-    	if (playerBall == null || playerBallPocketed) {
-    		return null;
-    	}
-    	return new BallSnapshot(playerBall.getPos(), playerBall.getRadius());
+        if (playerBall == null || playerBallPocketed) {
+            return null;
+        }
+        return new BallSnapshot(playerBall.getPos(), playerBall.getRadius());
     }
 
-    /**
-     * Gets the bot cue-ball snapshot.
-     *
-     * @return immutable bot cue-ball snapshot, or {@code null} when pocketed
-     */
+    /** Gets the bot cue-ball snapshot. */
     public synchronized BallSnapshot getBotBall() {
         if (botBall == null || botBallPocketed) {
             return null;
@@ -148,76 +106,40 @@ public class Board {
         return new BallSnapshot(botBall.getPos(), botBall.getRadius());
     }
 
-    /**
-     * Gets the configured holes.
-     *
-     * @return immutable copy of the configured holes
-     */
+    /** Gets the configured holes. */
     public synchronized List<Hole> getHoles() {
         return Collections.unmodifiableList(new ArrayList<>(holes));
     }
 
-    /**
-     * Gets the total number of pocketed small balls.
-     *
-     * @return total number of small balls removed through holes
-     */
+    /** Gets the total number of pocketed small balls. */
     public synchronized int getPocketedSmallBalls() {
         return pocketedSmallBalls;
     }
 
-    /**
-     * Consumes all pending score events regardless of player.
-     *
-     * <p>This legacy aggregate form is kept for tests and compatibility. Game
-     * rules should prefer {@link #consumePendingScoredSmallBalls(Player)}.
-     *
-     * @return number of pending score events across all players
-     */
+    /** Consumes all pending score events regardless of player. Legacy compatibility helper. */
     public synchronized int consumePendingScoredSmallBalls() {
         int scored = pendingScoredSmallBalls.values().stream().mapToInt(Integer::intValue).sum();
         pendingScoredSmallBalls.clear();
         return scored;
     }
 
-    /**
-     * Consumes pending small-ball score events for one player.
-     *
-     * <p>A score is pending only when that player's cue ball directly touched
-     * the small ball and the ball reached a hole before any small-small
-     * collision invalidated that direct cause.
-     *
-     * @param player score owner
-     * @return number of newly scored balls for the player
-     */
+    /** Consumes pending small-ball score events for one player. */
     public synchronized int consumePendingScoredSmallBalls(Player player) {
         var scored = pendingScoredSmallBalls.remove(player);
         return scored == null ? 0 : scored;
     }
 
-    /**
-     * Checks whether the human cue ball has been pocketed.
-     *
-     * @return whether the human cue ball has entered a hole
-     */
+    /** Checks whether the human cue ball has been pocketed. */
     public synchronized boolean isPlayerBallPocketed() {
         return playerBallPocketed;
     }
 
-    /**
-     * Checks whether the bot cue ball has been pocketed.
-     *
-     * @return whether the bot cue ball has entered a hole
-     */
+    /** Checks whether the bot cue ball has been pocketed. */
     public synchronized boolean isBotBallPocketed() {
         return botBallPocketed;
     }
 
-    /**
-     * Checks whether any active ball is moving.
-     *
-     * @return whether any non-pocketed ball is still moving
-     */
+    /** Checks whether any active ball is moving. */
     public synchronized boolean areBallsMoving() {
         if (playerBall != null && !playerBallPocketed && playerBall.isMoving()) {
             return true;
@@ -228,60 +150,41 @@ public class Board {
         return balls.stream().anyMatch(Ball::isMoving);
     }
 
-    /**
-     * Checks whether a player's cue ball can currently be kicked.
-     *
-     * @param player cue-ball owner
-     * @return whether the player's cue ball exists and is stopped
-     */
+    /** Checks whether a player's cue ball can currently be kicked. */
     public synchronized boolean canKick(Player player) {
         var cueBall = getCueBallEntity(player);
         return cueBall != null && !cueBall.isMoving();
     }
 
-    /**
-     * Assigns a new velocity to a player's cue ball if it is still on the board.
-     *
-     * @param player cue-ball owner
-     * @param velocity new cue-ball velocity
-     */
+    /** Assigns a new velocity to a player's cue ball if it is still on the board. */
     public synchronized void kick(Player player, V2d velocity) {
         var cueBall = getCueBallEntity(player);
         if (cueBall != null) {
             cueBall.kick(velocity);
         }
     }
-    
-    /**
-     * Gets the board boundary.
-     *
-     * @return rectangular board boundary
-     */
-    public Boundary getBounds(){
+
+    /** Gets the board boundary. */
+    public Boundary getBounds() {
         return bounds;
     }
 
+    /** Gets the mutable human cue-ball entity for the physics engine. */
     public synchronized Ball getPlayerBallEntity() {
         return playerBallPocketed ? null : playerBall;
     }
 
+    /** Gets the mutable bot cue-ball entity for the physics engine. */
     public synchronized Ball getBotBallEntity() {
         return botBallPocketed ? null : botBall;
     }
 
+    /** Gets the mutable list of small balls for the physics engine. */
     public synchronized List<Ball> getSmallBallEntities() {
         return balls;
     }
 
-    /**
-     * Copies the active balls that participate in collision detection into a
-     * caller-provided list.
-     *
-     * <p>The target list is cleared first, so callers can keep and reuse a
-     * scratch buffer across physics ticks.
-     *
-     * @param target reusable list that receives the active balls
-     */
+    /** Copies the active balls that participate in collision detection into a caller-provided list. */
     public synchronized void fillCollisionBalls(List<Ball> target) {
         target.clear();
         if (playerBall != null && !playerBallPocketed) {
@@ -293,12 +196,14 @@ public class Board {
         target.addAll(balls);
     }
 
+    /** Gets all active balls that participate in collision detection. */
     public synchronized List<Ball> getCollisionBalls() {
         var allBalls = new ArrayList<Ball>();
         fillCollisionBalls(allBalls);
         return allBalls;
     }
 
+    /** Records a collision so the board can track direct cue-ball contact. */
     public synchronized void recordCollision(Ball first, Ball second) {
         recordDirectCueTouch(first, second, Player.HUMAN);
         recordDirectCueTouch(first, second, Player.BOT);
@@ -324,26 +229,22 @@ public class Board {
         }
     }
 
+    /** Applies pocketing directly by inspecting the current board state. */
     public synchronized void applyHoleInteractions() {
         if (holes.isEmpty()) {
             return;
         }
-        /*
-         * Game-level scoring will later decide who earns a point. The physics
-         * layer only removes pocketed balls and records that the event happened.
-         */
         if (playerBall != null && !playerBallPocketed && isInsideHole(playerBall)) {
             playerBallPocketed = true;
         }
         if (botBall != null && !botBallPocketed && isInsideHole(botBall)) {
             botBallPocketed = true;
         }
+
         var iterator = balls.iterator();
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (isInsideHole(ball)) {
-                // Hole removal is serialized here so score bookkeeping stays
-                // consistent with the board's mutable list.
                 iterator.remove();
                 pocketedSmallBalls++;
                 var scorer = lastDirectCueTouch.remove(ball);
@@ -354,14 +255,7 @@ public class Board {
         }
     }
 
-    /**
-     * Applies a hole-interaction summary computed by a task-based coordinator.
-     *
-     * <p>The provided small-ball list must be ordered deterministically by the
-     * coordinator, with task order first and ball order inside each task.
-     *
-     * @param interactions detected pocketed entities for the current physics tick
-     */
+    /** Applies pocketing using a deterministic summary computed elsewhere. */
     public synchronized void applyHoleInteractions(HoleInteractions interactions) {
         if (holes.isEmpty()) {
             return;
@@ -383,8 +277,6 @@ public class Board {
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (pocketed.contains(ball)) {
-                // The coordinator already decided the pocketed set, so this is
-                // just the commit phase.
                 iterator.remove();
                 pocketedSmallBalls++;
                 var scorer = lastDirectCueTouch.remove(ball);
