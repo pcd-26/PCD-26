@@ -18,7 +18,10 @@
 - `pcd.poool.threaded`: `ThreadedGameRunner`
 - `pcd.poool.runtime`: shared bot, command, receipt, queue, and snapshot supports
   used by the threaded and task-based runners
-- `pcd.poool`: `SequentialPoool`, `ThreadedPoool`
+- `pcd.poool`: `SequentialPoool`, `ThreadedPoool`, `TaskBasedPoool`,
+  `PooolApplication`
+- `pcd.poool.runtime`: `GameRuntime` plus shared command, bot, and snapshot
+  support
 
 ## Excluded from `pcd.poool`
 - sketch02 counter demo artifacts

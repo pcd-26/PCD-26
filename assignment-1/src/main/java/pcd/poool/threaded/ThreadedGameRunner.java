@@ -11,6 +11,7 @@ import pcd.poool.runtime.CommandQueueMonitorSupport;
 import pcd.poool.runtime.CommandReceiptSupport;
 import pcd.poool.runtime.CommandSubmissionSupport;
 import pcd.poool.runtime.GameCommand;
+import pcd.poool.runtime.GameRuntime;
 import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.runtime.SnapshotStoreSupport;
 
@@ -21,7 +22,7 @@ import pcd.poool.runtime.SnapshotStoreSupport;
  * mutations to one controller thread. External threads submit commands through
  * a monitor, while the optional bot agent runs as a separate platform thread.
  */
-public class ThreadedGameRunner implements AutoCloseable {
+public class ThreadedGameRunner implements GameRuntime {
 
     private static final Duration DEFAULT_JOIN_TIMEOUT = Duration.ofSeconds(2);
 
