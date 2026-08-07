@@ -1,8 +1,6 @@
 package pcd.poool.view;
 
-/**
- * Sync point between render requests and completed frames.
- */
+// Sync point between render requests and completed frames.
 public class RenderSynch {
 
 	private static final long FIRST_FRAME = 0;

@@ -12,7 +12,7 @@ import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.Player;
 import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 
-/** Mutable board state used by the physics loop. */
+// Mutable board state used by the physics loop.
 public class Board {
 
     public static record BallSnapshot(P2d pos, double radius) {}
@@ -34,16 +34,12 @@ public class Board {
     private boolean botBallPocketed;
     private final Map<Ball, Player> lastDirectCueTouch;
 
-    /** Creates an empty board using the default sequential physics engine. */
+    // Creates an empty board using the default sequential physics engine.
     public Board() {
         this(new SequentialPhysicsEngine());
     }
 
-    /**
-     * Creates an empty board using the supplied physics stepping strategy.
-     *
-     * @param physicsEngine physics strategy used by {@link #updateState(long)}
-     */
+    // Creates an empty board using the supplied physics stepping strategy.
     public Board(PhysicsStepper physicsEngine) {
         if (physicsEngine == null) {
             throw new IllegalArgumentException("physicsEngine must not be null");
@@ -55,11 +51,7 @@ public class Board {
         lastDirectCueTouch = new HashMap<>();
     }
 
-    /**
-     * Reinitializes this board from a configuration.
-     *
-     * @param conf board layout and initial ball entities
-     */
+    // Reinitializes this board from a configuration.
     public void init(BoardConf conf) {
         balls = new ArrayList<>(conf.getSmallBalls());
         playerBall = conf.getPlayerBall();
@@ -73,12 +65,12 @@ public class Board {
         lastDirectCueTouch.clear();
     }
 
-    /** Advances the board physics by the given elapsed time. */
+    // Advances the board physics by the given elapsed time.
     public synchronized void updateState(long dt) {
         physicsEngine.step(this, dt);
     }
 
-    /** Returns immutable rendering data instead of exposing mutable ball objects. */
+    // Returns immutable rendering data instead of exposing mutable ball objects.
     public synchronized List<BallSnapshot> getBalls() {
         if (balls == null) {
             return Collections.emptyList();
@@ -90,7 +82,7 @@ public class Board {
         return Collections.unmodifiableList(snapshots);
     }
 
-    /** Gets the human cue-ball snapshot. */
+    // Gets the human cue-ball snapshot.
     public synchronized BallSnapshot getPlayerBall() {
         if (playerBall == null || playerBallPocketed) {
             return null;
@@ -98,7 +90,7 @@ public class Board {
         return new BallSnapshot(playerBall.getPos(), playerBall.getRadius());
     }
 
-    /** Gets the bot cue-ball snapshot. */
+    // Gets the bot cue-ball snapshot.
     public synchronized BallSnapshot getBotBall() {
         if (botBall == null || botBallPocketed) {
             return null;
@@ -106,40 +98,40 @@ public class Board {
         return new BallSnapshot(botBall.getPos(), botBall.getRadius());
     }
 
-    /** Gets the configured holes. */
+    // Gets the configured holes.
     public synchronized List<Hole> getHoles() {
         return Collections.unmodifiableList(new ArrayList<>(holes));
     }
 
-    /** Gets the total number of pocketed small balls. */
+    // Gets the total number of pocketed small balls.
     public synchronized int getPocketedSmallBalls() {
         return pocketedSmallBalls;
     }
 
-    /** Consumes all pending score events regardless of player. Legacy compatibility helper. */
+    // Consumes all pending score events regardless of player. Legacy compatibility helper.
     public synchronized int consumePendingScoredSmallBalls() {
         int scored = pendingScoredSmallBalls.values().stream().mapToInt(Integer::intValue).sum();
         pendingScoredSmallBalls.clear();
         return scored;
     }
 
-    /** Consumes pending small-ball score events for one player. */
+    // Consumes pending small-ball score events for one player.
     public synchronized int consumePendingScoredSmallBalls(Player player) {
         var scored = pendingScoredSmallBalls.remove(player);
         return scored == null ? 0 : scored;
     }
 
-    /** Checks whether the human cue ball has been pocketed. */
+    // Checks whether the human cue ball has been pocketed.
     public synchronized boolean isPlayerBallPocketed() {
         return playerBallPocketed;
     }
 
-    /** Checks whether the bot cue ball has been pocketed. */
+    // Checks whether the bot cue ball has been pocketed.
     public synchronized boolean isBotBallPocketed() {
         return botBallPocketed;
     }
 
-    /** Checks whether any active ball is moving. */
+    // Checks whether any active ball is moving.
     public synchronized boolean areBallsMoving() {
         if (playerBall != null && !playerBallPocketed && playerBall.isMoving()) {
             return true;
@@ -150,13 +142,13 @@ public class Board {
         return balls.stream().anyMatch(Ball::isMoving);
     }
 
-    /** Checks whether a player's cue ball can currently be kicked. */
+    // Checks whether a player's cue ball can currently be kicked.
     public synchronized boolean canKick(Player player) {
         var cueBall = getCueBallEntity(player);
         return cueBall != null && !cueBall.isMoving();
     }
 
-    /** Assigns a new velocity to a player's cue ball if it is still on the board. */
+    // Assigns a new velocity to a player's cue ball if it is still on the board.
     public synchronized void kick(Player player, V2d velocity) {
         var cueBall = getCueBallEntity(player);
         if (cueBall != null) {
@@ -164,27 +156,27 @@ public class Board {
         }
     }
 
-    /** Gets the board boundary. */
+    // Gets the board boundary.
     public Boundary getBounds() {
         return bounds;
     }
 
-    /** Gets the mutable human cue-ball entity for the physics engine. */
+    // Gets the mutable human cue-ball entity for the physics engine.
     public synchronized Ball getPlayerBallEntity() {
         return playerBallPocketed ? null : playerBall;
     }
 
-    /** Gets the mutable bot cue-ball entity for the physics engine. */
+    // Gets the mutable bot cue-ball entity for the physics engine.
     public synchronized Ball getBotBallEntity() {
         return botBallPocketed ? null : botBall;
     }
 
-    /** Gets the mutable list of small balls for the physics engine. */
+    // Gets the mutable list of small balls for the physics engine.
     public synchronized List<Ball> getSmallBallEntities() {
         return balls;
     }
 
-    /** Copies the active balls that participate in collision detection into a caller-provided list. */
+    // Copies the active balls that participate in collision detection into a caller-provided list.
     public synchronized void fillCollisionBalls(List<Ball> target) {
         target.clear();
         if (playerBall != null && !playerBallPocketed) {
@@ -196,14 +188,14 @@ public class Board {
         target.addAll(balls);
     }
 
-    /** Gets all active balls that participate in collision detection. */
+    // Gets all active balls that participate in collision detection.
     public synchronized List<Ball> getCollisionBalls() {
         var allBalls = new ArrayList<Ball>();
         fillCollisionBalls(allBalls);
         return allBalls;
     }
 
-    /** Records a collision so the board can track direct cue-ball contact. */
+    // Records a collision so the board can track direct cue-ball contact.
     public synchronized void recordCollision(Ball first, Ball second) {
         recordDirectCueTouch(first, second, Player.HUMAN);
         recordDirectCueTouch(first, second, Player.BOT);
@@ -229,7 +221,7 @@ public class Board {
         }
     }
 
-    /** Applies pocketing directly by inspecting the current board state. */
+    // Applies pocketing directly by inspecting the current board state.
     public synchronized void applyHoleInteractions() {
         if (holes.isEmpty()) {
             return;
@@ -255,7 +247,7 @@ public class Board {
         }
     }
 
-    /** Applies pocketing using a deterministic summary computed elsewhere. */
+    // Applies pocketing using a deterministic summary computed elsewhere.
     public synchronized void applyHoleInteractions(HoleInteractions interactions) {
         if (holes.isEmpty()) {
             return;

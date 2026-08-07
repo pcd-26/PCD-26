@@ -2,12 +2,7 @@ package pcd.poool.runtime;
 
 import java.util.LinkedList;
 
-/**
- * Monitor used by producer threads to submit commands to a single controller
- * loop.
- *
- * @param <C> command type
- */
+// Monitor used by producer threads to submit commands to a controller loop.
 public class CommandQueueMonitorSupport<C extends GameCommand> {
 
     private final LinkedList<C> commands = new LinkedList<>();
@@ -16,12 +11,7 @@ public class CommandQueueMonitorSupport<C extends GameCommand> {
     public CommandQueueMonitorSupport() {
     }
 
-    /**
-     * Enqueues a command unless the monitor has been closed.
-     *
-     * @param command command to execute on the controller thread
-     * @return {@code true} if the command was accepted
-     */
+    // Enqueues a command unless the monitor has been closed.
     public synchronized boolean put(C command) {
         if (closed) {
             return false;
@@ -31,11 +21,7 @@ public class CommandQueueMonitorSupport<C extends GameCommand> {
         return true;
     }
 
-    /**
-     * Retrieves one pending command without blocking.
-     *
-     * @return next command, or {@code null} when the queue is empty
-     */
+    // Retrieves one pending command without blocking.
     public synchronized C poll() {
         if (commands.isEmpty()) {
             return null;
@@ -43,10 +29,7 @@ public class CommandQueueMonitorSupport<C extends GameCommand> {
         return commands.removeFirst();
     }
 
-    /**
-     * Closes the monitor and rejects all commands that were accepted but not
-     * yet executed by the controller.
-     */
+    // Closes the monitor and rejects pending commands.
     public synchronized void close() {
         closed = true;
         while (!commands.isEmpty()) {

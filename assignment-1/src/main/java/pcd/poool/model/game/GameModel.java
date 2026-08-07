@@ -5,7 +5,7 @@ import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsStepper;
 
-/** Shared gameplay model. */
+// Shared gameplay model.
 public class GameModel {
 
     private static final double MIN_SHOT_SPEED = 0.05;
@@ -16,7 +16,7 @@ public class GameModel {
     private final long startTimeMillis = System.currentTimeMillis();
     private final StartupCountdown countdown;
 
-    /** Checks whether the startup countdown is still blocking shots. */
+    // Checks whether the startup countdown is still blocking shots.
     public synchronized boolean isCountdownActive() {
         return countdown.enabled()
                 && (System.currentTimeMillis() - startTimeMillis < countdown.durationMillis());
@@ -32,32 +32,17 @@ public class GameModel {
     private long stepCount;
     private long accumulatedStepNanos;
 
-    /**
-     * Creates a new game using the default sequential physics engine.
-     *
-     * @param conf initial board configuration
-     */
+    // Creates a new game using the default sequential physics engine.
     public GameModel(BoardConf conf) {
         this(conf, null);
     }
 
-    /**
-     * Creates a new game using the given physics stepper and the default countdown policy.
-     *
-     * @param conf initial board configuration
-     * @param physicsStepper physics strategy, or {@code null} for the default
-     */
+    // Creates a new game using the given physics stepper and the default countdown policy.
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper) {
         this(conf, physicsStepper, StartupCountdown.enabledDefault());
     }
 
-    /**
-     * Creates a new game using the given physics stepper and countdown policy.
-     *
-     * @param conf initial board configuration
-     * @param physicsStepper physics strategy, or {@code null} for the default
-     * @param startupCountdown startup countdown configuration
-     */
+    // Creates a new game using the given physics stepper and countdown policy.
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper, StartupCountdown startupCountdown) {
         board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
@@ -68,30 +53,17 @@ public class GameModel {
         status = GameStatus.RUNNING_STILL;
     }
 
-    /**
-     * Attempts to shoot the human cue ball.
-     *
-     * @param velocity requested shot velocity
-     * @return true when the shot is accepted
-     */
+    // Attempts to shoot the human cue ball.
     public synchronized boolean shootHuman(V2d velocity) {
         return shoot(Player.HUMAN, velocity);
     }
 
-    /**
-     * Attempts to shoot the bot cue ball using the deterministic bot policy.
-     *
-     * @return true when the bot shot is accepted
-     */
+    // Attempts to shoot the bot cue ball using the deterministic bot policy.
     public synchronized boolean shootBot() {
         return shoot(Player.BOT, computeBotShot());
     }
 
-    /**
-     * Computes the bot shot without mutating the game.
-     *
-     * @return preview velocity for the bot, or zero when it cannot shoot
-     */
+    // Computes the bot shot without mutating the game.
     public synchronized V2d previewBotShot() {
         if (!canBotShoot()) {
             return new V2d(0, 0);
@@ -99,31 +71,17 @@ public class GameModel {
         return computeBotShot();
     }
 
-    /**
-     * Checks whether the human cue ball may be shot now.
-     *
-     * @return true when the human can shoot
-     */
+    // Checks whether the human cue ball may be shot now.
     public synchronized boolean canHumanShoot() {
         return canShoot(Player.HUMAN);
     }
 
-    /**
-     * Checks whether the bot cue ball may be shot now.
-     *
-     * @return true when the bot can shoot
-     */
+    // Checks whether the bot cue ball may be shot now.
     public synchronized boolean canBotShoot() {
         return canShoot(Player.BOT);
     }
 
-    /**
-     * Attempts to shoot the selected player's cue ball.
-     *
-     * @param player cue-ball owner
-     * @param velocity requested shot velocity
-     * @return true when the shot is accepted
-     */
+    // Attempts to shoot the selected player's cue ball.
     public synchronized boolean shoot(Player player, V2d velocity) {
         if (!canShoot(player) || velocity.abs() < MIN_SHOT_SPEED) {
             return false;
@@ -133,7 +91,7 @@ public class GameModel {
         return true;
     }
 
-    /** Advances the logical game state and the underlying board. */
+    // Advances the logical game state and the underlying board.
     public synchronized void step(long dtMillis) {
         if (dtMillis < 0) {
             throw new IllegalArgumentException("dtMillis must be >= 0");
@@ -166,20 +124,12 @@ public class GameModel {
         refreshStatusFromBoard();
     }
 
-    /**
-     * Exposes the owned mutable board for rendering and physics tests.
-     *
-     * @return owned board
-     */
+    // Exposes the owned mutable board for rendering and physics tests.
     public synchronized Board board() {
         return board;
     }
 
-    /**
-     * Creates an immutable snapshot of the current game state.
-     *
-     * @return snapshot used by the UI and the runners
-     */
+    // Creates an immutable snapshot of the current game state.
     public synchronized GameSnapshot snapshot() {
         return new GameSnapshot(
                 humanScore,
@@ -238,22 +188,22 @@ public class GameModel {
         return accumulatedStepNanos / 1_000_000.0 / stepCount;
     }
 
-    /** Startup countdown policy for a game instance. */
+    // Startup countdown policy for a game instance.
     public record StartupCountdown(boolean enabled, long durationMillis) {
 
-        /** Validates the countdown configuration. */
+        // Validates the countdown configuration.
         public StartupCountdown {
             if (durationMillis < 0) {
                 throw new IllegalArgumentException("durationMillis must be >= 0");
             }
         }
 
-        /** Creates the default enabled countdown. */
+        // Creates the default enabled countdown.
         public static StartupCountdown enabledDefault() {
             return new StartupCountdown(true, DEFAULT_COUNTDOWN_MILLIS);
         }
 
-        /** Creates a disabled countdown. */
+        // Creates a disabled countdown.
         public static StartupCountdown disabled() {
             return new StartupCountdown(false, 0);
         }

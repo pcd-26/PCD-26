@@ -12,27 +12,7 @@ import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialGridSupport;
 
-/**
- * Platform-threaded physics engine focused on reducing the global
- * coordination cost of the collision phase.
- *
- * <p>The engine keeps the movement phase chunk-based but uses a
- * spatial-ownership collision pipeline:
- *
- * <ol>
- *   <li>workers build local spatial buckets for the balls they integrated;</li>
- *   <li>the controller merges buckets into one deterministic grid;</li>
- *   <li>grid cells are sorted and partitioned across workers;</li>
- *   <li>each worker resolves only the pairs canonically owned by its cells,
- *       avoiding a global candidate-pair materialization step;</li>
- *   <li>workers emit sparse collision deltas that are merged only on the
- *       touched ball indexes.</li>
- * </ol>
- *
- * <p>The board still has a single writer per tick: workers only process
- * private chunks or private accumulators, while the controller thread keeps
- * the serialized merge and apply phases.
- */
+/** Platform-threaded physics engine focused on lowering collision coordination cost. */
 public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final int MIN_WORKER_COUNT = 1;
@@ -44,28 +24,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private final ThreadLocal<ArrayList<Ball>> activeBallsBuffer = ThreadLocal.withInitial(ArrayList::new);
     private boolean closed;
 
-    /**
-     * Creates a threaded engine using a CPU-oriented default worker count.
-     */
+    /** Creates a threaded engine using a CPU-oriented default worker count. */
     public ThreadedPhysicsEngine() {
         this(defaultWorkerCount());
     }
 
-    /**
-     * Creates a threaded engine.
-     *
-     * @param workerCount number of long-lived worker platform threads
-     */
+    /** Creates a threaded engine. */
     public ThreadedPhysicsEngine(int workerCount) {
         this(workerCount, PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
-    /**
-     * Creates a threaded engine.
-     *
-     * @param workerCount number of long-lived worker platform threads
-     * @param maxStepMillis maximum duration of one internal physics sub-step
-     */
+    /** Creates a threaded engine. */
     public ThreadedPhysicsEngine(int workerCount, long maxStepMillis) {
         if (workerCount < MIN_WORKER_COUNT) {
             throw new IllegalArgumentException("workerCount must be >= 1");
@@ -85,30 +54,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         stepInternal(board, elapsedMillis, false);
     }
 
-    /**
-     * Advances the board and returns a profiling snapshot for the executed
-     * step.
-     *
-     * @param board board to mutate
-     * @param elapsedMillis elapsed time in milliseconds
-     * @return per-phase timings and workload counters for the executed step
-     */
+    /** Advances the board and returns a profiling snapshot for the executed step. */
     public StepProfile profileStep(Board board, long elapsedMillis) {
         return stepInternal(board, elapsedMillis, true);
     }
 
-    /**
-     * Gets the number of worker threads owned by this engine.
-     *
-     * @return number of worker threads owned by this engine
-     */
+    /** Gets the number of worker threads owned by this engine. */
     public int workerCount() {
         return workers.length;
     }
 
-    /**
-     * Closes the owned workers and rejects future physics steps.
-     */
+    /** Closes the owned workers and rejects future physics steps. */
     @Override
     public void close() {
         closed = true;
@@ -123,8 +79,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
         ensureOpen();
         StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(workers.length) : null;
-        // One writer at a time: the board lock spans the full tick, while
-        // workers only operate on private ranges inside that tick.
+        // One writer at a time: workers only operate on private ranges.
         synchronized (board) {
             long remaining = elapsedMillis;
             while (remaining > 0) {
@@ -185,8 +140,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
         @SuppressWarnings("unchecked")
         Map<SpatialGridSupport.GridCell, IntBag>[] localGrids = new Map[workers.length];
-        // Each worker builds a private grid so no shared bucket map is written
-        // concurrently during the broad phase.
+        // Each worker builds a private grid, then the coordinator merges it.
         runRanges(balls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
@@ -202,8 +156,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             }
         }, profile);
         long aggregationStart = profile == null ? 0 : System.nanoTime();
-        // The coordinator merges first, then sorts cells to keep pair ownership
-        // and collision recording deterministic.
+        // Merge first, sort later, keep collision ownership deterministic.
         var mergedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
         for (var localGrid : localGrids) {
             if (localGrid == null) {
@@ -229,8 +182,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         long resolutionStart = profile == null ? 0 : System.nanoTime();
         var localDeltas = new SparseCollisionDeltaAccumulator[Math.min(workers.length, orderedCells.size())];
         var localPairs = new LongBag[Math.min(workers.length, orderedCells.size())];
-        // Workers compute collision contributions from the same tick-start
-        // state, but the authoritative board is still untouched here.
+        // Workers compute deltas, but the board is still untouched here.
         runRanges(orderedCells.size(), (from, to, workerIndex) -> {
             var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
             var pairAccumulator = new LongBag();
@@ -276,19 +228,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /**
-     * Resolves collisions for all balls inside a specific cell and against its neighboring cells.
-     *
-     * <p>To prevent duplicate checks and double-applying impulses, this cell only processes pairs
-     * where the current cell is considered the "canonical owner" of the pair. This is achieved by
-     * only checking the cell itself and 4 of its 8 neighbors (East, South-East, South, South-West).
-     *
-     * @param bucket the bucket representing the grid cell and its contained ball indexes
-     * @param mergedGrid the complete grid map containing all occupied cells and their balls
-     * @param balls the master list of balls on the board
-     * @param deltas the sparse accumulator to record calculated position and velocity changes
-     * @param contactPairs the long bag to record unique contact pairs detected
-     */
+    /** Resolves collisions for one cell and its owned neighbors. */
     private void resolveOwnedCell(
             CellBucket bucket,
             Map<SpatialGridSupport.GridCell, IntBag> mergedGrid,
@@ -307,14 +247,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 balls, deltas, contactPairs);
     }
 
-    /**
-     * Collects and resolves candidate collisions for pairs of balls located in the same grid cell.
-     *
-     * @param indexes the list of ball indexes in the cell
-     * @param balls the master list of balls on the board
-     * @param deltas the sparse accumulator to record calculated position and velocity changes
-     * @param contactPairs the long bag to record unique contact pairs detected
-     */
+    /** Collects same-cell collision candidates. */
     private void collectPairsWithinBag(
             IntBag indexes,
             List<Ball> balls,
@@ -328,15 +261,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /**
-     * Collects and resolves candidate collisions between balls in a cell and balls in a neighboring cell.
-     *
-     * @param firstBag the list of ball indexes in the current cell
-     * @param secondBag the list of ball indexes in the neighboring cell
-     * @param balls the master list of balls on the board
-     * @param deltas the sparse accumulator to record calculated position and velocity changes
-     * @param contactPairs the long bag to record unique contact pairs detected
-     */
+    /** Collects cross-cell collision candidates. */
     private void collectCrossPairs(
             IntBag firstBag,
             IntBag secondBag,
@@ -354,15 +279,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /**
-     * Tests two balls for overlap and accumulates collision changes if they collide.
-     *
-     * @param balls the master list of balls on the board
-     * @param first index of the first ball
-     * @param second index of the second ball
-     * @param deltas the sparse accumulator to record changes
-     * @param contactPairs the long bag to record unique contact pairs detected
-     */
+    /** Tests two balls and records a collision contribution if needed. */
     private void addContributionIfColliding(
             List<Ball> balls,
             int first,
@@ -377,27 +294,17 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         contactPairs.add(encodePair(first, second));
     }
 
-    /**
-     * Applies the accumulated position and velocity deltas to the master list of balls.
-     *
-     * <p>If the number of affected/touched balls is low, it executes sequentially to avoid worker thread
-     * scheduling overhead. If the touched count is high, work is partitioned across parallel workers.
-     *
-     * @param balls the master list of balls to mutate
-     * @param merged the merged sparse collision accumulator containing all deltas
-     * @param profile profiling metrics accumulator
-     */
+    /** Applies accumulated position and velocity deltas to the balls. */
     private void applyMergedDeltas(List<Ball> balls, SparseCollisionDeltaAccumulator merged, StepProfileAccumulator profile) {
         if (merged.touchedCount() == 0) {
             return;
         }
         if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
-            // Small touch sets are cheaper to commit serially than to split
-            // again into another worker barrier.
+            // Small touch sets are cheaper to commit serially.
             applyMergedDeltasSequentially(balls, merged);
             return;
         }
-        // Each touched ball index is assigned to exactly one worker here.
+        // Each touched ball index goes to exactly one worker.
         runRanges(merged.touchedCount(), (from, to, workerIndex) -> {
             for (int i = from; i < to; i++) {
                 int ballIndex = merged.touchedIndex(i);
@@ -407,12 +314,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }, profile);
     }
 
-    /**
-     * Sequentially applies the accumulated position and velocity deltas to the master list of balls.
-     *
-     * @param balls the master list of balls to mutate
-     * @param merged the sparse collision accumulator
-     */
+    /** Sequentially applies accumulated position and velocity deltas. */
     private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
         for (int i = 0; i < merged.touchedCount(); i++) {
             int ballIndex = merged.touchedIndex(i);
@@ -421,17 +323,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    /**
-     * Calculates the position and velocity deltas resulting from an elastic collision between two balls.
-     *
-     * <p>Applies separation vector (position correction to remove overlap) and elastic collision impulse
-     * along the collision normal using Newtonian mechanics.
-     *
-     * @param balls the master list of balls
-     * @param firstIndex index of the first ball
-     * @param secondIndex index of the second ball
-     * @return the collision contribution details, or null if no collision occurs
-     */
+    /** Calculates the position and velocity deltas for one elastic collision. */
     private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
         var a = balls.get(firstIndex);
         var b = balls.get(secondIndex);
@@ -485,37 +377,21 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 secondVelocityDeltaY);
     }
 
-    /**
-     * Extracts a list of all active (non-pocketed) balls from the board.
-     *
-     * @param board the board containing all entities
-     * @return the list of active balls
-     */
+    /** Extracts the active balls from the board. */
     private List<Ball> activeBalls(Board board) {
         var activeBalls = activeBallsBuffer.get();
         board.fillCollisionBalls(activeBalls);
         return activeBalls;
     }
 
-    /**
-     * Maps a ball's coordinate to its grid center cell.
-     *
-     * @param ball the ball entity
-     * @param cellSize the size of each grid cell
-     * @return the center GridCell containing the ball
-     */
+    /** Maps a ball to its grid cell. */
     private CenterCell computeCenterCell(Ball ball, double cellSize) {
         return new CenterCell(new SpatialGridSupport.GridCell(
                 SpatialGridSupport.toCellCoordinate(ball.getPos().x(), cellSize),
                 SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize)));
     }
 
-    /**
-     * Computes grid cell size based on the largest ball radius to optimize neighbor lookup.
-     *
-     * @param balls list of all balls to consider
-     * @return the computed cell size
-     */
+    /** Computes grid cell size from the largest ball. */
     private double computeOwnershipCellSize(List<Ball> balls) {
         double maxRadius = Double.NEGATIVE_INFINITY;
         for (var ball : balls) {
@@ -527,16 +403,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
-    /**
-     * Partitions a dataset of item count across worker threads and waits for completion.
-     *
-     * <p>Divides the items into equal ranges, assigns each range task to a {@link PhysicsWorker},
-     * and blocks on the barrier until all workers complete execution or throw an exception.
-     *
-     * @param itemCount the total number of items to process
-     * @param rangeTask the task execution logic for a range
-     * @param profile profiling metrics accumulator
-     */
+    /** Splits the work across workers and waits for them. */
     private void runRanges(int itemCount, RangeTask rangeTask, StepProfileAccumulator profile) {
         if (itemCount == 0) {
             return;
@@ -573,8 +440,7 @@ public class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             profile.lockAcquisitions += workerCount + 1L;
         }
         long waitStart = profile == null ? 0 : System.nanoTime();
-        // This is the phase barrier: the coordinator cannot merge or apply
-        // anything until every assigned worker has completed or failed.
+        // Phase barrier: merge only after every worker finishes.
         completion.await();
         if (profile != null) {
             profile.joinOrFutureWaitNanos += System.nanoTime() - waitStart;

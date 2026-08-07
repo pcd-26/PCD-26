@@ -6,29 +6,18 @@ import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialCollisionDetector;
 
-/**
- * Deterministic physics stepper for board state updates.
- *
- * <p>The engine is deliberately passive: runners decide whether steps are
- * executed sequentially, by a dedicated platform thread, or by tasks.
- */
+/** Deterministic physics stepper for board state updates. */
 public class SequentialPhysicsEngine implements PhysicsStepper {
 
     private final SpatialCollisionDetector collisionDetector;
     private final long maxStepMillis;
 
-    /**
-     * Creates a physics engine using the default maximum sub-step duration.
-     */
+    /** Creates a physics engine using the default maximum sub-step duration. */
     public SequentialPhysicsEngine() {
         this(PhysicsDefaults.FIXED_STEP_MILLIS);
     }
 
-    /**
-     * Creates a physics engine.
-     *
-     * @param maxStepMillis maximum duration of one internal physics sub-step
-     */
+    /** Creates a physics engine. */
     public SequentialPhysicsEngine(long maxStepMillis) {
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
@@ -37,15 +26,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
         this.maxStepMillis = maxStepMillis;
     }
 
-    /**
-     * Advances the board by the given elapsed time.
-     *
-     * <p>The elapsed time is split into bounded sub-steps to reduce numerical
-     * instability when a caller provides a large delta.
-     *
-     * @param board board to mutate
-     * @param elapsedMillis elapsed time in milliseconds
-     */
+    /** Advances the board by splitting large deltas into smaller sub-steps. */
     @Override
     public void step(Board board, long elapsedMillis) {
         if (elapsedMillis < 0) {
@@ -61,8 +42,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
 
     private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
-        // Movement first, then pocketing, then pairwise contacts: the order
-        // keeps the sequential baseline deterministic and reproducible.
+        // Move first, then pocket, then resolve contacts.
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }

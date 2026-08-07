@@ -6,9 +6,7 @@ import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 import pcd.poool.model.common.math.V2d;
 
-/**
- * Swing facade for the board view.
- */
+// Swing facade for the board view.
 public class View {
 
 	private ViewFrame frame;

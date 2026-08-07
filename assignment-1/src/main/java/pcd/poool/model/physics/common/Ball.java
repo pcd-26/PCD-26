@@ -3,7 +3,7 @@ package pcd.poool.model.physics.common;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
 
-/** Ball entity with position, velocity, and collision update logic. */
+// Physical ball with position, velocity, mass, and radius.
 public class Ball {
 
     private static final double REFERENCE_RADIUS = 0.05;
@@ -16,14 +16,7 @@ public class Ball {
     private final double radius;
     private final double mass;
 
-    /**
-     * Creates a mutable physical ball.
-     *
-     * @param pos initial center position
-     * @param radius ball radius
-     * @param mass ball mass used by collision impulses
-     * @param vel initial velocity
-     */
+    // Creates a mutable physical ball.
     public Ball(P2d pos, double radius, double mass, V2d vel) {
         this.pos = pos;
         this.radius = radius;
@@ -31,24 +24,12 @@ public class Ball {
         this.vel = vel;
     }
 
-    /**
-     * Creates a ball using the same material density as the reference cue ball.
-     *
-     * @param pos initial center position
-     * @param radius ball radius
-     * @param vel initial velocity
-     * @return ball whose mass is derived from its radius
-     */
+    // Creates a ball using the same material density as the reference cue ball.
     public static Ball ofUniformMaterial(P2d pos, double radius, V2d vel) {
         return new Ball(pos, radius, massForRadius(radius), vel);
     }
 
-    /**
-     * Computes the mass implied by the uniform-material 2D model.
-     *
-     * @param radius ball radius
-     * @return mass proportional to the disk area with shared areal density
-     */
+    // Mass is proportional to disk area with shared areal density.
     public static double massForRadius(double radius) {
         if (radius <= 0) {
             throw new IllegalArgumentException("radius must be > 0");
@@ -56,22 +37,12 @@ public class Ball {
         return UNIFORM_AREAL_DENSITY * diskArea(radius);
     }
 
-    /**
-     * Advances this ball using the boundary owned by a board.
-     *
-     * @param dt elapsed time in milliseconds
-     * @param ctx board that provides movement bounds
-     */
+    // Uses the board boundary to advance the ball.
     public void updateState(long dt, Board ctx) {
         updateState(dt, ctx.getBounds());
     }
 
-    /**
-     * Advances this ball by applying friction, movement, and wall bounces.
-     *
-     * @param dt elapsed time in milliseconds
-     * @param bounds rectangular movement boundary
-     */
+    // Applies friction, movement, and wall bounces.
     public void updateState(long dt, Boundary bounds) {
         double dtScaled = dt * PhysicsDefaults.SECONDS_PER_MILLISECOND;
         applyFriction(dtScaled);
@@ -79,38 +50,22 @@ public class Ball {
         applyBoundaryConstraints(bounds);
     }
 
-    /**
-     * Assigns a new velocity to the ball.
-     *
-     * @param vel new velocity
-     */
+    // Sets the current velocity.
     public void kick(V2d vel) {
         this.vel = vel;
     }
 
-    /**
-     * Moves the ball by a translation vector.
-     *
-     * @param delta displacement to apply
-     */
+    // Translates the ball position.
     public void translate(V2d delta) {
         pos = new P2d(pos.x() + delta.x(), pos.y() + delta.y());
     }
 
-    /**
-     * Adds a velocity delta to the current velocity.
-     *
-     * @param delta velocity variation
-     */
+    // Adds a velocity delta.
     public void addVelocity(V2d delta) {
         vel = vel.sum(delta);
     }
 
-    /**
-     * Enforces rectangular boundary constraints on the ball.
-     *
-     * @param bounds rectangular movement boundary
-     */
+    // Reflects the ball on the rectangular boundary.
     private void applyBoundaryConstraints(Boundary bounds) {
         if (pos.x() + radius > bounds.x1()) {
             pos = new P2d(bounds.x1() - radius, pos.y());
@@ -127,7 +82,7 @@ public class Ball {
         }
     }
 
-    /** Resolves a ball-ball collision by separating the balls and applying an elastic bounce. */
+    // Separates overlapping balls and applies the elastic impulse.
     public static void resolveCollision(Ball a, Ball b) {
         double dx = b.pos.x() - a.pos.x();
         double dy = b.pos.y() - a.pos.y();
@@ -195,32 +150,28 @@ public class Ball {
         b.vel = new V2d(b.vel.x() + (impulse / b.mass) * nx, b.vel.y() + (impulse / b.mass) * ny);
     }
 
-    /** Gets the current center position. */
     public P2d getPos() {
         return pos;
     }
 
-    /** Gets the mass used by impulse computations. */
     public double getMass() {
         return mass;
     }
 
-    /** Gets the current velocity. */
     public V2d getVel() {
         return vel;
     }
 
-    /** Gets the ball radius. */
     public double getRadius() {
         return radius;
     }
 
-    /** Checks whether this ball is still moving. */
+    // True when the speed is above the rest threshold.
     public boolean isMoving() {
         return vel.abs() > PhysicsDefaults.REST_SPEED_THRESHOLD;
     }
 
-    /** Calculates the area of a disk: pi * r^2. */
+    // Disk area used by the uniform-density mass model.
     private static double diskArea(double radius) {
         return Math.PI * radius * radius;
     }
