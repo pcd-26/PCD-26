@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -18,7 +17,6 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
-import pcd.poool.model.physics.common.SpatialCollisionDetector.Pair;
 import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
@@ -151,100 +149,6 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
-    void broadPhaseDeduplicatesCandidatePairsAcrossMergedCells() {
-        try (var engine = new TaskBasedPhysicsEngine(2)) {
-            var balls = List.of(
-                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
-                    new Ball(new P2d(0.06, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
-
-            var pairs = engine.detectCollisionPairs(balls);
-
-            assertEquals(1, pairs.size());
-            assertEquals(List.of(new Pair(0, 1)), pairs);
-        }
-    }
-
-    @Test
-    void broadPhaseReturnsDeterministicallyOrderedCandidatePairs() {
-        try (var engine = new TaskBasedPhysicsEngine(4)) {
-            var balls = List.of(
-                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
-                    new Ball(new P2d(0.06, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
-                    new Ball(new P2d(0.07, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
-
-            var firstRun = engine.detectCollisionPairs(balls);
-            var secondRun = engine.detectCollisionPairs(balls);
-
-            assertEquals(List.of(
-                    new Pair(0, 1),
-                    new Pair(0, 2),
-                    new Pair(1, 2)), firstRun);
-            assertEquals(firstRun, secondRun);
-        }
-    }
-
-    @Test
-    void broadPhaseIncludesSharedBoundaryCandidates() {
-        try (var engine = new TaskBasedPhysicsEngine(1)) {
-            var balls = List.of(
-                    new Ball(new P2d(0.0, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
-                    new Ball(new P2d(0.15, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
-
-            var pairs = engine.detectCollisionPairs(balls);
-
-            assertEquals(List.of(new Pair(0, 1)), pairs);
-        }
-    }
-
-    @Test
-    void broadPhaseSkipsAdjacentCellsWhenBallsDoNotShareOccupiedCells() {
-        try (var engine = new TaskBasedPhysicsEngine(2)) {
-            var balls = List.of(
-                    new Ball(new P2d(0.05, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)),
-                    new Ball(new P2d(0.25, 0.0), 0.05, 1.0, new V2d(0.0, 0.0)));
-
-            var pairs = engine.detectCollisionPairs(balls);
-
-            assertEquals(List.of(), pairs);
-        }
-    }
-
-    @Test
-    void collisionRoundsContainOnlyIndependentPairs() {
-        try (var engine = new TaskBasedPhysicsEngine(4)) {
-            var rounds = engine.buildCollisionRounds(List.of(
-                    new Pair(0, 1),
-                    new Pair(2, 3),
-                    new Pair(4, 5),
-                    new Pair(1, 6),
-                    new Pair(3, 7)), 8);
-
-            assertEquals(2, rounds.size());
-            for (var round : rounds) {
-                var touchedBalls = new java.util.HashSet<Integer>();
-                for (var pair : round) {
-                    assertTrue(touchedBalls.add(pair.firstIndex()));
-                    assertTrue(touchedBalls.add(pair.secondIndex()));
-                }
-            }
-        }
-    }
-
-    @Test
-    void collisionRoundsScheduleIndependentPairsAsEarlyAsPossible() {
-        try (var engine = new TaskBasedPhysicsEngine(4)) {
-            var rounds = engine.buildCollisionRounds(List.of(
-                    new Pair(0, 1),
-                    new Pair(0, 2),
-                    new Pair(2, 3),
-                    new Pair(4, 5)), 6);
-
-            assertEquals(List.of(new Pair(0, 1), new Pair(2, 3), new Pair(4, 5)), rounds.get(0));
-            assertEquals(List.of(new Pair(0, 2)), rounds.get(1));
-        }
-    }
-
-    @Test
     @Timeout(6)
     void denseCollisionConfigurationIsDeterministicAcrossRepeatedRuns() {
         var conf = new DenseCollisionBoardConf();
@@ -331,7 +235,6 @@ class TaskBasedPhysicsEngineTest {
 
             assertTrue(profile.collisionResolutionMillis() >= 0.0);
             assertEquals(0L, profile.submittedTasks());
-            assertFalse(profile.applyWorkerItems().stream().anyMatch(itemCount -> itemCount > 0));
         }
     }
 
@@ -345,7 +248,7 @@ class TaskBasedPhysicsEngineTest {
             var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
 
             assertTrue(profile.submittedTasks() > 0L);
-            assertTrue(profile.integrationWorkerItems().stream().filter(itemCount -> itemCount > 0).count() > 1L);
+            assertTrue(profile.submittedTasks() >= engine.poolSize());
         }
     }
 

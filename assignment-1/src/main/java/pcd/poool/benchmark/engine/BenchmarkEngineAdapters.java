@@ -11,6 +11,7 @@ import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
+import pcd.poool.model.physics.parallel.ParallelPhysicsEngine;
 
 /**
  * Factory methods for benchmark engine adapters.
@@ -189,27 +190,7 @@ public final class BenchmarkEngineAdapters {
         }
     }
 
-    private static BenchmarkInstrumentation toInstrumentation(ThreadedPhysicsEngine.StepProfile profile) {
-        if (profile == null) {
-            return BenchmarkInstrumentation.zero();
-        }
-        return new BenchmarkInstrumentation(
-                profile.syncTimeMillis(),
-                profile.aggregationTimeMillis(),
-                profile.taskSubmissionTimeMillis(),
-                profile.joinOrFutureWaitMillis(),
-                profile.lockAcquisitions(),
-                profile.submittedTasks(),
-                profile.stateReadMillis(),
-                profile.partitionMillis(),
-                profile.movementMillis(),
-                profile.holeInteractionMillis(),
-                profile.collisionDetectionMillis(),
-                profile.collisionResolutionMillis(),
-                profile.mergeApplyMillis());
-    }
-
-    private static BenchmarkInstrumentation toInstrumentation(TaskBasedPhysicsEngine.StepProfile profile) {
+    private static BenchmarkInstrumentation toInstrumentation(ParallelPhysicsEngine.StepProfile profile) {
         if (profile == null) {
             return BenchmarkInstrumentation.zero();
         }
