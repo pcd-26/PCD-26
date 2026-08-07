@@ -176,8 +176,8 @@ public class Board {
         return balls;
     }
 
-    // Copies the active balls that participate in collision detection into a caller-provided list.
-    public synchronized void fillCollisionBalls(List<Ball> target) {
+    // Copies the active balls that may collide into a caller-provided list.
+    public synchronized void fillCandidateCollisionBalls(List<Ball> target) {
         target.clear();
         if (playerBall != null && !playerBallPocketed) {
             target.add(playerBall);
@@ -191,7 +191,7 @@ public class Board {
     // Gets all active balls that participate in collision detection.
     public synchronized List<Ball> getCollisionBalls() {
         var allBalls = new ArrayList<Ball>();
-        fillCollisionBalls(allBalls);
+        fillCandidateCollisionBalls(allBalls);
         return allBalls;
     }
 
