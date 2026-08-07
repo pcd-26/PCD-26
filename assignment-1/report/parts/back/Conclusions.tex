@@ -1,7 +1,18 @@
 \clearpage
 \section{Conclusions}
 
-This project implements the three required execution strategies: sequential, platform-thread, and task-based. In both concurrent versions, the \textbf{controller} is the \textbf{single writer} of the game protocol: it executes commands, advances ticks, updates scores and terminal state, and publishes snapshots. Physics workers only execute bounded phases on disjoint ranges or private accumulators, with deterministic merge and apply steps before publication.
+This project implements the three required execution strategies without
+turning them into three separate codebases. The concurrent versions share one
+\texttt{GameLoop}, one command protocol, and one
+\texttt{ParallelPhysicsEngine}. Their only relevant difference is the
+\texttt{RangeScheduler}: persistent platform threads in one case, executor
+tasks in the other.
+
+The controller remains the single writer of the game protocol. Physics workers
+operate only inside bounded phases, on disjoint ranges or private
+accumulators, and the deterministic merge completes before publication. This
+is the central trade-off of the solution: parallelize the expensive local
+work, while keeping the global meaning of a tick simple and explicit.
 
 The benchmark evidence in the repository and the rendered figures show consistent but limited gains. For the
 speedup workloads, both concurrent versions beat the sequential baseline from
@@ -11,4 +22,9 @@ scalability run, both implementations reach their best measured point at
 \textbf{16 workers}, and performance then flattens or slightly regresses at 17,
 so scaling remains \textbf{sublinear}.
 
-The verification evidence is intentionally narrower than the full game. The \textbf{Petri nets} and \textbf{JPF harnesses} model \textbf{reduced synchronization models} for the coordination protocol, but they do not prove the full game, the numerical physics, or general performance. The report therefore establishes a deterministic concurrent design with measured speedups, while also making its limits explicit.
+The verification evidence is intentionally narrower than the full game. The
+Petri nets and JPF harnesses model the synchronization protocol, not numerical
+physics or performance. Together with the JUnit suite and reproducible
+benchmarks, they provide evidence at the right level for each claim: functional
+correctness, absence of errors in the bounded protocol, and measured---rather
+than assumed---parallel speedup.
