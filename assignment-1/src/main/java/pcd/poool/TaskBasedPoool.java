@@ -2,6 +2,7 @@ package pcd.poool;
 
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
+import pcd.poool.runtime.GameRuntimeConfig;
 import pcd.poool.taskbased.TaskBasedGameRunner;
 
 /** Playable Executor Framework version of Poool. */
@@ -23,8 +24,8 @@ public final class TaskBasedPoool {
                 "poool-task-based-shutdown");
     }
 
-    static TaskBasedGameRunner.Config taskBasedConfig(String[] args) {
-        return new TaskBasedGameRunner.Config(
+    static GameRuntimeConfig taskBasedConfig(String[] args) {
+        return new GameRuntimeConfig(
                 PhysicsDefaults.FIXED_STEP_MILLIS,
                 true,
                 BOT_THINK_TIME_MILLIS,

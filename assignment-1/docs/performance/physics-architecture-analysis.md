@@ -71,7 +71,8 @@ the ordering/merge steps that restore determinism.
 | `TaskBasedPhysicsEngine` | Executor-based stepper with a fixed pool and per-phase task submission. |
 | `PhysicsWorker` | Reused worker thread for the platform-thread implementation. |
 | `WorkerCompletionMonitor` | Per-phase barrier used by the controller thread to wait for all assigned workers. |
-| `ThreadedGameRunner` / `TaskBasedGameRunner` | Own the `GameModel` and serialize command execution, stepping, and snapshot publication on one controller thread. |
+| `GameLoop` | Owns `GameModel` and implements the shared command, step, and snapshot tick. |
+| `ThreadedGameRunner` / `TaskBasedGameRunner` | Select whether a platform thread or scheduled executor invokes the shared loop. |
 
 ## Current Sequential Baseline
 

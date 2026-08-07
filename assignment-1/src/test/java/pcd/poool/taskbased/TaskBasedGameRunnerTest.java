@@ -25,12 +25,13 @@ import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 import pcd.poool.runtime.CommandReceiptSupport;
+import pcd.poool.runtime.GameRuntimeConfig;
 
 class TaskBasedGameRunnerTest {
 
     private static final Duration SHORT_TIMEOUT = Duration.ofSeconds(2);
-    private static final TaskBasedGameRunner.Config FAST_WITHOUT_BOT =
-            new TaskBasedGameRunner.Config(5, false, 0, GameModel.StartupCountdown.disabled());
+    private static final GameRuntimeConfig FAST_WITHOUT_BOT =
+            new GameRuntimeConfig(5, false, 0, GameModel.StartupCountdown.disabled());
 
     @Test
     @Timeout(3)
@@ -184,7 +185,7 @@ class TaskBasedGameRunnerTest {
     @Test
     @Timeout(3)
     void botAgentSubmitsShotsFromASeparateTask() throws InterruptedException {
-        var config = new TaskBasedGameRunner.Config(5, true, 0, GameModel.StartupCountdown.disabled());
+        var config = new GameRuntimeConfig(5, true, 0, GameModel.StartupCountdown.disabled());
         try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 
