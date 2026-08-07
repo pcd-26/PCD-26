@@ -24,8 +24,8 @@ public class TaskBasedPoool {
 
     private static final int VIEW_WIDTH = 1200;
     private static final int VIEW_HEIGHT = 800;
-    private static final long FRAME_SLEEP_MILLIS = 4;
-    private static final double BOT_PREVIEW_SCALE = 0.35;
+    private static final long FRAME_SLEEP_MILLIS = 4; // Small pause between frames so the scheduler-driven loop does not busy-spin.
+    private static final double BOT_PREVIEW_SCALE = 0.35; // Shrinks the bot preview arrow so the visual hint stays readable on screen.
     private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
 
     private TaskBasedPoool() {
@@ -52,18 +52,20 @@ public class TaskBasedPoool {
                 viewModel,
                 VIEW_WIDTH,
                 VIEW_HEIGHT,
-                velocity -> runnerRef.get().shootHuman(velocity),
-                () -> restartRequested.set(true),
-                () -> canStartHumanAiming(runnerRef.get()),
-                () -> viewModel.clearShotPreview(Player.HUMAN));
+                velocity -> runnerRef.get().shootHuman(velocity), // Callback for submitting a human shot to the task-based runner.
+                () -> restartRequested.set(true), // Callback that marks the task-based game for restart.
+                () -> canStartHumanAiming(runnerRef.get()), // Callback that checks whether the human can start aiming.
+                () -> viewModel.clearShotPreview(Player.HUMAN)); // Callback that clears the human shot preview.
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-task-based-shutdown"));
 
         long startTime = System.currentTimeMillis();
         int renderedFrames = 0;
 
+        // UI loop: reads immutable snapshots, updates the ViewModel, and renders.
         while (true) {
             long now = System.currentTimeMillis();
+            // Recreate the task-based runner if the user requested a restart.
             if (restartRequested.getAndSet(false)) {
                 var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile, config));
                 oldRunner.close();
@@ -72,6 +74,7 @@ public class TaskBasedPoool {
                 renderedFrames = 0;
             }
 
+            // Read the latest immutable runtime state and project it into the ViewModel.
             renderedFrames++;
             int framePerSec = framePerSec(renderedFrames, startTime, now);
             var taskSnapshot = runnerRef.get().snapshot();
@@ -83,6 +86,7 @@ public class TaskBasedPoool {
                     taskSnapshot.game(),
                     framePerSec);
             updateBotShotPreview(taskSnapshot, viewModel);
+            // Draw the current frame and keep the UI loop responsive.
             view.render();
             sleepFrame();
         }
