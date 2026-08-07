@@ -2,16 +2,20 @@
 \section{Design}
 
 \noindent
-The three implementations share the same game logic and differ only in their runtime organization.
+The three implementations share the same game logic. The concurrent versions
+also share one \texttt{GameLoop} and one \texttt{ParallelPhysicsEngine}; they
+differ only in the driver and \texttt{RangeScheduler} execution policy.
 
 \subsection{Project architecture}
 
-The project architecture is built around three stable elements:
+The project architecture is built around five stable elements:
 
 \begin{itemize}
-    \item the \textbf{shared game model};
-    \item the \textbf{controller/runtime};
-    \item the \textbf{view}.
+    \item the shared \textbf{application lifecycle};
+    \item the single-writer \textbf{game loop};
+    \item the \textbf{game model and board};
+    \item the shared \textbf{parallel physics kernel};
+    \item the immutable-snapshot \textbf{view boundary}.
 \end{itemize}
 
 The controller/runtime publishes \textbf{immutable snapshots} after each tick, and the view consumes only those snapshots. This keeps rendering separate from simulation updates and prevents the GUI from observing half-finished state changes.

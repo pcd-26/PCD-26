@@ -1,41 +1,27 @@
-# Poool Final-Delivery Scope
+# Poool final-delivery scope
 
-`pcd.poool` contains only code intended for final delivery.
+## Playable product
 
-## Included
-- `pcd.poool.model.common.math`: `P2d`, `V2d`
-- `pcd.poool.model.physics`: `Boundary`, `Hole`, `Ball`, `Board`, `BoardConf`,
-  `PhysicsDefaults`, `PhysicsStepper`, `PhysicsEngine`,
-  `ThreadedPhysicsEngine`, `SpatialCollisionDetector`, `PhysicsWorker`,
-  `WorkerCompletionMonitor`
-- `pcd.poool.model.physics.config`: `MinimalBoardConf`,
-  `StandardGameBoardConf`, `LargeBoardConf`, `ThousandBallsBoardConf`,
-  `MassiveBoardConf`
-- `pcd.poool.model.game`: `GameModel`, `GameSnapshot`, `Player`,
-  `GameStatus`, `GameOverReason`
-- `pcd.poool.view`: `RenderSynch`
-- `pcd.poool.view.board`: `ViewModel`, `View`, `ViewFrame`
-- `pcd.poool.threaded`: `ThreadedGameRunner`
-- `pcd.poool.runtime`: shared bot, command, receipt, queue, and snapshot supports
-  used by the threaded and task-based runners
-- `pcd.poool`: `SequentialPoool`, `ThreadedPoool`, `TaskBasedPoool`,
-  `PooolApplication`
-- `pcd.poool.runtime`: `GameRuntime` plus shared command, bot, and snapshot
-  support
+- launchers and shared GUI lifecycle under `pcd.poool`;
+- `runtime`: common game loop, mailbox, bot, configuration, and snapshot;
+- `model.game`: scoring and match lifecycle;
+- `model.physics.common`: board and physical entities;
+- `model.physics.sequential`: reference engine;
+- `model.physics.parallel`: shared parallel algorithm;
+- `model.physics.threaded`: explicit platform-thread scheduler;
+- `model.physics.taskbased`: Executor Framework scheduler;
+- `view`: Swing rendering and input translation.
 
-## Excluded from `pcd.poool`
-- sketch02 counter demo artifacts
-- sketch-derived generic controller and bounded-buffer examples
-- sketch bootstrap/demo launchers
-- `pcd.poool.benchmark`: benchmark configuration, runners, post-processing,
-  and CSV/chart export flow
+## Supporting material outside the product
 
-They remain under `assignment-1/reference/sketch01` and `assignment-1/reference/sketch02`, outside the Maven source tree.
-The benchmark tooling and generated outputs remain available in the repository
-for the report and local analysis. They compile into `target/classes` for the
-existing scripts, but Maven excludes them from the packaged game JAR and final
-delivery scope.
+- `assignment-1/reference`: original course sketches;
+- `pcd.poool.benchmark`: compiled development tooling for the report;
+- `assignment-1/verification`: JPF harnesses and configuration;
+- `assignment-1/report`: LaTeX report sources;
+- `assignment-1/benchmarks`: generated CSV and charts.
 
-For a component-level explanation of responsibilities and runtime relations,
-see [`docs/runtime-architecture.md`](runtime-architecture.md).
+Maven compiles benchmark classes so existing scripts keep working, but excludes
+`pcd/poool/benchmark/**` from the packaged game JAR. Generic sketch controller
+and bounded-buffer examples remain only under `reference/`.
 
+See [`runtime-architecture.md`](runtime-architecture.md) for the product flow.
