@@ -8,7 +8,7 @@ workload subset and uses the standard warmup/measured window.
 
 The current `speedup-results.csv` shows the best overall speedup for:
 
-- implementation: `executor`
+- implementation: `threads`
 - balls: `2500`
 - workers: `16`
 - steps: `600`
@@ -16,9 +16,9 @@ The current `speedup-results.csv` shows the best overall speedup for:
 
 This row has the highest speedup in the available stabilized snapshot:
 
-- sequential median: `442.005000 ms`
-- executor median: `242.861100 ms`
-- speedup: `1.819991`
+- sequential median: `433.920800 ms`
+- threads median: `230.347500 ms`
+- speedup: `1.883766`
 
 That makes it the best single number to cite when we want to show the
 shared parallel kernel at its strongest point on the current stabilized run.
