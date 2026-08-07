@@ -39,9 +39,12 @@ That means:
   Playable platform-thread launcher.
 - `TaskBasedPoool`
   Playable task-based launcher.
+- `PooolApplication`
+  Shared GUI, rendering, restart, and shutdown lifecycle for both concurrent
+  launchers.
 
-These classes are application entry points. They assemble the runtime, create
-the Swing view, and keep refreshing the `ViewModel`.
+The three public launchers select an execution strategy. `PooolApplication`
+contains the shared concurrent GUI lifecycle and keeps refreshing `ViewModel`.
 
 ### `pcd.poool.model.common.math`
 
@@ -119,6 +122,9 @@ long-lived worker threads.
 
 - `GameCommand`
   Controller-owned command abstraction.
+- `GameRuntime`
+  Small common API implemented by both concurrent runners and consumed by the
+  shared application.
 - `BotAgent`
   Active bot component that observes snapshots and submits bot shots.
 - `CommandQueueMonitorSupport`

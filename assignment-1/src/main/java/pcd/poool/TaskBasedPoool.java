@@ -1,113 +1,34 @@
 package pcd.poool;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import pcd.poool.model.game.Player;
-import pcd.poool.model.physics.common.BoardConf;
-import pcd.poool.model.physics.config.MassiveBoardConf;
-import pcd.poool.model.physics.config.StandardGameBoardConf;
+import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
-import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.taskbased.TaskBasedGameRunner;
-import pcd.poool.view.board.View;
-import pcd.poool.view.board.ViewModel;
 
-/**
- * Playable task-based entry point for Poool.
- *
- * <p>The user-facing experience matches the threaded launcher, but the
- * simulation is coordinated through {@link TaskBasedGameRunner} and its
- * executor-backed physics engine. The runner owns the game model, while the
- * UI loop only consumes immutable snapshots.
- */
-public class TaskBasedPoool {
+/** Playable Executor Framework version of Poool. */
+public final class TaskBasedPoool {
 
-    private static final int VIEW_WIDTH = 1200;
-    private static final int VIEW_HEIGHT = 800;
-    private static final long FRAME_SLEEP_MILLIS = 4; // Limits the render loop update rate.
-    private static final double BOT_PREVIEW_SCALE = 0.35; // Scales the bot preview arrow.
-    private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
+    private static final long BOT_THINK_TIME_MILLIS = 600;
 
     private TaskBasedPoool() {
     }
 
-    /**
-     * Starts the playable task-based game.
-     *
-     * @param args optional first argument: worker count for the task-based
-     *             physics engine
-     */
+    /** Starts the task-based application. The first argument may select the worker count. */
     public static void main(String[] args) {
-        var boardProfile = BOARD_PROFILE.createConfiguration();
         var config = taskBasedConfig(args);
         System.out.printf(
-                "Starting task-based Poool with %d physics workers (%s board)%n",
-                config.physicsWorkerCount(),
-                BOARD_PROFILE.name().toLowerCase());
-
-        var runner = new TaskBasedGameRunner(boardProfile, config);
-        // Starts the runner.
-        runner.start();
-        // Stores the started runner so the loop can use and restart it.
-        var runnerRef = new AtomicReference<>(runner);
-        var restartRequested = new AtomicBoolean(false);
-        var viewModel = new ViewModel();
-        var view = new View(
-                viewModel,
-                VIEW_WIDTH,
-                VIEW_HEIGHT,
-                velocity -> runnerRef.get().shootHuman(velocity), // Human shot callback.
-                () -> restartRequested.set(true), // Restart callback.
-                () -> canStartHumanAiming(runnerRef.get()), // Human aiming gate.
-                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clears the human shot preview.
-
-        // Registers a shutdown hook so the runner closes when the JVM exits.
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-task-based-shutdown"));
-
-        long startTime = System.currentTimeMillis();
-        int renderedFrames = 0;
-
-        // UI loop: reads immutable snapshots, updates the ViewModel, and renders.
-        while (true) {
-            long now = System.currentTimeMillis();
-            // Recreate the task-based runner if the user requested a restart.
-            if (restartRequested.getAndSet(false)) {
-                var oldRunner = runnerRef.get();
-                oldRunner.close();
-                var newRunner = new TaskBasedGameRunner(boardProfile, config);
-                // Starts the runner.
-                newRunner.start();
-                runnerRef.set(newRunner);
-                viewModel.clearShotPreview();
-                startTime = now;
-                renderedFrames = 0;
-            }
-
-            // Read the latest immutable runtime state and project it into the ViewModel.
-            renderedFrames++;
-            int framePerSec = framePerSec(renderedFrames, startTime, now);
-            var taskSnapshot = runnerRef.get().snapshot();
-            viewModel.update(
-                    taskSnapshot.smallBalls(),
-                    taskSnapshot.humanBall(),
-                    taskSnapshot.botBall(),
-                    taskSnapshot.holes(),
-                    taskSnapshot.game(),
-                    framePerSec);
-            updateBotShotPreview(taskSnapshot, viewModel);
-            // Draw the current frame and keep the UI loop responsive.
-            view.render();
-            sleepFrame();
-        }
+                "Starting task-based Poool with %d physics workers (thousand board)%n",
+                config.physicsWorkerCount());
+        PooolApplication.run(
+                () -> new TaskBasedGameRunner(new ThousandBallsBoardConf(), config),
+                "poool-task-based-shutdown");
     }
 
     static TaskBasedGameRunner.Config taskBasedConfig(String[] args) {
-        int workerCount = parseWorkerCount(args);
         return new TaskBasedGameRunner.Config(
-                pcd.poool.model.physics.common.PhysicsDefaults.FIXED_STEP_MILLIS,
+                PhysicsDefaults.FIXED_STEP_MILLIS,
                 true,
-                600,
-                workerCount);
+                BOT_THINK_TIME_MILLIS,
+                parseWorkerCount(args));
     }
 
     static int parseWorkerCount(String[] args) {
@@ -119,65 +40,5 @@ public class TaskBasedPoool {
             throw new IllegalArgumentException("worker count must be >= 1");
         }
         return workers;
-    }
-
-    private enum BoardProfile {
-        STANDARD {
-            @Override
-            BoardConf createConfiguration() {
-                return new StandardGameBoardConf();
-            }
-        },
-        THOUSAND {
-            @Override
-            BoardConf createConfiguration() {
-                return new ThousandBallsBoardConf();
-            }
-        },
-        MASSIVE {
-            @Override
-            BoardConf createConfiguration() {
-                return new MassiveBoardConf();
-            }
-        };
-
-        abstract BoardConf createConfiguration();
-    }
-
-    private static boolean canStartHumanAiming(TaskBasedGameRunner runner) {
-        return runner.snapshot().game().humanCanShoot();
-    }
-
-    private static void updateBotShotPreview(RuntimeGameSnapshot snapshot, ViewModel viewModel) {
-        if (!snapshot.game().botCanShoot() || snapshot.botBall() == null) {
-            viewModel.clearShotPreview(Player.BOT);
-            return;
-        }
-        var impulse = snapshot.botPreviewShot();
-        if (impulse.abs() <= 0) {
-            return;
-        }
-        var from = snapshot.botBall().pos();
-        viewModel.setShotPreview(
-                from,
-                from.sum(impulse.mul(BOT_PREVIEW_SCALE)),
-                impulse.abs(),
-                Player.BOT);
-    }
-
-    private static int framePerSec(int renderedFrames, long startTime, long now) {
-        long elapsed = now - startTime;
-        if (elapsed <= 0) {
-            return 0;
-        }
-        return (int) (renderedFrames * 1000 / elapsed);
-    }
-
-    private static void sleepFrame() {
-        try {
-            Thread.sleep(FRAME_SLEEP_MILLIS);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        }
     }
 }

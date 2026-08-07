@@ -17,6 +17,7 @@ import pcd.poool.runtime.CommandQueueMonitorSupport;
 import pcd.poool.runtime.CommandReceiptSupport;
 import pcd.poool.runtime.CommandSubmissionSupport;
 import pcd.poool.runtime.GameCommand;
+import pcd.poool.runtime.GameRuntime;
 import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.runtime.SnapshotStoreSupport;
 
@@ -28,7 +29,7 @@ import pcd.poool.runtime.SnapshotStoreSupport;
  * simulation. Auxiliary tasks may submit commands through a monitor-backed
  * queue, but they never mutate the model directly.
  */
-public class TaskBasedGameRunner implements AutoCloseable {
+public class TaskBasedGameRunner implements GameRuntime {
 
     private static final Duration DEFAULT_JOIN_TIMEOUT = Duration.ofSeconds(2);
 
