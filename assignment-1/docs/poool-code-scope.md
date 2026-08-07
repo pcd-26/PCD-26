@@ -32,8 +32,9 @@
 
 They remain under `assignment-1/reference/sketch01` and `assignment-1/reference/sketch02`, outside the Maven source tree.
 The benchmark tooling and generated outputs remain available in the repository
-for the report and local analysis, but they are not part of the final delivery
-zip.
+for the report and local analysis. They compile into `target/classes` for the
+existing scripts, but Maven excludes them from the packaged game JAR and final
+delivery scope.
 
 For a component-level explanation of responsibilities and runtime relations,
 see [`docs/runtime-architecture.md`](runtime-architecture.md).

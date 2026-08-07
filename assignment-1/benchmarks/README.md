@@ -1,5 +1,10 @@
 # Assignment 1 Benchmark Audit
 
+Benchmark code is development infrastructure, not part of the playable Poool
+architecture or final game JAR. Maven still compiles it so all commands below
+remain available from `target/classes`; only the packaging step excludes
+`pcd/poool/benchmark/**`.
+
 This document records the benchmark suite as it exists in the repository today.
 It is an audit of the current entry points, outputs, and measurement choices,
 not a proposal for the next benchmark design.
