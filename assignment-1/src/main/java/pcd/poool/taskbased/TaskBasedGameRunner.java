@@ -18,7 +18,12 @@ import pcd.poool.runtime.GameRuntime;
 import pcd.poool.runtime.GameRuntimeConfig;
 import pcd.poool.runtime.RuntimeGameSnapshot;
 
-/** Executor Framework driver around the shared {@link GameLoop}. */
+/**
+ * Executor Framework driver around the shared {@link GameLoop}.
+ *
+ * <p>The controller runs on a scheduled executor, the bot uses a dedicated
+ * executor, and the physics engine owns its own worker pool.
+ */
 public final class TaskBasedGameRunner implements GameRuntime {
 
     private static final Duration DEFAULT_JOIN_TIMEOUT = Duration.ofSeconds(2);
@@ -43,13 +48,17 @@ public final class TaskBasedGameRunner implements GameRuntime {
     TaskBasedGameRunner(BoardConf boardConf, GameRuntimeConfig config, TaskBasedPhysicsEngine physics) {
         this.config = Objects.requireNonNull(config, "config");
         this.physics = Objects.requireNonNull(physics, "physics");
-        loop = new GameLoop(boardConf, physics, config.startupCountdown());
+        loop = new GameLoop(
+                boardConf, // Board layout and initial ball placement.
+                physics, // Parallel physics implementation.
+                config.startupCountdown()); // Startup shoot lock policy.
         controller = Executors.newSingleThreadScheduledExecutor(runnable -> namedThread(runnable, "poool-task-controller"));
         botExecutor = config.botEnabled()
                 ? Executors.newSingleThreadExecutor(runnable -> namedThread(runnable, "poool-task-bot"))
                 : null;
     }
 
+    // Schedules the controller tick and submits the bot loop if enabled.
     @Override
     public synchronized void start() {
         ensureHealthy();
@@ -63,13 +72,14 @@ public final class TaskBasedGameRunner implements GameRuntime {
         controller.scheduleAtFixedRate(this::tick, 0, config.tickMillis(), TimeUnit.MILLISECONDS);
         if (botExecutor != null) {
             botExecutor.submit(new BotAgent(
-                    loop::snapshot,
-                    loop::shootBot,
-                    this::isRunning,
-                    config.botThinkTimeMillis()));
+                    loop::snapshot, // Reads the latest published game snapshot.
+                    loop::shootBot, // Submits the bot shot command.
+                    this::isRunning, // Stops the bot when the runtime is no longer active.
+                    config.botThinkTimeMillis())); // Delay before the bot shoots.
         }
     }
 
+    // Exposes whether the scheduled controller is still active.
     public boolean isRunning() {
         return running;
     }
@@ -98,6 +108,7 @@ public final class TaskBasedGameRunner implements GameRuntime {
         return loop.awaitSnapshot(condition, timeout);
     }
 
+    // Stops the loop and shuts down all owned executors.
     public synchronized void requestStop() {
         running = false;
         loop.close();
@@ -107,6 +118,7 @@ public final class TaskBasedGameRunner implements GameRuntime {
         }
     }
 
+    // Waits for the controller, the bot, and the physics workers to finish.
     public void awaitTermination(Duration timeout) throws InterruptedException {
         controller.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
         if (botExecutor != null) {
@@ -115,6 +127,7 @@ public final class TaskBasedGameRunner implements GameRuntime {
         physics.close();
     }
 
+    // Marks the runner closed and performs a best-effort stop.
     @Override
     public synchronized void close() {
         if (closed) {
@@ -138,6 +151,7 @@ public final class TaskBasedGameRunner implements GameRuntime {
             return;
         }
         try {
+            // One scheduled tick advances the whole match through GameLoop.
             loop.tick(config.tickMillis());
         } catch (RuntimeException ex) {
             if (failure.compareAndSet(null, ex)) {

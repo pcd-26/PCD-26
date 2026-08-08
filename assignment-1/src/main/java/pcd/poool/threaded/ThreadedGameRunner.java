@@ -12,7 +12,12 @@ import pcd.poool.runtime.GameRuntime;
 import pcd.poool.runtime.GameRuntimeConfig;
 import pcd.poool.runtime.RuntimeGameSnapshot;
 
-/** Platform-thread driver around the shared {@link GameLoop}. */
+/**
+ * Platform-thread driver around the shared {@link GameLoop}.
+ *
+ * <p>The controller and bot run on dedicated platform threads, while the
+ * physics engine owns the worker threads used for the parallel step.
+ */
 public final class ThreadedGameRunner implements GameRuntime {
 
     private static final Duration DEFAULT_JOIN_TIMEOUT = Duration.ofSeconds(2);
@@ -31,9 +36,13 @@ public final class ThreadedGameRunner implements GameRuntime {
     public ThreadedGameRunner(BoardConf boardConf, GameRuntimeConfig config) {
         this.config = config;
         physics = new ThreadedPhysicsEngine(config.physicsWorkerCount(), config.tickMillis());
-        loop = new GameLoop(boardConf, physics, config.startupCountdown());
+        loop = new GameLoop(
+                boardConf, // Board layout and initial ball placement.
+                physics, // Parallel physics implementation.
+                config.startupCountdown()); // Startup shoot lock policy.
     }
 
+    // Starts the controller thread and, when enabled, the bot thread.
     @Override
     public synchronized void start() {
         if (running) {
@@ -44,12 +53,17 @@ public final class ThreadedGameRunner implements GameRuntime {
         controllerThread.start();
         if (config.botEnabled()) {
             botThread = new Thread(
-                    new BotAgent(loop::snapshot, loop::shootBot, this::isRunning, config.botThinkTimeMillis()),
+                    new BotAgent(
+                            loop::snapshot, // Reads the latest published game snapshot.
+                            loop::shootBot, // Submits the bot shot command.
+                            this::isRunning, // Stops the bot when the runtime is no longer active.
+                            config.botThinkTimeMillis()), // Delay before the bot shoots.
                     "poool-threaded-bot");
             botThread.start();
         }
     }
 
+    // Exposes whether the controller loop is still active.
     public boolean isRunning() {
         return running;
     }
@@ -75,6 +89,7 @@ public final class ThreadedGameRunner implements GameRuntime {
         return loop.awaitSnapshot(condition, timeout);
     }
 
+    // Asks all live threads to stop and rejects further work.
     public void requestStop() {
         running = false;
         loop.close();
@@ -82,12 +97,14 @@ public final class ThreadedGameRunner implements GameRuntime {
         interrupt(controllerThread);
     }
 
+    // Waits for the controller, the bot, and the physics workers to finish.
     public void awaitTermination(Duration timeout) throws InterruptedException {
         join(controllerThread, timeout);
         join(botThread, timeout);
         physics.close();
     }
 
+    // Stops the runtime and waits briefly for it to terminate.
     @Override
     public void close() {
         requestStop();
@@ -100,8 +117,12 @@ public final class ThreadedGameRunner implements GameRuntime {
 
     private void runController() {
         try {
+            // The controller alternates between advancing the game and sleeping
+            // for one logical tick duration.
             while (running) {
+                // Advance the shared game state.
                 loop.tick(config.tickMillis());
+                // Keep the controller pacing aligned with the configured tick.
                 Thread.sleep(config.tickMillis());
             }
         } catch (InterruptedException ex) {
