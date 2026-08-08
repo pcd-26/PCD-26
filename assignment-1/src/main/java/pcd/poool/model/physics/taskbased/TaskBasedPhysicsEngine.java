@@ -5,13 +5,16 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialGridSupport;
-import pcd.poool.model.physics.parallel.RangeScheduler;
 
 /** Executor Framework physics engine. */
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
@@ -20,7 +23,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private static final int MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY = 256;
 
     private final long maxStepMillis;
-    private final RangeScheduler scheduler;
+    private final int poolSize;
+    private final ExecutorService executor;
     private boolean closed;
 
     public TaskBasedPhysicsEngine() {
@@ -35,10 +39,16 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (poolSize < MIN_WORKER_COUNT) {
             throw new IllegalArgumentException("poolSize must be >= 1");
         }
-        this.scheduler = new ExecutorRangeScheduler(poolSize);
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
         }
+        // Create a fixed executor so task-based work always runs on the same pool size.
+        this.poolSize = poolSize;
+        this.executor = Executors.newFixedThreadPool(poolSize, runnable -> {
+            var thread = new Thread(runnable, "poool-task-physics-worker");
+            thread.setDaemon(true);
+            return thread;
+        });
         this.maxStepMillis = maxStepMillis;
     }
 
@@ -48,13 +58,14 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     public int poolSize() {
-        return scheduler.parallelism();
+        return poolSize;
     }
 
     @Override
     public void close() {
         closed = true;
-        scheduler.close();
+        // Shut down the pool after the engine is no longer used.
+        executor.shutdown();
     }
 
     private void stepInternal(Board board, long elapsedMillis) {
@@ -106,7 +117,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
         // Build one local grid per worker to avoid write contention.
         @SuppressWarnings("unchecked")
-        Map<SpatialGridSupport.GridCell, IntBag>[] workerGrids = new Map[scheduler.parallelism()];
+        Map<SpatialGridSupport.GridCell, IntBag>[] workerGrids = new Map[poolSize];
         executeParallelRanges(balls.size(), (from, to, workerIndex) -> {
             var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
             // Place each ball in the cell containing its center.
@@ -136,8 +147,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         orderedCellBuckets.sort((first, second) -> first.cell().compareTo(second.cell()));
 
         // Let workers collect collision corrections for the cells they own.
-        var workerDeltas = new SparseCollisionDeltaAccumulator[Math.min(scheduler.parallelism(), orderedCellBuckets.size())];
-        var workerPairs = new LongBag[Math.min(scheduler.parallelism(), orderedCellBuckets.size())];
+        var workerDeltas = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCellBuckets.size())];
+        var workerPairs = new LongBag[Math.min(poolSize, orderedCellBuckets.size())];
         executeParallelRanges(orderedCellBuckets.size(), (from, to, workerIndex) -> {
             var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
             var pairAccumulator = new LongBag();
@@ -356,8 +367,27 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         if (itemCount == 0) {
             return;
         }
-        // Let the scheduler split the index range across workers.
-        scheduler.execute(itemCount, rangeTask::run);
+        // Small batches stay sequential because task creation would cost more than it saves.
+        int taskCount = itemCount < 256 ? 1 : Math.min(poolSize, itemCount);
+        int baseSize = taskCount == 0 ? 0 : itemCount / taskCount;
+        int remainder = taskCount == 0 ? 0 : itemCount % taskCount;
+        if (taskCount <= 1) {
+            rangeTask.run(0, itemCount, 0);
+            return;
+        }
+        // Submit one task per chunk and keep the Future list so we can wait for all of them.
+        var futures = new ArrayList<Future<?>>(taskCount);
+        int from = 0;
+        for (int workerIndex = 0; workerIndex < taskCount; workerIndex++) {
+            int size = baseSize + (workerIndex < remainder ? 1 : 0);
+            int rangeStart = from;
+            int rangeEnd = rangeStart + size;
+            int assignedWorker = workerIndex;
+            futures.add(executor.submit(() -> rangeTask.run(rangeStart, rangeEnd, assignedWorker)));
+            from = rangeEnd;
+        }
+        // Join every submitted task and rethrow the first failure if one happened.
+        awaitAll(futures);
     }
 
     private void ensureOpen() {
@@ -383,6 +413,27 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static int defaultPoolSize() {
         return Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+    }
+
+    private void awaitAll(ArrayList<Future<?>> futures) {
+        try {
+            for (var future : futures) {
+                // Wait for this chunk to finish before moving on to the next one.
+                future.get();
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("task-based physics step interrupted", ex);
+        } catch (ExecutionException ex) {
+            var cause = ex.getCause();
+            if (cause instanceof RuntimeException runtimeFailure) {
+                throw runtimeFailure;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IllegalStateException("task-based physics step failed", cause);
+        }
     }
 
     @FunctionalInterface

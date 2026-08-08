@@ -11,7 +11,6 @@ import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialGridSupport;
-import pcd.poool.model.physics.parallel.RangeScheduler;
 
 /** Platform-thread physics engine. */
 public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseable {
@@ -20,7 +19,7 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
     private static final int MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY = 256;
 
     private final long maxStepMillis;
-    private final RangeScheduler scheduler;
+    private final PhysicsWorker[] workers;
     private boolean closed;
 
     public ThreadedPhysicsEngine() {
@@ -35,9 +34,13 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         if (workerCount < MIN_WORKER_COUNT) {
             throw new IllegalArgumentException("workerCount must be >= 1");
         }
-        this.scheduler = new PlatformThreadRangeScheduler(workerCount);
         if (maxStepMillis <= 0) {
             throw new IllegalArgumentException("maxStepMillis must be > 0");
+        }
+        // Create one long-lived platform thread per worker slot.
+        this.workers = new PhysicsWorker[workerCount];
+        for (int i = 0; i < workerCount; i++) {
+            workers[i] = new PhysicsWorker("poool-physics-worker-" + i);
         }
         this.maxStepMillis = maxStepMillis;
     }
@@ -48,13 +51,16 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
     }
 
     public int workerCount() {
-        return scheduler.parallelism();
+        return workers.length;
     }
 
     @Override
     public void close() {
         closed = true;
-        scheduler.close();
+        // Stop every worker thread before releasing the engine.
+        for (var worker : workers) {
+            worker.close();
+        }
     }
 
     private void stepInternal(Board board, long elapsedMillis) {
@@ -106,7 +112,7 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
 
         // Build a spatial hash in parallel, one local grid per worker.
         @SuppressWarnings("unchecked")
-        Map<SpatialGridSupport.GridCell, IntBag>[] workerGrids = new Map[scheduler.parallelism()];
+        Map<SpatialGridSupport.GridCell, IntBag>[] workerGrids = new Map[workers.length];
         executeParallelRanges(balls.size(), (from, to, workerIndex) -> {
             var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
             // Each ball is assigned to the cell containing its center.
@@ -136,8 +142,8 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         orderedCellBuckets.sort((first, second) -> first.cell().compareTo(second.cell()));
 
         // Each worker accumulates the corrections and contact pairs for the cells it owns.
-        var workerDeltas = new SparseCollisionDeltaAccumulator[Math.min(scheduler.parallelism(), orderedCellBuckets.size())];
-        var workerPairs = new LongBag[Math.min(scheduler.parallelism(), orderedCellBuckets.size())];
+        var workerDeltas = new SparseCollisionDeltaAccumulator[Math.min(workers.length, orderedCellBuckets.size())];
+        var workerPairs = new LongBag[Math.min(workers.length, orderedCellBuckets.size())];
         executeParallelRanges(orderedCellBuckets.size(), (from, to, workerIndex) -> {
             var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
             var pairAccumulator = new LongBag();
@@ -356,8 +362,29 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         if (itemCount == 0) {
             return;
         }
-        // Delegate the range splitting and worker execution to the scheduler.
-        scheduler.execute(itemCount, rangeTask::run);
+        // Split the work into contiguous chunks so each worker gets a stable slice.
+        int usedWorkers = Math.min(workers.length, itemCount);
+        if (usedWorkers <= 1) {
+            rangeTask.run(0, itemCount, 0);
+            return;
+        }
+        int baseSize = itemCount / usedWorkers;
+        int remainder = itemCount % usedWorkers;
+        var completion = new WorkerCompletionMonitor(usedWorkers);
+        int from = 0;
+        for (int workerIndex = 0; workerIndex < usedWorkers; workerIndex++) {
+            int size = baseSize + (workerIndex < remainder ? 1 : 0);
+            int rangeStart = from;
+            int rangeEnd = rangeStart + size;
+            int assignedWorker = workerIndex;
+            // Hand the chunk to the worker and let the monitor track completion.
+            workers[workerIndex].assign(
+                    () -> rangeTask.run(rangeStart, rangeEnd, assignedWorker),
+                    completion);
+            from = rangeEnd;
+        }
+        // Block the calling thread until every worker finishes its chunk.
+        completion.await();
     }
 
     private void ensureOpen() {
