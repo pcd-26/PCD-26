@@ -33,7 +33,19 @@
             ]
         }
     ],
+    "java.import.exclusions": [
+        "**/verification/jpf/.jpf-core"
+    ],
+    "java.project.resourceFilters": [
+        "node_modules",
+        ".git",
+        ".jpf-core"
+    ],
+    "files.exclude": {
+        "**/verification/jpf/.jpf-core": true
+    },
     "files.watcherExclude": {
-        "**/target/**": true
+        "**/target/**": true,
+        "**/verification/jpf/.jpf-core/**": true
     }
 }

@@ -55,6 +55,7 @@ public class SequentialPoool {
             lastUpdateTime = now;
 
             advanceGame(game, elapsedMillis);
+            
             // Track the bot aim delay before firing its shot.
             if (game.canBotShoot()) {
                 if (botAimStartedAt == 0) {
