@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
+import pcd.poool.model.game.Player;
 
 class BoardPhysicsStepperTest {
 
@@ -51,6 +52,21 @@ class BoardPhysicsStepperTest {
         assertEquals(board.getBotBallEntity(), target.get(1));
     }
 
+    @Test
+    void directCueTouchAssignsThePocketedBallToTheCorrectPlayer() {
+        var board = new Board((target, elapsedMillis) -> {});
+        board.init(new SinglePocketedBallConf());
+
+        var playerBall = board.getPlayerBallEntity();
+        var smallBall = board.getSmallBallEntities().get(0);
+
+        board.recordCollision(playerBall, smallBall);
+        board.applyHoleInteractions();
+
+        assertEquals(1, board.consumePendingScoredSmallBalls(Player.HUMAN));
+        assertEquals(0, board.consumePendingScoredSmallBalls(Player.BOT));
+    }
+
     private static class EmptyBoardConf implements BoardConf {
 
         @Override
@@ -66,6 +82,34 @@ class BoardPhysicsStepperTest {
         @Override
         public List<Ball> getSmallBalls() {
             return List.of();
+        }
+    }
+
+    private static class SinglePocketedBallConf implements BoardConf {
+
+        @Override
+        public Boundary getBoardBoundary() {
+            return new Boundary(-1, -1, 1, 1);
+        }
+
+        @Override
+        public Ball getPlayerBall() {
+            return new Ball(new P2d(-0.5, 0), 0.05, 1.0, new V2d(0, 0));
+        }
+
+        @Override
+        public Ball getBotBall() {
+            return new Ball(new P2d(0.5, 0), 0.05, 1.0, new V2d(0, 0));
+        }
+
+        @Override
+        public List<Ball> getSmallBalls() {
+            return List.of(new Ball(new P2d(0.7, 0), 0.05, 1.0, new V2d(0, 0)));
+        }
+
+        @Override
+        public List<Hole> getHoles() {
+            return List.of(new Hole(new P2d(0.7, 0), 0.12));
         }
     }
 }

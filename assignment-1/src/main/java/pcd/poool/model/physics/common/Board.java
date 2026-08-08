@@ -23,7 +23,7 @@ public class Board {
             List<Ball> pocketedSmallBalls) {}
 
     private final PhysicsStepper physicsEngine;
-    private List<Ball> balls;
+    private List<Ball> smallBalls;
     private Ball playerBall;
     private Ball botBall;
     private Boundary bounds;
@@ -45,7 +45,7 @@ public class Board {
             throw new IllegalArgumentException("physicsEngine must not be null");
         }
         this.physicsEngine = physicsEngine;
-        balls = new ArrayList<>();
+        smallBalls = new ArrayList<>();
         holes = List.of();
         pendingScoredSmallBalls = new EnumMap<>(Player.class);
         lastDirectCueTouch = new HashMap<>();
@@ -53,7 +53,7 @@ public class Board {
 
     // Reinitializes this board from a configuration.
     public void init(BoardConf conf) {
-        balls = new ArrayList<>(conf.getSmallBalls());
+        smallBalls = new ArrayList<>(conf.getSmallBalls());
         playerBall = conf.getPlayerBall();
         botBall = conf.getBotBall();
         bounds = conf.getBoardBoundary();
@@ -72,11 +72,11 @@ public class Board {
 
     // Returns immutable rendering data instead of exposing mutable ball objects.
     public synchronized List<BallSnapshot> getBalls() {
-        if (balls == null) {
+        if (smallBalls == null) {
             return Collections.emptyList();
         }
         var snapshots = new ArrayList<BallSnapshot>();
-        for (var ball : balls) {
+        for (var ball : smallBalls) {
             snapshots.add(new BallSnapshot(ball.getPos(), ball.getRadius()));
         }
         return Collections.unmodifiableList(snapshots);
@@ -139,7 +139,7 @@ public class Board {
         if (botBall != null && !botBallPocketed && botBall.isMoving()) {
             return true;
         }
-        return balls.stream().anyMatch(Ball::isMoving);
+        return smallBalls.stream().anyMatch(Ball::isMoving);
     }
 
     // Checks whether a player's cue ball can currently be kicked.
@@ -173,7 +173,7 @@ public class Board {
 
     // Gets the mutable list of small balls for the physics engine.
     public synchronized List<Ball> getSmallBallEntities() {
-        return balls;
+        return smallBalls;
     }
 
     // Copies the active balls that may collide into a caller-provided list.
@@ -185,7 +185,7 @@ public class Board {
         if (botBall != null && !botBallPocketed) {
             target.add(botBall);
         }
-        target.addAll(balls);
+        target.addAll(smallBalls);
     }
 
     // Gets all active balls that participate in collision detection.
@@ -195,27 +195,34 @@ public class Board {
         return allBalls;
     }
 
-    // Records a collision so the board can track direct cue-ball contact.
+    // Records the collision and lets the helper map it to the right cue ball.
     public synchronized void recordCollision(Ball first, Ball second) {
-        recordDirectCueTouch(first, second, Player.HUMAN);
-        recordDirectCueTouch(first, second, Player.BOT);
+        recordDirectCueTouchIfRelevant(first, second);
         clearSmallBallScoringOnIndirectTouch(first, second);
     }
 
-    private void recordDirectCueTouch(Ball first, Ball second, Player player) {
-        var cueBall = getCueBallEntity(player);
-        if (cueBall == null) {
-            return;
+    private void recordDirectCueTouchIfRelevant(Ball first, Ball second) {
+        var humanCueBall = getCueBallEntity(Player.HUMAN);
+        if (humanCueBall != null) {
+            if (first == humanCueBall && smallBalls.contains(second)) {
+                lastDirectCueTouch.put(second, Player.HUMAN);
+            } else if (second == humanCueBall && smallBalls.contains(first)) {
+                lastDirectCueTouch.put(first, Player.HUMAN);
+            }
         }
-        if (first == cueBall && balls.contains(second)) {
-            lastDirectCueTouch.put(second, player);
-        } else if (second == cueBall && balls.contains(first)) {
-            lastDirectCueTouch.put(first, player);
+
+        var botCueBall = getCueBallEntity(Player.BOT);
+        if (botCueBall != null) {
+            if (first == botCueBall && smallBalls.contains(second)) {
+                lastDirectCueTouch.put(second, Player.BOT);
+            } else if (second == botCueBall && smallBalls.contains(first)) {
+                lastDirectCueTouch.put(first, Player.BOT);
+            }
         }
     }
 
     private void clearSmallBallScoringOnIndirectTouch(Ball first, Ball second) {
-        if (balls.contains(first) && balls.contains(second)) {
+        if (smallBalls.contains(first) && smallBalls.contains(second)) {
             lastDirectCueTouch.remove(first);
             lastDirectCueTouch.remove(second);
         }
@@ -233,7 +240,7 @@ public class Board {
             botBallPocketed = true;
         }
 
-        var iterator = balls.iterator();
+        var iterator = smallBalls.iterator();
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (isInsideHole(ball)) {
@@ -266,7 +273,7 @@ public class Board {
         }
 
         var pocketed = new LinkedHashSet<>(interactions.pocketedSmallBalls());
-        var iterator = balls.iterator();
+        var iterator = smallBalls.iterator();
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (pocketed.contains(ball)) {
