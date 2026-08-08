@@ -28,8 +28,9 @@ public class SpatialCollisionDetector {
         double cellSize = SpatialGridSupport.computeCellSize(balls);
         Map<SpatialGridSupport.GridCell, List<Integer>> grid = new HashMap<>(); // [cell, list of ball indexes]
 
-        // Register every ball in all cells covered by its bounding box.
+        // Register every ball only in the cells it actually occupies.
         for (int i = 0; i < balls.size(); i++) {
+            // Only the cells actually covered by the ball are created here.
             for (var cell : SpatialGridSupport.occupiedCells(balls.get(i), cellSize)) {
                 grid.computeIfAbsent(cell, ignored -> new ArrayList<>()).add(i);
             }
