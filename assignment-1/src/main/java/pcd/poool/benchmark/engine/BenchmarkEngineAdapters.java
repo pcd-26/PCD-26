@@ -7,7 +7,6 @@ import pcd.poool.benchmark.core.BenchmarkRunner;
 import pcd.poool.benchmark.util.BenchmarkStateHasher;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
-import pcd.poool.model.physics.common.PhysicsStepProfile;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
@@ -156,17 +155,10 @@ public final class BenchmarkEngineAdapters {
 
         @Override
         public BenchmarkRunner.BenchmarkExecution execute(Board board, int steps, boolean instrumentationEnabled) {
-            BenchmarkInstrumentation instrumentation = BenchmarkInstrumentation.zero();
             for (int i = 0; i < steps; i++) {
-                if (instrumentationEnabled && threadedEngine != null) {
-                    instrumentation = instrumentation.plus(toInstrumentation(threadedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
-                } else if (instrumentationEnabled && taskBasedEngine != null) {
-                    instrumentation = instrumentation.plus(toInstrumentation(taskBasedEngine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS)));
-                } else {
-                    step(board);
-                }
+                step(board);
             }
-            return new BenchmarkRunner.BenchmarkExecution(BenchmarkStateHasher.checksum(board), instrumentation);
+            return new BenchmarkRunner.BenchmarkExecution(BenchmarkStateHasher.checksum(board), BenchmarkInstrumentation.zero());
         }
 
         private void step(Board board) {
@@ -188,25 +180,5 @@ public final class BenchmarkEngineAdapters {
                 taskBasedEngine.close();
             }
         }
-    }
-
-    private static BenchmarkInstrumentation toInstrumentation(PhysicsStepProfile profile) {
-        if (profile == null) {
-            return BenchmarkInstrumentation.zero();
-        }
-        return new BenchmarkInstrumentation(
-                profile.syncTimeMillis(),
-                profile.aggregationTimeMillis(),
-                profile.taskSubmissionTimeMillis(),
-                profile.joinOrFutureWaitMillis(),
-                profile.lockAcquisitions(),
-                profile.submittedTasks(),
-                profile.stateReadMillis(),
-                profile.partitionMillis(),
-                profile.movementMillis(),
-                profile.holeInteractionMillis(),
-                profile.collisionDetectionMillis(),
-                profile.collisionResolutionMillis(),
-                profile.mergeApplyMillis());
     }
 }

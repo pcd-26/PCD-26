@@ -23,7 +23,7 @@ public final class BenchmarkCsvWriter {
     public static final String SUMMARY_FILE_NAME = "benchmark-summary.csv";
 
     private static final String RUNS_HEADER =
-            "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks,stateReadTimeMillis,partitionTimeMillis,movementTimeMillis,holeInteractionTimeMillis,collisionDetectionTimeMillis,collisionResolutionTimeMillis,mergeApplyTimeMillis";
+            "timestamp,implementation,balls,threads,steps,seed,runIndex,elapsedMillis,throughputStepsPerSec,cpuUtilizationPercent,checksum,status,failureReason,syncTimeMillis,aggregationTimeMillis,taskSubmissionTimeMillis,joinOrFutureWaitMillis,lockAcquisitions,submittedTasks";
     private static final String SUMMARY_HEADER =
             "implementation,balls,threads,steps,seed,runs,meanMillis,medianMillis,p95Millis,minMillis,maxMillis,stdDevMillis,meanThroughput,medianThroughput,meanCpuUtilizationPercent,medianCpuUtilizationPercent,speedup,efficiency,checksum";
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_INSTANT;
@@ -115,14 +115,7 @@ public final class BenchmarkCsvWriter {
                             formatDouble(result.instrumentation().taskSubmissionTimeMillis()),
                             formatDouble(result.instrumentation().joinOrFutureWaitMillis()),
                             Long.toString(result.instrumentation().lockAcquisitions()),
-                            Long.toString(result.instrumentation().submittedTasks()),
-                            formatDouble(result.instrumentation().stateReadTimeMillis()),
-                            formatDouble(result.instrumentation().partitionTimeMillis()),
-                            formatDouble(result.instrumentation().movementTimeMillis()),
-                            formatDouble(result.instrumentation().holeInteractionTimeMillis()),
-                            formatDouble(result.instrumentation().collisionDetectionTimeMillis()),
-                            formatDouble(result.instrumentation().collisionResolutionTimeMillis()),
-                            formatDouble(result.instrumentation().mergeApplyTimeMillis())))
+                            Long.toString(result.instrumentation().submittedTasks())))
                     .append(System.lineSeparator());
         }
         write(runsFile, lines);

@@ -104,7 +104,7 @@ class HeadlessSimulationRunnerTest {
 
     @Test
     @Timeout(5)
-    void instrumentedThreadedExecutionCapturesSynchronizationMetrics() {
+    void instrumentedThreadedExecutionLeavesInstrumentationEmpty() {
         var execution = HeadlessSimulationRunner.simulateExecution(
                 BenchmarkConfig.defaults()
                         .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
@@ -114,10 +114,6 @@ class HeadlessSimulationRunnerTest {
                         .withSeed(SEED)
                         .withInstrumentationEnabled(true));
 
-        assertTrue(execution.instrumentation().lockAcquisitions() >= 0L);
-        assertTrue(execution.instrumentation().submittedTasks() > 0L);
-        assertTrue(execution.instrumentation().syncTimeMillis() >= 0.0);
-        assertTrue(execution.instrumentation().stateReadTimeMillis() >= 0.0);
-        assertTrue(execution.instrumentation().collisionResolutionTimeMillis() >= 0.0);
+        assertTrue(execution.instrumentation().isEmpty());
     }
 }

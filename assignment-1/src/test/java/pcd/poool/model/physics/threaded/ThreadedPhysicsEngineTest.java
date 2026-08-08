@@ -203,28 +203,6 @@ class ThreadedPhysicsEngineTest {
     }
 
     /**
-     * Verifies that step profiling captures timing and execution metrics across workers.
-     */
-    @Test
-    @Timeout(3)
-    void profileStepReportsParallelWorkOnLargeBoard() {
-        try (var engine = new ThreadedPhysicsEngine(4)) {
-            var board = new Board(engine);
-            board.init(new ThousandBallsBoardConf());
-
-            var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
-
-            assertEquals(4, engine.workerCount());
-            assertTrue(profile.submittedTasks() >= 4);
-            assertTrue(profile.taskSubmissionTimeMillis() >= 0.0);
-            assertTrue(profile.joinOrFutureWaitMillis() >= 0.0);
-            assertTrue(profile.movementMillis() >= 0.0);
-            assertTrue(profile.collisionDetectionMillis() >= 0.0);
-            assertTrue(profile.collisionResolutionMillis() >= 0.0);
-        }
-    }
-
-    /**
      * Verifies that a zero or negative worker count is rejected on engine startup.
      */
     @Test
