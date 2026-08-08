@@ -9,12 +9,13 @@ GameLoop.tick
   -> GameModel.step
     -> Board.updateState
       -> ThreadedPhysicsEngine or TaskBasedPhysicsEngine
-        -> ParallelPhysicsEngine
-          -> RangeScheduler
+        -> ThreadedPhysicsEngine
+        -> TaskBasedPhysicsEngine
 ```
 
 The two public engines are facades. All numerical work is implemented once in
-`ParallelPhysicsEngine`; only range scheduling changes.
+`ThreadedPhysicsEngine` and `TaskBasedPhysicsEngine`; the core physics rules
+stay the same while the worker strategy changes.
 
 ## Parallel and serial phases
 

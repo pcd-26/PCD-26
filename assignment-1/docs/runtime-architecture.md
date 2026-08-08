@@ -1,8 +1,8 @@
 # Poool runtime architecture
 
 This is the source of truth for explaining Assignment 1. The architecture has
-one application flow, one game loop, one domain model, and one parallel physics
-algorithm. The required implementations differ only at explicit execution
+one application flow, one game loop, one domain model, and three physics
+engines. The required implementations differ only at explicit execution
 policy seams.
 
 ## Complete flow
@@ -15,10 +15,8 @@ Swing / Bot
     -> Board
     -> PhysicsStepper
          |- SequentialPhysicsEngine
-         `- ParallelPhysicsEngine
-              `- RangeScheduler
-                   |- PlatformThreadRangeScheduler
-                   `- ExecutorRangeScheduler
+         |- ThreadedPhysicsEngine
+         `- TaskBasedPhysicsEngine
 
 GameLoop -> RuntimeGameSnapshot -> launcher -> View
 ```
@@ -59,9 +57,9 @@ small `PhysicsStepper` interface.
 ### 5. Physics engine
 
 `SequentialPhysicsEngine` is the reference implementation.
-`ParallelPhysicsEngine` is the only parallel algorithm. Its `RangeScheduler`
-decides whether ranges run on explicit platform workers or Executor tasks. See
-[`physics-engines-and-concurrency.md`](physics-engines-and-concurrency.md).
+`ThreadedPhysicsEngine` and `TaskBasedPhysicsEngine` are the two concurrent
+engines. They keep the same physics rules but use different execution
+strategies. See [`physics-engines-and-concurrency.md`](physics-engines-and-concurrency.md).
 
 ## Ownership and synchronization
 

@@ -8,11 +8,11 @@ import pcd.poool.benchmark.core.BenchmarkStateFingerprint;
 import pcd.poool.benchmark.core.SeededBenchmarkBoardConf;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.common.PhysicsStepProfile;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 import pcd.poool.model.physics.threaded.ThreadedPhysicsEngine;
-import pcd.poool.model.physics.parallel.ParallelPhysicsEngine;
 
 /**
  * Runs a deterministic simulation headlessly for benchmark comparisons.
@@ -174,7 +174,7 @@ public final class HeadlessSimulationRunner {
         return instrumentation;
     }
 
-    private static BenchmarkInstrumentation toInstrumentation(ParallelPhysicsEngine.StepProfile profile) {
+    private static BenchmarkInstrumentation toInstrumentation(PhysicsStepProfile profile) {
         if (profile == null) {
             return BenchmarkInstrumentation.zero();
         }

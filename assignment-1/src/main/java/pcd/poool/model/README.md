@@ -78,7 +78,8 @@ These types are shared by physics, view, and tests.
 
 ### `physics/parallel`
 
-- `ParallelPhysicsEngine.java`
+- `ThreadedPhysicsEngine.java`
+- `TaskBasedPhysicsEngine.java`
   The one shared parallel algorithm: integration, grids, collision
   contributions, deterministic merge, and commit.
 - `RangeScheduler.java`
