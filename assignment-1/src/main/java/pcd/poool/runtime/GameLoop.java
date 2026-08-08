@@ -21,9 +21,9 @@ public final class GameLoop {
     private RuntimeGameSnapshot snapshot;
 
     public GameLoop(
-            BoardConf boardConf,
-            PhysicsStepper physics,
-            GameModel.StartupCountdown startupCountdown) {
+            BoardConf boardConf, // Board layout and initial ball placement.
+            PhysicsStepper physics, // Physics engine used for each tick.
+            GameModel.StartupCountdown startupCountdown) { // Startup shoot lock policy.
         game = new GameModel(
                 Objects.requireNonNull(boardConf, "boardConf"),
                 Objects.requireNonNull(physics, "physics"),
@@ -33,10 +33,13 @@ public final class GameLoop {
 
     /** Executes all commands, advances physics, and publishes one snapshot. */
     public void tick(long tickMillis) {
+        // Apply queued shots and other pending commands first.
         drainCommands();
+        // Only advance the simulation while the match is still running.
         if (!game.snapshot().isFinished()) {
             game.step(tickMillis);
         }
+        // Publish a fresh immutable snapshot for readers.
         publishSnapshot();
     }
 
@@ -57,6 +60,7 @@ public final class GameLoop {
             Duration timeout) throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         while (!condition.test(snapshot)) {
+            // Wait until the snapshot changes or the timeout expires.
             long remaining = deadline - System.currentTimeMillis();
             if (remaining <= 0) {
                 throw new IllegalStateException("snapshot condition was not reached before timeout");
