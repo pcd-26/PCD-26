@@ -15,6 +15,7 @@ import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialGridSupport;
+import pcd.poool.model.physics.common.SpatialGridSupport.GridCell;
 
 /** Executor Framework physics engine. */
 public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
@@ -86,17 +87,8 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private void stepOnce(Board board, long dt) {
-        var bounds = board.getBounds();
-
-        // Update all active balls first so positions and velocities move forward.
-        var activeBalls = board.getActiveBalls();
-
-        executeParallelRanges(activeBalls.size(), (from, to, workerIndex) -> {
-            // Each worker updates a separate slice of the active ball list.
-            for (int i = from; i < to; i++) {
-                activeBalls.get(i).updateState(dt, bounds);
-            }
-        });
+        // Move the active balls first, keeping the motion phase separate from collision handling.
+        advanceActiveBalls(board, dt);
 
         // Hole interactions may pocket balls or otherwise alter the active set.
         board.applyHoleInteractions();
@@ -107,29 +99,143 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return;
         }
 
-        // Only perform collision work when there are enough active balls to collide.
-        detectAndResolveCollisions(board, activeBallsForCollisionPhase);
+        // Detect candidate collisions first, then resolve the accumulated corrections.
+        SparseCollisionDeltaAccumulator detectedCollisions = detectCandidateCollisions(board, activeBallsForCollisionPhase);
+        resolveCollisions(activeBallsForCollisionPhase, detectedCollisions);
     }
 
-    private void detectAndResolveCollisions(Board board, List<Ball> balls) {
-        // Use a spatial grid to keep collision checks local instead of quadratic.
-        double cellSize = computeOwnershipCellSize(balls);
+    private void advanceActiveBalls(Board board, long dt) {
+        var bounds = board.getBounds();
 
+        // Motion phase: update all active balls so positions and velocities move forward.
+        var activeBalls = board.getActiveBalls();
+        int activeBallCount = activeBalls.size();
+        int activeTaskCount = activeBallCount < 256 ? 1 : Math.min(poolSize, activeBallCount);
+        if (activeTaskCount <= 1) {
+            // Small batches stay sequential because task creation would cost more than it saves.
+            for (int i = 0; i < activeBallCount; i++) {
+                activeBalls.get(i).updateState(dt, bounds);
+            }
+            return;
+        }
+
+        // Submit one task per contiguous chunk of active balls.
+        int baseSize = activeBallCount / activeTaskCount;
+        int remainder = activeBallCount % activeTaskCount;
+        var futures = new ArrayList<Future<?>>(activeTaskCount);
+        int from = 0;
+        for (int workerIndex = 0; workerIndex < activeTaskCount; workerIndex++) {
+            int size = baseSize + (workerIndex < remainder ? 1 : 0);
+            int rangeStart = from;
+            int rangeEnd = rangeStart + size;
+            futures.add(executor.submit(() -> {
+                for (int i = rangeStart; i < rangeEnd; i++) {
+                    activeBalls.get(i).updateState(dt, bounds);
+                }
+            }));
+            from = rangeEnd;
+        }
+        // Wait until every submitted task has finished.
+        awaitAll(futures);
+    }
+
+    private SparseCollisionDeltaAccumulator detectCandidateCollisions(Board board, List<Ball> balls) {
+        // Detection phase: use a spatial grid to keep collision checks local instead of quadratic.
+        // We only inspect nearby balls, then `computeCollisionContribution(...)` filters out
+        // the ones that do not overlap, so this phase finds collision candidates rather than
+        // every possible pair.
+        double cellSize = computeOwnershipCellSize(balls);
+        Map<GridCell, IntBag>[] workerGrids = buildWorkerGrids(balls, cellSize);
+        var combinedGrid = mergeWorkerGrids(workerGrids);
+        var orderedCellBuckets = orderCellBuckets(combinedGrid);
+        return collectCandidateCollisionCorrections(board, balls, combinedGrid, orderedCellBuckets);
+    }
+
+    private void resolveCollisions(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
+        // Resolution phase: apply all accumulated positional and velocity corrections.
+        if (merged.touchedCount() == 0) {
+            return;
+        }
+        // Small batches are cheaper to apply sequentially than to split again.
+        if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
+            for (int i = 0; i < merged.touchedCount(); i++) {
+                int ballIndex = merged.touchedIndex(i);
+                balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
+                balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
+            }
+            return;
+        }
+        // Reapply larger correction sets in parallel.
+        int touchedCount = merged.touchedCount();
+        int applyTaskCount = Math.min(poolSize, touchedCount);
+        int baseSize = touchedCount / applyTaskCount;
+        int remainder = touchedCount % applyTaskCount;
+        var futures = new ArrayList<Future<?>>(applyTaskCount);
+        int from = 0;
+        for (int workerIndex = 0; workerIndex < applyTaskCount; workerIndex++) {
+            int size = baseSize + (workerIndex < remainder ? 1 : 0);
+            int rangeStart = from;
+            int rangeEnd = rangeStart + size;
+            futures.add(executor.submit(() -> {
+                for (int i = rangeStart; i < rangeEnd; i++) {
+                    int ballIndex = merged.touchedIndex(i);
+                    balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
+                    balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
+                }
+            }));
+            from = rangeEnd;
+        }
+        // Wait until every correction task has finished.
+        awaitAll(futures);
+    }
+
+    private Map<GridCell, IntBag>[] buildWorkerGrids(List<Ball> balls, double cellSize) {
         // Build one local grid per worker to avoid write contention.
         @SuppressWarnings("unchecked")
-        Map<SpatialGridSupport.GridCell, IntBag>[] workerGrids = new Map[poolSize];
-        executeParallelRanges(balls.size(), (from, to, workerIndex) -> {
-            var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
-            // Place each ball in the cell containing its center.
-            for (int i = from; i < to; i++) {
-                CenterCell centerCell = computeCenterCell(balls.get(i), cellSize);
-                localGrid.computeIfAbsent(centerCell.cell(), ignored -> new IntBag()).add(i);
+        Map<GridCell, IntBag>[] workerGrids = new Map[poolSize];
+        int ballCount = balls.size();
+        int gridTaskCount = Math.min(poolSize, ballCount);
+        if (gridTaskCount <= 1) {
+            // Tiny collections are cheaper to partition directly on the calling thread.
+            var localGrid = new HashMap<GridCell, IntBag>();
+            for (int i = 0; i < ballCount; i++) {
+                GridCell assignedCellForBall = gridCellForBallCenter(balls.get(i), cellSize);
+                localGrid.computeIfAbsent(assignedCellForBall, ignored -> new IntBag()).add(i);
             }
-            workerGrids[workerIndex] = localGrid;
-        });
+            if (ballCount > 0) {
+                workerGrids[0] = localGrid;
+            }
+            return workerGrids;
+        }
 
+        // Build one local grid per submitted task.
+        int baseSize = ballCount / gridTaskCount;
+        int remainder = ballCount % gridTaskCount;
+        var futures = new ArrayList<Future<?>>(gridTaskCount);
+        int from = 0;
+        for (int workerIndex = 0; workerIndex < gridTaskCount; workerIndex++) {
+            int size = baseSize + (workerIndex < remainder ? 1 : 0);
+            int rangeStart = from;
+            int rangeEnd = rangeStart + size;
+            int assignedWorker = workerIndex;
+            futures.add(executor.submit(() -> {
+                var localGrid = new HashMap<GridCell, IntBag>();
+                for (int i = rangeStart; i < rangeEnd; i++) {
+                    GridCell assignedCellForBall = gridCellForBallCenter(balls.get(i), cellSize);
+                    localGrid.computeIfAbsent(assignedCellForBall, ignored -> new IntBag()).add(i);
+                }
+                workerGrids[assignedWorker] = localGrid;
+            }));
+            from = rangeEnd;
+        }
+        // Wait until every local grid has been produced.
+        awaitAll(futures);
+        return workerGrids;
+    }
+
+    private HashMap<GridCell, IntBag> mergeWorkerGrids(Map<GridCell, IntBag>[] workerGrids) {
         // Merge the local grids into one deterministic global view.
-        var combinedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
+        var combinedGrid = new HashMap<GridCell, IntBag>();
         for (var localGrid : workerGrids) {
             if (localGrid == null) {
                 continue;
@@ -138,83 +244,127 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 combinedGrid.computeIfAbsent(entry.getKey(), ignored -> new IntBag()).addAll(entry.getValue());
             }
         }
+        return combinedGrid;
+    }
 
+    private ArrayList<CellBucket> orderCellBuckets(Map<GridCell, IntBag> combinedGrid) {
         // Sort cells so the collision pass stays stable across runs.
         var orderedCellBuckets = new ArrayList<CellBucket>(combinedGrid.size());
         for (var entry : combinedGrid.entrySet()) {
             orderedCellBuckets.add(new CellBucket(entry.getKey(), entry.getValue()));
         }
         orderedCellBuckets.sort((first, second) -> first.cell().compareTo(second.cell()));
+        return orderedCellBuckets;
+    }
 
-        // Let workers collect collision corrections for the cells they own.
-        var workerDeltas = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCellBuckets.size())];
-        var workerPairs = new LongBag[Math.min(poolSize, orderedCellBuckets.size())];
-        executeParallelRanges(orderedCellBuckets.size(), (from, to, workerIndex) -> {
+    private SparseCollisionDeltaAccumulator collectCandidateCollisionCorrections(
+            Board board,
+            List<Ball> balls,
+            Map<GridCell, IntBag> combinedGrid,
+            ArrayList<CellBucket> orderedCellBuckets) {
+        // Each worker collects the corrections and contact pairs for the cells it owns.
+        var collisionCorrectionsByWorker = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCellBuckets.size())];
+        @SuppressWarnings("unchecked")
+        List<CollisionPair>[] collisionPairsByWorker = new List[Math.min(poolSize, orderedCellBuckets.size())];
+        int cellCount = orderedCellBuckets.size();
+        int cellTaskCount = Math.min(poolSize, cellCount);
+        if (cellTaskCount <= 1) {
+            // A tiny collision set is processed directly to avoid worker overhead.
             var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
-            var pairAccumulator = new LongBag();
-            for (int i = from; i < to; i++) {
+            var pairAccumulator = new ArrayList<CollisionPair>();
+            for (int i = 0; i < cellCount; i++) {
                 resolveOwnedCell(orderedCellBuckets.get(i), combinedGrid, balls, deltaAccumulator, pairAccumulator);
             }
-            workerDeltas[workerIndex] = deltaAccumulator;
-            workerPairs[workerIndex] = pairAccumulator;
-        });
+            if (cellCount > 0) {
+                collisionCorrectionsByWorker[0] = deltaAccumulator;
+                collisionPairsByWorker[0] = pairAccumulator;
+            }
+        } else {
+            // Each worker resolves the detection work for the cell slice it owns.
+            int baseSize = cellCount / cellTaskCount;
+            int remainder = cellCount % cellTaskCount;
+            var futures = new ArrayList<Future<?>>(cellTaskCount);
+            int from = 0;
+            for (int workerIndex = 0; workerIndex < cellTaskCount; workerIndex++) {
+                int size = baseSize + (workerIndex < remainder ? 1 : 0);
+                int rangeStart = from;
+                int rangeEnd = rangeStart + size;
+                int assignedWorker = workerIndex;
+                futures.add(executor.submit(() -> {
+                    var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
+                    var pairAccumulator = new ArrayList<CollisionPair>();
+                    for (int i = rangeStart; i < rangeEnd; i++) {
+                        resolveOwnedCell(orderedCellBuckets.get(i), combinedGrid, balls, deltaAccumulator, pairAccumulator);
+                    }
+                    collisionCorrectionsByWorker[assignedWorker] = deltaAccumulator;
+                    collisionPairsByWorker[assignedWorker] = pairAccumulator;
+                }));
+                from = rangeEnd;
+            }
+            // Wait until every collision task has finished.
+            awaitAll(futures);
+        }
 
         // Merge all worker corrections into a single batch to apply at the end.
         var combinedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
         int pairCount = 0;
-        for (int i = 0; i < workerDeltas.length; i++) {
-            if (workerDeltas[i] != null) {
-                combinedDeltas.merge(workerDeltas[i]);
+        for (int i = 0; i < collisionCorrectionsByWorker.length; i++) {
+            if (collisionCorrectionsByWorker[i] != null) {
+                combinedDeltas.merge(collisionCorrectionsByWorker[i]);
             }
-            if (workerPairs[i] != null) {
-                pairCount += workerPairs[i].size();
+            if (collisionPairsByWorker[i] != null) {
+                pairCount += collisionPairsByWorker[i].size();
             }
         }
 
-        // Record each collision pair exactly once, in sorted order.
-        long[] contactPairs = new long[pairCount];
-        int offset = 0;
-        for (var localPairBag : workerPairs) {
+        // Collect all confirmed collision candidates, sort them, and report each one once.
+        var contactPairs = new ArrayList<CollisionPair>(pairCount);
+        for (var localPairBag : collisionPairsByWorker) {
             if (localPairBag == null) {
                 continue;
             }
-            offset = localPairBag.copyInto(contactPairs, offset);
+            contactPairs.addAll(localPairBag);
         }
-        Arrays.sort(contactPairs);
-        for (long packedPair : contactPairs) {
-            board.recordCollision(balls.get(firstIndex(packedPair)), balls.get(secondIndex(packedPair)));
+        contactPairs.sort((first, second) -> {
+            int byFirst = Integer.compare(first.firstIndex(), second.firstIndex());
+            if (byFirst != 0) {
+                return byFirst;
+            }
+            return Integer.compare(first.secondIndex(), second.secondIndex());
+        });
+        for (var pair : contactPairs) {
+            board.recordCollision(balls.get(pair.firstIndex()), balls.get(pair.secondIndex()));
         }
 
-        // Apply all positional and velocity corrections after detection is complete.
-        applyMergedDeltas(balls, combinedDeltas);
+        return combinedDeltas;
     }
 
     private void resolveOwnedCell(
             CellBucket bucket,
-            Map<SpatialGridSupport.GridCell, IntBag> mergedGrid,
-            List<Ball> balls,
-            SparseCollisionDeltaAccumulator deltas,
-            LongBag contactPairs) {
+            Map<GridCell, IntBag> mergedGrid,
+        List<Ball> balls,
+        SparseCollisionDeltaAccumulator deltas,
+        List<CollisionPair> contactPairs) {
         IntBag indexes = bucket.indexes();
-        // Check balls that already live in the same cell.
+        // Detection phase: check balls that already live in the same cell.
         collectPairsWithinBag(indexes, balls, deltas, contactPairs);
-        // Check the neighboring cells that belong to this cell's ownership region.
-        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x() + 1, bucket.cell().y() - 1)),
+        // Detection phase: check the neighboring cells that belong to this cell's ownership region.
+        collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x() + 1, bucket.cell().y() - 1)),
                 balls, deltas, contactPairs);
-        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x() + 1, bucket.cell().y())),
+        collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x() + 1, bucket.cell().y())),
                 balls, deltas, contactPairs);
-        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x() + 1, bucket.cell().y() + 1)),
+        collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x() + 1, bucket.cell().y() + 1)),
                 balls, deltas, contactPairs);
-        collectCrossPairs(indexes, mergedGrid.get(new SpatialGridSupport.GridCell(bucket.cell().x(), bucket.cell().y() + 1)),
+        collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x(), bucket.cell().y() + 1)),
                 balls, deltas, contactPairs);
     }
 
     private void collectPairsWithinBag(
             IntBag indexes,
-            List<Ball> balls,
-            SparseCollisionDeltaAccumulator deltas,
-            LongBag contactPairs) {
-        // Compare every pair in the cell.
+        List<Ball> balls,
+        SparseCollisionDeltaAccumulator deltas,
+        List<CollisionPair> contactPairs) {
+        // Detection phase: compare every pair in the cell.
         for (int i = 0; i < indexes.size() - 1; i++) {
             int first = indexes.get(i);
             for (int j = i + 1; j < indexes.size(); j++) {
@@ -226,13 +376,13 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     private void collectCrossPairs(
             IntBag firstBag,
             IntBag secondBag,
-            List<Ball> balls,
-            SparseCollisionDeltaAccumulator deltas,
-            LongBag contactPairs) {
+        List<Ball> balls,
+        SparseCollisionDeltaAccumulator deltas,
+        List<CollisionPair> contactPairs) {
         if (secondBag == null) {
             return;
         }
-        // Compare the current cell with one neighboring cell at a time.
+        // Detection phase: compare the current cell with one neighboring cell at a time.
         for (int i = 0; i < firstBag.size(); i++) {
             int first = firstBag.get(i);
             for (int j = 0; j < secondBag.size(); j++) {
@@ -242,47 +392,18 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private void addContributionIfColliding(
-            List<Ball> balls,
-            int first,
-            int second,
-            SparseCollisionDeltaAccumulator deltas,
-            LongBag contactPairs) {
-        // Build the correction only when the balls actually overlap.
+        List<Ball> balls,
+        int first,
+        int second,
+        SparseCollisionDeltaAccumulator deltas,
+        List<CollisionPair> contactPairs) {
+        // Detection phase: build the correction only when the balls actually overlap.
         CollisionContribution contribution = computeCollisionContribution(balls, first, second);
         if (contribution == null) {
             return;
         }
         deltas.add(contribution);
-        contactPairs.add(encodePair(first, second));
-    }
-
-    private void applyMergedDeltas(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
-        // Nothing touched means nothing to apply.
-        if (merged.touchedCount() == 0) {
-            return;
-        }
-        // Keep tiny correction sets simple and sequential.
-        if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
-            applyMergedDeltasSequentially(balls, merged);
-            return;
-        }
-        // Reapply larger correction sets in parallel.
-        executeParallelRanges(merged.touchedCount(), (from, to, workerIndex) -> {
-            for (int i = from; i < to; i++) {
-                int ballIndex = merged.touchedIndex(i);
-                balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
-                balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
-            }
-        });
-    }
-
-    private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
-        // Apply each stored correction in index order.
-        for (int i = 0; i < merged.touchedCount(); i++) {
-            int ballIndex = merged.touchedIndex(i);
-            balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
-            balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
-        }
+        contactPairs.add(new CollisionPair(first, second));
     }
 
     private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
@@ -356,38 +477,11 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return Math.max(maxRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
-    private CenterCell computeCenterCell(Ball ball, double cellSize) {
+    private GridCell gridCellForBallCenter(Ball ball, double cellSize) {
         // Assign the ball to the grid cell that contains its center point.
-        return new CenterCell(new SpatialGridSupport.GridCell(
+        return new GridCell(
                 SpatialGridSupport.toCellCoordinate(ball.getPos().x(), cellSize),
-                SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize)));
-    }
-
-    private void executeParallelRanges(int itemCount, RangeTask rangeTask) {
-        if (itemCount == 0) {
-            return;
-        }
-        // Small batches stay sequential because task creation would cost more than it saves.
-        int taskCount = itemCount < 256 ? 1 : Math.min(poolSize, itemCount);
-        int baseSize = taskCount == 0 ? 0 : itemCount / taskCount;
-        int remainder = taskCount == 0 ? 0 : itemCount % taskCount;
-        if (taskCount <= 1) {
-            rangeTask.run(0, itemCount, 0);
-            return;
-        }
-        // Submit one task per chunk and keep the Future list so we can wait for all of them.
-        var futures = new ArrayList<Future<?>>(taskCount);
-        int from = 0;
-        for (int workerIndex = 0; workerIndex < taskCount; workerIndex++) {
-            int size = baseSize + (workerIndex < remainder ? 1 : 0);
-            int rangeStart = from;
-            int rangeEnd = rangeStart + size;
-            int assignedWorker = workerIndex;
-            futures.add(executor.submit(() -> rangeTask.run(rangeStart, rangeEnd, assignedWorker)));
-            from = rangeEnd;
-        }
-        // Join every submitted task and rethrow the first failure if one happened.
-        awaitAll(futures);
+                SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize));
     }
 
     private void ensureOpen() {
@@ -396,23 +490,10 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private static long encodePair(int first, int second) {
-        // Pack the two indexes so the collision pair can be sorted and deduplicated cheaply.
-        int low = Math.min(first, second);
-        int high = Math.max(first, second);
-        return (((long) low) << 32) | (high & 0xffffffffL);
-    }
-
-    private static int firstIndex(long packedPair) {
-        return (int) (packedPair >> 32);
-    }
-
-    private static int secondIndex(long packedPair) {
-        return (int) packedPair;
-    }
-
     private static int defaultPoolSize() {
         return Math.max(1, Runtime.getRuntime().availableProcessors() - 1);
+    }
+    private record CollisionPair(int firstIndex, int secondIndex) {
     }
 
     private void awaitAll(ArrayList<Future<?>> futures) {
@@ -435,16 +516,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             throw new IllegalStateException("task-based physics step failed", cause);
         }
     }
-
-    @FunctionalInterface
-    private interface RangeTask {
-        void run(int fromInclusive, int toExclusive, int workerIndex);
-    }
-
-    private record CenterCell(SpatialGridSupport.GridCell cell) {
-    }
-
-    private record CellBucket(SpatialGridSupport.GridCell cell, IntBag indexes) {
+    private record CellBucket(GridCell cell, IntBag indexes) {
     }
 
     private record CollisionContribution(
@@ -496,39 +568,9 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
     }
 
-    private static final class LongBag {
-
-        private long[] values = new long[16];
-        private int size;
-
-        private void add(long value) {
-            ensureCapacity(size + 1);
-            values[size++] = value;
-        }
-
-        private int size() {
-            return size;
-        }
-
-        private int copyInto(long[] target, int offset) {
-            System.arraycopy(values, 0, target, offset, size);
-            return offset + size;
-        }
-
-        private void ensureCapacity(int required) {
-            if (required <= values.length) {
-                return;
-            }
-            int newCapacity = values.length;
-            while (newCapacity < required) {
-                newCapacity *= 2;
-            }
-            values = Arrays.copyOf(values, newCapacity);
-        }
-    }
-
     private static final class SparseCollisionDeltaAccumulator {
 
+        // Store the summed correction for each ball index.
         private final double[] positionDeltaX;
         private final double[] positionDeltaY;
         private final double[] velocityDeltaX;
@@ -547,7 +589,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         private void add(CollisionContribution contribution) {
-            // Accumulate the positional and velocity correction for both balls.
+            // Resolution phase: add this collision contribution to the running totals for both balls.
             int first = contribution.firstIndex();
             int second = contribution.secondIndex();
             touch(first);
@@ -563,7 +605,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         }
 
         private void merge(SparseCollisionDeltaAccumulator other) {
-            // Merge only the balls that were touched by the other worker.
+            // Resolution phase: merge only the balls that were actually touched by the other worker, preserving the sums.
             for (int i = 0; i < other.touchedCount; i++) {
                 int index = other.touchedIndexes[i];
                 touch(index);
@@ -602,6 +644,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             if (touched[index]) {
                 return;
             }
+            // Resolution phase: record the index once so later merges and application can skip untouched balls.
             touched[index] = true;
             if (touchedCount == touchedIndexes.length) {
                 touchedIndexes = Arrays.copyOf(touchedIndexes, touchedIndexes.length * 2);
