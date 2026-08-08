@@ -17,9 +17,9 @@ public final class SpatialGridSupport {
         return Math.max(minRadius * PhysicsDefaults.RADIUS_TO_DIAMETER, PhysicsDefaults.MIN_SPATIAL_CELL_SIZE);
     }
 
-    /** Returns all grid cells covered by the ball's bounding box. */
+    /** Returns only the grid cells occupied by the ball's bounding box. */
     public static List<GridCell> occupiedCells(Ball ball, double cellSize) {
-        // A ball can span more than one cell, so register every covered cell.
+        // Only the cells actually covered by the ball are created here.
         int x0 = toCellCoordinate(ball.getPos().x() - ball.getRadius(), cellSize);
         int x1 = toCellCoordinate(ball.getPos().x() + ball.getRadius(), cellSize);
         int y0 = toCellCoordinate(ball.getPos().y() - ball.getRadius(), cellSize);
