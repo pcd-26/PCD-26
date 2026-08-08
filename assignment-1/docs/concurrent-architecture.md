@@ -31,7 +31,7 @@ calculate independent ranges; one deterministic commit updates the board.
 | --- | --- |
 | platform-thread concurrent version | `ThreadedGameRunner`, `PlatformThreadRangeScheduler`, `PhysicsWorker` |
 | task-based Executor version | `TaskBasedGameRunner`, `ExecutorRangeScheduler` |
-| modularity and encapsulation | shared `GameLoop`, `GameModel`, `Board`, and `ParallelPhysicsEngine` |
+| modularity and encapsulation | shared `GameLoop`, `GameModel`, `Board`, and separate `ThreadedPhysicsEngine` / `TaskBasedPhysicsEngine` implementations |
 | high-level/custom monitor | `CommandMailbox` and `WorkerCompletionMonitor` |
 | asynchronous players | Swing and `BotAgent` submit commands independently |
 | high ball count | spatial grid and parallel range processing |

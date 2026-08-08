@@ -241,8 +241,8 @@ This subnet is reusable for all worker phases:
 | --- | --- |
 | `TickReady`, `StartTick`, `FinishTick` | `pcd.poool.threaded.ThreadedGameRunner.runController()` |
 | `CommandsPending`, `DrainCommands` | `CommandMailbox` plus `GameLoop.tick(...)` |
-| `BoardWriteOwned` | `synchronized (board)` inside `ParallelPhysicsEngine` |
-| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `ParallelPhysicsEngine` plus `PlatformThreadRangeScheduler.execute(...)` |
+| `BoardWriteOwned` | `synchronized (board)` inside `ThreadedPhysicsEngine` |
+| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `ThreadedPhysicsEngine` plus `PlatformThreadRangeScheduler.execute(...)` |
 | worker chunk places and transitions | `pcd.poool.model.physics.threaded.PhysicsWorker` |
 | barrier places and joins | `pcd.poool.model.physics.threaded.WorkerCompletionMonitor.await()` |
 | `PublishSnapshot`, `SnapshotPublished` | `GameLoop.publishSnapshot()` and `RuntimeGameSnapshot.from(game)` |
@@ -258,8 +258,8 @@ results, applies the final writes, and only then publishes the snapshot.
 | --- | --- |
 | `TickReady`, `StartTick`, `FinishTick` | `pcd.poool.taskbased.TaskBasedGameRunner.tick()` |
 | `CommandsPending`, `DrainCommands` | `CommandMailbox` plus `GameLoop.tick(...)` |
-| `BoardWriteOwned` | `synchronized (board)` inside `ParallelPhysicsEngine` |
-| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `ParallelPhysicsEngine` plus `ExecutorRangeScheduler.execute(...)` |
+| `BoardWriteOwned` | `synchronized (board)` inside `TaskBasedPhysicsEngine` |
+| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `TaskBasedPhysicsEngine` plus `ExecutorRangeScheduler.execute(...)` |
 | worker chunk places and transitions | fixed `ExecutorService` workers inside `ExecutorRangeScheduler` |
 | barrier places and joins | `Future.get()` inside `ExecutorRangeScheduler` |
 | `PublishSnapshot`, `SnapshotPublished` | `GameLoop.publishSnapshot()` and `RuntimeGameSnapshot.from(game)` |
@@ -274,11 +274,11 @@ of manually owned platform threads.
 The abstract tick pipeline maps onto the following concrete methods:
 
 - integration phase:
-  - `ParallelPhysicsEngine.stepOnce(...)`
+  - `ThreadedPhysicsEngine.step(...)` / `TaskBasedPhysicsEngine.step(...)`
 - hole phase:
   - `board.applyHoleInteractions()`
 - local-grid phase:
-  - `ParallelPhysicsEngine.detectAndResolveCollisions(...)`
+  - `ThreadedPhysicsEngine` / `TaskBasedPhysicsEngine` collision phases
 - ordered-cell resolution phase:
   - `resolveOwnedCell(...)`
   - `collectPairsWithinBag(...)`

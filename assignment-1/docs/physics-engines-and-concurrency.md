@@ -1,28 +1,26 @@
 # Physics engine and concurrency
 
-Poool has one parallel physics algorithm and two execution policies. This is
+Poool has one sequential engine and two separate concurrent engines. This is
 the central simplification of the final architecture.
 
 ## Components
 
 - `SequentialPhysicsEngine` is the single-threaded correctness baseline.
-- `ParallelPhysicsEngine` contains the complete parallel step algorithm.
-- `RangeScheduler` is the only concurrency seam used by that algorithm.
+- `ThreadedPhysicsEngine` contains the full platform-thread step algorithm.
+- `TaskBasedPhysicsEngine` contains the full executor-based step algorithm.
 - `PlatformThreadRangeScheduler` owns reusable platform-thread workers and a
   custom completion monitor.
 - `ExecutorRangeScheduler` submits ranges to a fixed `ExecutorService` and
   waits on their futures.
-- `ThreadedPhysicsEngine` and `TaskBasedPhysicsEngine` are small public facades
-  that select the appropriate scheduler.
 
-The platform-thread and task-based versions therefore cannot drift into two
-different physical simulations. They execute the same phases, collision math,
-ordering rules, and commit logic.
+The platform-thread and task-based versions therefore still follow the same
+physics rules, even though their implementations are separate.
 
 ## One parallel step
 
-`ParallelPhysicsEngine.step(board, elapsedMillis)` keeps the board under one
-writer and splits a long elapsed duration into fixed sub-steps. Each sub-step:
+`ThreadedPhysicsEngine.step(board, elapsedMillis)` and
+`TaskBasedPhysicsEngine.step(board, elapsedMillis)` keep the board under one
+writer and split a long elapsed duration into fixed sub-steps. Each sub-step:
 
 1. collects active balls;
 2. integrates disjoint ball ranges in parallel;

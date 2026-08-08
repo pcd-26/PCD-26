@@ -12,7 +12,7 @@ the final snapshot on shutdown. An optional `poool-threaded-bot` thread runs
 ## Physics workers
 
 `ThreadedPhysicsEngine` is a small facade. It constructs
-`ParallelPhysicsEngine` with `PlatformThreadRangeScheduler`. The scheduler owns
+`ThreadedPhysicsEngine` with `PlatformThreadRangeScheduler`. The scheduler owns
 long-lived `PhysicsWorker` platform threads. For each parallel phase it:
 
 1. partitions a contiguous index range;

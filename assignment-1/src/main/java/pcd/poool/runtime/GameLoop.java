@@ -9,10 +9,11 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsStepper;
 
 /**
- * Strategy-independent game tick.
+ * Strategy-independent game tick and publication boundary.
  *
  * <p>The caller owns the controller thread or executor task. This class owns
- * the model, serializes commands, advances one tick, and publishes a snapshot.
+ * the model, serializes commands, advances one tick, and publishes immutable
+ * snapshots for readers.
  */
 public final class GameLoop {
 
@@ -33,13 +34,14 @@ public final class GameLoop {
 
     /** Executes all commands, advances physics, and publishes one snapshot. */
     public void tick(long tickMillis) {
-        // Apply queued shots and other pending commands first.
+        // Apply queued shots and other pending commands first so the tick sees
+        // the latest user intent.
         drainCommands();
         // Only advance the simulation while the match is still running.
         if (!game.snapshot().isFinished()) {
             game.step(tickMillis);
         }
-        // Publish a fresh immutable snapshot for readers.
+        // Publish a fresh immutable snapshot for readers after the tick.
         publishSnapshot();
     }
 
@@ -72,14 +74,18 @@ public final class GameLoop {
 
     /** Rejects pending commands and publishes the final state. */
     public void close() {
+        // Stop accepting new commands before exposing the final snapshot.
         commands.close();
+        // Make the last state visible to readers waiting on a condition.
         publishSnapshot();
     }
 
+    // Applies every queued command to the live model under single-writer control.
     private void drainCommands() {
         commands.drain(game);
     }
 
+    // Rebuilds the immutable snapshot and wakes any waiter.
     private synchronized void publishSnapshot() {
         snapshot = RuntimeGameSnapshot.from(game);
         notifyAll();
