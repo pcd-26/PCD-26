@@ -1,6 +1,6 @@
 package pcd.poool.model.physics.threaded;
 
-/** Long-lived platform thread used by {@link PlatformThreadRangeScheduler}. */
+/** Long-lived platform thread owned directly by the threaded physics engine. */
 class PhysicsWorker implements AutoCloseable {
 
     private static final long JOIN_TIMEOUT_MILLIS = 1_000;
@@ -16,7 +16,7 @@ class PhysicsWorker implements AutoCloseable {
         thread.start();
     }
 
-    /** Assigns one phase chunk to this worker. */
+    /** Assigns one contiguous range of work to this worker. */
     synchronized void assign(Runnable task, WorkerCompletionMonitor completion) {
         while (this.task != null && running) {
             try {
@@ -56,6 +56,7 @@ class PhysicsWorker implements AutoCloseable {
                 return;
             }
             try {
+                // Run the assigned chunk and notify the barrier when it finishes.
                 assignedTask.run();
                 completion.completeOne();
             } catch (RuntimeException ex) {
