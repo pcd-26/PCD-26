@@ -20,16 +20,16 @@ Swing / Bot
                    |- PlatformThreadRangeScheduler
                    `- ExecutorRangeScheduler
 
-GameLoop -> RuntimeGameSnapshot -> PooolApplication -> View
+GameLoop -> RuntimeGameSnapshot -> launcher -> View
 ```
 
 ## The five concepts to explain
 
-### 1. `PooolApplication`
+### 1. Launcher lifecycle
 
-The two concurrent launchers delegate their common GUI lifecycle here. It owns
-render refresh, restart, FPS, bot preview, and shutdown. `ThreadedPoool` and
-`TaskBasedPoool` only choose which `GameRuntime` to construct.
+`ThreadedPoool` and `TaskBasedPoool` each own their GUI lifecycle directly. They
+handle render refresh, restart, FPS, bot preview, and shutdown around the
+`GameRuntime` they construct.
 
 ### 2. `GameLoop`
 
@@ -93,7 +93,7 @@ flows into `ViewModel` and Swing repaints it on the EDT.
 
 ## Package map
 
-- `pcd.poool`: three launchers and shared `PooolApplication`.
+- `pcd.poool`: three launchers with separate top-level runtime entry points.
 - `pcd.poool.runtime`: `GameRuntime`, `GameLoop`, `CommandMailbox`, bot,
   configuration, and runtime snapshot.
 - `pcd.poool.model.game`: game rules and logical snapshot.
