@@ -112,7 +112,7 @@ class ThreadedPhysicsEngineTest {
 
             board.updateState(1);
 
-            var balls = board.getCollisionBalls();
+            var balls = board.getCandidateCollisionBalls();
             var leftCueBall = balls.get(0);
             var lowerCueBall = balls.get(1);
             var sharedTarget = balls.get(2);

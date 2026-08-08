@@ -79,17 +79,17 @@ public final class ParallelPhysicsEngine implements PhysicsStepper, AutoCloseabl
         var bounds = board.getBounds();
 
         long stateReadStart = profile == null ? 0 : System.nanoTime();
-        var activeBalls = activeBalls(board);
+        var candidateCollisionBalls = loadCandidateCollisionBalls(board);
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - stateReadStart;
         }
 
         // Movement.
         long integrationStart = profile == null ? 0 : System.nanoTime();
-        executeParallelRanges(activeBalls.size(), (from, to, workerIndex) -> {
+        executeParallelRanges(candidateCollisionBalls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
-                activeBalls.get(i).updateState(dt, bounds);
+                candidateCollisionBalls.get(i).updateState(dt, bounds);
             }
             if (profile != null) {
                 profile.integrationWorkerItems[workerIndex] += to - from;
@@ -110,17 +110,17 @@ public final class ParallelPhysicsEngine implements PhysicsStepper, AutoCloseabl
 
         // Collision detection.
         long collisionStateReadStart = profile == null ? 0 : System.nanoTime();
-        var collisionBalls = activeBallsBuffer.get();
-        board.fillCandidateCollisionBalls(collisionBalls); // Fills the collision candidates.
+        var candidateCollisionBallsForCollisionPhase = activeBallsBuffer.get();
+        board.fillCandidateCollisionBalls(candidateCollisionBallsForCollisionPhase); // Fills the collision candidates.
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - collisionStateReadStart;
         }
-        if (collisionBalls.size() < 2) {
+        if (candidateCollisionBallsForCollisionPhase.size() < 2) {
             return;
         }
 
         // Collision resolution.
-        detectAndResolveCollisions(board, collisionBalls, profile);
+        detectAndResolveCollisions(board, candidateCollisionBallsForCollisionPhase, profile);
     }
 
     private void detectAndResolveCollisions(Board board, List<Ball> balls, StepProfileAccumulator profile) {
@@ -368,10 +368,10 @@ public final class ParallelPhysicsEngine implements PhysicsStepper, AutoCloseabl
     }
 
     // Reuses a buffer to collect the active balls.
-    private List<Ball> activeBalls(Board board) {
-        var activeBalls = activeBallsBuffer.get();
-        board.fillCandidateCollisionBalls(activeBalls);
-        return activeBalls;
+    private List<Ball> loadCandidateCollisionBalls(Board board) {
+        var candidateCollisionBalls = activeBallsBuffer.get();
+        board.fillCandidateCollisionBalls(candidateCollisionBalls);
+        return candidateCollisionBalls;
     }
 
     // Places a ball in the grid cell that contains its center.

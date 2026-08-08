@@ -59,7 +59,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
         board.applyHoleInteractions();
 
         // Collision resolution.
-        var allBalls = board.getCollisionBalls();
+        var allBalls = board.getCandidateCollisionBalls();
         for (var pair : collisionDetector.detectCollisionPairs(allBalls)) {
             var first = allBalls.get(pair.firstIndex());
             var second = allBalls.get(pair.secondIndex());
