@@ -99,9 +99,9 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             return;
         }
 
-        // Detect candidate collisions first, then resolve the accumulated corrections.
-        SparseCollisionDeltaAccumulator detectedCollisions = detectCandidateCollisions(board, activeBallsForCollisionPhase);
-        resolveCollisions(activeBallsForCollisionPhase, detectedCollisions);
+        // Detect candidate collisions first, then resolve the accumulated deltas.
+        SparseCollisionDeltaAccumulator detectedCollisionDeltas = detectCandidateCollisions(board, activeBallsForCollisionPhase);
+        resolveCollisions(activeBallsForCollisionPhase, detectedCollisionDeltas);
     }
 
     private void advanceActiveBalls(Board board, long dt) {
@@ -148,25 +148,25 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         Map<GridCell, IntBag>[] workerGrids = buildWorkerGrids(balls, cellSize);
         var combinedGrid = mergeWorkerGrids(workerGrids);
         var orderedCellBuckets = orderCellBuckets(combinedGrid);
-        return collectCandidateCollisionCorrections(board, balls, combinedGrid, orderedCellBuckets);
+        return collectCandidateCollisionDeltas(board, balls, combinedGrid, orderedCellBuckets);
     }
 
-    private void resolveCollisions(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
-        // Resolution phase: apply all accumulated positional and velocity corrections.
-        if (merged.touchedCount() == 0) {
+    private void resolveCollisions(List<Ball> balls, SparseCollisionDeltaAccumulator accumulatedCollisionDeltas) {
+        // Resolution phase: apply all accumulated positional and velocity deltas.
+        if (accumulatedCollisionDeltas.touchedCount() == 0) {
             return;
         }
         // Small batches are cheaper to apply sequentially than to split again.
-        if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
-            for (int i = 0; i < merged.touchedCount(); i++) {
-                int ballIndex = merged.touchedIndex(i);
-                balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
-                balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
+        if (accumulatedCollisionDeltas.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
+            for (int i = 0; i < accumulatedCollisionDeltas.touchedCount(); i++) {
+                int ballIndex = accumulatedCollisionDeltas.touchedIndex(i);
+                balls.get(ballIndex).translate(new V2d(accumulatedCollisionDeltas.positionDeltaX(ballIndex), accumulatedCollisionDeltas.positionDeltaY(ballIndex)));
+                balls.get(ballIndex).addVelocity(new V2d(accumulatedCollisionDeltas.velocityDeltaX(ballIndex), accumulatedCollisionDeltas.velocityDeltaY(ballIndex)));
             }
             return;
         }
-        // Reapply larger correction sets in parallel.
-        int touchedCount = merged.touchedCount();
+        // Reapply larger delta sets in parallel.
+        int touchedCount = accumulatedCollisionDeltas.touchedCount();
         int applyTaskCount = Math.min(poolSize, touchedCount);
         int baseSize = touchedCount / applyTaskCount;
         int remainder = touchedCount % applyTaskCount;
@@ -178,14 +178,14 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             int rangeEnd = rangeStart + size;
             futures.add(executor.submit(() -> {
                 for (int i = rangeStart; i < rangeEnd; i++) {
-                    int ballIndex = merged.touchedIndex(i);
-                    balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
-                    balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
+                    int ballIndex = accumulatedCollisionDeltas.touchedIndex(i);
+                    balls.get(ballIndex).translate(new V2d(accumulatedCollisionDeltas.positionDeltaX(ballIndex), accumulatedCollisionDeltas.positionDeltaY(ballIndex)));
+                    balls.get(ballIndex).addVelocity(new V2d(accumulatedCollisionDeltas.velocityDeltaX(ballIndex), accumulatedCollisionDeltas.velocityDeltaY(ballIndex)));
                 }
             }));
             from = rangeEnd;
         }
-        // Wait until every correction task has finished.
+        // Wait until every delta task has finished.
         awaitAll(futures);
     }
 
@@ -257,13 +257,13 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         return orderedCellBuckets;
     }
 
-    private SparseCollisionDeltaAccumulator collectCandidateCollisionCorrections(
+    private SparseCollisionDeltaAccumulator collectCandidateCollisionDeltas(
             Board board,
             List<Ball> balls,
             Map<GridCell, IntBag> combinedGrid,
             ArrayList<CellBucket> orderedCellBuckets) {
-        // Each worker collects the corrections and contact pairs for the cells it owns.
-        var collisionCorrectionsByWorker = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCellBuckets.size())];
+        // Each worker collects the deltas and contact pairs for the cells it owns.
+        var collisionDeltasByWorker = new SparseCollisionDeltaAccumulator[Math.min(poolSize, orderedCellBuckets.size())];
         @SuppressWarnings("unchecked")
         List<CollisionPair>[] collisionPairsByWorker = new List[Math.min(poolSize, orderedCellBuckets.size())];
         int cellCount = orderedCellBuckets.size();
@@ -276,7 +276,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 resolveOwnedCell(orderedCellBuckets.get(i), combinedGrid, balls, deltaAccumulator, pairAccumulator);
             }
             if (cellCount > 0) {
-                collisionCorrectionsByWorker[0] = deltaAccumulator;
+                collisionDeltasByWorker[0] = deltaAccumulator;
                 collisionPairsByWorker[0] = pairAccumulator;
             }
         } else {
@@ -296,7 +296,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                     for (int i = rangeStart; i < rangeEnd; i++) {
                         resolveOwnedCell(orderedCellBuckets.get(i), combinedGrid, balls, deltaAccumulator, pairAccumulator);
                     }
-                    collisionCorrectionsByWorker[assignedWorker] = deltaAccumulator;
+                    collisionDeltasByWorker[assignedWorker] = deltaAccumulator;
                     collisionPairsByWorker[assignedWorker] = pairAccumulator;
                 }));
                 from = rangeEnd;
@@ -305,12 +305,12 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             awaitAll(futures);
         }
 
-        // Merge all worker corrections into a single batch to apply at the end.
+        // Merge all worker deltas into a single batch to apply at the end.
         var combinedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
         int pairCount = 0;
-        for (int i = 0; i < collisionCorrectionsByWorker.length; i++) {
-            if (collisionCorrectionsByWorker[i] != null) {
-                combinedDeltas.merge(collisionCorrectionsByWorker[i]);
+        for (int i = 0; i < collisionDeltasByWorker.length; i++) {
+            if (collisionDeltasByWorker[i] != null) {
+                combinedDeltas.merge(collisionDeltasByWorker[i]);
             }
             if (collisionPairsByWorker[i] != null) {
                 pairCount += collisionPairsByWorker[i].size();
@@ -397,7 +397,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
         int second,
         SparseCollisionDeltaAccumulator deltas,
         List<CollisionPair> contactPairs) {
-        // Detection phase: build the correction only when the balls actually overlap.
+        // Detection phase: build the delta only when the balls actually overlap.
         CollisionContribution contribution = computeCollisionContribution(balls, first, second);
         if (contribution == null) {
             return;
@@ -451,7 +451,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
             secondVelocityDeltaY = (impulse / b.getMass()) * ny;
         }
 
-        // Package the correction so it can be merged with the other worker results.
+        // Package the delta so it can be merged with the other worker results.
         return new CollisionContribution(
                 firstIndex,
                 secondIndex,
@@ -570,7 +570,7 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     private static final class SparseCollisionDeltaAccumulator {
 
-        // Store the summed correction for each ball index.
+        // Store the summed delta for each ball index.
         private final double[] positionDeltaX;
         private final double[] positionDeltaY;
         private final double[] velocityDeltaX;
