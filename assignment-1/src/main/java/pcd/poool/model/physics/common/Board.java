@@ -241,7 +241,8 @@ public class Board {
                 pocketedSmallBalls++;
                 var scorer = lastDirectCueTouch.remove(ball);
                 if (scorer != null) {
-                    pendingScoredSmallBalls.merge(scorer, 1, Integer::sum);
+                    int updatedScore = pendingScoredSmallBalls.getOrDefault(scorer, 0) + 1;
+                    pendingScoredSmallBalls.put(scorer, updatedScore);
                 }
             }
         }
@@ -273,7 +274,8 @@ public class Board {
                 pocketedSmallBalls++;
                 var scorer = lastDirectCueTouch.remove(ball);
                 if (scorer != null) {
-                    pendingScoredSmallBalls.merge(scorer, 1, Integer::sum);
+                    int updatedScore = pendingScoredSmallBalls.getOrDefault(scorer, 0) + 1;
+                    pendingScoredSmallBalls.put(scorer, updatedScore);
                 }
             }
         }
