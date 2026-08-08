@@ -189,7 +189,7 @@ public class Board {
     }
 
     // Gets all active balls that participate in collision detection.
-    public synchronized List<Ball> getCollisionBalls() {
+    public synchronized List<Ball> getCandidateCollisionBalls() {
         var allBalls = new ArrayList<Ball>();
         fillCandidateCollisionBalls(allBalls);
         return allBalls;
