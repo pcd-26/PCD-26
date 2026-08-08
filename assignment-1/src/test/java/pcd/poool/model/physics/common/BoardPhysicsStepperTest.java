@@ -3,7 +3,6 @@ package pcd.poool.model.physics.common;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
@@ -38,18 +37,17 @@ class BoardPhysicsStepperTest {
     }
 
     @Test
-    void fillCandidateCollisionBallsReusesTheProvidedBuffer() {
+    void getCandidateCollisionBallsReturnsACopy() {
         var board = new Board((target, elapsedMillis) -> {});
         board.init(new EmptyBoardConf());
 
-        var target = new ArrayList<Ball>();
-        target.add(new Ball(new P2d(99, 99), 1.0, 1.0, new V2d(0, 0)));
+        var copy = board.getActiveBalls();
+        copy.add(new Ball(new P2d(99, 99), 1.0, 1.0, new V2d(0, 0)));
 
-        board.fillCandidateCollisionBalls(target);
-
-        assertEquals(2, target.size());
-        assertEquals(board.getPlayerBallEntity(), target.get(0));
-        assertEquals(board.getBotBallEntity(), target.get(1));
+        assertEquals(3, copy.size());
+        assertEquals(2, board.getActiveBalls().size());
+        assertEquals(board.getPlayerBallEntity(), copy.get(0));
+        assertEquals(board.getBotBallEntity(), copy.get(1));
     }
 
     @Test

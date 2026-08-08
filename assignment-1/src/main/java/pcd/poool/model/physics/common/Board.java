@@ -176,23 +176,17 @@ public class Board {
         return smallBalls;
     }
 
-    // Copies the active balls that may collide into a caller-provided list.
-    public synchronized void fillCandidateCollisionBalls(List<Ball> target) {
-        target.clear();
+    // Returns a copy of the active balls.
+    public synchronized List<Ball> getActiveBalls() {
+        var activeBalls = new ArrayList<Ball>();
         if (playerBall != null && !playerBallPocketed) {
-            target.add(playerBall);
+            activeBalls.add(playerBall);
         }
         if (botBall != null && !botBallPocketed) {
-            target.add(botBall);
+            activeBalls.add(botBall);
         }
-        target.addAll(smallBalls);
-    }
-
-    // Gets all active balls that participate in collision detection.
-    public synchronized List<Ball> getCandidateCollisionBalls() {
-        var allBalls = new ArrayList<Ball>();
-        fillCandidateCollisionBalls(allBalls);
-        return allBalls;
+        activeBalls.addAll(smallBalls);
+        return activeBalls;
     }
 
     // Records the collision for cue-ball touch bookkeeping.

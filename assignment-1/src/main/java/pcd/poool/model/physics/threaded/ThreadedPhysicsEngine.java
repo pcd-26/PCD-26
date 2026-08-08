@@ -23,7 +23,6 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
 
     private final long maxStepMillis;
     private final RangeScheduler scheduler;
-    private final ThreadLocal<ArrayList<Ball>> activeBallsBuffer = ThreadLocal.withInitial(ArrayList::new);
     private boolean closed;
 
     public ThreadedPhysicsEngine() {
@@ -87,19 +86,19 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
     private void stepOnce(Board board, long dt, StepProfileAccumulator profile) {
         var bounds = board.getBounds();
 
-        // Read the candidate balls first: only these need integration and collision checks.
+        // Read all active balls first: only these need integration and collision checks.
         long stateReadStart = profile == null ? 0 : System.nanoTime();
-        var candidateCollisionBalls = loadCandidateCollisionBalls(board);
+        var activeBalls = loadActiveBalls(board);
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - stateReadStart;
         }
 
         // Phase 1: movement. Each worker updates one contiguous slice of the list.
         long integrationStart = profile == null ? 0 : System.nanoTime();
-        executeParallelRanges(candidateCollisionBalls.size(), (from, to, workerIndex) -> {
+        executeParallelRanges(activeBalls.size(), (from, to, workerIndex) -> {
             long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
-                candidateCollisionBalls.get(i).updateState(dt, bounds);
+                activeBalls.get(i).updateState(dt, bounds);
             }
             if (profile != null) {
                 profile.integrationWorkerItems[workerIndex] += to - from;
@@ -120,16 +119,15 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
 
         // Read the balls again before the broad phase, because some may have been removed.
         long collisionStateReadStart = profile == null ? 0 : System.nanoTime();
-        var candidateCollisionBallsForCollisionPhase = activeBallsBuffer.get();
-        board.fillCandidateCollisionBalls(candidateCollisionBallsForCollisionPhase);
+        var activeBallsForCollisionPhase = board.getActiveBalls();
         if (profile != null) {
             profile.stateReadNanos += System.nanoTime() - collisionStateReadStart;
         }
-        if (candidateCollisionBallsForCollisionPhase.size() < 2) {
+        if (activeBallsForCollisionPhase.size() < 2) {
             return;
         }
 
-        detectAndResolveCollisions(board, candidateCollisionBallsForCollisionPhase, profile);
+        detectAndResolveCollisions(board, activeBallsForCollisionPhase, profile);
     }
 
     private void detectAndResolveCollisions(Board board, List<Ball> balls, StepProfileAccumulator profile) {
@@ -382,11 +380,9 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
                 secondVelocityDeltaY);
     }
 
-    // Reload only the candidate balls because the board may have changed the live list.
-    private List<Ball> loadCandidateCollisionBalls(Board board) {
-        var balls = activeBallsBuffer.get();
-        board.fillCandidateCollisionBalls(balls);
-        return balls;
+    // Reload the active balls because the board may have changed the live list.
+    private List<Ball> loadActiveBalls(Board board) {
+        return board.getActiveBalls();
     }
 
     // The cell size must be large enough to avoid splitting one ball across too many cells.
