@@ -24,8 +24,8 @@ python assignment-1/verification/jpf/run_jpf.py
 
 ## Explanation order
 
-Start from `PooolApplication`, then follow `GameLoop -> GameModel -> Board ->
-PhysicsEngine`. Explain `CommandMailbox` as the input boundary and
+Start from the launcher you are presenting, then follow `GameLoop -> GameModel
+-> Board -> PhysicsEngine`. Explain `CommandMailbox` as the input boundary and
 `RangeScheduler` as the only difference between the two parallel engines.
 Benchmark and verification packages support the report but are not part of the
 playable game artifact.
