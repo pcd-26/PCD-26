@@ -10,19 +10,7 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 
-/**
- * Immutable benchmark workload definition for deterministic physics
- * comparisons.
- *
- * <p>The workload keeps the layout metadata in one place and can build a fresh
- * {@link BoardConf} for each engine so repeated runs always start from the same
- * initial state.
- *
- * @param size workload size category
- * @param collisionProfile collision pattern to stress
- * @param boardBoundary board bounds used by the workload
- * @param seed deterministic seed used to generate the initial state
- */
+/** Immutable benchmark workload for deterministic physics comparisons. */
 public record BenchmarkWorkload(
         WorkloadSize size,
         CollisionProfile collisionProfile,
@@ -42,50 +30,29 @@ public record BenchmarkWorkload(
     private static final double LOW_COLLISION_VELOCITY = 0.0;
     private static final double HIGH_COLLISION_VELOCITY = 0.085;
 
-    /**
-     * Creates a workload definition.
-     *
-     * @param size workload size category
-     * @param collisionProfile collision pattern to stress
-     * @param boardBoundary board bounds used by the workload
-     * @param seed deterministic seed used to generate the initial state
-     */
+    /** Creates a workload definition. */
     public BenchmarkWorkload {
         Objects.requireNonNull(size, "size");
         Objects.requireNonNull(collisionProfile, "collisionProfile");
         Objects.requireNonNull(boardBoundary, "boardBoundary");
     }
 
-    /**
-     * Returns the number of small balls in the workload.
-     *
-     * @return small-ball count
-     */
+    /** Returns the number of small balls in the workload. */
     public int balls() {
         return size.balls();
     }
 
-    /**
-     * Returns the number of simulation ticks in the workload.
-     *
-     * @return tick count
-     */
+    /** Returns the number of simulation ticks in the workload. */
     public int ticks() {
         return size.ticks();
     }
 
-    /**
-     * Builds a fresh deterministic board configuration for this workload.
-     *
-     * @return new board configuration
-     */
+    /** Builds a fresh deterministic board configuration for this workload. */
     public BoardConf createBoardConf() {
         return new DeterministicBenchmarkBoardConf(this);
     }
 
-    /**
-     * Supported benchmark size categories.
-     */
+    /** Supported benchmark size categories. */
     public enum WorkloadSize {
         SMALL(100, 600),
         MEDIUM(500, 900),
@@ -99,28 +66,18 @@ public record BenchmarkWorkload(
             this.ticks = ticks;
         }
 
-        /**
-         * Gets the small-ball count associated with this size.
-         *
-         * @return number of small balls
-         */
+        /** Returns the small-ball count associated with this size. */
         public int balls() {
             return balls;
         }
 
-        /**
-         * Gets the tick count associated with this size.
-         *
-         * @return number of simulation ticks
-         */
+        /** Returns the tick count associated with this size. */
         public int ticks() {
             return ticks;
         }
     }
 
-    /**
-     * Collision profiles used by the deterministic workloads.
-     */
+    /** Collision profiles used by the deterministic workloads. */
     public enum CollisionProfile {
         LOW_COLLISION,
         HIGH_COLLISION

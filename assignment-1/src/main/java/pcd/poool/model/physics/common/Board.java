@@ -108,7 +108,7 @@ public class Board {
         return pocketedSmallBalls;
     }
 
-    // Consumes all pending score events regardless of player. Legacy compatibility helper.
+    // Consumes all pending score events regardless of player.
     public synchronized int consumePendingScoredSmallBalls() {
         int scored = pendingScoredSmallBalls.values().stream().mapToInt(Integer::intValue).sum();
         pendingScoredSmallBalls.clear();
@@ -195,9 +195,11 @@ public class Board {
         return allBalls;
     }
 
-    // Records the collision and lets the helper map it to the right cue ball.
+    // Records the collision for cue-ball touch bookkeeping.
     public synchronized void recordCollision(Ball first, Ball second) {
+        // Direct cue touches only matter when a cue ball hits a small ball.
         recordDirectCueTouchIfRelevant(first, second);
+        // Small-ball collisions clear any earlier direct-touch ownership.
         clearSmallBallScoringOnIndirectTouch(first, second);
     }
 
@@ -244,8 +246,11 @@ public class Board {
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (isInsideHole(ball)) {
+                // Remove via iterator to keep the board list consistent during iteration.
                 iterator.remove();
                 pocketedSmallBalls++;
+
+                // Credit the player that last touched this ball directly, if any.
                 var scorer = lastDirectCueTouch.remove(ball);
                 if (scorer != null) {
                     int updatedScore = pendingScoredSmallBalls.getOrDefault(scorer, 0) + 1;
@@ -277,8 +282,11 @@ public class Board {
         while (iterator.hasNext()) {
             var ball = iterator.next();
             if (pocketed.contains(ball)) {
+                // Remove via iterator to keep the board list consistent during iteration.
                 iterator.remove();
                 pocketedSmallBalls++;
+
+                // Credit the player that last touched this ball directly, if any.
                 var scorer = lastDirectCueTouch.remove(ball);
                 if (scorer != null) {
                     int updatedScore = pendingScoredSmallBalls.getOrDefault(scorer, 0) + 1;
@@ -297,6 +305,7 @@ public class Board {
 
     private boolean isInsideHole(Ball ball) {
         for (var hole : holes) {
+            // A ball is pocketed as soon as it enters any hole.
             if (hole.contains(ball.getPos())) {
                 return true;
             }

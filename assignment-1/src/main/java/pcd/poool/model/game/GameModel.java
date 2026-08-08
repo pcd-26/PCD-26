@@ -5,7 +5,7 @@ import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsStepper;
 
-// Shared gameplay model.
+// Shared gameplay model and match state.
 public class GameModel {
 
     private static final double MIN_SHOT_SPEED = 0.05;
@@ -16,7 +16,7 @@ public class GameModel {
     private final long startTimeMillis = System.currentTimeMillis();
     private final StartupCountdown countdown;
 
-    // Checks whether the startup countdown is still blocking shots.
+    // Checks whether the startup countdown still blocks shots.
     public synchronized boolean isCountdownActive() {
         return countdown.enabled()
                 && (System.currentTimeMillis() - startTimeMillis < countdown.durationMillis());
@@ -32,17 +32,17 @@ public class GameModel {
     private long stepCount;
     private long accumulatedStepNanos;
 
-    // Creates a new game using the default sequential physics engine.
+    // Creates a new game with the default physics engine.
     public GameModel(BoardConf conf) {
         this(conf, null);
     }
 
-    // Creates a new game using the given physics stepper and the default countdown policy.
+    // Creates a new game with a custom physics stepper and the default countdown policy.
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper) {
         this(conf, physicsStepper, StartupCountdown.enabledDefault());
     }
 
-    // Creates a new game using the given physics stepper and countdown policy.
+    // Creates a new game with explicit physics and countdown settings.
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper, StartupCountdown startupCountdown) {
         board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
@@ -63,7 +63,7 @@ public class GameModel {
         return shoot(Player.BOT, computeBotShot());
     }
 
-    // Computes the bot shot without mutating the game.
+    // Computes the bot shot without mutating the game state.
     public synchronized V2d previewBotShot() {
         if (!canBotShoot()) {
             return new V2d(0, 0);
@@ -71,12 +71,12 @@ public class GameModel {
         return computeBotShot();
     }
 
-    // Checks whether the human cue ball may be shot now.
+    // Checks whether the human cue ball can be shot now.
     public synchronized boolean canHumanShoot() {
         return canShoot(Player.HUMAN);
     }
 
-    // Checks whether the bot cue ball may be shot now.
+    // Checks whether the bot cue ball can be shot now.
     public synchronized boolean canBotShoot() {
         return canShoot(Player.BOT);
     }
@@ -103,12 +103,16 @@ public class GameModel {
         long start = System.nanoTime();
         board.updateState(dtMillis);
         accumulatedStepNanos += System.nanoTime() - start;
+
+        // Track simulated time separately from wall-clock time.
         simulatedElapsedMillis += dtMillis;
         stepCount++;
 
+        // Consume score events after the physics step has settled.
         humanScore += board.consumePendingScoredSmallBalls(Player.HUMAN);
         botScore += board.consumePendingScoredSmallBalls(Player.BOT);
 
+        // Cue-ball pocketing ends the match immediately.
         if (board.isPlayerBallPocketed()) {
             finishGame(Player.BOT, GameOverReason.HUMAN_CUE_BALL_POCKETED);
             return;
@@ -117,6 +121,7 @@ public class GameModel {
             finishGame(Player.HUMAN, GameOverReason.BOT_CUE_BALL_POCKETED);
             return;
         }
+        // If all small balls are gone, the winner is decided by score.
         if (board.getBalls().isEmpty()) {
             finishGameByScore();
             return;
@@ -124,7 +129,7 @@ public class GameModel {
         refreshStatusFromBoard();
     }
 
-    // Exposes the owned mutable board for rendering and physics tests.
+    // Exposes the owned board for rendering and physics tests.
     public synchronized Board board() {
         return board;
     }
@@ -145,6 +150,7 @@ public class GameModel {
     }
 
     private boolean canShoot(Player player) {
+        // The countdown has priority over every other shooting rule.
         if (isCountdownActive()) {
             return false;
         }

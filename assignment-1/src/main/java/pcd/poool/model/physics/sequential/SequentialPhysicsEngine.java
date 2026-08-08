@@ -32,7 +32,7 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
-        // Process the whole elapsed time in fixed-size chunks.
+        // Break long updates into smaller deterministic physics slices.
         long remaining = elapsedMillis;
         while (remaining > 0) {
             long dt = Math.min(maxStepMillis, remaining);
@@ -41,10 +41,11 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
         }
     }
 
-    // Moves balls, applies holes, then resolves collisions.
+    // Runs one complete physics slice.
     private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
 
+        // First move every active ball using the same time slice.
         if (board.getPlayerBallEntity() != null) {
             board.getPlayerBallEntity().updateState(dt, bounds);
         }
@@ -55,10 +56,10 @@ public class SequentialPhysicsEngine implements PhysicsStepper {
             ball.updateState(dt, bounds);
         }
 
-        // Pocketing.
+        // Then remove balls that entered a hole.
         board.applyHoleInteractions();
 
-        // Collision resolution.
+        // Finally detect and resolve collisions on the updated positions.
         var allBalls = board.getCandidateCollisionBalls();
         for (var pair : collisionDetector.detectCollisionPairs(allBalls)) {
             var first = allBalls.get(pair.firstIndex());
