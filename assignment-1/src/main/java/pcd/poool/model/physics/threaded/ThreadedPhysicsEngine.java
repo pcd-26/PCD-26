@@ -9,7 +9,6 @@ import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
-import pcd.poool.model.physics.common.PhysicsStepProfile;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.common.SpatialGridSupport;
 import pcd.poool.model.physics.parallel.RangeScheduler;
@@ -19,7 +18,6 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
 
     private static final int MIN_WORKER_COUNT = 1;
     private static final int MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY = 256;
-    private static final double NANOS_PER_MILLISECOND = 1_000_000.0;
 
     private final long maxStepMillis;
     private final RangeScheduler scheduler;
@@ -46,12 +44,7 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
 
     @Override
     public void step(Board board, long elapsedMillis) {
-        stepInternal(board, elapsedMillis, false);
-    }
-
-    // Runs one complete step and, if requested, also collects profiling data.
-    public PhysicsStepProfile profileStep(Board board, long elapsedMillis) {
-        return stepInternal(board, elapsedMillis, true);
+        stepInternal(board, elapsedMillis);
     }
 
     public int workerCount() {
@@ -64,95 +57,56 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         scheduler.close();
     }
 
-    private PhysicsStepProfile stepInternal(Board board, long elapsedMillis, boolean profilingEnabled) {
+    private void stepInternal(Board board, long elapsedMillis) {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
         ensureOpen();
-        // The profile is created only when needed, so the normal step stays lightweight.
-        StepProfileAccumulator profile = profilingEnabled ? new StepProfileAccumulator(scheduler.parallelism()) : null;
         synchronized (board) {
-        // Split real elapsed time into smaller internal steps and process them sequentially.
             long remaining = elapsedMillis;
             while (remaining > 0) {
                 long dt = Math.min(maxStepMillis, remaining);
-                stepOnce(board, dt, profile);
+                stepOnce(board, dt);
                 remaining -= dt;
             }
         }
-        return profilingEnabled ? profile.toProfile() : null;
     }
 
-    private void stepOnce(Board board, long dt, StepProfileAccumulator profile) {
+    private void stepOnce(Board board, long dt) {
         var bounds = board.getBounds();
 
-        // Read all active balls first: only these need integration and collision checks.
-        long stateReadStart = profile == null ? 0 : System.nanoTime();
-        var activeBalls = loadActiveBalls(board);
-        if (profile != null) {
-            profile.stateReadNanos += System.nanoTime() - stateReadStart;
-        }
+        var activeBalls = board.getActiveBalls();
 
-        // Phase 1: movement. Each worker updates one contiguous slice of the list.
-        long integrationStart = profile == null ? 0 : System.nanoTime();
         executeParallelRanges(activeBalls.size(), (from, to, workerIndex) -> {
-            long workerStart = profile == null ? 0 : System.nanoTime();
             for (int i = from; i < to; i++) {
                 activeBalls.get(i).updateState(dt, bounds);
             }
-            if (profile != null) {
-                profile.integrationWorkerItems[workerIndex] += to - from;
-                profile.integrationWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
-            }
-        }, profile);
-        if (profile != null) {
-            long integrationNanos = System.nanoTime() - integrationStart;
-            profile.movementNanos += integrationNanos;
-        }
+        });
 
-        // Phase 2: hole interactions.
-        long holeStart = profile == null ? 0 : System.nanoTime();
         board.applyHoleInteractions();
-        if (profile != null) {
-            profile.holeInteractionNanos += System.nanoTime() - holeStart;
-        }
 
-        // Read the balls again before the broad phase, because some may have been removed.
-        long collisionStateReadStart = profile == null ? 0 : System.nanoTime();
         var activeBallsForCollisionPhase = board.getActiveBalls();
-        if (profile != null) {
-            profile.stateReadNanos += System.nanoTime() - collisionStateReadStart;
-        }
         if (activeBallsForCollisionPhase.size() < 2) {
             return;
         }
 
-        detectAndResolveCollisions(board, activeBallsForCollisionPhase, profile);
+        detectAndResolveCollisions(board, activeBallsForCollisionPhase);
     }
 
-    private void detectAndResolveCollisions(Board board, List<Ball> balls, StepProfileAccumulator profile) {
-        long collisionStart = profile == null ? 0 : System.nanoTime();
+    private void detectAndResolveCollisions(Board board, List<Ball> balls) {
         double cellSize = computeOwnershipCellSize(balls);
 
-        // Broad phase: build one private grid per worker using only occupied cells.
         @SuppressWarnings("unchecked")
         Map<SpatialGridSupport.GridCell, IntBag>[] workerGrids = new Map[scheduler.parallelism()];
         executeParallelRanges(balls.size(), (from, to, workerIndex) -> {
-            long workerStart = profile == null ? 0 : System.nanoTime();
             var localGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
             for (int i = from; i < to; i++) {
                 CenterCell centerCell = computeCenterCell(balls.get(i), cellSize);
                 localGrid.computeIfAbsent(centerCell.cell(), ignored -> new IntBag()).add(i);
             }
             workerGrids[workerIndex] = localGrid;
-            if (profile != null) {
-                profile.localGridWorkerItems[workerIndex] += to - from;
-                profile.localGridWorkerNanos[workerIndex] += System.nanoTime() - workerStart;
-            }
-        }, profile);
+        });
 
-        // Merge the local grids into one combined grid, then order the cells.
-        long aggregationStart = profile == null ? 0 : System.nanoTime();
         var combinedGrid = new HashMap<SpatialGridSupport.GridCell, IntBag>();
         for (var localGrid : workerGrids) {
             if (localGrid == null) {
@@ -164,19 +118,11 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         }
 
         var orderedCellBuckets = new ArrayList<CellBucket>(combinedGrid.size());
-        int maxCellOccupancy = 0;
         for (var entry : combinedGrid.entrySet()) {
             orderedCellBuckets.add(new CellBucket(entry.getKey(), entry.getValue()));
-            maxCellOccupancy = Math.max(maxCellOccupancy, entry.getValue().size());
         }
         orderedCellBuckets.sort((first, second) -> first.cell().compareTo(second.cell()));
-        if (profile != null) {
-            profile.aggregationNanos += System.nanoTime() - aggregationStart;
-            profile.maxCellOccupancy = Math.max(profile.maxCellOccupancy, maxCellOccupancy);
-        }
 
-        // Assign each cell to a single worker so the narrow phase stays deterministic.
-        long resolutionStart = profile == null ? 0 : System.nanoTime();
         var workerDeltas = new SparseCollisionDeltaAccumulator[Math.min(scheduler.parallelism(), orderedCellBuckets.size())];
         var workerPairs = new LongBag[Math.min(scheduler.parallelism(), orderedCellBuckets.size())];
         executeParallelRanges(orderedCellBuckets.size(), (from, to, workerIndex) -> {
@@ -187,13 +133,8 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
             }
             workerDeltas[workerIndex] = deltaAccumulator;
             workerPairs[workerIndex] = pairAccumulator;
-        }, profile);
-        if (profile != null) {
-            profile.collisionResolutionNanos += System.nanoTime() - resolutionStart;
-        }
+        });
 
-        // Collect the deltas and record the contacts before applying the movements.
-        long mergeApplyStart = profile == null ? 0 : System.nanoTime();
         var combinedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
         int pairCount = 0;
         for (int i = 0; i < workerDeltas.length; i++) {
@@ -217,12 +158,7 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         for (long packedPair : contactPairs) {
             board.recordCollision(balls.get(firstIndex(packedPair)), balls.get(secondIndex(packedPair)));
         }
-        applyMergedDeltas(balls, combinedDeltas, profile);
-        if (profile != null) {
-            profile.collisionDetectionNanos += mergeApplyStart - collisionStart;
-            profile.mergeApplyNanos += System.nanoTime() - mergeApplyStart;
-            profile.aggregationNanos += System.nanoTime() - mergeApplyStart;
-        }
+        applyMergedDeltas(balls, combinedDeltas);
     }
 
     // Resolves one cell and only the neighboring cells it owns.
@@ -293,27 +229,23 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         contactPairs.add(encodePair(first, second));
     }
 
-    // Apply all collected deltas: in parallel when it pays off, otherwise sequentially.
-    private void applyMergedDeltas(List<Ball> balls, SparseCollisionDeltaAccumulator merged, StepProfileAccumulator profile) {
+    private void applyMergedDeltas(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
         if (merged.touchedCount() == 0) {
             return;
         }
         if (merged.touchedCount() < MIN_TOUCHED_BALLS_FOR_PARALLEL_APPLY) {
-            // With few touched balls, the parallel overhead is not worth it.
             applyMergedDeltasSequentially(balls, merged);
             return;
         }
-        // Each touched index goes into its own distinct range.
         executeParallelRanges(merged.touchedCount(), (from, to, workerIndex) -> {
             for (int i = from; i < to; i++) {
                 int ballIndex = merged.touchedIndex(i);
                 balls.get(ballIndex).translate(new V2d(merged.positionDeltaX(ballIndex), merged.positionDeltaY(ballIndex)));
                 balls.get(ballIndex).addVelocity(new V2d(merged.velocityDeltaX(ballIndex), merged.velocityDeltaY(ballIndex)));
             }
-        }, profile);
+        });
     }
 
-    // Direct variant when the touched set is small.
     private void applyMergedDeltasSequentially(List<Ball> balls, SparseCollisionDeltaAccumulator merged) {
         for (int i = 0; i < merged.touchedCount(); i++) {
             int ballIndex = merged.touchedIndex(i);
@@ -322,7 +254,6 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         }
     }
 
-    // Compute the position correction and elastic impulse for one colliding pair.
     private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
         var a = balls.get(firstIndex);
         var b = balls.get(secondIndex);
@@ -335,14 +266,12 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
             return null;
         }
 
-        // If the centers are almost identical, force a stable normal.
         if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
             dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
             dy = 0.0;
             dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
         }
 
-        // Collision direction and overlap correction.
         double nx = dx / dist;
         double ny = dy / dist;
         double totalMass = a.getMass() + b.getMass();
@@ -350,7 +279,6 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         double firstPositionCorrection = overlap * (b.getMass() / totalMass);
         double secondPositionCorrection = overlap * (a.getMass() / totalMass);
 
-        // If the balls are moving toward each other along the normal, also compute the impulse.
         double firstVelocityDeltaX = 0.0;
         double firstVelocityDeltaY = 0.0;
         double secondVelocityDeltaX = 0.0;
@@ -380,11 +308,6 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
                 secondVelocityDeltaY);
     }
 
-    // Reload the active balls because the board may have changed the live list.
-    private List<Ball> loadActiveBalls(Board board) {
-        return board.getActiveBalls();
-    }
-
     // The cell size must be large enough to avoid splitting one ball across too many cells.
     private double computeOwnershipCellSize(List<Ball> balls) {
         double maxRadius = Double.NEGATIVE_INFINITY;
@@ -404,19 +327,11 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
                 SpatialGridSupport.toCellCoordinate(ball.getPos().y(), cellSize)));
     }
 
-    // Split the work into contiguous ranges and hand the results to the concrete scheduler.
-    private void executeParallelRanges(int itemCount, RangeTask rangeTask, StepProfileAccumulator profile) {
+    private void executeParallelRanges(int itemCount, RangeTask rangeTask) {
         if (itemCount == 0) {
             return;
         }
-        var stats = scheduler.execute(itemCount, rangeTask::run);
-        if (profile != null) {
-            profile.partitionNanos += stats.partitionNanos();
-            profile.taskSubmissionNanos += stats.submissionNanos();
-            profile.joinOrFutureWaitNanos += stats.waitNanos();
-            profile.lockAcquisitions += stats.coordinationOperations();
-            profile.submittedTasks += stats.submittedTasks();
-        }
+        scheduler.execute(itemCount, rangeTask::run);
     }
 
     private void ensureOpen() {
@@ -618,49 +533,4 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         }
     }
 
-    private static final class StepProfileAccumulator {
-
-        private final long[] integrationWorkerNanos;
-        private final long[] localGridWorkerNanos;
-        private final int[] integrationWorkerItems;
-        private final int[] localGridWorkerItems;
-        private long stateReadNanos;
-        private long partitionNanos;
-        private long movementNanos;
-        private long holeInteractionNanos;
-        private long collisionDetectionNanos;
-        private long collisionResolutionNanos;
-        private long mergeApplyNanos;
-        private long aggregationNanos;
-        private long taskSubmissionNanos;
-        private long joinOrFutureWaitNanos;
-        private long lockAcquisitions;
-        private long submittedTasks;
-        private int maxCellOccupancy;
-
-        private StepProfileAccumulator(int workerCount) {
-            integrationWorkerNanos = new long[workerCount];
-            localGridWorkerNanos = new long[workerCount];
-            integrationWorkerItems = new int[workerCount];
-            localGridWorkerItems = new int[workerCount];
-        }
-
-        private PhysicsStepProfile toProfile() {
-            long measuredSyncNanos = taskSubmissionNanos + joinOrFutureWaitNanos;
-            return new PhysicsStepProfile(
-                    measuredSyncNanos / NANOS_PER_MILLISECOND,
-                    aggregationNanos / NANOS_PER_MILLISECOND,
-                    taskSubmissionNanos / NANOS_PER_MILLISECOND,
-                    joinOrFutureWaitNanos / NANOS_PER_MILLISECOND,
-                    lockAcquisitions,
-                    submittedTasks,
-                    stateReadNanos / NANOS_PER_MILLISECOND,
-                    partitionNanos / NANOS_PER_MILLISECOND,
-                    movementNanos / NANOS_PER_MILLISECOND,
-                    holeInteractionNanos / NANOS_PER_MILLISECOND,
-                    collisionDetectionNanos / NANOS_PER_MILLISECOND,
-                    collisionResolutionNanos / NANOS_PER_MILLISECOND,
-                    mergeApplyNanos / NANOS_PER_MILLISECOND);
-        }
-    }
 }

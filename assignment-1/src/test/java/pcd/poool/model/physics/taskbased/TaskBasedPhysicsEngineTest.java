@@ -223,36 +223,6 @@ class TaskBasedPhysicsEngineTest {
     }
 
     @Test
-    @Timeout(3)
-    void profileStepKeepsSmallCollisionCommitSequential() {
-        var conf = new SimpleCollisionBoardConf();
-
-        try (var engine = new TaskBasedPhysicsEngine(4)) {
-            var board = new Board(engine);
-            board.init(conf);
-
-            var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
-
-            assertTrue(profile.collisionResolutionMillis() >= 0.0);
-            assertEquals(0L, profile.submittedTasks());
-        }
-    }
-
-    @Test
-    @Timeout(5)
-    void profileStepSubmitsExecutorTasksForLargeRanges() {
-        try (var engine = new TaskBasedPhysicsEngine(4)) {
-            var board = new Board(engine);
-            board.init(new ThousandBallsBoardConf());
-
-            var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
-
-            assertTrue(profile.submittedTasks() > 0L);
-            assertTrue(profile.submittedTasks() >= engine.poolSize());
-        }
-    }
-
-    @Test
     @Timeout(8)
     void highBallCountConfigurationCanBeSteppedRepeatedly() {
         try (var engine = new TaskBasedPhysicsEngine(4)) {

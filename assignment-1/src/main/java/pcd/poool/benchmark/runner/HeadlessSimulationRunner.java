@@ -8,7 +8,6 @@ import pcd.poool.benchmark.core.BenchmarkStateFingerprint;
 import pcd.poool.benchmark.core.SeededBenchmarkBoardConf;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsDefaults;
-import pcd.poool.model.physics.common.PhysicsStepProfile;
 import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
@@ -161,37 +160,10 @@ public final class HeadlessSimulationRunner {
             BenchmarkConfig config,
             ThreadedPhysicsEngine threadedEngine,
             TaskBasedPhysicsEngine taskBasedEngine) {
-        var instrumentation = BenchmarkInstrumentation.zero();
         for (int i = 0; i < config.steps(); i++) {
-            if (config.instrumentationEnabled() && threadedEngine != null) {
-                instrumentation = instrumentation.plus(toInstrumentation(threadedEngine.profileStep(board, STEP_MILLIS)));
-            } else if (config.instrumentationEnabled() && taskBasedEngine != null) {
-                instrumentation = instrumentation.plus(toInstrumentation(taskBasedEngine.profileStep(board, STEP_MILLIS)));
-            } else {
-                board.updateState(STEP_MILLIS);
-            }
+            board.updateState(STEP_MILLIS);
         }
-        return instrumentation;
-    }
-
-    private static BenchmarkInstrumentation toInstrumentation(PhysicsStepProfile profile) {
-        if (profile == null) {
-            return BenchmarkInstrumentation.zero();
-        }
-        return new BenchmarkInstrumentation(
-                profile.syncTimeMillis(),
-                profile.aggregationTimeMillis(),
-                profile.taskSubmissionTimeMillis(),
-                profile.joinOrFutureWaitMillis(),
-                profile.lockAcquisitions(),
-                profile.submittedTasks(),
-                profile.stateReadMillis(),
-                profile.partitionMillis(),
-                profile.movementMillis(),
-                profile.holeInteractionMillis(),
-                profile.collisionDetectionMillis(),
-                profile.collisionResolutionMillis(),
-                profile.mergeApplyMillis());
+        return BenchmarkInstrumentation.zero();
     }
 
     private static void closeQuietly(AutoCloseable closeable) {
