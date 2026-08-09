@@ -1,6 +1,7 @@
 package pcd.poool.verification;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -61,14 +62,21 @@ class JpfVerificationArtifactsTest {
         assertTrue(runScript.contains("--docker"));
         assertTrue(runScript.contains("\"docker\", \"build\""));
         assertTrue(runScript.contains("run_model_in_docker"));
+        assertTrue(runScript.contains("JPF_SUCCESS_MARKER"));
+        assertTrue(runScript.contains("JPF_FAILURE_MARKER"));
+        assertTrue(runScript.contains("run_checked_jpf"));
+        assertTrue(runScript.contains("result.check_returncode()"));
         assertTrue(runScript.contains("docker_command"));
         assertTrue(runScript.contains("compile_minimal_harnesses(repo_root)"));
         assertTrue(runScript.contains("--release"));
         assertTrue(runScript.contains("sed -i 's/\\\\r$//' gradlew"));
+        assertTrue(runScript.contains("./gradlew buildJars"));
     }
 
     @Test
     void minimalJpfModelsRunUnderJpfWhenRuntimeJarsAreAvailable() throws Exception {
+        assumeTrue(Runtime.version().feature() <= 11,
+                "The local JPF runtime requires Java 11; newer JVMs use run_jpf.py with Docker");
         Path buildDir = Path.of("verification", "jpf", ".jpf-core", "build");
         Path libDir = Path.of("verification", "jpf", ".jpf-core", "lib");
         assumeTrue(Files.isDirectory(buildDir) && Files.isDirectory(libDir),
@@ -146,6 +154,9 @@ class JpfVerificationArtifactsTest {
 
         int exitCode = process.exitValue();
         assertEquals(0, exitCode, () -> formatFailure("JPF " + configFile, output, null));
+        String jpfOutput = output.toString(StandardCharsets.UTF_8);
+        assertTrue(jpfOutput.contains("no errors detected"), () -> formatFailure("JPF " + configFile, output, null));
+        assertFalse(jpfOutput.contains("[SEVERE]"), () -> formatFailure("JPF " + configFile, output, null));
     }
 
     private static void deleteDirectoryIfPresent(Path path) throws IOException {
