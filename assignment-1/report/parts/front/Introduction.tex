@@ -1,13 +1,13 @@
 \section{Introduction}
 
-Assignment 1 requires three execution strategies for \emph{Poool}: a sequential baseline, a platform-thread implementation, and a task-based implementation built on the Executor framework. The brief also asks for performance measurements and model checking with Java PathFinder (JPF).
+Assignment 1 requires the development of two concurrent versions of \emph{Poool}: one based on platform threads and one based on the Executor framework. A sequential version is also provided as a correctness and performance baseline. The assignment additionally requires performance analysis and model checking with Java PathFinder (JPF).
 
-This report presents the implemented strategies:
+This report presents the three implemented execution strategies:
 
 \begin{itemize}
-    \item \textbf{Sequential baseline}: single-thread reference execution;
-    \item \textbf{Platform-thread version}: controller-led platform-thread architecture with long-lived workers;
-    \item \textbf{Task-based version}: concurrent execution using the Executor framework.
+    \item \textbf{Sequential baseline}: single-threaded reference implementation;
+    \item \textbf{Platform-thread version}: concurrent implementation based on long-lived platform-thread workers and explicit synchronization;
+    \item \textbf{Task-based version}: concurrent implementation based on a fixed thread pool, tasks, and \texttt{Future} barriers.
 \end{itemize}
 
-All three launchers reuse the same game rules.
+The three versions share the same domain model, game rules, graphical view, and immutable snapshot representation. They differ mainly in the execution strategy used by the runtime and the physics engine.
