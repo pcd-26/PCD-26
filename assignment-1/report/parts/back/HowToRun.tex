@@ -1,56 +1,47 @@
 \clearpage
 \section{How to Run}
 
-The project can be built and tested either from the repository root with
-\path{-f assignment-1/pom.xml}, or from the \path{assignment-1} directory with
-plain Maven commands. The three launchers share the same compiled classes; the
-task-based version accepts an optional worker count. The benchmark command below
-regenerates the local speedup snapshot and refreshes \path{benchmarks/results/}
-and \path{benchmarks/charts/}. The report is generated from the
-\path{assignment-1/report} directory.
+The delivery requires \textbf{JDK 17} and \textbf{Maven}. After extracting
+\texttt{Assignment-01.zip}, enter the \texttt{Assignment-01} directory. Its
+\texttt{pom.xml} builds the supplied production and test sources.
 
-\textbf{Run the test suite}
+\textbf{Build and run all tests}
 \begin{verbatim}
-mvn -f assignment-1/pom.xml test
+mvn clean test
 \end{verbatim}
 
-\textbf{Compile the application classes}
+\textbf{Compile the application}
 \begin{verbatim}
-mvn -f assignment-1/pom.xml compile
-\end{verbatim}
-
-\textbf{Regenerate the speedup benchmark snapshot}
-\begin{verbatim}
-python assignment-1/scripts/run_benchmarks.py --mode speedup
+mvn compile
 \end{verbatim}
 
 \textbf{Start the sequential launcher}
 \begin{verbatim}
-java -cp assignment-1/target/classes pcd.poool.SequentialPoool
+java -cp target/classes pcd.poool.SequentialPoool
 \end{verbatim}
 
 \textbf{Start the platform-thread launcher}
 \begin{verbatim}
-java -cp assignment-1/target/classes pcd.poool.ThreadedPoool
+java -cp target/classes pcd.poool.ThreadedPoool
 \end{verbatim}
 
 \textbf{Start the task-based launcher}
 \begin{verbatim}
-java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool
+java -cp target/classes pcd.poool.TaskBasedPoool
 \end{verbatim}
 
-\textbf{Start the task-based launcher with an explicit worker count}
+An optional positive argument selects the task-based physics worker count;
+otherwise the launcher uses one fewer than the available processors.
 \begin{verbatim}
-java -cp assignment-1/target/classes pcd.poool.TaskBasedPoool 16
+java -cp target/classes pcd.poool.TaskBasedPoool 8
 \end{verbatim}
 
-\textbf{Build the PDF report}
-\begin{verbatim}
-cd assignment-1/report
-make
-\end{verbatim}
+The human shot can be aimed with the arrow keys or by dragging the mouse and is
+released automatically or on mouse release. Press \texttt{R} to restart; after
+game over, the \texttt{New Game} button provides the same action.
 
-\textbf{Run both reduced JPF models}
-\begin{verbatim}
-python assignment-1/verification/jpf/run_jpf.py --model both
-\end{verbatim}
+Benchmark scripts, JPF configurations, report sources, and their instructions
+are development artifacts and are not included in the delivery. To regenerate
+performance results, execute the verification models, or rebuild this report,
+use the complete project at
+\href{https://github.com/pcd-26/PCD-26}{github.com/pcd-26/PCD-26}.
