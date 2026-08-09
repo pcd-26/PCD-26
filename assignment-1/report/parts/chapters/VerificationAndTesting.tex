@@ -1,66 +1,55 @@
 \clearpage
 \section{Verification and Testing}
 
-The repository includes JUnit tests under \texttt{src/test/java/pcd/poool}. They exercise the game model, the physics engines, the runtime helpers, the concurrent runners, the view layer, and the benchmark utilities.
+The project combines JUnit tests on the production code with Java PathFinder
+(JPF) exploration of a reduced synchronization protocol.
 
-\begin{itemize}
-    \item \textbf{JUnit tests}: under \texttt{src/test/java/pcd/poool};
-    \item \textbf{Coverage}: model, physics engines, runtime helpers, concurrent runners, view layer, benchmark utilities.
-\end{itemize}
+\subsection{JUnit tests}
 
-\subsection{JPF model checking}
+The Maven suite checks deterministic physics, collisions, pocketing, FIFO
+commands, concurrent submissions, failures, snapshots, shutdown, view input,
+and benchmark tooling. Running \texttt{mvn -f assignment-1/pom.xml test}
+completed with \textbf{158 tests, 0 failures, and 0 errors}. Both JPF models were executed in Docker.
 
-The verification area contains two \textbf{reduced JPF harnesses}:
-\path{pcd.poool.verification.jpf.ThreadedMiniHarness} and
-\path{pcd.poool.verification.jpf.TaskBasedMiniHarness}. They do not model the
-full game; instead, they reuse \path{MinimalProtocolState} to check the
-\textbf{essential coordination protocol}:
+\subsection{JPF verification}
 
-\begin{itemize}
-    \item the board cannot be owned twice at the same time;
-    \item the worker/task cannot complete before board ownership is established;
-    \item pending commands are drained before publication;
-    \item the final state must release ownership, publish the snapshot, and reach the finished flag.
-\end{itemize}
+Two small harnesses model the coordination protocol without full physics,
+Swing, timers, or large collections \cite{visser2003}.
+\texttt{ThreadedMiniHarness} uses a producer, controller, and long-lived worker;
+\texttt{TaskBasedMiniHarness} creates and joins a short-lived task.
 
-The two JPF configuration files are \texttt{threaded-minimal.jpf} and
-\texttt{taskbased-minimal.jpf}. They use the same reduced setup, but each file
-has its own target harness:
+Both use the shared \texttt{MinimalProtocolState}.
 
-\begin{verbatim}
-# threaded-minimal.jpf
-target=pcd.poool.verification.jpf.ThreadedMiniHarness
-classpath=target/jpf-classes
-search.class=gov.nasa.jpf.search.DFSearch
-vm.storage.class=gov.nasa.jpf.vm.JenkinsStateSet
-vm.por=true
-vm.max_heap=64m
-search.depth_limit=40
+The configurations use depth-first search, \texttt{JenkinsStateSet},
+partial-order reduction, and a depth limit of 40. They were executed with
+\texttt{run\_jpf.py --docker --model both}. The runner compiles for Java 11 and
+requires \texttt{no errors detected} without a \texttt{[SEVERE]} diagnostic.
 
-# taskbased-minimal.jpf
-target=pcd.poool.verification.jpf.TaskBasedMiniHarness
-classpath=target/jpf-classes
-search.class=gov.nasa.jpf.search.DFSearch
-vm.storage.class=gov.nasa.jpf.vm.JenkinsStateSet
-vm.por=true
-vm.max_heap=64m
-search.depth_limit=40
-\end{verbatim}
+\subsection{Verified properties, results, and limits}
 
-The actual JPF run was executed through the Docker helper. The launcher first
-compiles the reduced Java 11 harnesses and then checks both models:
-\begin{verbatim}
-python assignment-1/verification/jpf/run_jpf.py --model both
-\end{verbatim}
-The helper selects Docker when the host JVM is unsuitable, which keeps the
-command portable across Windows and Linux. Both runs completed with
-\texttt{no errors detected}.
-The verification artifacts used for this report are available in the
-repository: \href{https://github.com/pcd-26/PCD-26}{pcd-26/PCD-26}.
+The searches verify exclusive board ownership, command draining before
+snapshot publication, worker completion before commit, ownership release,
+final termination, and absence of deadlock.
 
-\begin{itemize}
-    \item \textbf{Threaded model}: \texttt{states: new=774, visited=1117, backtracked=1891, end=4}; \texttt{maxDepth=35}; \texttt{instructions=22411}.
-    \item \textbf{Task-based model}: \texttt{states: new=249, visited=288, backtracked=537, end=3}; \texttt{maxDepth=34}; \texttt{instructions=16409}.
-\end{itemize}
+Both searches completed without deadlock or assertion failure:
 
-The threaded model explores a larger state space because its worker thread stays alive across the protocol steps. The task-based model is smaller because the parallel work is represented by a short-lived thread that is created only when needed and joined immediately after. In both cases, JPF confirms that the bounded synchronization protocol reaches completion without deadlock or assertion failure, which is exactly the level of verification this report claims \cite{clarke1999,visser2003}.
+\begin{center}
+\begin{tabular}{|>{\bfseries}p{2.4cm}|r|r|r|r|r|r|}
+    \hline
+    Model & New & Visited & Backtracked & End & Depth & Instructions \\
+    \hline
+    Threaded & 774 & 1117 & 1891 & 4 & 35 & 22411 \\
+    \hline
+    Task-based & 249 & 288 & 537 & 3 & 34 & 16409 \\
+    \hline
+\end{tabular}
+\end{center}
+
+Both maximum depths remain below 40, so the bound did not truncate either
+search. The threaded state space is larger because its worker can interleave
+from the start; the task-based worker exists only after work is prepared.
+
+The result covers every schedule represented by these bounded harnesses. It
+does not prove numerical physics, full \texttt{ExecutorService} behavior,
+Swing responsiveness, performance, or arbitrary workloads; these aspects are
+covered separately by production tests and benchmarks.

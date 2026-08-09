@@ -44,8 +44,10 @@ either:
 - locally, using the runtime jars under `assignment-1/verification/jpf/.jpf-core/build`;
 - inside Docker, using `--docker`.
 
-If the local Java runtime is too new for the JPF build, the helper
+The local JPF runtime requires Java 11. With a newer JVM, the helper
 automatically falls back to Docker so the default command still works.
+Regardless of the execution mode, a run succeeds only when JPF prints
+`no errors detected`; the process exit code alone is not sufficient.
 
 ## Execution Notes
 
@@ -77,8 +79,9 @@ python assignment-1/verification/jpf/run_jpf.py --docker --model both
 ```
 
 Docker mode normalizes the Gradle wrapper line endings inside the container
-before building `jpf-core`, so it works even when the checkout was cloned on
-Windows.
+before building the JPF runtime jars, so it works even when the checkout was
+cloned on Windows. It uses the focused `buildJars` task rather than running the
+complete `jpf-core` test suite for every model-checking session.
 
 Or, if you already built JPF locally, run without Docker:
 

@@ -50,8 +50,8 @@ The helper script can run JPF in two ways:
 - Docker mode, which builds `jpf-core` inside the container and runs JPF there;
 - local mode, which uses the runtime classpath produced by the local `jpf-core` build.
 
-If the local Java runtime is too new for the JPF build, the helper falls back
-to Docker automatically.
+The local runtime is supported on Java 11. With Java 17 or newer, the helper
+falls back to Docker automatically.
 
 The standard local runtime jars include:
 
@@ -130,8 +130,8 @@ python assignment-1/verification/jpf/run_jpf.py --docker --model both
 ```
 
 The Docker helper normalizes the Gradle wrapper line endings inside the
-container before building `jpf-core`, which avoids the `^M` wrapper failure on
-Windows checkouts.
+container before running the focused `buildJars` task, which avoids the `^M`
+wrapper failure on Windows checkouts without rerunning the full JPF test suite.
 
 If you already built JPF locally and want to run the two `.jpf` files manually
 from `assignment-1/` instead of through Maven, use:
@@ -175,6 +175,8 @@ For the report, record:
 - the local `jpf-core` launcher jar used to start JPF;
 - the exact JPF invocation for each model;
 - whether JPF found a counterexample or completed cleanly;
+- the final `no errors detected` marker, which is required in addition to a
+  zero process exit code;
 - the main limitation of the model, if any.
 
 ## 7. Practical Verification Notes

@@ -11,6 +11,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+JPF_SUCCESS_MARKER = "no errors detected"
+JPF_FAILURE_MARKER = "[SEVERE]"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -82,6 +85,27 @@ def compile_minimal_harnesses(repo_root: Path) -> None:
     ]
     subprocess.run(command, cwd=repo_root, check=True)
 
+
+def run_checked_jpf(command: list[str], workdir: Path | None = None) -> None:
+    result = subprocess.run(
+        command,
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+    )
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+
+    result.check_returncode()
+    combined_output = result.stdout + result.stderr
+    if JPF_SUCCESS_MARKER not in result.stdout or JPF_FAILURE_MARKER in combined_output:
+        raise RuntimeError(
+            "JPF exited without confirming a complete, error-free search."
+        )
+
+
 def run_model(jpf_root: Path, workdir: Path, config_file: Path) -> None:
     command = [
         java_executable(),
@@ -90,7 +114,7 @@ def run_model(jpf_root: Path, workdir: Path, config_file: Path) -> None:
         str(jpf_root / "build" / "RunJPF.jar"),
         str(config_file),
     ]
-    subprocess.run(command, cwd=workdir, check=True)
+    run_checked_jpf(command, workdir)
 
 
 def build_jpf_in_docker(jpf_root: Path) -> None:
@@ -108,7 +132,7 @@ def build_jpf_in_docker(jpf_root: Path) -> None:
             image_name,
             "bash",
             "-lc",
-            "sed -i 's/\\r$//' gradlew && chmod +x gradlew && ./gradlew build",
+            "sed -i 's/\\r$//' gradlew && chmod +x gradlew && ./gradlew buildJars",
         ],
         check=True,
     )
@@ -117,24 +141,21 @@ def build_jpf_in_docker(jpf_root: Path) -> None:
 def run_model_in_docker(jpf_root: Path, repo_root: Path, config_file: Path) -> None:
     image_name = "jpf-core"
     docker_command = f"java -ea -jar /home/jpf-core/build/RunJPF.jar /repo/{config_file.as_posix()}"
-    subprocess.run(
-        [
-            "docker",
-            "run",
-            "--rm",
-            "-v",
-            f"{jpf_root.resolve().as_posix()}:/home/jpf-core",
-            "-v",
-            f"{repo_root.resolve().as_posix()}:/repo",
-            "-w",
-            "/repo/assignment-1",
-            image_name,
-            "bash",
-            "-lc",
-            docker_command,
-        ],
-        check=True,
-    )
+    run_checked_jpf([
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{jpf_root.resolve().as_posix()}:/home/jpf-core",
+        "-v",
+        f"{repo_root.resolve().as_posix()}:/repo",
+        "-w",
+        "/repo/assignment-1",
+        image_name,
+        "bash",
+        "-lc",
+        docker_command,
+    ])
 
 
 def main() -> int:
@@ -154,7 +175,7 @@ def main() -> int:
     use_docker = args.docker
     if not use_docker:
         java_major = host_java_major_version()
-        if java_major is None or java_major > 17:
+        if java_major is None or java_major > 11:
             use_docker = True
 
     if use_docker:
