@@ -12,7 +12,15 @@ import pcd.poool.taskbased.TaskBasedGameRunner;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
 
-/** Playable Executor Framework version of Poool. */
+/**
+ * Playable task-based version of Poool.
+ *
+ * <p>This launcher uses the executor-based runtime, so the game loop is still
+ * the same UI-facing shell but the physics step is delegated to a task-based
+ * worker pool. The rest of the launcher is intentionally close to the
+ * threaded one, which makes the comparison between execution strategies easy
+ * to explain.
+ */
 public final class TaskBasedPoool {
 
     private static final long BOT_THINK_TIME_MILLIS = 600;
@@ -24,8 +32,9 @@ public final class TaskBasedPoool {
     private TaskBasedPoool() {
     }
 
-    /** Starts the task-based application. The first argument may select the worker count. */
     public static void main(String[] args) {
+        // The worker count is configurable so the same launcher can be used for
+        // both normal play and scaling experiments.
         var config = taskBasedConfig(args);
         System.out.printf(
                 "Starting task-based Poool with %d physics workers (thousand board)%n",
@@ -38,10 +47,10 @@ public final class TaskBasedPoool {
                 viewModel,
                 VIEW_WIDTH,
                 VIEW_HEIGHT,
-                velocity -> runtimeRef.get().shootHuman(velocity),
-                () -> restartRequested.set(true),
-                () -> runtimeRef.get().snapshot().game().humanCanShoot(),
-                () -> viewModel.clearShotPreview(Player.HUMAN));
+                velocity -> runtimeRef.get().shootHuman(velocity), // Human shot.
+                () -> restartRequested.set(true), // Restart request.
+                () -> runtimeRef.get().snapshot().game().humanCanShoot(), // Human aiming gate.
+                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clear human preview.
 
         Runtime.getRuntime().addShutdownHook(
                 new Thread(() -> runtimeRef.get().close(), "poool-task-based-shutdown"));

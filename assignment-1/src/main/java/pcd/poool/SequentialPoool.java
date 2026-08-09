@@ -15,10 +15,13 @@ public class SequentialPoool {
     private static final int VIEW_WIDTH = 1200;
     private static final int VIEW_HEIGHT = 800;
     private static final long BOT_THINK_TIME_MILLIS = 600;
-    private static final long FRAME_SLEEP_MILLIS = 4; // Limits the render loop update rate.
-    private static final double BOT_PREVIEW_SCALE = 0.35; // Scales the bot preview arrow.
+    private static final long FRAME_SLEEP_MILLIS = 4;
+    private static final double BOT_PREVIEW_SCALE = 0.35;
 
     public static void main(String[] args) {
+        // The sequential launcher keeps game rules, bot thinking, and rendering
+        // in the same loop. This makes it the simplest baseline to compare
+        // against the concurrent launchers.
         var gameRef = new AtomicReference<>(newGame());
         var restartRequested = new AtomicBoolean(false);
         var viewModel = new ViewModel();
@@ -26,20 +29,18 @@ public class SequentialPoool {
                 viewModel,
                 VIEW_WIDTH,
                 VIEW_HEIGHT,
-                velocity -> gameRef.get().shootHuman(velocity), // Human shot callback.
-                () -> restartRequested.set(true), // Restart callback.
+                velocity -> gameRef.get().shootHuman(velocity), // Human shot.
+                () -> restartRequested.set(true), // Restart request.
                 () -> gameRef.get().canHumanShoot(), // Human aiming gate.
-                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clears the human shot preview.
+                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clear human preview.
 
         long startTime = System.currentTimeMillis();
         long lastUpdateTime = startTime;
         long botAimStartedAt = 0;
         int renderedFrames = 0;
 
-        // Single game loop: updates gameplay, bot timing, rendering, and restart handling.
         while (true) {
             long now = System.currentTimeMillis();
-            // Apply a pending restart request by rebuilding the game and clearing UI state.
             if (restartRequested.getAndSet(false)) {
                 gameRef.set(newGame());
                 viewModel.clearShotPreview();
@@ -49,14 +50,12 @@ public class SequentialPoool {
                 renderedFrames = 0;
             }
 
-            var game = gameRef.get(); // Get the current game state to update and render.
-            // Advance the simulation using the elapsed real time since the previous frame.
+            var game = gameRef.get();
             long elapsedMillis = Math.max(PhysicsDefaults.FIXED_STEP_MILLIS, now - lastUpdateTime);
             lastUpdateTime = now;
 
             advanceGame(game, elapsedMillis);
-            
-            // Track the bot aim delay before firing its shot.
+
             if (game.canBotShoot()) {
                 if (botAimStartedAt == 0) {
                     botAimStartedAt = now;
@@ -70,7 +69,6 @@ public class SequentialPoool {
                 botAimStartedAt = 0;
             }
 
-            // Publish a fresh view state and render the current frame.
             renderedFrames++;
             int currentFramesPerSecond = getCurrentFPS(renderedFrames, startTime, now);
             viewModel.update(game.board(), game.snapshot(), currentFramesPerSecond);

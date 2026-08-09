@@ -1,6 +1,13 @@
 package pcd.poool.view;
 
-// Sync point between render requests and completed frames.
+/**
+ * Synchronization helper between the runtime thread and the Swing EDT.
+ *
+ * <p>The runtime assigns a monotonically increasing frame id before each
+ * repaint and then waits until Swing confirms that the same frame has been
+ * painted. This keeps rendering ordered and avoids mixing simulation steps
+ * with stale or partial frames.
+ */
 public class RenderSynch {
 
 	private static final long FIRST_FRAME = 0;

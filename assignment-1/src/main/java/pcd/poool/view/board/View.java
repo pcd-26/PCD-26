@@ -6,7 +6,13 @@ import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 import pcd.poool.model.common.math.V2d;
 
-// Swing facade for the board view.
+/**
+ * Small Swing facade used by the launchers.
+ *
+ * <p>Its job is only to create the frame on the EDT and expose a tiny
+ * lifecycle API to the runtime. The actual drawing and input handling stay in
+ * {@link ViewFrame} and the mutable state stays in {@link ViewModel}.
+ */
 public class View {
 
 	private ViewFrame frame;
@@ -39,14 +45,15 @@ public class View {
 		displayFrame(model, w, h, shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
 	}
 
-	private void displayFrame(
-			ViewModel model,
-			int w,
-			int h,
-			Consumer<V2d> shotHandler,
-			Runnable restartHandler,
-			BooleanSupplier humanAimingStartHandler,
-			Runnable humanAimingStopHandler) {
+    private void displayFrame(
+            ViewModel model,
+            int w,
+            int h,
+            Consumer<V2d> shotHandler,
+            Runnable restartHandler,
+            BooleanSupplier humanAimingStartHandler,
+            Runnable humanAimingStopHandler) {
+		// Create the Swing window on the EDT.
 		if (SwingUtilities.isEventDispatchThread()) {
 			createAndShowFrame(model, w, h, shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
 			return;
@@ -68,14 +75,15 @@ public class View {
 		}
 	}
 
-	private void createAndShowFrame(
-			ViewModel model,
-			int w,
-			int h,
-			Consumer<V2d> shotHandler,
-			Runnable restartHandler,
-			BooleanSupplier humanAimingStartHandler,
-			Runnable humanAimingStopHandler) {
+    private void createAndShowFrame(
+            ViewModel model,
+            int w,
+            int h,
+            Consumer<V2d> shotHandler,
+            Runnable restartHandler,
+            BooleanSupplier humanAimingStartHandler,
+            Runnable humanAimingStopHandler) {
+		// The frame reads only from ViewModel.
 		frame = new ViewFrame(
 				model,
 				w,
@@ -87,9 +95,10 @@ public class View {
 		frame.setVisible(true);
 	}
 
-	public void render() {
+    public void render() {
+		// Render from the runtime thread, not the EDT.
 		frame.render();
-	}
+    }
 
 	public void close() {
 		frame.close();
