@@ -317,20 +317,19 @@ range operations. \textcolor{orange!75!black}{Orange transitions} are
 sequential coordinator operations. Dark transitions dispatch and join ranges.
 \end{center}
 
-Each fork represents $R$ independent range instances. The multiplicity appears
-on the arcs, while places still encode the current marking and transitions
-remain the only atomic state changes. The corresponding blue transitions can
-fire in any order or concurrently. Private input places ensure that each range
-fires exactly once; the join requires every completion token. The net is
-therefore 1-safe and prevents the next phase from starting early. For final
-delta application, $R=1$ models the sequential fast path, while $R>1$ models
-the parallel path selected for large touched-ball sets.
+Each parallel phase uses $R$ workers or tasks. The diagram shows only $W_1$ and
+$W_R$ for readability; the omitted workers follow the same private path. Their
+blue transitions can fire in any order or concurrently. Private input places
+ensure that each worker fires exactly once, while the join requires every
+completion token. The net is therefore 1-safe and prevents the next phase from
+starting early. Final delta application uses one sequential path for small sets
+and multiple workers for large touched-ball sets.
 
 The spatial grid is the broad phase. It inspects only the cell containing a
 ball and selected neighbours, avoiding every possible pair on sparse boards.
 Private grids and pair lists also remove parallel write contention.
 
-\subsection{Determinism and serialized commit}
+\subsection{Deterministic accumulation and disjoint commit}
 
 Parallel workers never update scores or remove balls. They produce private
 lists of confirmed pairs, which the coordinator merges and sorts before
@@ -342,7 +341,7 @@ competing writes and schedule-dependent floating-point results. The engines
 instead accumulate position and velocity corrections before applying them:
 
 \begin{center}
-\textbf{parallel computation, deterministic ordering, serialized commit}
+\textbf{parallel computation, deterministic accumulation, disjoint commit}
 \end{center}
 
 The final delta application may become parallel again because each touched
