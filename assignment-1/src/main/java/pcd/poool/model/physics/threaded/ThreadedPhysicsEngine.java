@@ -132,14 +132,10 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
     }
 
     private SparseCollisionDeltaAccumulator detectCandidateCollisions(Board board, List<Ball> balls) {
-        // Detection phase: use a grid cell size that keeps each ball in a small neighborhood.
-        // We only inspect nearby balls, then `computeCollisionContribution(...)` filters out
-        // the ones that do not overlap, so this phase finds collision candidates rather than
-        // every possible pair.
-        double cellSize = computeOwnershipCellSize(balls);
-        Map<GridCell, IntBag>[] workerGrids = buildWorkerGrids(balls, cellSize);
-        var combinedGrid = mergeWorkerGrids(workerGrids);
-        var orderedCellBuckets = orderCellBuckets(combinedGrid);
+        double cellSize = computeOwnershipCellSize(balls); // Grid size based on the largest ball.
+        Map<GridCell, IntBag>[] workerGrids = buildWorkerGrids(balls, cellSize); // Local grids per worker.
+        var combinedGrid = mergeWorkerGrids(workerGrids); // Merge the local grids.
+        var orderedCellBuckets = orderCellBuckets(combinedGrid); // Keep cell processing deterministic.
         return collectCandidateCollisionDeltas(board, balls, combinedGrid, orderedCellBuckets);
     }
 
