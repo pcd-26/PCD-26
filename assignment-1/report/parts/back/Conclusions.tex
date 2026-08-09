@@ -6,6 +6,10 @@ without duplicating game rules. The concurrent versions share the game loop,
 command protocol, and phased physics algorithm. They differ only in work
 scheduling: persistent workers or tasks submitted to a fixed executor.
 
+All three versions are fully playable. The simulation advances correctly,
+accepts keyboard and mouse shots, controls the bot, updates scores, detects the
+end of the game, and supports restarting without relaunching the application.
+
 The design preserves a clear ownership rule. The controller owns mutable game
 state; workers process disjoint ranges or private accumulators. Phase barriers
 separate parallel computation from deterministic accumulation and snapshot
