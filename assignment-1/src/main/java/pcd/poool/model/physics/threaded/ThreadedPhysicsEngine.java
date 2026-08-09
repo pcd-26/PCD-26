@@ -136,7 +136,8 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         Map<GridCell, IntBag>[] workerGrids = buildWorkerGrids(balls, cellSize); // Local grids per worker.
         var combinedGrid = mergeWorkerGrids(workerGrids); // Merge the local grids.
         var orderedCellBuckets = orderCellBuckets(combinedGrid); // Keep cell processing deterministic.
-        return collectCandidateCollisionDeltas(board, balls, combinedGrid, orderedCellBuckets);
+        var candidatePairs = collectCandidateCollisionPairs(balls, combinedGrid, orderedCellBuckets);
+        return collectCollisionContributions(board, balls, candidatePairs);
     }
 
     private void resolveCollisions(List<Ball> balls, SparseCollisionDeltaAccumulator accumulatedCollisionDeltas) {
@@ -245,26 +246,20 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         return orderedCellBuckets;
     }
 
-    private SparseCollisionDeltaAccumulator collectCandidateCollisionDeltas(
-            Board board,
+    private List<CollisionPair> collectCandidateCollisionPairs(
             List<Ball> balls,
             Map<GridCell, IntBag> combinedGrid,
             ArrayList<CellBucket> orderedCellBuckets) {
-        // Each worker collects the deltas and contact pairs for the cells it owns.
-        var collisionDeltasByWorker = new SparseCollisionDeltaAccumulator[Math.min(workers.length, orderedCellBuckets.size())];
-        @SuppressWarnings("unchecked")
-        List<CollisionPair>[] collisionPairsByWorker = new List[Math.min(workers.length, orderedCellBuckets.size())];
+        var collisionPairsByWorker = new List[Math.min(workers.length, orderedCellBuckets.size())];
         int cellCount = orderedCellBuckets.size();
         int cellWorkerCount = Math.min(workers.length, cellCount);
         if (cellWorkerCount <= 1) {
             // A tiny cell set is processed directly to avoid worker overhead.
-            var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
             var pairAccumulator = new ArrayList<CollisionPair>();
             for (int i = 0; i < cellCount; i++) {
-                resolveOwnedCell(orderedCellBuckets.get(i), combinedGrid, balls, deltaAccumulator, pairAccumulator);
+                collectCellCandidatePairs(orderedCellBuckets.get(i), combinedGrid, balls, pairAccumulator);
             }
             if (cellCount > 0) {
-                collisionDeltasByWorker[0] = deltaAccumulator;
                 collisionPairsByWorker[0] = pairAccumulator;
             }
         } else {
@@ -279,12 +274,10 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
                 int rangeEnd = rangeStart + size;
                 int assignedWorker = workerIndex;
                 workers[workerIndex].assign(() -> {
-                    var deltaAccumulator = new SparseCollisionDeltaAccumulator(balls.size());
                     var pairAccumulator = new ArrayList<CollisionPair>();
                     for (int i = rangeStart; i < rangeEnd; i++) {
-                        resolveOwnedCell(orderedCellBuckets.get(i), combinedGrid, balls, deltaAccumulator, pairAccumulator);
+                        collectCellCandidatePairs(orderedCellBuckets.get(i), combinedGrid, balls, pairAccumulator);
                     }
-                    collisionDeltasByWorker[assignedWorker] = deltaAccumulator;
                     collisionPairsByWorker[assignedWorker] = pairAccumulator;
                 }, completion);
                 from = rangeEnd;
@@ -293,70 +286,74 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
             completion.await();
         }
 
-        // Merge every worker contribution into a single delta set.
-        var combinedDeltas = new SparseCollisionDeltaAccumulator(balls.size());
+        // Collect all confirmed collision candidates and keep them ordered.
         int pairCount = 0;
-        for (int i = 0; i < collisionDeltasByWorker.length; i++) {
-            if (collisionDeltasByWorker[i] != null) {
-                combinedDeltas.merge(collisionDeltasByWorker[i]);
-            }
-            if (collisionPairsByWorker[i] != null) {
-                pairCount += collisionPairsByWorker[i].size();
+        for (var localPairBag : collisionPairsByWorker) {
+            if (localPairBag != null) {
+                pairCount += localPairBag.size();
             }
         }
-
-        // Collect all confirmed collision candidates, sort them, and report each one once.
-        var contactPairs = new ArrayList<CollisionPair>(pairCount);
+        var candidatePairs = new ArrayList<CollisionPair>(pairCount);
         for (var localPairBag : collisionPairsByWorker) {
             if (localPairBag == null) {
                 continue;
             }
-            contactPairs.addAll(localPairBag);
+            candidatePairs.addAll(localPairBag);
         }
-        contactPairs.sort((first, second) -> {
+        candidatePairs.sort((first, second) -> {
             int byFirst = Integer.compare(first.firstIndex(), second.firstIndex());
             if (byFirst != 0) {
                 return byFirst;
             }
             return Integer.compare(first.secondIndex(), second.secondIndex());
         });
-        for (var pair : contactPairs) {
-            board.recordCollision(balls.get(pair.firstIndex()), balls.get(pair.secondIndex()));
-        }
-
-        return combinedDeltas;
+        return candidatePairs;
     }
 
-    private void resolveOwnedCell(
+    private SparseCollisionDeltaAccumulator collectCollisionContributions(
+            Board board,
+            List<Ball> balls,
+            List<CollisionPair> candidatePairs) {
+        var collisionDeltas = new SparseCollisionDeltaAccumulator(balls.size());
+        for (var pair : candidatePairs) {
+            var contribution = computeCollisionContribution(balls, pair.firstIndex(), pair.secondIndex());
+            if (contribution == null) {
+                continue;
+            }
+            collisionDeltas.add(contribution);
+            board.recordCollision(balls.get(pair.firstIndex()), balls.get(pair.secondIndex()));
+        }
+        return collisionDeltas;
+    }
+
+    private void collectCellCandidatePairs(
             CellBucket bucket,
             Map<GridCell, IntBag> mergedGrid,
-        List<Ball> balls,
-        SparseCollisionDeltaAccumulator deltas,
-        List<CollisionPair> contactPairs) {
+            List<Ball> balls,
+            List<CollisionPair> contactPairs) {
         IntBag indexes = bucket.indexes();
-        // Detection phase: start with candidate collisions inside the current cell.
-        collectPairsWithinBag(indexes, balls, deltas, contactPairs);
-        // Detection phase: then check the neighbor cells that belong to this cell's ownership region.
+        // Check the cell itself first.
+        collectPairsWithinBag(indexes, balls, contactPairs);
+        // Then check the neighboring cells that can still collide with it.
         collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x() + 1, bucket.cell().y() - 1)),
-                balls, deltas, contactPairs);
+                balls, contactPairs);
         collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x() + 1, bucket.cell().y())),
-                balls, deltas, contactPairs);
+                balls, contactPairs);
         collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x() + 1, bucket.cell().y() + 1)),
-                balls, deltas, contactPairs);
+                balls, contactPairs);
         collectCrossPairs(indexes, mergedGrid.get(new GridCell(bucket.cell().x(), bucket.cell().y() + 1)),
-                balls, deltas, contactPairs);
+                balls, contactPairs);
     }
 
     private void collectPairsWithinBag(
             IntBag indexes,
-        List<Ball> balls,
-        SparseCollisionDeltaAccumulator deltas,
-        List<CollisionPair> contactPairs) {
+            List<Ball> balls,
+            List<CollisionPair> contactPairs) {
         // Detection phase: compare every pair of balls that share the same cell.
         for (int i = 0; i < indexes.size() - 1; i++) {
             int first = indexes.get(i);
             for (int j = i + 1; j < indexes.size(); j++) {
-                addContributionIfColliding(balls, first, indexes.get(j), deltas, contactPairs);
+                addCandidatePairIfColliding(balls, first, indexes.get(j), contactPairs);
             }
         }
     }
@@ -364,9 +361,8 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
     private void collectCrossPairs(
             IntBag firstBag,
             IntBag secondBag,
-        List<Ball> balls,
-        SparseCollisionDeltaAccumulator deltas,
-        List<CollisionPair> contactPairs) {
+            List<Ball> balls,
+            List<CollisionPair> contactPairs) {
         if (secondBag == null) {
             return;
         }
@@ -374,81 +370,85 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
         for (int i = 0; i < firstBag.size(); i++) {
             int first = firstBag.get(i);
             for (int j = 0; j < secondBag.size(); j++) {
-                addContributionIfColliding(balls, first, secondBag.get(j), deltas, contactPairs);
+                addCandidatePairIfColliding(balls, first, secondBag.get(j), contactPairs);
             }
         }
     }
 
-    private void addContributionIfColliding(
-        List<Ball> balls,
-        int first,
-        int second,
-        SparseCollisionDeltaAccumulator deltas,
-        List<CollisionPair> contactPairs) {
-        // Detection phase: compute the collision contribution once and keep it only if the balls overlap.
-        CollisionContribution contribution = computeCollisionContribution(balls, first, second);
-        if (contribution == null) {
+    private void addCandidatePairIfColliding(
+            List<Ball> balls,
+            int first,
+            int second,
+            List<CollisionPair> contactPairs) {
+        // Detection phase: keep only overlapping pairs.
+        if (!areOverlapping(balls, first, second)) {
             return;
         }
-        deltas.add(contribution);
         contactPairs.add(new CollisionPair(first, second));
     }
 
-    private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
-        var a = balls.get(firstIndex);
-        var b = balls.get(secondIndex);
-
-        // Measure the gap between the two centers and stop if they are already separate.
-        double dx = b.getPos().x() - a.getPos().x();
-        double dy = b.getPos().y() - a.getPos().y();
+    private boolean areOverlapping(List<Ball> balls, int firstIndex, int secondIndex) {
+        var firstBall = balls.get(firstIndex);
+        var secondBall = balls.get(secondIndex);
+        double dx = secondBall.getPos().x() - firstBall.getPos().x();
+        double dy = secondBall.getPos().y() - firstBall.getPos().y();
         double dist = Math.hypot(dx, dy);
-        double minD = a.getRadius() + b.getRadius();
-        if (dist >= minD) {
+        return dist < firstBall.getRadius() + secondBall.getRadius();
+    }
+
+    private CollisionContribution computeCollisionContribution(List<Ball> balls, int firstIndex, int secondIndex) {
+        var firstBall = balls.get(firstIndex);
+        var secondBall = balls.get(secondIndex);
+
+        double centerDeltaX = secondBall.getPos().x() - firstBall.getPos().x();
+        double centerDeltaY = secondBall.getPos().y() - firstBall.getPos().y();
+        double centerDistance = Math.hypot(centerDeltaX, centerDeltaY);
+        double minAllowedDistance = firstBall.getRadius() + secondBall.getRadius();
+        if (centerDistance >= minAllowedDistance) {
             return null;
         }
 
-        // Avoid a zero-length normal when the balls are practically on top of each other.
-        if (dist <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
-            dx = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
-            dy = 0.0;
-            dist = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+        // Avoid a zero-length collision axis.
+        if (centerDistance <= PhysicsDefaults.COINCIDENT_CENTER_EPSILON) {
+            centerDeltaX = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
+            centerDeltaY = 0.0;
+            centerDistance = PhysicsDefaults.COINCIDENT_CENTER_EPSILON;
         }
 
-        // Build the collision normal and split the overlap proportionally to mass.
-        double nx = dx / dist;
-        double ny = dy / dist;
-        double totalMass = a.getMass() + b.getMass();
-        double overlap = minD - dist;
-        double firstPositionCorrection = overlap * (b.getMass() / totalMass);
-        double secondPositionCorrection = overlap * (a.getMass() / totalMass);
+        double collisionAxisX = centerDeltaX / centerDistance;
+        double collisionAxisY = centerDeltaY / centerDistance;
+        double totalMass = firstBall.getMass() + secondBall.getMass();
+        double overlapDistance = minAllowedDistance - centerDistance;
+        double firstPositionDelta = overlapDistance * (secondBall.getMass() / totalMass);
+        double secondPositionDelta = overlapDistance * (firstBall.getMass() / totalMass);
 
-        // Prepare velocity deltas only if the balls are actually moving toward each other.
         double firstVelocityDeltaX = 0.0;
         double firstVelocityDeltaY = 0.0;
         double secondVelocityDeltaX = 0.0;
         double secondVelocityDeltaY = 0.0;
-        double relativeVelocityX = b.getVel().x() - a.getVel().x();
-        double relativeVelocityY = b.getVel().y() - a.getVel().y();
-        double relativeVelocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
-        if (relativeVelocityAlongNormal <= 0.0) {
-            double impulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityAlongNormal
-                    / (1.0 / a.getMass() + 1.0 / b.getMass());
-            firstVelocityDeltaX = -(impulse / a.getMass()) * nx;
-            firstVelocityDeltaY = -(impulse / a.getMass()) * ny;
-            secondVelocityDeltaX = (impulse / b.getMass()) * nx;
-            secondVelocityDeltaY = (impulse / b.getMass()) * ny;
+        double relativeVelocityX = secondBall.getVel().x() - firstBall.getVel().x();
+        double relativeVelocityY = secondBall.getVel().y() - firstBall.getVel().y();
+        double relativeVelocityOnAxis = relativeVelocityX * collisionAxisX + relativeVelocityY * collisionAxisY;
+        if (relativeVelocityOnAxis <= 0.0) {
+            // Apply an elastic impulse only if the balls are moving toward each other.
+            double bounceImpulse = -(1 + PhysicsDefaults.RESTITUTION_FACTOR) * relativeVelocityOnAxis
+                    / (1.0 / firstBall.getMass() + 1.0 / secondBall.getMass());
+            firstVelocityDeltaX = -(bounceImpulse / firstBall.getMass()) * collisionAxisX;
+            firstVelocityDeltaY = -(bounceImpulse / firstBall.getMass()) * collisionAxisY;
+            secondVelocityDeltaX = (bounceImpulse / secondBall.getMass()) * collisionAxisX;
+            secondVelocityDeltaY = (bounceImpulse / secondBall.getMass()) * collisionAxisY;
         }
 
-        // Return the full delta packet so the caller can apply it later in batch.
+        // Return the position and velocity corrections for both balls.
         return new CollisionContribution(
                 firstIndex,
                 secondIndex,
-                -nx * firstPositionCorrection,
-                -ny * firstPositionCorrection,
+                -collisionAxisX * firstPositionDelta,
+                -collisionAxisY * firstPositionDelta,
                 firstVelocityDeltaX,
                 firstVelocityDeltaY,
-                nx * secondPositionCorrection,
-                ny * secondPositionCorrection,
+                collisionAxisX * secondPositionDelta,
+                collisionAxisY * secondPositionDelta,
                 secondVelocityDeltaX,
                 secondVelocityDeltaY);
     }
