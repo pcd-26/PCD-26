@@ -15,6 +15,9 @@ To generate `report.pdf`:
 make
 ```
 
+The `make` target runs `pdflatex` twice so citations and references settle
+correctly, then removes the temporary LaTeX files.
+
 Alternatively, without `make`:
 
 ```bash

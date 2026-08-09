@@ -1,9 +1,9 @@
 .RECIPEPREFIX := >
 
 PDF = report.pdf
-BUILD_DIR = build
 SOURCE = main.tex
-LATEXMK_FLAGS = -pdf -interaction=nonstopmode -halt-on-error -file-line-error -jobname=report -outdir=$(BUILD_DIR)
+PDFLATEX_FLAGS = -interaction=nonstopmode -halt-on-error -jobname=report
+TEMP_FILES = report.aux report.log report.out report.toc report.fls report.fdb_latexmk
 
 .DEFAULT_GOAL := all
 .PHONY: all clean
@@ -11,9 +11,10 @@ LATEXMK_FLAGS = -pdf -interaction=nonstopmode -halt-on-error -file-line-error -j
 all: $(PDF)
 
 $(PDF): $(SOURCE)
->latexmk $(LATEXMK_FLAGS) $(SOURCE)
->python -c "from pathlib import Path; import shutil, sys; build_pdf = Path('$(BUILD_DIR)/report.pdf'); report_pdf = Path('$(PDF)'); build_dir = Path('$(BUILD_DIR)'); report_pdf.unlink(missing_ok=True); shutil.copy2(build_pdf, report_pdf) if build_pdf.exists() else None; shutil.rmtree(build_dir, ignore_errors=True); sys.exit(1) if not report_pdf.exists() else None"
+>pdflatex $(PDFLATEX_FLAGS) $(SOURCE)
+>pdflatex $(PDFLATEX_FLAGS) $(SOURCE)
+>rm -f $(TEMP_FILES)
+>test -f $(PDF)
 
 clean:
->latexmk -C $(LATEXMK_FLAGS) $(SOURCE)
->python -c "from pathlib import Path; import shutil; Path('$(PDF)').unlink(missing_ok=True); shutil.rmtree(Path('$(BUILD_DIR)'), ignore_errors=True); Path('main.pdf').unlink(missing_ok=True)"
+>rm -f $(TEMP_FILES) $(PDF)
