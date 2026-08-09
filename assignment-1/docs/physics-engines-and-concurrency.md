@@ -34,6 +34,27 @@ writer and split a long elapsed duration into fixed sub-steps. Each sub-step:
 Workers never add scores, remove balls, or mutate the game lifecycle. They
 only process disjoint balls or write private collision accumulators.
 
+## Report summary
+
+The report can describe the step as a small pipeline with a few serialized
+boundaries:
+
+- `step(...)` itself is serialized on the board lock;
+- the elapsed time is split into fixed sub-steps sequentially;
+- ball motion is parallel, because each worker updates a disjoint slice;
+- hole interactions are sequential on the coordinator;
+- spatial grids are built in parallel, one private grid per worker/task;
+- cell ordering and grid merge are sequential to keep the result deterministic;
+- candidate collision detection is parallel over cell slices;
+- collision contribution computation and final board recording are sequential;
+- the final delta application can be parallel again when the touched set is
+  large enough.
+
+This structure is the same in `ThreadedPhysicsEngine` and
+`TaskBasedPhysicsEngine`. The only difference is the execution mechanism:
+platform threads with a custom completion monitor versus executor tasks with
+`Future` barriers.
+
 ## Why the merge is serial
 
 Collisions can touch the same ball from different cells. Direct concurrent
