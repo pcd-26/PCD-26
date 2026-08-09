@@ -439,18 +439,18 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
             secondVelocityDeltaY = (bounceImpulse / secondBall.getMass()) * collisionAxisY;
         }
 
-        // Return the position and velocity corrections for both balls.
+        // Move the first ball backward and the second ball forward on the collision axis.
         return new CollisionContribution(
-                firstIndex,
-                secondIndex,
-                -collisionAxisX * firstPositionDelta,
-                -collisionAxisY * firstPositionDelta,
-                firstVelocityDeltaX,
-                firstVelocityDeltaY,
-                collisionAxisX * secondPositionDelta,
-                collisionAxisY * secondPositionDelta,
-                secondVelocityDeltaX,
-                secondVelocityDeltaY);
+                firstIndex,					                // first ball index
+                secondIndex,					            // second ball index
+                -collisionAxisX * firstPositionDelta,	    // first ball position delta x
+                -collisionAxisY * firstPositionDelta,	    // first ball position delta y
+                firstVelocityDeltaX,			            // first ball velocity delta x
+                firstVelocityDeltaY,			            // first ball velocity delta y
+                collisionAxisX * secondPositionDelta,	    // second ball position delta x
+                collisionAxisY * secondPositionDelta,	    // second ball position delta y
+                secondVelocityDeltaX,			            // second ball velocity delta x
+                secondVelocityDeltaY);			            // second ball velocity delta y
     }
 
     private double computeOwnershipCellSize(List<Ball> balls) {
