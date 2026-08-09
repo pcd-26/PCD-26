@@ -55,21 +55,6 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
 
     @Override
     public void step(Board board, long elapsedMillis) {
-        stepInternal(board, elapsedMillis);
-    }
-
-    public int poolSize() {
-        return poolSize;
-    }
-
-    @Override
-    public void close() {
-        closed = true;
-        // Shut down the pool after the engine is no longer used.
-        executor.shutdown();
-    }
-
-    private void stepInternal(Board board, long elapsedMillis) {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
@@ -84,6 +69,17 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
                 remaining -= dt;
             }
         }
+    }
+
+    public int poolSize() {
+        return poolSize;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+        // Shut down the pool after the engine is no longer used.
+        executor.shutdown();
     }
 
     private void stepOnce(Board board, long dt) {

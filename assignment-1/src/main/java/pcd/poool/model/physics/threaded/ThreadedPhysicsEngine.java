@@ -48,23 +48,6 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
 
     @Override
     public void step(Board board, long elapsedMillis) {
-        stepInternal(board, elapsedMillis);
-    }
-
-    public int workerCount() {
-        return workers.length;
-    }
-
-    @Override
-    public void close() {
-        closed = true;
-        // Stop every worker thread before releasing the engine.
-        for (var worker : workers) {
-            worker.close();
-        }
-    }
-
-    private void stepInternal(Board board, long elapsedMillis) {
         if (elapsedMillis < 0) {
             throw new IllegalArgumentException("elapsedMillis must be >= 0");
         }
@@ -78,6 +61,19 @@ public final class ThreadedPhysicsEngine implements PhysicsStepper, AutoCloseabl
                 stepOnce(board, dt);
                 remaining -= dt;
             }
+        }
+    }
+
+    public int workerCount() {
+        return workers.length;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+        // Stop every worker thread before releasing the engine.
+        for (var worker : workers) {
+            worker.close();
         }
     }
 
