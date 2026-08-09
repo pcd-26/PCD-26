@@ -1,15 +1,92 @@
+\clearpage
 \section{Problem Analysis}
 
-The main difficulty is the management of a shared mutable board under asynchronous input and a non-trivial simulation workload. During each tick, many balls move, collide, and change status, so the implementation must preserve deterministic state transitions while still allowing useful concurrency.
+The main difficulty is not simply running the game on multiple threads. It is
+coordinating asynchronous activities around a simulation with a large
+\textbf{mutable state}. During every tick, balls move, collide, enter holes,
+and may change the score or terminate the match. These effects must appear as
+\textbf{one coherent state transition}, even while input, bot decisions,
+rendering, and physics computation progress concurrently.
+
+\subsection{Concurrent activities and shared state}
+
+The system contains activities with different timing requirements:
 
 \begin{itemize}
-    \item \textbf{Computational cost}: collision detection and resolution become the dominant cost as the number of balls increases;
-    \item \textbf{Shared state}: the board must be updated consistently even when multiple events are active;
-    \item \textbf{Asynchronous input}: human and bot actions arrive while the simulation is running;
-    \item \textbf{Determinism}: concurrency must not alter the logical outcome of the match;
-    \item \textbf{Responsiveness}: the interface must remain reactive while the simulation progresses.
+    \item the \textbf{game controller} advances the simulation periodically;
+    \item the \textbf{graphical interface} receives human input and updates the displayed state;
+    \item the \textbf{bot} independently decides when to shoot;
+    \item the \textbf{physics workers} cooperate within a simulation tick.
 \end{itemize}
 
-The concurrent part of the assignment starts from identifying which simulation work can be parallelized and which coordination must remain serialized. This is the first step toward preserving a consistent global view of the match while keeping the simulation efficient.
+These activities cannot mutate the game state without a defined ordering.
 
-\textbf{The objective} is to \textbf{exploit parallelism} while preserving \textbf{coherence} and \textbf{determinism}.
+The shared state includes ball positions and velocities, pocketed balls,
+scores, shot eligibility, and match termination. A race could lose an input,
+apply a shot during an invalid phase, score the same ball twice, or expose a
+partially completed tick to the view.
+
+Input must therefore be treated as an \textbf{asynchronous request}, not as an
+immediate board mutation. Rendering has the complementary requirement: it
+needs a stable representation of the latest completed state without delaying
+the simulation.
+
+\subsection{Physics dependencies and available parallelism}
+
+The physics workload grows with the number of balls. Movement has linear cost,
+while naive collision detection compares every pair and requires $O(n^2)$
+tests. For large workloads, collision detection and resolution can dominate
+the tick duration. Executing this work on the UI thread would make the
+interface unresponsive.
+
+Not every operation in a physics tick is independent. Movement must finish
+before testing holes and collisions. Removing a pocketed ball changes the set
+of collision participants. Collision effects must be combined before the new
+state becomes visible. These dependencies divide the tick into
+\textbf{ordered phases} separated by completion barriers.
+
+Useful \textbf{data parallelism} is available within some phases. Distinct ball
+ranges can be moved independently. Separate portions of the spatial partition
+can be built concurrently. Collision candidates can also be examined by
+different workers.
+
+Collision resolution is more delicate because several contacts may affect the
+same ball. Uncoordinated writes would introduce data races and make the result
+depend on worker scheduling. The key distinction is therefore between
+\textbf{parallel computation on independent or private data} and
+\textbf{ordered application to shared state}.
+
+\subsection{Correctness requirements}
+
+The concurrent implementations must preserve the semantics of the sequential
+baseline. Given the same initial configuration and input sequence, the
+execution strategy must not change ball state, scoring, or the winner. This is
+especially important for floating-point collision calculations. A different
+accumulation order can produce diverging results over time.
+
+The required properties can be summarized as follows:
+
+\begin{itemize}
+    \item \textbf{Safety}: only completed ticks are published, accepted commands are processed at most once, and each physics phase observes a complete previous phase;
+    \item \textbf{Determinism}: scheduling does not alter the observable result;
+    \item \textbf{Liveness}: workers, tasks, and command receipts eventually complete;
+    \item \textbf{Responsiveness}: simulation work does not block user input or UI updates;
+    \item \textbf{Clean termination}: shutdown releases every active component.
+\end{itemize}
+
+\subsection{Performance and scalability}
+
+Parallel execution is useful only when its benefit exceeds
+\textbf{partitioning, scheduling, synchronization, and merge overheads}. Small
+workloads may run faster sequentially. Large workloads provide enough
+independent work to amortize these costs.
+
+\textbf{Load balancing} also matters. Collision work is not distributed
+uniformly: dense board regions produce more candidate pairs than sparse ones.
+
+The two concurrent versions solve the same problem through different execution
+models. Their evaluation therefore requires a \textbf{common sequential
+baseline}, equivalent workloads, and configurable parallelism. Elapsed time
+alone is not sufficient. Speedup, scalability, CPU utilization, and the
+saturation point are needed to explain whether the available cores are used
+effectively.
