@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.runner;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import pcd.poool.benchmark.config.BenchmarkConfig;
 
 class HeadlessSimulationRunnerTest {
 
@@ -103,7 +104,7 @@ class HeadlessSimulationRunnerTest {
 
     @Test
     @Timeout(5)
-    void instrumentedThreadedExecutionCapturesSynchronizationMetrics() {
+    void instrumentedThreadedExecutionLeavesInstrumentationEmpty() {
         var execution = HeadlessSimulationRunner.simulateExecution(
                 BenchmarkConfig.defaults()
                         .withImplementation(BenchmarkConfig.ImplementationType.THREADS)
@@ -113,10 +114,6 @@ class HeadlessSimulationRunnerTest {
                         .withSeed(SEED)
                         .withInstrumentationEnabled(true));
 
-        assertTrue(execution.instrumentation().lockAcquisitions() >= 0L);
-        assertTrue(execution.instrumentation().submittedTasks() > 0L);
-        assertTrue(execution.instrumentation().syncTimeMillis() >= 0.0);
-        assertTrue(execution.instrumentation().stateReadTimeMillis() >= 0.0);
-        assertTrue(execution.instrumentation().collisionResolutionTimeMillis() >= 0.0);
+        assertTrue(execution.instrumentation().isEmpty());
     }
 }

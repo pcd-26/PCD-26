@@ -1,8 +1,12 @@
 package pcd.poool.view;
 
 /**
- * Monitor used to coordinate render requests with frame completion.
- * Useful when a simulation loop wants synchronous render semantics.
+ * Synchronization helper between the runtime thread and the Swing EDT.
+ *
+ * <p>The runtime assigns a monotonically increasing frame id before each
+ * repaint and then waits until Swing confirms that the same frame has been
+ * painted. This keeps rendering ordered and avoids mixing simulation steps
+ * with stale or partial frames.
  */
 public class RenderSynch {
 
@@ -11,31 +15,18 @@ public class RenderSynch {
 
 	private long nextFrameToRender;
 	private long lastFrameRendered;
-	
-	/**
-	 * Creates a render synchronization monitor.
-	 */
+
 	public RenderSynch() {
 		nextFrameToRender = FIRST_FRAME;
 		lastFrameRendered = NO_FRAME_RENDERED;
 	}
 
-	/**
-	 * Reserves the next frame identifier for rendering.
-	 *
-	 * @return monotonically increasing frame id
-	 */
 	public synchronized long nextFrameToRender() {
-		long f = nextFrameToRender;
+		long frameId = nextFrameToRender;
 		nextFrameToRender++;
-		return f;
+		return frameId;
 	}
 
-	/**
-	 * Marks a frame as rendered and wakes waiting simulation threads.
-	 *
-	 * @param frame completed frame id
-	 */
 	public synchronized void notifyFrameRendered(long frame) {
 		if (frame <= lastFrameRendered) {
 			return;
@@ -43,18 +34,10 @@ public class RenderSynch {
 		lastFrameRendered = frame;
 		notifyAll();
 	}
-	
-	/**
-	 * Waits until the requested frame has been rendered.
-	 *
-	 * @param frame frame id to wait for
-	 * @throws InterruptedException if interrupted while waiting
-	 */
+
 	public synchronized void waitForFrameRendered(long frame) throws InterruptedException {
 		while (lastFrameRendered < frame) {
 			wait();
 		}
 	}
-	
-	
 }

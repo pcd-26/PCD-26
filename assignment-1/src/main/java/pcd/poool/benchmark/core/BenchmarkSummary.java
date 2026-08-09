@@ -1,6 +1,7 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 import java.util.Locale;
+import pcd.poool.benchmark.config.BenchmarkConfig;
 
 /**
  * Aggregate statistics for a benchmark session.

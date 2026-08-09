@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.postprocess;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,12 +15,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkSummary;
+import pcd.poool.benchmark.core.BenchmarkWorkloads;
+import pcd.poool.benchmark.core.RuntimeTelemetry;
 import pcd.poool.model.physics.common.Boundary;
 
 /**
  * Exports derived benchmark tables and run metadata.
  */
-final class BenchmarkResultsExporter {
+public final class BenchmarkResultsExporter {
 
     static final String METADATA_FILE_NAME = "benchmark-runtime-metadata.csv";
     static final String AVG_TICK_TIME_FILE_NAME = "avg-tick-time-by-engine.csv";
@@ -48,7 +52,7 @@ final class BenchmarkResultsExporter {
     private BenchmarkResultsExporter() {
     }
 
-    static ExportedResults export(
+    public static ExportedResults export(
             Path outputDir,
             Instant timestamp,
             RuntimeTelemetry telemetry,
@@ -85,7 +89,7 @@ final class BenchmarkResultsExporter {
         return new ExportedResults(metadataFile, avgTickFile, throughputFile, speedupFile, crossoverFile);
     }
 
-    static String resolveGitCommitHash() {
+    public static String resolveGitCommitHash() {
         try {
             var process = new ProcessBuilder("git", "rev-parse", "HEAD")
                     .redirectErrorStream(true)
