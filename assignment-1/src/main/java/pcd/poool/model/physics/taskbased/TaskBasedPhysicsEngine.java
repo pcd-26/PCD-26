@@ -136,14 +136,10 @@ public class TaskBasedPhysicsEngine implements PhysicsStepper, AutoCloseable {
     }
 
     private SparseCollisionDeltaAccumulator detectCandidateCollisions(Board board, List<Ball> balls) {
-        // Detection phase: use a spatial grid to keep collision checks local instead of quadratic.
-        // We only inspect nearby balls, then `computeCollisionContribution(...)` filters out
-        // the ones that do not overlap, so this phase finds collision candidates rather than
-        // every possible pair.
-        double cellSize = computeOwnershipCellSize(balls);
-        Map<GridCell, IntBag>[] workerGrids = buildWorkerGrids(balls, cellSize);
-        var combinedGrid = mergeWorkerGrids(workerGrids);
-        var orderedCellBuckets = orderCellBuckets(combinedGrid);
+        double cellSize = computeOwnershipCellSize(balls); // Grid size based on the largest ball.
+        Map<GridCell, IntBag>[] workerGrids = buildWorkerGrids(balls, cellSize); // Local grids per task.
+        var combinedGrid = mergeWorkerGrids(workerGrids); // Merge the local grids.
+        var orderedCellBuckets = orderCellBuckets(combinedGrid); // Keep cell processing deterministic.
         return collectCandidateCollisionDeltas(board, balls, combinedGrid, orderedCellBuckets);
     }
 
