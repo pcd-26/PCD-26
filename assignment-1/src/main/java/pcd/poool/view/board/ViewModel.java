@@ -9,7 +9,13 @@ import pcd.poool.model.game.Player;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.Hole;
 
-// Mutable snapshot read by the Swing renderer.
+/**
+ * Thread-safe rendering state shared between the runtime and Swing.
+ *
+ * <p>The runtime copies the current board into this object, while the EDT
+ * reads immutable view records from it. This keeps the renderer independent
+ * from the mutable physics model and makes the visible state easy to test.
+ */
 public class ViewModel {
 
 	public static record BallViewInfo(P2d pos, double radius) {}
@@ -31,7 +37,7 @@ public class ViewModel {
 		framePerSec = 0;
 	}
 
-	public synchronized void update(Board board, int framePerSec) {
+    public synchronized void update(Board board, int framePerSec) {
 		balls.clear();
 		for (var ball : board.getBalls()) {
 			balls.add(new BallViewInfo(ball.pos(), ball.radius()));
@@ -52,13 +58,13 @@ public class ViewModel {
 		this.game = game;
 	}
 
-	public synchronized void update(
-			List<Board.BallSnapshot> smallBalls,
-			Board.BallSnapshot playerBall,
+    public synchronized void update(
+            List<Board.BallSnapshot> smallBalls,
+            Board.BallSnapshot playerBall,
 			Board.BallSnapshot botBall,
-			List<Hole> holes,
-			GameSnapshot game,
-			int framePerSec) {
+            List<Hole> holes,
+            GameSnapshot game,
+            int framePerSec) {
 		balls.clear();
 		for (var ball : smallBalls) {
 			balls.add(new BallViewInfo(ball.pos(), ball.radius()));

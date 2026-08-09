@@ -10,7 +10,14 @@ import pcd.poool.threaded.ThreadedGameRunner;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
 
-/** Playable platform-thread version of Poool. */
+/**
+ * Playable platform-thread version of Poool.
+ *
+ * <p>The launcher keeps the UI loop separate from the game runtime and talks
+ * to it through snapshots and callbacks. Compared with the sequential
+ * launcher, the important difference is that physics advances in its own
+ * thread while Swing only consumes published state.
+ */
 public final class ThreadedPoool {
 
     private static final int VIEW_WIDTH = 1200;
@@ -21,8 +28,10 @@ public final class ThreadedPoool {
     private ThreadedPoool() {
     }
 
-    /** Starts the platform-thread application. */
     public static void main(String[] args) {
+        // The threaded launcher splits responsibilities: the runtime owns the
+        // mutable game state, while this loop only publishes snapshots to the
+        // view and reacts to restart requests.
         var runtimeRef = new AtomicReference<GameRuntime>(startRuntime());
         var restartRequested = new AtomicBoolean(false);
         var viewModel = new ViewModel();
@@ -30,10 +39,10 @@ public final class ThreadedPoool {
                 viewModel,
                 VIEW_WIDTH,
                 VIEW_HEIGHT,
-                velocity -> runtimeRef.get().shootHuman(velocity),
-                () -> restartRequested.set(true),
-                () -> runtimeRef.get().snapshot().game().humanCanShoot(),
-                () -> viewModel.clearShotPreview(Player.HUMAN));
+                velocity -> runtimeRef.get().shootHuman(velocity), // Human shot.
+                () -> restartRequested.set(true), // Restart request.
+                () -> runtimeRef.get().snapshot().game().humanCanShoot(), // Human aiming gate.
+                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clear human preview.
 
         Runtime.getRuntime().addShutdownHook(
                 new Thread(() -> runtimeRef.get().close(), "poool-threaded-shutdown"));
