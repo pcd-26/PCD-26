@@ -51,40 +51,39 @@ These types are shared by physics, view, and tests.
 - `PhysicsStepper.java`
   Strategy interface for advancing a `Board`.
 - `SpatialCollisionDetector.java`
-  Broad-phase detector used by all physics engines.
+  Broad-phase detector used by the sequential reference engine.
 
 ### `physics/sequential`
 
-- `PhysicsEngine.java`
+- `SequentialPhysicsEngine.java`
   Sequential implementation of `PhysicsStepper`.
 
 ### `physics/threaded`
 
 - `ThreadedPhysicsEngine.java`
-  Worker-based multithreaded implementation of `PhysicsStepper`. It computes
-  collision contributions in parallel and applies accumulated position/velocity
-  deltas deterministically once per ball. Candidate pairs are split across
-  worker threads, each worker fills private per-ball delta arrays, and the
-  controller merges those arrays before the final per-ball apply phase.
-- `ThreadedPhysicsEngine.java`
-  Platform-threaded engine based on worker-owned spatial cells, forward-neighbor
-  collision scans, and sparse per-ball delta accumulation to reduce the global
-  coordination cost of the collision phase on large workloads.
+  Small facade selecting the platform-thread scheduler.
+- `PlatformThreadRangeScheduler.java`
+  Splits ranges among reusable explicit platform workers.
 - `PhysicsWorker.java`
-  Long-lived worker thread used internally by `ThreadedPhysicsEngine`.
+  Long-lived worker used by the platform-thread scheduler.
 - `WorkerCompletionMonitor.java`
   Monitor used to coordinate the completion of one worker phase.
 
 ### `physics/taskbased`
 
 - `TaskBasedPhysicsEngine.java`
-  Executor-based physics implementation that preserves the same board
-  ownership model while scheduling work through an `ExecutorService`.
-  Integration, hole checks, spatial-grid construction, and collision handling
-  are modeled as tasks. Collision pairs are packed in compact `long` values.
-  Small contact sets are resolved as independent collision rounds; larger
-  contact sets use parallel accumulated impulse/delta computation followed by a
-  deterministic merge and per-ball apply phase.
+  Small facade selecting the Executor scheduler.
+- `ExecutorRangeScheduler.java`
+  Executes large ranges as fixed-pool tasks and small ranges inline.
+
+### `physics/parallel`
+
+- `ThreadedPhysicsEngine.java`
+- `TaskBasedPhysicsEngine.java`
+  The one shared parallel algorithm: integration, grids, collision
+  contributions, deterministic merge, and commit.
+- `RangeScheduler.java`
+  Minimal seam between numerical phases and their execution policy.
 
 ### `physics/config`
 
@@ -112,13 +111,6 @@ These types are shared by physics, view, and tests.
   Lifecycle state of the match.
 - `GameOverReason.java`
   Explicit terminal reason for a finished game.
-
-### `concurrent`
-
-- `BoundedBuffer.java`
-  Minimal blocking producer/consumer buffer interface.
-- `BoundedBufferImpl.java`
-  Monitor-based bounded buffer implementation.
 
 ## Relationships
 

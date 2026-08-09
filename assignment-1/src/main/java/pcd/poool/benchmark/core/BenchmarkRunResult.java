@@ -1,22 +1,8 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 import java.util.Locale;
 
-/**
- * Raw measurement produced by one benchmark run.
- *
- * @param runIndex 1-based run index within the benchmark session
- * @param warmup whether the run belongs to the warmup phase
- * @param elapsedNanos elapsed wall-clock time in nanoseconds
- * @param elapsedMillis elapsed wall-clock time in milliseconds
- * @param completedSteps number of completed simulation steps
- * @param throughputStepsPerSecond completed steps divided by elapsed seconds
- * @param checksum checksum or state hash observed at the end of the run
- * @param instrumentation optional synchronization metrics collected during the run
- * @param cpuUtilizationPercent estimated process CPU utilization during the run
- * @param status run status
- * @param failureMessage optional failure detail, null for successful runs
- */
+/** Raw measurement produced by one benchmark run. */
 public record BenchmarkRunResult(
         int runIndex,
         boolean warmup,
@@ -30,25 +16,13 @@ public record BenchmarkRunResult(
         Status status,
         String failureMessage) {
 
-    /**
-     * Run status.
-     */
+    /** Run status. */
     public enum Status {
         SUCCESS,
         FAILED
     }
 
-    /**
-     * Creates a successful run result.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param elapsedNanos elapsed wall-clock time in nanoseconds
-     * @param completedSteps number of completed simulation steps
-     * @param checksum checksum or state hash observed at the end of the run
-     * @param instrumentation optional synchronization metrics collected during the run
-     * @return successful run result
-     */
+    /** Creates a successful run result. */
     public static BenchmarkRunResult success(
             int runIndex,
             boolean warmup,
@@ -58,17 +32,7 @@ public record BenchmarkRunResult(
         return success(runIndex, warmup, elapsedNanos, completedSteps, checksum, BenchmarkInstrumentation.zero());
     }
 
-    /**
-     * Creates a successful run result.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param elapsedNanos elapsed wall-clock time in nanoseconds
-     * @param completedSteps number of completed simulation steps
-     * @param checksum checksum or state hash observed at the end of the run
-     * @param instrumentation optional synchronization metrics collected during the run
-     * @return successful run result
-     */
+    /** Creates a successful run result. */
     public static BenchmarkRunResult success(
             int runIndex,
             boolean warmup,
@@ -79,18 +43,7 @@ public record BenchmarkRunResult(
         return success(runIndex, warmup, elapsedNanos, completedSteps, checksum, instrumentation, Double.NaN);
     }
 
-    /**
-     * Creates a successful run result.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param elapsedNanos elapsed wall-clock time in nanoseconds
-     * @param completedSteps number of completed simulation steps
-     * @param checksum checksum or state hash observed at the end of the run
-     * @param instrumentation optional synchronization metrics collected during the run
-     * @param cpuUtilizationPercent estimated process CPU utilization during the run
-     * @return successful run result
-     */
+    /** Creates a successful run result. */
     public static BenchmarkRunResult success(
             int runIndex,
             boolean warmup,
@@ -115,29 +68,12 @@ public record BenchmarkRunResult(
                 null);
     }
 
-    /**
-     * Creates a failed run result.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param elapsedNanos elapsed wall-clock time in nanoseconds
-     * @param failureMessage failure detail
-     * @return failed run result
-     */
+    /** Creates a failed run result. */
     public static BenchmarkRunResult failure(int runIndex, boolean warmup, long elapsedNanos, String failureMessage) {
         return failure(runIndex, warmup, elapsedNanos, failureMessage, BenchmarkInstrumentation.zero());
     }
 
-    /**
-     * Creates a failed run result.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param elapsedNanos elapsed wall-clock time in nanoseconds
-     * @param failureMessage failure detail
-     * @param instrumentation optional synchronization metrics collected during the run
-     * @return failed run result
-     */
+    /** Creates a failed run result. */
     public static BenchmarkRunResult failure(
             int runIndex,
             boolean warmup,
@@ -147,17 +83,7 @@ public record BenchmarkRunResult(
         return failure(runIndex, warmup, elapsedNanos, failureMessage, instrumentation, Double.NaN);
     }
 
-    /**
-     * Creates a failed run result.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param elapsedNanos elapsed wall-clock time in nanoseconds
-     * @param failureMessage failure detail
-     * @param instrumentation optional synchronization metrics collected during the run
-     * @param cpuUtilizationPercent estimated process CPU utilization during the run
-     * @return failed run result
-     */
+    /** Creates a failed run result. */
     public static BenchmarkRunResult failure(
             int runIndex,
             boolean warmup,
@@ -180,20 +106,12 @@ public record BenchmarkRunResult(
                 failureMessage);
     }
 
-    /**
-     * Checks whether this result represents a successful run.
-     *
-     * @return whether the run succeeded
-     */
+    /** Returns whether the run succeeded. */
     public boolean succeeded() {
         return status == Status.SUCCESS;
     }
 
-    /**
-     * Checks whether this result represents a failed run.
-     *
-     * @return whether the run failed
-     */
+    /** Returns whether the run failed. */
     public boolean failed() {
         return status == Status.FAILED;
     }

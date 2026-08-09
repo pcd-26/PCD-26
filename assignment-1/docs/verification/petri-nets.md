@@ -63,14 +63,15 @@ the tick pipeline.
   all integration tasks for the batch have completed.
 - `HolePhaseReady`
   hole interactions may be applied.
-- `LocalCollisionWorkReady`
-  the worker set can build local collision candidates or local cell buckets.
-- `LocalCollisionDone`
-  all local broad-phase work has completed.
-- `CrossCellCollisionWorkReady`
-  cross-cell collision resolution may start.
-- `CrossCellCollisionDone`
-  all collision-resolution workers have completed.
+- `LocalGridReady`
+  the worker set can build private local center-cell grids.
+- `OrderedCellsReady`
+  the coordinator has merged the local grids into one ordered occupied-cell
+  view.
+- `SparseDeltasReady`
+  collision-resolution contributions have been accumulated in sparse form.
+- `CommitReady`
+  the board is in a consistent post-tick state and can be committed.
 - `SnapshotPublishReady`
   the board is in a consistent post-tick state and can be published.
 - `SnapshotPublished`
@@ -85,10 +86,10 @@ the tick pipeline.
 - `DispatchIntegration`
 - `JoinIntegration`
 - `ApplyHoleInteractions`
-- `DispatchLocalCollisionWork`
-- `JoinLocalCollisionWork`
-- `DispatchCrossCellCollisionWork`
-- `JoinCrossCellCollisionWork`
+- `BuildLocalGrid`
+- `MergeGrids`
+- `ResolveOwnedCells`
+- `MergeDeltas`
 - `PublishSnapshot`
 - `FinishTick`
 
@@ -104,10 +105,10 @@ flowchart LR
     IntegrationWorkReady((IntegrationWorkReady\n1 token))
     IntegrationDone((IntegrationDone\n1 token))
     HolePhaseReady((HolePhaseReady\n1 token))
-    LocalCollisionWorkReady((LocalCollisionWorkReady\n1 token))
-    LocalCollisionDone((LocalCollisionDone\n1 token))
-    CrossCellCollisionWorkReady((CrossCellCollisionWorkReady\n1 token))
-    CrossCellCollisionDone((CrossCellCollisionDone\n1 token))
+    LocalGridReady((LocalGridReady\n1 token))
+    OrderedCellsReady((OrderedCellsReady\n1 token))
+    SparseDeltasReady((SparseDeltasReady\n1 token))
+    CommitReady((CommitReady\n1 token))
     SnapshotPublishReady((SnapshotPublishReady\n1 token))
     SnapshotPublished((SnapshotPublished\n1 token))
 
@@ -116,10 +117,10 @@ flowchart LR
     DispatchIntegration[DispatchIntegration]
     JoinIntegration[JoinIntegration]
     ApplyHoleInteractions[ApplyHoleInteractions]
-    DispatchLocalCollisionWork[DispatchLocalCollisionWork]
-    JoinLocalCollisionWork[JoinLocalCollisionWork]
-    DispatchCrossCellCollisionWork[DispatchCrossCellCollisionWork]
-    JoinCrossCellCollisionWork[JoinCrossCellCollisionWork]
+    BuildLocalGrid[BuildLocalGrid]
+    MergeGrids[MergeGrids]
+    ResolveOwnedCells[ResolveOwnedCells]
+    MergeDeltas[MergeDeltas]
     PublishSnapshot[PublishSnapshot]
     FinishTick[FinishTick]
 
@@ -135,15 +136,15 @@ flowchart LR
 
     IntegrationDone --> ApplyHoleInteractions
     ApplyHoleInteractions --> HolePhaseReady
-    HolePhaseReady --> DispatchLocalCollisionWork
+    HolePhaseReady --> BuildLocalGrid
 
-    DispatchLocalCollisionWork --> JoinLocalCollisionWork
-    JoinLocalCollisionWork --> LocalCollisionDone
-    LocalCollisionDone --> DispatchCrossCellCollisionWork
+    BuildLocalGrid --> MergeGrids
+    MergeGrids --> OrderedCellsReady
+    OrderedCellsReady --> ResolveOwnedCells
 
-    DispatchCrossCellCollisionWork --> JoinCrossCellCollisionWork
-    JoinCrossCellCollisionWork --> CrossCellCollisionDone
-    CrossCellCollisionDone --> PublishSnapshot
+    ResolveOwnedCells --> MergeDeltas
+    MergeDeltas --> CommitReady
+    CommitReady --> PublishSnapshot
 
     PublishSnapshot --> SnapshotPublishReady
     SnapshotPublishReady --> FinishTick
@@ -161,14 +162,14 @@ flowchart LR
 - `IntegrationDone` means all integration tasks have returned.
 - `HolePhaseReady` means pocketing and hole effects may be applied after
   movement.
-- `LocalCollisionWorkReady` means workers may build local candidate sets or
-  cell buckets from a stable tick-start view.
-- `LocalCollisionDone` means the local broad phase has finished and the
-  coordinator may merge the results.
-- `CrossCellCollisionWorkReady` means collision resolution can proceed on the
-  merged candidate view.
-- `CrossCellCollisionDone` means all collision contributions for the tick have
-  been computed and merged.
+- `LocalGridReady` means workers may build private local cell grids from a
+  stable tick-start view.
+- `OrderedCellsReady` means the coordinator has merged the local grids into a
+  deterministic occupied-cell view.
+- `SparseDeltasReady` means the collision-resolution contributions have been
+  computed and staged for merge.
+- `CommitReady` means all sparse collision contributions for the tick have
+  been merged and the board can be committed.
 - `SnapshotPublishReady` means the board has reached a consistent commit
   point.
 - `SnapshotPublished` means the immutable state is now visible to the GUI and
@@ -182,11 +183,13 @@ flowchart LR
 - `DispatchIntegration` assigns disjoint ball ranges to workers.
 - `JoinIntegration` acts as the phase barrier for integration.
 - `ApplyHoleInteractions` performs the serialized hole/pocketing phase.
-- `DispatchLocalCollisionWork` assigns the broad-phase work for each worker.
-- `JoinLocalCollisionWork` waits for the local broad-phase barrier.
-- `DispatchCrossCellCollisionWork` assigns collision-resolution work on the
-  merged candidate view.
-- `JoinCrossCellCollisionWork` waits for the collision-resolution barrier.
+- `BuildLocalGrid` assigns the local-grid construction work for each worker.
+- `MergeGrids` waits for the local-grid barrier and combines the private
+  grids.
+- `ResolveOwnedCells` assigns collision-resolution work on the merged ordered
+  cell view.
+- `MergeDeltas` waits for the collision-resolution barrier and merges the
+  sparse deltas.
 - `PublishSnapshot` stores an immutable snapshot for readers.
 - `FinishTick` releases the controller back to `TickReady`.
 
@@ -226,8 +229,8 @@ flowchart LR
 This subnet is reusable for all worker phases:
 
 - integration;
-- local collision candidate construction;
-- cross-cell collision resolution;
+- local grid construction;
+- ordered-cell collision resolution and sparse delta merging;
 - parallel final apply of disjoint ball ranges.
 
 ## 4. Mapping to implementation classes
@@ -237,12 +240,12 @@ This subnet is reusable for all worker phases:
 | Petri net element | Implementation mapping |
 | --- | --- |
 | `TickReady`, `StartTick`, `FinishTick` | `pcd.poool.threaded.ThreadedGameRunner.runController()` |
-| `CommandsPending`, `DrainCommands` | `pcd.poool.runtime.CommandQueueMonitorSupport` plus `drainPendingCommands()` |
-| `BoardWriteOwned` | `synchronized (board)` inside `pcd.poool.model.physics.threaded.ThreadedPhysicsEngine.stepInternal(...)` |
-| `DispatchIntegration`, `DispatchLocalCollisionWork`, `DispatchCrossCellCollisionWork` | `ThreadedPhysicsEngine.runRanges(...)` |
+| `CommandsPending`, `DrainCommands` | `CommandMailbox` plus `GameLoop.tick(...)` |
+| `BoardWriteOwned` | `synchronized (board)` inside `ThreadedPhysicsEngine` |
+| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `ThreadedPhysicsEngine` plus `PlatformThreadRangeScheduler.execute(...)` |
 | worker chunk places and transitions | `pcd.poool.model.physics.threaded.PhysicsWorker` |
 | barrier places and joins | `pcd.poool.model.physics.threaded.WorkerCompletionMonitor.await()` |
-| `PublishSnapshot`, `SnapshotPublished` | `pcd.poool.runtime.SnapshotStoreSupport.publish(...)` and `RuntimeGameSnapshot.from(game)` |
+| `PublishSnapshot`, `SnapshotPublished` | `GameLoop.publishSnapshot()` and `RuntimeGameSnapshot.from(game)` |
 | immutable reader state | `pcd.poool.runtime.RuntimeGameSnapshot` |
 
 The threaded engine uses long-lived platform threads. The controller thread
@@ -254,12 +257,12 @@ results, applies the final writes, and only then publishes the snapshot.
 | Petri net element | Implementation mapping |
 | --- | --- |
 | `TickReady`, `StartTick`, `FinishTick` | `pcd.poool.taskbased.TaskBasedGameRunner.tick()` |
-| `CommandsPending`, `DrainCommands` | `pcd.poool.runtime.CommandQueueMonitorSupport` plus `drainPendingCommands()` |
-| `BoardWriteOwned` | `synchronized (board)` inside `pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine.stepInternal(...)` |
-| `DispatchIntegration`, `DispatchLocalCollisionWork`, `DispatchCrossCellCollisionWork` | `TaskBasedPhysicsEngine.runRanges(...)` and executor tasks |
-| worker chunk places and transitions | fixed `ExecutorService` workers inside `TaskBasedPhysicsEngine` |
-| barrier places and joins | `Future` joins and internal task aggregation in `TaskBasedPhysicsEngine` |
-| `PublishSnapshot`, `SnapshotPublished` | `pcd.poool.runtime.SnapshotStoreSupport.publish(...)` and `RuntimeGameSnapshot.from(game)` |
+| `CommandsPending`, `DrainCommands` | `CommandMailbox` plus `GameLoop.tick(...)` |
+| `BoardWriteOwned` | `synchronized (board)` inside `TaskBasedPhysicsEngine` |
+| `DispatchIntegration`, `BuildLocalGrid`, `ResolveOwnedCells` | `TaskBasedPhysicsEngine` plus `ExecutorRangeScheduler.execute(...)` |
+| worker chunk places and transitions | fixed `ExecutorService` workers inside `ExecutorRangeScheduler` |
+| barrier places and joins | `Future.get()` inside `ExecutorRangeScheduler` |
+| `PublishSnapshot`, `SnapshotPublished` | `GameLoop.publishSnapshot()` and `RuntimeGameSnapshot.from(game)` |
 | immutable reader state | `pcd.poool.runtime.RuntimeGameSnapshot` |
 
 The executor-based engine keeps the same ownership discipline as the threaded
@@ -271,20 +274,17 @@ of manually owned platform threads.
 The abstract tick pipeline maps onto the following concrete methods:
 
 - integration phase:
-  - `ThreadedPhysicsEngine.stepOnce(...)`
-  - `TaskBasedPhysicsEngine.stepOnce(...)`
+  - `ThreadedPhysicsEngine.step(...)` / `TaskBasedPhysicsEngine.step(...)`
 - hole phase:
   - `board.applyHoleInteractions()`
-- local collision phase:
-  - `ThreadedPhysicsEngine.detectAndResolveCollisions(...)`
-  - `TaskBasedPhysicsEngine.detectAndResolveCollisions(...)`
-- cross-cell collision phase:
+- local-grid phase:
+  - `ThreadedPhysicsEngine` / `TaskBasedPhysicsEngine` collision phases
+- ordered-cell resolution phase:
   - `resolveOwnedCell(...)`
   - `collectPairsWithinBag(...)`
   - `collectCrossPairs(...)`
 - snapshot publication:
-  - `ThreadedGameRunner.runController()`
-  - `TaskBasedGameRunner.tick()`
+  - `GameLoop.tick(...)`
   - `RuntimeGameSnapshot.from(game)`
 
 ## 6. Safety properties
@@ -296,9 +296,10 @@ The net enforces the following order:
 1. drain commands;
 2. integrate movement;
 3. apply hole interactions;
-4. build local collision work;
-5. resolve cross-cell collisions;
-6. publish a snapshot.
+4. build local grids;
+5. merge local grids and resolve ordered cells;
+6. merge sparse collision deltas;
+7. publish a snapshot.
 
 The collision transitions are not enabled until the integration and hole
 phases have completed. That prevents the model from resolving contacts against

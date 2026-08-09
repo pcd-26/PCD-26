@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.engine;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkStateFingerprint;
 
 class BenchmarkCorrectnessGuardTest {
 

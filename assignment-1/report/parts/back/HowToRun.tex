@@ -1,0 +1,47 @@
+\clearpage
+\section{How to Run}
+
+The delivery requires \textbf{JDK 17} and \textbf{Maven}. After extracting
+\texttt{Assignment-01.zip}, enter the \texttt{Assignment-01} directory. Its
+\texttt{pom.xml} builds the supplied production and test sources.
+
+\textbf{Build and run all tests}
+\begin{verbatim}
+mvn clean test
+\end{verbatim}
+
+\textbf{Compile the application}
+\begin{verbatim}
+mvn compile
+\end{verbatim}
+
+\textbf{Start the sequential launcher}
+\begin{verbatim}
+java -cp target/classes pcd.poool.SequentialPoool
+\end{verbatim}
+
+\textbf{Start the platform-thread launcher}
+\begin{verbatim}
+java -cp target/classes pcd.poool.ThreadedPoool
+\end{verbatim}
+
+\textbf{Start the task-based launcher}
+\begin{verbatim}
+java -cp target/classes pcd.poool.TaskBasedPoool
+\end{verbatim}
+
+An optional positive argument selects the task-based physics worker count;
+otherwise the launcher uses one fewer than the available processors.
+\begin{verbatim}
+java -cp target/classes pcd.poool.TaskBasedPoool 8
+\end{verbatim}
+
+The human shot can be aimed with the arrow keys or by dragging the mouse and is
+released automatically or on mouse release. Press \texttt{R} to restart; after
+game over, the \texttt{New Game} button provides the same action.
+
+Benchmark scripts, JPF configurations, report sources, and their instructions
+are development artifacts and are not included in the delivery. To regenerate
+performance results, execute the verification models, or rebuild this report,
+use the complete project at
+\href{https://github.com/pcd-26/PCD-26}{github.com/pcd-26/PCD-26}.

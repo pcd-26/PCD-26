@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 import java.lang.management.ManagementFactory;
 import java.util.Locale;
