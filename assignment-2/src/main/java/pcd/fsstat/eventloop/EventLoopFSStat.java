@@ -19,26 +19,26 @@ import java.util.concurrent.atomic.AtomicLong;
 /** Computes directory file statistics asynchronously using Vert.x. */
 public class EventLoopFSStat {
 
-    private enum PathCheck {
+    private enum PathValidationStatus {
         VALID,
         DUPLICATE,
         NOT_DIRECTORY,
         NOT_READABLE
     }
 
-    private record PathCheckResult(PathCheck status) { }
+    private record PathValidationResult(PathValidationStatus status) { }
 
-    private static class ScanState {
+    private static class EventLoopScanState {
         private volatile boolean cancelled = false;
-        final AtomicInteger outstandingTasks = new AtomicInteger(0);
+        final AtomicInteger pendingTaskCount = new AtomicInteger(0);
         final AtomicBoolean closed = new AtomicBoolean(false);
-        final AtomicLong totalFiles = new AtomicLong(0);
-        final AtomicLong[] bandsCount;
-        final Set<String> seenDirectories = ConcurrentHashMap.newKeySet();
-        long timerId = -1;
+        final AtomicLong totalFileCount = new AtomicLong(0);
+        final AtomicLong[] fileCountsPerBand;
+        final Set<String> visitedDirectories = ConcurrentHashMap.newKeySet();
+        long progressTimerId = -1;
 
-        ScanState(int nb) {
-            bandsCount = FSUtils.initAtomicLongs(nb + 1);
+        EventLoopScanState(int nb) {
+            fileCountsPerBand = FSUtils.initAtomicLongs(nb + 1);
         }
 
         void requestCancel() {
@@ -53,166 +53,166 @@ public class EventLoopFSStat {
     public static FSReportJob getFSReport(String directory, long maxFS, int nb, FSReportListener listener) {
         Vertx vertx = Vertx.vertx();
         FileSystem fs = vertx.fileSystem();
-        ScanState state = new ScanState(nb);
-        long startTime = System.currentTimeMillis();
+        EventLoopScanState scanState = new EventLoopScanState(nb);
+        long scanStartTime = System.currentTimeMillis();
 
-        state.timerId = vertx.setPeriodic(100, id -> {
-            if (state.cancelled() || state.closed.get()) {
+        scanState.progressTimerId = vertx.setPeriodic(100, timerId -> {
+            if (scanState.cancelled() || scanState.closed.get()) {
                 return;
             }
-            listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime));
+            listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, scanState.fileCountsPerBand, scanState.totalFileCount, scanStartTime));
         });
 
-        Runnable completeIfDone = () -> {
-            if (state.outstandingTasks.get() == 0 && state.closed.compareAndSet(false, true)) {
-                if (state.timerId != -1) {
-                    vertx.cancelTimer(state.timerId);
+        Runnable finishScanIfIdle = () -> {
+            if (scanState.pendingTaskCount.get() == 0 && scanState.closed.compareAndSet(false, true)) {
+                if (scanState.progressTimerId != -1) {
+                    vertx.cancelTimer(scanState.progressTimerId);
                 }
-                if (!state.cancelled()) {
-                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, state.bandsCount, state.totalFiles, startTime));
+                if (!scanState.cancelled()) {
+                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, scanState.fileCountsPerBand, scanState.totalFileCount, scanStartTime));
                 }
                 vertx.close();
             }
         };
 
-        state.outstandingTasks.incrementAndGet();
-        vertx.runOnContext(v -> scanDirectoryAsync(directory, maxFS, nb, fs, state, completeIfDone, vertx, listener));
+        scanState.pendingTaskCount.incrementAndGet();
+        vertx.runOnContext(v -> scanDirectory(directory, maxFS, nb, fs, scanState, finishScanIfIdle, vertx, listener));
 
         return new FSReportJob() {
             @Override
             public void cancel() {
-                state.requestCancel();
-                if (state.timerId != -1) {
-                    vertx.cancelTimer(state.timerId);
+                scanState.requestCancel();
+                if (scanState.progressTimerId != -1) {
+                    vertx.cancelTimer(scanState.progressTimerId);
                 }
-                if (state.outstandingTasks.get() == 0 && state.closed.compareAndSet(false, true)) {
+                if (scanState.pendingTaskCount.get() == 0 && scanState.closed.compareAndSet(false, true)) {
                     vertx.close();
                 }
             }
 
             @Override
             public boolean isCancelled() {
-                return state.cancelled();
+                return scanState.cancelled();
             }
         };
     }
 
-    private static void scanDirectoryAsync(
+    private static void scanDirectory(
         String path,
         long maxFS,
         int nb,
         FileSystem fs,
-        ScanState state,
-        Runnable completeIfDone,
+        EventLoopScanState scanState,
+        Runnable finishScanIfIdle,
         Vertx vertx,
         FSReportListener listener
     ) {
-        if (state.cancelled()) {
-            completeTask(state, completeIfDone);
+        if (scanState.cancelled()) {
+            markTaskCompleted(scanState, finishScanIfIdle);
             return;
         }
 
-        validatePathAsync(vertx, path, state).onComplete(pathCheckResult -> {
-            if (state.cancelled()) {
-                completeTask(state, completeIfDone);
+        validateDirectoryPath(vertx, path, scanState).onComplete(validationResult -> {
+            if (scanState.cancelled()) {
+                markTaskCompleted(scanState, finishScanIfIdle);
                 return;
             }
 
-            if (pathCheckResult.failed()) {
-                if (state.outstandingTasks.get() == 1) {
-                    listener.onError(pathCheckResult.cause());
-                    state.requestCancel();
-                    if (state.timerId != -1) {
-                        vertx.cancelTimer(state.timerId);
+            if (validationResult.failed()) {
+                if (scanState.pendingTaskCount.get() == 1) {
+                    listener.onError(validationResult.cause());
+                    scanState.requestCancel();
+                    if (scanState.progressTimerId != -1) {
+                        vertx.cancelTimer(scanState.progressTimerId);
                     }
                 }
-                completeTask(state, completeIfDone);
+                markTaskCompleted(scanState, finishScanIfIdle);
                 return;
             }
 
-            PathCheckResult pathCheck = pathCheckResult.result();
-            if (pathCheck.status() == PathCheck.DUPLICATE) {
-                completeTask(state, completeIfDone);
+            PathValidationResult pathValidation = validationResult.result();
+            if (pathValidation.status() == PathValidationStatus.DUPLICATE) {
+                markTaskCompleted(scanState, finishScanIfIdle);
                 return;
             }
-            if (pathCheck.status() == PathCheck.NOT_DIRECTORY || pathCheck.status() == PathCheck.NOT_READABLE) {
-                if (state.outstandingTasks.get() == 1) {
+            if (pathValidation.status() == PathValidationStatus.NOT_DIRECTORY || pathValidation.status() == PathValidationStatus.NOT_READABLE) {
+                if (scanState.pendingTaskCount.get() == 1) {
                     listener.onError(new IllegalArgumentException("Target directory is not a readable directory: " + path));
-                    state.requestCancel();
-                    if (state.timerId != -1) {
-                        vertx.cancelTimer(state.timerId);
+                    scanState.requestCancel();
+                    if (scanState.progressTimerId != -1) {
+                        vertx.cancelTimer(scanState.progressTimerId);
                     }
                 }
-                completeTask(state, completeIfDone);
+                markTaskCompleted(scanState, finishScanIfIdle);
                 return;
             }
 
             fs.readDir(path).onComplete(res -> {
-                if (state.cancelled()) {
-                    completeTask(state, completeIfDone);
+                if (scanState.cancelled()) {
+                    markTaskCompleted(scanState, finishScanIfIdle);
                     return;
                 }
 
                 if (res.succeeded()) {
                     for (String childPath : res.result()) {
-                        state.outstandingTasks.incrementAndGet();
+                        scanState.pendingTaskCount.incrementAndGet();
                         fs.props(childPath).onComplete(propsRes -> {
-                            if (state.cancelled()) {
-                                completeTask(state, completeIfDone);
+                            if (scanState.cancelled()) {
+                                markTaskCompleted(scanState, finishScanIfIdle);
                                 return;
                             }
 
                             if (propsRes.succeeded()) {
                                 FileProps props = propsRes.result();
                                 if (props.isDirectory()) {
-                                    state.outstandingTasks.incrementAndGet();
-                                    scanDirectoryAsync(childPath, maxFS, nb, fs, state, completeIfDone, vertx, listener);
+                                    scanState.pendingTaskCount.incrementAndGet();
+                                    scanDirectory(childPath, maxFS, nb, fs, scanState, finishScanIfIdle, vertx, listener);
                                 } else if (props.isRegularFile()) {
-                                    state.totalFiles.incrementAndGet();
-                                    long size = props.size();
-                                    int idx = FSReport.getBandIndex(size, maxFS, nb);
-                                    state.bandsCount[idx].incrementAndGet();
+                                    scanState.totalFileCount.incrementAndGet();
+                                    long fileSizeBytes = props.size();
+                                    int bandIndex = FSReport.getBandIndex(fileSizeBytes, maxFS, nb);
+                                    scanState.fileCountsPerBand[bandIndex].incrementAndGet();
                                 }
                             }
 
-                            completeTask(state, completeIfDone);
+                            markTaskCompleted(scanState, finishScanIfIdle);
                         });
                     }
                 } else {
-                    if (state.outstandingTasks.get() == 1) {
+                    if (scanState.pendingTaskCount.get() == 1) {
                         listener.onError(res.cause());
-                        state.requestCancel();
-                        if (state.timerId != -1) {
-                            vertx.cancelTimer(state.timerId);
+                        scanState.requestCancel();
+                        if (scanState.progressTimerId != -1) {
+                            vertx.cancelTimer(scanState.progressTimerId);
                         }
                     }
                 }
 
-                completeTask(state, completeIfDone);
+                markTaskCompleted(scanState, finishScanIfIdle);
             });
         });
     }
 
-    private static Future<PathCheckResult> validatePathAsync(Vertx vertx, String path, ScanState state) {
+    private static Future<PathValidationResult> validateDirectoryPath(Vertx vertx, String path, EventLoopScanState scanState) {
         return vertx.executeBlocking(() -> {
-            File fileObj = new File(path);
-            String canonicalPath = fileObj.getCanonicalPath();
-            if (!fileObj.exists() || !fileObj.isDirectory()) {
-                return new PathCheckResult(PathCheck.NOT_DIRECTORY);
+            File directoryFile = new File(path);
+            String canonicalPath = directoryFile.getCanonicalPath();
+            if (!directoryFile.exists() || !directoryFile.isDirectory()) {
+                return new PathValidationResult(PathValidationStatus.NOT_DIRECTORY);
             }
-            if (!state.seenDirectories.add(canonicalPath)) {
-                return new PathCheckResult(PathCheck.DUPLICATE);
+            if (!scanState.visitedDirectories.add(canonicalPath)) {
+                return new PathValidationResult(PathValidationStatus.DUPLICATE);
             }
-            if (!fileObj.canRead()) {
-                return new PathCheckResult(PathCheck.NOT_READABLE);
+            if (!directoryFile.canRead()) {
+                return new PathValidationResult(PathValidationStatus.NOT_READABLE);
             }
-            return new PathCheckResult(PathCheck.VALID);
+            return new PathValidationResult(PathValidationStatus.VALID);
         });
     }
 
-    private static void completeTask(ScanState state, Runnable completeIfDone) {
-        if (state.outstandingTasks.decrementAndGet() == 0) {
-            completeIfDone.run();
+    private static void markTaskCompleted(EventLoopScanState scanState, Runnable finishScanIfIdle) {
+        if (scanState.pendingTaskCount.decrementAndGet() == 0) {
+            finishScanIfIdle.run();
         }
     }
 }

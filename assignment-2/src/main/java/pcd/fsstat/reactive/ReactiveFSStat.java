@@ -12,54 +12,54 @@ import java.util.concurrent.TimeUnit;
 /** Computes directory file statistics reactively using RxJava 3. */
 public class ReactiveFSStat {
 
-    private static class ScanState {
-        final String directory;
-        final long maxFS;
-        final int nb;
-        final long totalFiles;
-        final long[] bandsCount;
-        final long startTime;
+    private static class ReactiveScanState {
+        final String directoryPath;
+        final long maximumFileSizeBytes;
+        final int numberOfBands;
+        final long totalFileCount;
+        final long[] fileCountsPerBand;
+        final long scanStartTime;
 
-        ScanState(String directory, long maxFS, int nb, long startTime) {
-            this.directory = directory;
-            this.maxFS = maxFS;
-            this.nb = nb;
-            this.totalFiles = 0;
-            this.bandsCount = new long[nb + 1];
-            this.startTime = startTime;
+        ReactiveScanState(String directoryPath, long maximumFileSizeBytes, int numberOfBands, long scanStartTime) {
+            this.directoryPath = directoryPath;
+            this.maximumFileSizeBytes = maximumFileSizeBytes;
+            this.numberOfBands = numberOfBands;
+            this.totalFileCount = 0;
+            this.fileCountsPerBand = new long[numberOfBands + 1];
+            this.scanStartTime = scanStartTime;
         }
 
-        ScanState(ScanState previous, File file) {
-            this.directory = previous.directory;
-            this.maxFS = previous.maxFS;
-            this.nb = previous.nb;
-            this.totalFiles = previous.totalFiles + 1;
-            this.bandsCount = previous.bandsCount.clone();
-            int idx = FSReport.getBandIndex(file.length(), maxFS, nb);
-            this.bandsCount[idx]++;
-            this.startTime = previous.startTime;
+        ReactiveScanState(ReactiveScanState previousState, File currentFile) {
+            this.directoryPath = previousState.directoryPath;
+            this.maximumFileSizeBytes = previousState.maximumFileSizeBytes;
+            this.numberOfBands = previousState.numberOfBands;
+            this.totalFileCount = previousState.totalFileCount + 1;
+            this.fileCountsPerBand = previousState.fileCountsPerBand.clone();
+            int bandIndex = FSReport.getBandIndex(currentFile.length(), maximumFileSizeBytes, numberOfBands);
+            this.fileCountsPerBand[bandIndex]++;
+            this.scanStartTime = previousState.scanStartTime;
         }
 
         FSReport toReport() {
-            return FSUtils.createReport(directory, maxFS, nb, bandsCount, totalFiles, startTime);
+            return FSUtils.createReport(directoryPath, maximumFileSizeBytes, numberOfBands, fileCountsPerBand, totalFileCount, scanStartTime);
         }
     }
 
     public static Observable<FSReport> getFSReport(String directory, long maxFS, int nb) {
         return Observable.defer(() -> {
-            File rootDir = new File(directory);
-            if (!rootDir.exists() || !rootDir.isDirectory()) {
+            File rootDirectory = new File(directory);
+            if (!rootDirectory.exists() || !rootDirectory.isDirectory()) {
                 return Observable.error(new IllegalArgumentException("Target is not a valid directory: " + directory));
             }
-            long startTime = System.currentTimeMillis();
-            ScanState initial = new ScanState(directory, maxFS, nb, startTime);
+            long scanStartTime = System.currentTimeMillis();
+            ReactiveScanState initialState = new ReactiveScanState(directory, maxFS, nb, scanStartTime);
 
-            return scanFiles(rootDir)
+            return scanFiles(rootDirectory)
                 .subscribeOn(Schedulers.io())
-                .scan(initial, ScanState::new)
+                .scan(initialState, ReactiveScanState::new)
                 .skip(1)
-                .defaultIfEmpty(initial)
-                .map(ScanState::toReport)
+                .defaultIfEmpty(initialState)
+                .map(ReactiveScanState::toReport)
                 .sample(100, TimeUnit.MILLISECONDS, true);
         });
     }
@@ -67,8 +67,8 @@ public class ReactiveFSStat {
     private static Observable<File> scanFiles(File rootDirectory) {
         return Observable.create(emitter -> {
             try {
-                java.util.Set<String> seenDirectories = new java.util.HashSet<>();
-                visitDirectory(rootDirectory, emitter, seenDirectories);
+                java.util.Set<String> visitedDirectories = new java.util.HashSet<>();
+                emitDirectoryContents(rootDirectory, emitter, visitedDirectories);
                 if (!emitter.isDisposed()) {
                     emitter.onComplete();
                 }
@@ -80,14 +80,14 @@ public class ReactiveFSStat {
         });
     }
 
-    private static void visitDirectory(File directory, ObservableEmitter<File> emitter, java.util.Set<String> seenDirectories) {
+    private static void emitDirectoryContents(File directory, ObservableEmitter<File> emitter, java.util.Set<String> visitedDirectories) {
         if (emitter.isDisposed()) {
             return;
         }
 
         try {
             String canonicalPath = directory.getCanonicalPath();
-            if (!seenDirectories.add(canonicalPath)) {
+            if (!visitedDirectories.add(canonicalPath)) {
                 return;
             }
         } catch (java.io.IOException ignored) {
@@ -103,7 +103,7 @@ public class ReactiveFSStat {
                 return;
             }
             if (file.isDirectory()) {
-                visitDirectory(file, emitter, seenDirectories);
+                emitDirectoryContents(file, emitter, visitedDirectories);
             } else if (file.isFile()) {
                 emitter.onNext(file);
             }

@@ -28,7 +28,7 @@ public record FSReport(
     /**
      * Formats the elapsed time as seconds plus milliseconds.
      *
-     * @param durationMs duration in milliseconds
+     * @param durationMillis duration in milliseconds
      * @return a human readable duration such as {@code 1.234 s (1234 ms)}
      */
     public static String formatDuration(long durationMs) {
