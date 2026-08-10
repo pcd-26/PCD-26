@@ -7,6 +7,8 @@ TEMP_FILES = report.aux report.log report.out report.toc report.fls report.fdb_l
 .DEFAULT_GOAL := all
 .PHONY: all clean
 
+all: $(PDF)
+
 $(PDF): $(SOURCE)
 >pdflatex -interaction=nonstopmode -halt-on-error -jobname=report $(SOURCE)
 >pdflatex -interaction=nonstopmode -halt-on-error -jobname=report $(SOURCE)
@@ -14,3 +16,4 @@ $(PDF): $(SOURCE)
 
 clean:
 >rm -f $(TEMP_FILES) $(PDF)
+
