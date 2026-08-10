@@ -16,18 +16,21 @@ import java.util.concurrent.CountDownLatch;
  * Allows running directory scans and outputting results to the console without a GUI.
  */
 public class FSStatCLI {
+    private static final String PARADIGM_VT = "vt";
+    private static final String PARADIGM_RX = "rx";
+    private static final String PARADIGM_LOOP = "loop";
 
     static final class ParsedArguments {
-        final String directory;
-        final double maxFSInput;
-        final int nb;
+        final String directoryPath;
+        final double maximumFileSizeInput;
+        final int numberOfBands;
         final SizeUnit sizeUnit;
         final String paradigm;
 
-        ParsedArguments(String directory, double maxFSInput, int nb, SizeUnit sizeUnit, String paradigm) {
-            this.directory = directory;
-            this.maxFSInput = maxFSInput;
-            this.nb = nb;
+        ParsedArguments(String directoryPath, double maximumFileSizeInput, int numberOfBands, SizeUnit sizeUnit, String paradigm) {
+            this.directoryPath = directoryPath;
+            this.maximumFileSizeInput = maximumFileSizeInput;
+            this.numberOfBands = numberOfBands;
             this.sizeUnit = sizeUnit;
             this.paradigm = paradigm;
         }
@@ -45,24 +48,24 @@ public class FSStatCLI {
             return;
         }
 
-        final SizeUnit displayUnit = parsed.sizeUnit;
-        long maxFS = parsed.sizeUnit.toBytes(parsed.maxFSInput);
+        final SizeUnit outputUnit = parsed.sizeUnit;
+        long maximumFileSizeBytes = parsed.sizeUnit.toBytes(parsed.maximumFileSizeInput);
 
-        File dir = new File(parsed.directory);
-        if (!dir.exists() || !dir.isDirectory()) {
-            System.err.println("Error: Target path is not a valid directory: " + parsed.directory);
+        File targetDirectory = new File(parsed.directoryPath);
+        if (!targetDirectory.exists() || !targetDirectory.isDirectory()) {
+            System.err.println("Error: Target path is not a valid directory: " + parsed.directoryPath);
             System.exit(1);
         }
 
         System.out.println("Starting CLI scan using paradigm: " + parsed.paradigm.toUpperCase());
-        System.out.println("Directory: " + dir.getAbsolutePath());
-        System.out.println("Max Size Threshold: " + displayUnit.format(maxFS) + " (" + maxFS + " bytes)");
-        System.out.println("Number of bands: " + parsed.nb);
+        System.out.println("Directory: " + targetDirectory.getAbsolutePath());
+        System.out.println("Max Size Threshold: " + outputUnit.format(maximumFileSizeBytes) + " (" + maximumFileSizeBytes + " bytes)");
+        System.out.println("Number of bands: " + parsed.numberOfBands);
         System.out.println("----------------------------------------------");
 
-        CountDownLatch completionLatch = new CountDownLatch(1);
+        CountDownLatch completionSignal = new CountDownLatch(1);
 
-        FSReportListener listener = new FSReportListener() {
+        FSReportListener reportListener = new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {
                 System.out.print(String.format("\rProgress: %d files scanned...", report.totalFiles()));
@@ -72,30 +75,21 @@ public class FSStatCLI {
             @Override
             public void onCompleted(FSReport report) {
                 System.out.print(String.format("\rProgress: %d files scanned... Done!%n", report.totalFiles()));
-                printFinalReport(report, displayUnit);
-                completionLatch.countDown();
+                printFinalReport(report, outputUnit);
+                completionSignal.countDown();
             }
 
             @Override
             public void onError(Throwable error) {
                 System.err.println("\nScan failed with error: " + error.getMessage());
-                completionLatch.countDown();
+                completionSignal.countDown();
             }
         };
 
-        if ("vt".equals(parsed.paradigm)) {
-            VirtualThreadsFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
-        } else if ("loop".equals(parsed.paradigm)) {
-            EventLoopFSStat.getFSReport(parsed.directory, maxFS, parsed.nb, listener);
-        } else if ("rx".equals(parsed.paradigm)) {
-            subscribeReactiveScan(ReactiveFSStat.getFSReport(parsed.directory, maxFS, parsed.nb), listener, completionLatch);
-        } else {
-            System.err.println("Unknown paradigm: " + parsed.paradigm + ". Use: vt, loop, or rx.");
-            System.exit(1);
-        }
+        dispatchScan(parsed.directoryPath, maximumFileSizeBytes, parsed.numberOfBands, parsed.paradigm, reportListener, completionSignal);
 
         try {
-            completionLatch.await();
+            completionSignal.await();
         } catch (InterruptedException e) {
             System.err.println("Execution interrupted.");
         }
@@ -112,9 +106,9 @@ public class FSStatCLI {
             return null;
         }
 
-        String directory = args[0];
-        double maxFSInput = Double.parseDouble(args[1]);
-        int nb = Integer.parseInt(args[2]);
+        String directoryPath = args[0];
+        double maximumFileSizeInput = Double.parseDouble(args[1]);
+        int numberOfBands = Integer.parseInt(args[2]);
         SizeUnit sizeUnit = SizeUnit.BYTES;
         String paradigm = "vt";
 
@@ -127,35 +121,78 @@ public class FSStatCLI {
             }
         }
 
-        return new ParsedArguments(directory, maxFSInput, nb, sizeUnit, paradigm);
+        return new ParsedArguments(directoryPath, maximumFileSizeInput, numberOfBands, sizeUnit, paradigm);
+    }
+
+    static void dispatchScan(
+        String directoryPath,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        String paradigm,
+        FSReportListener reportListener,
+        CountDownLatch completionSignal
+    ) {
+        if (PARADIGM_VT.equals(paradigm)) {
+            runVirtualThreadsScan(directoryPath, maximumFileSizeBytes, numberOfBands, reportListener);
+            return;
+        }
+        if (PARADIGM_LOOP.equals(paradigm)) {
+            runEventLoopScan(directoryPath, maximumFileSizeBytes, numberOfBands, reportListener);
+            return;
+        }
+        if (PARADIGM_RX.equals(paradigm)) {
+            runReactiveScan(directoryPath, maximumFileSizeBytes, numberOfBands, reportListener, completionSignal);
+            return;
+        }
+
+        System.err.println("Unknown paradigm: " + paradigm + ". Use: vt, loop, or rx.");
+        System.exit(1);
+    }
+
+    static void runVirtualThreadsScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, FSReportListener reportListener) {
+        VirtualThreadsFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, reportListener);
+    }
+
+    static void runEventLoopScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, FSReportListener reportListener) {
+        EventLoopFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, reportListener);
+    }
+
+    static void runReactiveScan(
+        String directoryPath,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        FSReportListener reportListener,
+        CountDownLatch completionSignal
+    ) {
+        subscribeReactiveScan(ReactiveFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands), reportListener, completionSignal);
     }
 
     static void subscribeReactiveScan(
         Observable<FSReport> reportStream,
-        FSReportListener listener,
-        CountDownLatch completionLatch
+        FSReportListener reportListener,
+        CountDownLatch completionSignal
     ) {
-        final FSReport[] lastReport = new FSReport[1];
+        final FSReport[] latestReport = new FSReport[1];
         reportStream.subscribe(
             report -> {
-                lastReport[0] = report;
-                listener.onUpdate(report);
+                latestReport[0] = report;
+                reportListener.onUpdate(report);
             },
             error -> {
-                listener.onError(error);
-                completionLatch.countDown();
+                reportListener.onError(error);
+                completionSignal.countDown();
             },
             () -> {
-                if (lastReport[0] != null) {
-                    listener.onCompleted(lastReport[0]);
+                if (latestReport[0] != null) {
+                    reportListener.onCompleted(latestReport[0]);
                 } else {
-                    completionLatch.countDown();
+                    completionSignal.countDown();
                 }
             }
         );
     }
 
-    private static void printFinalReport(FSReport report, SizeUnit displayUnit) {
+    private static void printFinalReport(FSReport report, SizeUnit outputUnit) {
         System.out.println("\n==============================================");
         System.out.println("FINAL FILE SIZE DISTRIBUTION REPORT");
         System.out.println("==============================================");
@@ -165,9 +202,9 @@ public class FSStatCLI {
         System.out.println("----------------------------------------------");
         System.out.printf("%-30s | %-10s%n", "Size Range Band", "File Count");
         System.out.println("----------------------------------------------");
-        long[] counts = report.bandsCount();
-        for (int i = 0; i < counts.length; i++) {
-            System.out.printf("%-30s | %-10d%n", report.getBandLabel(i, displayUnit), counts[i]);
+        long[] bandCounts = report.bandsCount();
+        for (int bandIndex = 0; bandIndex < bandCounts.length; bandIndex++) {
+            System.out.printf("%-30s | %-10d%n", report.getBandLabel(bandIndex, outputUnit), bandCounts[bandIndex]);
         }
         System.out.println("==============================================");
     }

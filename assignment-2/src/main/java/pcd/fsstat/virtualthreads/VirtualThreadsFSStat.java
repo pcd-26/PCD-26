@@ -15,31 +15,31 @@ import java.util.concurrent.atomic.LongAdder;
 /** Computes directory file statistics asynchronously using Java Virtual Threads. */
 public class VirtualThreadsFSStat {
 
-    private static class ScanState {
-        volatile boolean cancelled = false;
+    private static class VirtualThreadsScanState {
+        volatile boolean isCancelled = false;
     }
 
     public static FSReportJob getFSReport(String directory, long maxFS, int nb, FSReportListener listener) {
-        ScanState state = new ScanState();
-        CountDownLatch finished = new CountDownLatch(1);
-        AtomicInteger runningTasks = new AtomicInteger(0);
+        VirtualThreadsScanState scanState = new VirtualThreadsScanState();
+        CountDownLatch completionSignal = new CountDownLatch(1);
+        AtomicInteger activeTaskCount = new AtomicInteger(0);
 
-        LongAdder totalFiles = new LongAdder();
-        LongAdder[] bandsCount = new LongAdder[nb + 1];
-        for (int i = 0; i <= nb; i++) {
-            bandsCount[i] = new LongAdder();
+        LongAdder totalFileCount = new LongAdder();
+        LongAdder[] fileCountsPerBand = new LongAdder[nb + 1];
+        for (int bandIndex = 0; bandIndex <= nb; bandIndex++) {
+            fileCountsPerBand[bandIndex] = new LongAdder();
         }
 
-        long startTime = System.currentTimeMillis();
-        java.util.Set<String> seenDirectories = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        long scanStartTime = System.currentTimeMillis();
+        java.util.Set<String> visitedDirectories = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-        ExecutorService taskExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-        Thread reporterThread = Thread.ofVirtual().start(() -> {
+        Thread progressReporterThread = Thread.ofVirtual().start(() -> {
             try {
-                while (!state.cancelled && !Thread.currentThread().isInterrupted()) {
+                while (!scanState.isCancelled && !Thread.currentThread().isInterrupted()) {
                     Thread.sleep(100);
-                    listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, bandsCount, totalFiles, startTime));
+                    listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
                 }
             } catch (InterruptedException ignored) {
             }
@@ -47,111 +47,133 @@ public class VirtualThreadsFSStat {
 
         Thread.ofVirtual().start(() -> {
             try {
-                File rootDir = new File(directory);
-                if (!rootDir.exists() || !rootDir.isDirectory()) {
+                File rootDirectory = new File(directory);
+                if (!rootDirectory.exists() || !rootDirectory.isDirectory()) {
                     throw new IllegalArgumentException("Target is not a valid directory: " + directory);
                 }
 
-                runningTasks.incrementAndGet();
-                taskExecutor.submit(() -> {
+                activeTaskCount.incrementAndGet();
+                virtualThreadExecutor.submit(() -> {
                     try {
-                        walkDirectory(rootDir, maxFS, nb, taskExecutor, runningTasks, totalFiles, bandsCount, state, finished, seenDirectories);
+                        scanDirectoryRecursively(
+                            rootDirectory,
+                            maxFS,
+                            nb,
+                            virtualThreadExecutor,
+                            activeTaskCount,
+                            totalFileCount,
+                            fileCountsPerBand,
+                            scanState,
+                            completionSignal,
+                            visitedDirectories
+                        );
                     } catch (Exception e) {
                         listener.onError(e);
-                        reporterThread.interrupt();
-                        taskExecutor.shutdownNow();
-                        finished.countDown();
+                        progressReporterThread.interrupt();
+                        virtualThreadExecutor.shutdownNow();
+                        completionSignal.countDown();
                     } finally {
-                        completeTask(runningTasks, finished);
+                        markTaskCompleted(activeTaskCount, completionSignal);
                     }
                 });
 
-                finished.await();
-                reporterThread.interrupt();
-                taskExecutor.shutdown();
+                completionSignal.await();
+                progressReporterThread.interrupt();
+                virtualThreadExecutor.shutdown();
 
-                if (!state.cancelled) {
-                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, bandsCount, totalFiles, startTime));
+                if (!scanState.isCancelled) {
+                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
                 }
             } catch (Throwable t) {
                 listener.onError(t);
-                reporterThread.interrupt();
-                taskExecutor.shutdownNow();
+                progressReporterThread.interrupt();
+                virtualThreadExecutor.shutdownNow();
             }
         });
 
         return new FSReportJob() {
             @Override
             public void cancel() {
-                state.cancelled = true;
-                reporterThread.interrupt();
-                taskExecutor.shutdownNow();
-                finished.countDown();
+                scanState.isCancelled = true;
+                progressReporterThread.interrupt();
+                virtualThreadExecutor.shutdownNow();
+                completionSignal.countDown();
             }
 
             @Override
             public boolean isCancelled() {
-                return state.cancelled;
+                return scanState.isCancelled;
             }
         };
     }
 
-    private static void walkDirectory(
-        File dir,
+    private static void scanDirectoryRecursively(
+        File currentDirectory,
         long maxFS,
         int nb,
-        ExecutorService taskExecutor,
-        AtomicInteger runningTasks,
-        LongAdder totalFiles,
-        LongAdder[] bandsCount,
-        ScanState state,
-        CountDownLatch finished,
-        java.util.Set<String> seenDirectories
+        ExecutorService virtualThreadExecutor,
+        AtomicInteger activeTaskCount,
+        LongAdder totalFileCount,
+        LongAdder[] fileCountsPerBand,
+        VirtualThreadsScanState scanState,
+        CountDownLatch completionSignal,
+        java.util.Set<String> visitedDirectories
     ) {
-        if (state.cancelled) {
+        if (scanState.isCancelled) {
             return;
         }
 
         try {
-            String canonicalPath = dir.getCanonicalPath();
-            if (!seenDirectories.add(canonicalPath)) {
+            String canonicalPath = currentDirectory.getCanonicalPath();
+            if (!visitedDirectories.add(canonicalPath)) {
                 return;
             }
         } catch (java.io.IOException ignored) {
             return;
         }
 
-        File[] files = dir.listFiles();
-        if (files == null) {
+        File[] children = currentDirectory.listFiles();
+        if (children == null) {
             return;
         }
 
-        for (File file : files) {
-            if (state.cancelled) {
+        for (File child : children) {
+            if (scanState.isCancelled) {
                 return;
             }
-            if (file.isDirectory()) {
-                runningTasks.incrementAndGet();
-                taskExecutor.submit(() -> {
+            if (child.isDirectory()) {
+                activeTaskCount.incrementAndGet();
+                virtualThreadExecutor.submit(() -> {
                     try {
-                        walkDirectory(file, maxFS, nb, taskExecutor, runningTasks, totalFiles, bandsCount, state, finished, seenDirectories);
+                        scanDirectoryRecursively(
+                            child,
+                            maxFS,
+                            nb,
+                            virtualThreadExecutor,
+                            activeTaskCount,
+                            totalFileCount,
+                            fileCountsPerBand,
+                            scanState,
+                            completionSignal,
+                            visitedDirectories
+                        );
                     } catch (Exception ignored) {
                     } finally {
-                        completeTask(runningTasks, finished);
+                        markTaskCompleted(activeTaskCount, completionSignal);
                     }
                 });
-            } else if (file.isFile()) {
-                totalFiles.increment();
-                long size = file.length();
-                int idx = FSReport.getBandIndex(size, maxFS, nb);
-                bandsCount[idx].increment();
+            } else if (child.isFile()) {
+                totalFileCount.increment();
+                long fileSizeBytes = child.length();
+                int bandIndex = FSReport.getBandIndex(fileSizeBytes, maxFS, nb);
+                fileCountsPerBand[bandIndex].increment();
             }
         }
     }
 
-    private static void completeTask(AtomicInteger runningTasks, CountDownLatch finished) {
-        if (runningTasks.decrementAndGet() == 0) {
-            finished.countDown();
+    private static void markTaskCompleted(AtomicInteger activeTaskCount, CountDownLatch completionSignal) {
+        if (activeTaskCount.decrementAndGet() == 0) {
+            completionSignal.countDown();
         }
     }
 }
