@@ -26,6 +26,16 @@
 \definecolor{stringcolor}{rgb}{0.0,0.5,0.0}
 \definecolor{commentcolor}{rgb}{0.4,0.4,0.4}
 
+\lstdefinelanguage{Go}{
+  keywords={break,case,chan,const,continue,default,defer,else,fallthrough,for,func,go,goto,if,import,interface,map,package,range,return,select,struct,switch,type,var},
+  morekeywords={bool,byte,complex64,complex128,error,float32,float64,int,int8,int16,int32,int64,rune,string,uint,uint8,uint16,uint32,uint64,uintptr,true,false,iota,nil},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+  morestring=[b]`
+}
+
 \lstset{
     backgroundcolor=\color{backcolour},
     commentstyle=\color{commentcolor}\itshape,
@@ -462,6 +472,7 @@ The Go round coordinator \texttt{PlayRound} executes matches concurrently by lau
 Listing~\ref{lst:go-round-impl} provides the complete implementation of \texttt{PlayRound} from \texttt{round.go}.
 
 \begin{lstlisting}[language=Go, caption={Concurrent match execution and result aggregation in round.go}, label={lst:go-round-impl}]
+// Match outcome envelope for channel communication
 type matchOutcome struct {
     matchIndex int
     result     MatchResult
@@ -547,6 +558,7 @@ Subexercise \#2 includes \textbf{35 test cases} written in Go. To prove concurre
 Listing~\ref{lst:coordinated-tosser} illustrates how \texttt{coordinatedTosser} blocks match workers using \texttt{started}, \texttt{done}, and \texttt{release} channels.
 
 \begin{lstlisting}[language=Go, caption={Empirical concurrency test harness in concurrency\_test.go}, label={lst:coordinated-tosser}]
+// Test tosser implementation for channel synchronization
 type coordinatedTosser struct {
     matchNumber int
     side        CoinSide
