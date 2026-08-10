@@ -1,0 +1,349 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\renewcommand{\arraystretch}{1.15}
+
+% Code Listing Configuration
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.96,0.96,0.96}
+\definecolor{keywordcolor}{rgb}{0.13,0.13,1.0}
+\definecolor{stringcolor}{rgb}{0.0,0.5,0.0}
+
+\lstset{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegray}\itshape,
+    keywordstyle=\color{keywordcolor}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{stringcolor},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2,
+    frame=single
+}
+
+\title{\vspace{-1.5cm}\Large\bfseries PCD Assignment 3: Concurrency Models in Practice\\
+\large Asynchronous Actor-Based Systems vs. Synchronous Channel-Based Process Messaging}
+\author{Alex Santini \quad Francesco Valentini\\
+\small Department of Computer Science and Engineering -- DISI\\
+\small Alma Mater Studiorum -- Università di Bologna, Cesena Campus}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents the complete design, implementation, and verification of Assignment 3 for the Concurrent and Distributed Systems course (A.Y. 2025--2026). The assignment explores two foundational message-passing paradigms for concurrent systems: asynchronous actor-based message passing and synchronous process-based channel communication. The first exercise implements a reactive \emph{Smart Home Alarm System} (SHAS) using Java and Apache Pekko Typed actors, incorporating a finite state machine, configurable exit/entry timers, and a bonus extension for zone-based partial arming. The second exercise implements a single-elimination \emph{Heads-or-Tails Championship} (HOTC) in Go, utilizing goroutines and channels to coordinate independent matches across tournament rounds without shared mutable state. Both subprojects include comprehensive unit and concurrency test suites ensuring deterministic behavior and resilience against failure modes.
+\end{abstract}
+
+\section{Introduction}
+
+Message passing is a core concurrency model that replaces shared mutable state with explicit communication. Rather than synchronizing memory access through locks or primitives, concurrent entities exchange messages over logical channels or direct address references. This assignment evaluates message-passing concurrency across two distinct abstractions and programming ecosystems:
+
+\begin{enumerate}
+    \item \textbf{Exercise \#1 -- Smart Home Alarm System (SHAS):} Built using the \textbf{Apache Pekko Typed} framework in Java 21. It demonstrates the \emph{Actor Model}, where autonomous, encapsulated state machines process incoming messages sequentially from an actor mailbox and react by changing behavior or scheduling timer events.
+    \item \textbf{Exercise \#2 -- Heads-or-Tails Championship (HOTC):} Built using the \textbf{Go} programming language. It demonstrates \emph{Communicating Sequential Processes} (CSP), where concurrent goroutines interact via explicit channels to achieve barrier synchronization across tournament rounds.
+\end{enumerate}
+
+The primary objective of this report is to detail the problem analysis, architectural design, implementation specifics, verification strategies, and key insights derived from contrasting these two message-passing paradigms.
+
+\section{ProblemAnalysis}
+
+\subsection{Exercise \#1: Smart Home Alarm System}
+
+The Smart Home Alarm System manages peripheral physical devices (keypad, door/window sensors, motion detectors, siren) through a central control unit. The domain poses several concurrency challenges:
+
+\begin{itemize}
+    \item \textbf{State Ownership and Concurrency:} The system must serialize all state transitions (e.g., disarming, arming countdowns, intrusion detection) in a single control entity to avoid race conditions caused by concurrent keypresses, sensor triggers, or background timer expirations.
+    \item \textbf{Finite State Machine (FSM) Semantics:} The system supports five distinct operating states:
+    \begin{enumerate}
+        \item \texttt{DISARMED}: Sensors are inactive. Normal household movement is allowed.
+        \item \texttt{EXIT\_DELAY}: Initiated upon submitting the correct PIN. Gives occupants time to leave the premises before sensors arm.
+        \item \texttt{ARMED}: Sensors are active. Any intrusion detection moves the system into \texttt{ENTRY\_DELAY}.
+        \item \texttt{ENTRY\_DELAY}: Initiated when an active sensor detects movement. Starts a grace countdown allowing occupants to disarm the alarm. If the countdown expires without disarming, the system enters \texttt{ALARM}.
+        \item \texttt{ALARM}: The emergency state where the physical siren activates. The system remains in this state until a valid PIN is submitted.
+    \end{enumerate}
+    \item \textbf{Asynchronous Delay Timers:} Exit and entry countdowns must automatically trigger transitions upon timeout. The control unit must handle stale timeout messages gracefully (e.g., if a user disarms the alarm before the entry delay expires).
+    \item \textbf{Zone-Based Partial Arming (Bonus Extension):} The system divides physical space into distinct zones (\texttt{PERIMETER}, \texttt{LIVING\_AREA}, \texttt{SLEEPING\_AREA}, \texttt{GROUND\_FLOOR}, \texttt{UPPER\_FLOOR}). When arming, occupants can configure full arming or partial arming (e.g., Night Mode activating only perimeter and ground floor sensors). Sensors belonging to inactive zones must be ignored during armed state.
+\end{itemize}
+
+\subsection{Exercise \#2: Heads-or-Tails Championship}
+
+The Heads-or-Tails Championship coordinates a single-elimination tournament of $N = 2^m$ players over $m$ rounds:
+
+\begin{itemize}
+    \item \textbf{Concurrency Structure:} In round $k$ (where $1 \le k \le m$), $N / 2^k$ matches are played. Matches within the same round are completely independent and can execute concurrently. However, round $k+1$ cannot begin until all matches in round $k$ have concluded.
+    \item \textbf{No Shared Memory Constraint:} The assignment explicitly forbids shared mutable state. Match results and winner promotions must be communicated purely through message passing over channels.
+    \item \textbf{Ordering and Determinism:} Match results must be aggregated by a coordinator while preserving original bracket ordering. For testability, coin toss sources must be abstracted so production runs use pseudo-randomness while automated tests execute deterministically.
+\end{itemize}
+
+\section{Design}
+
+\subsection{Exercise \#1 Architecture (Apache Pekko Typed Actors)}
+
+The alarm system architecture isolates responsibilities among strongly-typed actors using Apache Pekko. Figure~\ref{fig:pekko-arch} illustrates the actor hierarchy and message flow.
+
+\begin{itemize}
+    \item \textbf{\texttt{ControlUnitActor}:} The central state owner. It encapsulates the configured security PIN, the set of active zones, the current state behavior, and single-shot timers (\texttt{EXIT\_DELAY\_}\allowbreak\texttt{TIMER\_KEY}, \texttt{ENTRY\_DELAY\_}\allowbreak\texttt{TIMER\_KEY}). State transitions are modeled by returning new immutable behaviors (\texttt{disarmed}, \texttt{exitDelay}, \texttt{armed}, \texttt{entryDelay}, \texttt{alarm}).
+    \item \textbf{\texttt{KeypadActor}:} Represents the user input terminal. Buffers keypress digits, handles submit (\texttt{\#}) and clear (\texttt{*}) keys, and sends \texttt{PinSubmitted}, \texttt{ArmAll}, or \texttt{ArmPartial} commands to the control unit.
+    \item \textbf{\texttt{SensorActor}:} Adapts physical hardware triggers (motion, door contacts). Emits a timestamped \texttt{SensorEvent} wrapping a \texttt{SensorInfo} value object to the control unit upon activation.
+    \item \textbf{\texttt{SirenActor}:} Models the emergency audio device, transitioning between \texttt{SIREN\_OFF} and \texttt{SIREN\_ON}.
+    \item \textbf{\texttt{DemoScenarioActor}:} A scripted scenario driver that coordinates an automated step-by-step validation run.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\begin{small}
+\begin{verbatim}
++---------------+      +-----------------------+     +---------------+
+|  KeypadActor  |----->|   ControlUnitActor    |<----|  SensorActor  |
++---------------+ Pin  +-----------------------+ Evt +---------------+
+                       | (FSM & TimerScheduler)|
+                       +-----------------------+
+                                   | Act/Deact
+                                   v
+                           +---------------+
+                           |  SirenActor   |
+                           +---------------+
+\end{verbatim}
+\end{small}
+\caption{Actor hierarchy and message routing for the Smart Home Alarm System.}
+\label{fig:pekko-arch}
+\end{figure}
+
+\subsection{Exercise \#2 Architecture (Go Goroutines and Channels)}
+
+The Go implementation decouples domain entities from concurrent round coordination:
+
+\begin{itemize}
+    \item \textbf{Domain Value Objects:} Immutable Go structs for \texttt{Player}, \texttt{CoinSide} (\texttt{Heads}/\texttt{Tails}), \texttt{MatchResult}, \texttt{RoundResult}, and \texttt{ChampionshipResult}.
+    \item \textbf{Coin Tosser Abstraction:} A \texttt{CoinTosser} interface with \texttt{Toss() CoinSide}. Production runs supply \texttt{RandomCoinTosser}, while tests inject \texttt{FixedCoinTosser} or \texttt{coordinatedTosser}.
+    \item \textbf{Round Coordinator (\texttt{PlayRound}):} Spawns $N/2$ match goroutines. Each worker executes \texttt{PlayMatch} and sends a \texttt{matchOutcome} struct into an outcome channel. The coordinator collects exactly $N/2$ outcomes, places them into an ordered slice by \texttt{matchIndex}, extracts the winners, and returns them for the next round.
+    \item \textbf{Championship Loop (\texttt{PlayChampionship}):} Iterates round by round until a single champion remains.
+\end{itemize}
+
+\section{Implementation}
+
+\subsection{Exercise \#1 Implementation Details}
+
+The \texttt{ControlUnitActor} uses Pekko's \texttt{Behaviors.withTimers} to schedule single-shot timeouts. When transitioning between states, active timers are explicitly cancelled to prevent stale timeouts from triggering invalid transitions.
+
+Listing~\ref{lst:pekko-armed} highlights the transition logic in the \texttt{ARMED} state, including the bonus zone-arming check.
+
+\begin{lstlisting}[language=Java, caption={Zone filtering and state transition in ControlUnitActor.java}, label={lst:pekko-armed}]
+private static Behavior<Command> armed(
+    ActorContext<Command> context,
+    TimerScheduler<Command> timers,
+    String configuredPin,
+    Duration exitDelayDuration,
+    Duration entryDelayDuration,
+    ActorRef<SirenActor.Command> siren,
+    Set<Zone> activeZones
+) {
+    return Behaviors.receive(Command.class)
+        .onMessage(PinSubmitted.class, message -> {
+            if (configuredPin.equals(message.pin())) {
+                timers.cancel(ENTRY_DELAY_TIMER_KEY);
+                siren.tell(new SirenActor.Deactivate());
+                return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
+            }
+            return ignorePinSubmission(context, AlarmState.ARMED);
+        })
+        .onMessage(SensorActivated.class, message -> {
+            SensorInfo sensorInfo = message.sensorInfo();
+            if (activeZones.contains(sensorInfo.zone())) {
+                timers.startSingleTimer(ENTRY_DELAY_TIMER_KEY, new EntryDelayTimeout(), entryDelayDuration);
+                return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, activeZones);
+            }
+            return ignoreInactiveZone(context, sensorInfo);
+        })
+        .build();
+}
+\end{lstlisting}
+
+\subsection{Exercise \#2 Implementation Details}
+
+The Go round coordinator relies on a message-passing barrier. Listing~\ref{lst:go-round} shows how goroutines execute matches concurrently while the main thread aggregates results deterministically.
+
+\begin{lstlisting}[caption={Concurrent round execution and result aggregation in round.go}, label={lst:go-round}]
+func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]Player, []MatchResult, error) {
+    matchCount := len(players) / 2
+    outcomes := make(chan matchOutcome)
+
+    for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
+        matchNumber := matchIndex + 1
+        firstPlayer := players[matchIndex*2]
+        secondPlayer := players[matchIndex*2+1]
+        tosser := tosserFactory(round, matchNumber, firstPlayer, secondPlayer)
+
+        go func(matchIndex, matchNumber int, firstPlayer, secondPlayer Player, tosser CoinTosser) {
+            if tosser == nil {
+                outcomes <- matchOutcome{matchIndex: matchIndex, err: fmt.Errorf("coin tosser must not be nil")}
+                return
+            }
+            result, err := PlayMatch(round, matchNumber, tosser, firstPlayer, secondPlayer)
+            outcomes <- matchOutcome{matchIndex: matchIndex, result: result, err: err}
+        }(matchIndex, matchNumber, firstPlayer, secondPlayer, tosser)
+    }
+
+    orderedResults := make([]MatchResult, matchCount)
+    var firstErr error
+    for received := 0; received < matchCount; received++ {
+        outcome := <-outcomes
+        orderedResults[outcome.matchIndex] = outcome.result
+        if outcome.err != nil && firstErr == nil {
+            firstErr = outcome.err
+        }
+    }
+
+    if firstErr != nil {
+        return nil, nil, firstErr
+    }
+
+    winners := make([]Player, matchCount)
+    for matchIndex, result := range orderedResults {
+        winners[matchIndex] = result.Winner()
+    }
+    return winners, orderedResults, nil
+}
+\end{lstlisting}
+
+\section{ResultsAndDiscussion}
+
+Table~\ref{tab:comparison} summarizes the conceptual and structural differences between the two implemented message-passing solutions.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Comparison of Concurrency Paradigms and Implementations.}
+\label{tab:comparison}
+\begin{tabularx}{\textwidth}{l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Dimension} & \textbf{Exercise \#1 (Apache Pekko)} & \textbf{Exercise \#2 (Go CSP)} \\
+\midrule
+Paradigm & Actor Model (Asynchronous) & CSP (Channel Synchronization) \\
+State Model & Encapsulated inside Typed Actors & Immutable Value Objects via channels \\
+Communication & Mailbox-based async message passing & Unbuffered/Buffered channel signaling \\
+Synchronization & Sequential mailbox processing per actor & Channel barrier fan-in per round \\
+Timing & Built-in \texttt{TimerScheduler} & Standard library \texttt{time.Sleep} / \texttt{select} \\
+Error Scope & Actor lifecycle / supervision & Explicit error values over channel \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Discussion of Design Trade-offs}
+
+\begin{enumerate}
+    \item \textbf{State Isolation vs. Communication Overhead:} In Pekko, the \texttt{ControlUnitActor} guarantees linear processing of events without lock contention. However, inter-actor state queries require response adapter actors (\texttt{messageAdapter}). In Go, goroutines are lightweight tasks with zero object creation overhead for message passing, but barrier synchronization must be managed manually via channel loops.
+    \item \textbf{Determinism and Testability:} Both implementations heavily prioritize testability. In Pekko, \texttt{ActorTestKit} allows synchronous assertions over actor behaviors. In Go, injecting a custom \texttt{CoinTosserFactory} enables deterministic assertions on concurrent worker execution order.
+\end{enumerate}
+
+\section{VerificationAndTesting}
+
+Both subprojects contain extensive automated test suites ensuring functionality, concurrency correctness, and boundary conditions.
+
+\subsection{Exercise \#1 Verification (Java / Maven)}
+
+The Pekko test suite comprises \textbf{49 unit and integration tests} across 7 test classes:
+
+\begin{itemize}
+    \item \textbf{\texttt{ControlUnitActorStateMachineTest}:} Verifies all state transitions from \texttt{DISARMED} through \texttt{EXIT\_DELAY}, \texttt{ARMED}, \texttt{ENTRY\_DELAY}, and \texttt{ALARM}. Tests incorrect PIN rejections and stale timer cancellations.
+    \item \textbf{\texttt{ControlUnitZoneArmingTest}:} Exercises partial arming (Night Mode), asserting that sensor events in inactive zones (\texttt{LIVING\_AREA}) are ignored during \texttt{ARMED} state, whereas active zone sensors trigger \texttt{ENTRY\_DELAY}.
+    \item \textbf{\texttt{KeypadActorTest}, \texttt{SensorActorTest}, \texttt{SirenActorTest}:} Verify peripheral buffering, keypress decoding, event payload generation, and alert device switching.
+    \item \textbf{\texttt{MainTest} and \texttt{AlarmConfigurationTest}:} Validate configuration loading and application startup defaults.
+\end{itemize}
+
+Executing \texttt{mvn -f assignment-3/smart-home-alarm-system/pom.xml test} yields 100\% pass rate.
+
+\subsection{Exercise \#2 Verification (Go Test)}
+
+The Go test suite contains \textbf{35 test cases} covering unit correctness, CLI flags, and concurrency properties:
+
+\begin{itemize}
+    \item \textbf{\texttt{concurrency\_}\allowbreak\texttt{test.go}:} Uses a custom \texttt{coordinatedTosser} with signaling channels (\texttt{started}, \texttt{done}, \texttt{release}) to prove:
+    \begin{enumerate}
+        \item All match goroutines in a round start concurrently before any match completes.
+        \item The round coordinator blocks until every match has returned its result.
+        \item Results maintain exact bracket ordering even when matches finish out of order.
+        \item Match errors propagate back to the coordinator without leaking blocked goroutines.
+    \end{enumerate}
+    \item \textbf{\texttt{championship\_test.go} and \texttt{cli\_test.go}:} Verify power-of-two player validation ($N = 2^m$), output formatting for 8-player tournaments, and error handling for invalid input flags.
+\end{itemize}
+
+Executing \texttt{go test -v ./...} in the Go project directory confirms all tests pass in $< 5\text{ ms}$.
+
+\section{Conclusions}
+
+Assignment 3 successfully demonstrates the design and implementation of concurrent systems using two distinct message-passing frameworks: Apache Pekko Typed actors in Java and goroutines with channels in Go.
+
+\begin{itemize}
+    \item The \textbf{Smart Home Alarm System} effectively utilizes actor-encapsulated state machines and timer scheduling to deliver a robust, race-free security controller featuring zone-based partial arming.
+    \item The \textbf{Heads-or-Tails Championship} highlights Go's CSP concurrency model, coordinating parallel tournament rounds with explicit channel synchronization without shared memory.
+\end{itemize}
+
+Both implementations achieve high modularity, full test coverage, and strict alignment with assignment constraints.
+
+\section{HowToRun}
+
+\subsection{Prerequisites}
+\begin{itemize}
+    \item Java Development Kit (JDK) 21 or higher
+    \item Apache Maven 3.8+
+    \item Go 1.22 or higher
+\end{itemize}
+
+\subsection{Running Subexercise \#1 (Smart Home Alarm System)}
+
+Navigate to the workspace root and run the following commands:
+
+\begin{lstlisting}[language=bash, caption={Maven commands for Exercise \#1}]
+# Compile the project
+mvn -f assignment-3/smart-home-alarm-system/pom.xml compile
+
+# Run the complete test suite (49 tests)
+mvn -f assignment-3/smart-home-alarm-system/pom.xml test
+
+# Run the interactive scripted demo scenario
+mvn -f assignment-3/smart-home-alarm-system/pom.xml exec:java
+\end{lstlisting}
+
+\subsection{Running Subexercise \#2 (Heads-or-Tails Championship)}
+
+Navigate to the Go source directory:
+
+\begin{lstlisting}[language=bash, caption={Go commands for Exercise \#2}]
+cd assignment-3/heads-or-tails-championship/src
+
+# Run the test suite with verbose output
+go test -v ./...
+
+# Run the championship with 8 players
+go run . -players 8
+
+# Run with 16 players
+go run . -players 16
+\end{lstlisting}
+
+\end{document}
