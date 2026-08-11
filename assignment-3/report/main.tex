@@ -473,11 +473,13 @@ Listing~\ref{lst:go-round-impl} provides the complete implementation of \texttt{
 
 \begin{lstlisting}[language=Go, caption={Concurrent match execution and result aggregation in round.go}, label={lst:go-round-impl}]
 // Match outcome envelope for channel communication
+\begin{verbatim}
 type matchOutcome struct {
     matchIndex int
     result     MatchResult
     err        error
 }
+\end{verbatim}
 
 func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]Player, []MatchResult, error) {
     matchCount := len(players) / 2
