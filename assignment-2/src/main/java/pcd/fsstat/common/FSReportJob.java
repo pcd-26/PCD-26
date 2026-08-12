@@ -1,20 +1,10 @@
 package pcd.fsstat.common;
 
-/**
- * Represents a handle to a running filesystem statistics report job.
- * Provides methods to cancel the ongoing scan and query its cancellation status.
- */
+/** Handle for a running scan. */
 public interface FSReportJob {
-    /**
-     * Cancels the directory scanning task.
-     * This will stop the recursive traversal as soon as possible and release allocated resources.
-     */
+    /** Requests scan cancellation. */
     void cancel();
 
-    /**
-     * Checks if the directory scanning task has been cancelled.
-     *
-     * @return true if the job was cancelled, false otherwise.
-     */
+    /** Returns whether cancellation was requested. */
     boolean isCancelled();
 }

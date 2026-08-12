@@ -2,17 +2,7 @@ package pcd.fsstat.common;
 
 import java.util.Locale;
 
-/**
- * Represents an immutable filesystem statistics report.
- * Contains information about directory scanning results including file distribution across size bands.
- *
- * @param directory  The scanned directory path.
- * @param maxFS      The maximum file size boundary, stored in bytes.
- * @param nb         The number of size bands dividing the [0, maxFS] range.
- * @param bandsCount The counts of files falling within each band.
- * @param totalFiles The total count of files scanned recursively.
- * @param durationMs The elapsed time of the scan, in milliseconds.
- */
+/** Immutable result of a filesystem statistics scan. */
 public record FSReport(
     String directory,
     long maxFS,
@@ -21,42 +11,28 @@ public record FSReport(
     long totalFiles,
     long durationMs
 ) {
+    /** Stores a defensive copy of the bands array inside the immutable report. */
     public FSReport {
         bandsCount = bandsCount.clone();
     }
 
-    /**
-     * Formats the elapsed time as seconds plus milliseconds.
-     *
-     * @param durationMillis duration in milliseconds
-     * @return a human readable duration such as {@code 1.234 s (1234 ms)}
-     */
+    /** Formats a duration as seconds and milliseconds. */
     public static String formatDuration(long durationMs) {
         return String.format(Locale.US, "%.3f s (%d ms)", durationMs / 1000.0, durationMs);
     }
 
-    /**
-     * Formats the elapsed time for this report.
-     *
-     * @return a human readable duration string
-     */
+    /** Formats this report's duration. */
     public String formatDuration() {
         return formatDuration(durationMs);
     }
 
+    /** Returns a defensive copy of the file-count distribution. */
     @Override
     public long[] bandsCount() {
         return bandsCount.clone();
     }
 
-    /**
-     * Determines which size band index a given file size belongs to.
-     *
-     * @param size  The size of the file in bytes.
-     * @param maxFS The maximum file size threshold.
-     * @param nb    The total number of bands dividing [0, maxFS].
-     * @return The 0-based band index (from 0 to nb, where nb represents size > maxFS).
-     */
+    /** Finds the band index for a file size. */
     public static int getBandIndex(long size, long maxFS, int nb) {
         if (size > maxFS) {
             return nb;
@@ -78,36 +54,17 @@ public record FSReport(
         return idx;
     }
 
-    /**
-     * Gets a human-readable text label describing a specific size band's range.
-     *
-     * @param index The band index.
-     * @return A formatted String representing the size range (e.g. "[0 - 1,000] bytes").
-     */
+    /** Formats a band label in bytes. */
     public String getBandLabel(int index) {
         return getBandLabel(index, SizeUnit.BYTES);
     }
 
-    /**
-     * Gets a human-readable text label describing a specific size band's range.
-     *
-     * @param index The band index.
-     * @param unit  the display unit to use for the formatted range
-     * @return A formatted String representing the size range.
-     */
+    /** Formats a band label using the selected unit. */
     public String getBandLabel(int index, SizeUnit unit) {
         return formatBandLabel(maxFS, nb, index, unit);
     }
 
-    /**
-     * Gets a human-readable text label describing a specific size band's range.
-     *
-     * @param maxFS The maximum file size threshold.
-     * @param nb    The number of bands dividing the range.
-     * @param index The band index.
-     * @param unit  The display unit to use for the formatted range.
-     * @return A formatted String representing the size range.
-     */
+    /** Formats a size-band range label. */
     public static String formatBandLabel(long maxFS, int nb, int index, SizeUnit unit) {
         if (index < 0 || index > nb) {
             throw new IllegalArgumentException("Index out of bounds: " + index);

@@ -1,4 +1,4 @@
-package pcd.fsstat.virtualthreads;
+package pcd.fsstat.paradigm.virtualthreads;
 
 import pcd.fsstat.common.FSReport;
 import pcd.fsstat.common.FSReportJob;
@@ -15,11 +15,14 @@ import java.util.concurrent.atomic.LongAdder;
 /** Computes directory file statistics asynchronously using Java Virtual Threads. */
 public class VirtualThreadsFSStat {
 
+    /** Holds the cancellation flag shared by all virtual-thread tasks. */
     private static class VirtualThreadsScanState {
         volatile boolean isCancelled = false;
     }
 
+    /** Starts an asynchronous filesystem scan backed by virtual threads. */
     public static FSReportJob getFSReport(String directory, long maxFS, int nb, FSReportListener listener) {
+        // Initialize shared counters and lifecycle coordination.
         VirtualThreadsScanState scanState = new VirtualThreadsScanState();
         CountDownLatch completionSignal = new CountDownLatch(1);
         AtomicInteger activeTaskCount = new AtomicInteger(0);
@@ -35,6 +38,7 @@ public class VirtualThreadsFSStat {
 
         ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
+        // Emit periodic snapshots while worker tasks are running.
         Thread progressReporterThread = Thread.ofVirtual().start(() -> {
             try {
                 while (!scanState.isCancelled && !Thread.currentThread().isInterrupted()) {
@@ -45,6 +49,7 @@ public class VirtualThreadsFSStat {
             }
         });
 
+        // Validate the root directory, start traversal, then publish the final report.
         Thread.ofVirtual().start(() -> {
             try {
                 File rootDirectory = new File(directory);
@@ -52,6 +57,7 @@ public class VirtualThreadsFSStat {
                     throw new IllegalArgumentException("Target is not a valid directory: " + directory);
                 }
 
+                // Submit the root as the first counted task.
                 activeTaskCount.incrementAndGet();
                 virtualThreadExecutor.submit(() -> {
                     try {
@@ -92,6 +98,7 @@ public class VirtualThreadsFSStat {
         });
 
         return new FSReportJob() {
+            /** Requests cancellation and interrupts active scan infrastructure. */
             @Override
             public void cancel() {
                 scanState.isCancelled = true;
@@ -100,6 +107,7 @@ public class VirtualThreadsFSStat {
                 completionSignal.countDown();
             }
 
+            /** Reports whether this scan has been cancelled. */
             @Override
             public boolean isCancelled() {
                 return scanState.isCancelled;
@@ -107,6 +115,7 @@ public class VirtualThreadsFSStat {
         };
     }
 
+    /** Recursively scans a directory and submits subdirectories as separate virtual-thread tasks. */
     private static void scanDirectoryRecursively(
         File currentDirectory,
         long maxFS,
@@ -123,6 +132,7 @@ public class VirtualThreadsFSStat {
             return;
         }
 
+        // Canonical paths prevent revisiting symlink cycles.
         try {
             String canonicalPath = currentDirectory.getCanonicalPath();
             if (!visitedDirectories.add(canonicalPath)) {
@@ -137,6 +147,7 @@ public class VirtualThreadsFSStat {
             return;
         }
 
+        // Count files immediately and fan out directories as independent tasks.
         for (File child : children) {
             if (scanState.isCancelled) {
                 return;
@@ -171,6 +182,7 @@ public class VirtualThreadsFSStat {
         }
     }
 
+    /** Decrements the active-task counter and releases the waiter when the scan is idle. */
     private static void markTaskCompleted(AtomicInteger activeTaskCount, CountDownLatch completionSignal) {
         if (activeTaskCount.decrementAndGet() == 0) {
             completionSignal.countDown();

@@ -1,28 +1,13 @@
 package pcd.fsstat.common;
 
-/**
- * Callback listener for receiving updates, completion events, and errors
- * during asynchronous filesystem statistics report generation.
- */
+/** Receives scan updates, completion, and failures. */
 public interface FSReportListener {
-    /**
-     * Called periodically during execution to provide intermediate/partial progress updates.
-     *
-     * @param report The current state of the filesystem statistics report.
-     */
+    /** Receives a partial progress report. */
     void onUpdate(FSReport report);
 
-    /**
-     * Called when the directory traversal and analysis successfully complete.
-     *
-     * @param report The final, complete filesystem statistics report.
-     */
+    /** Receives the final report. */
     void onCompleted(FSReport report);
 
-    /**
-     * Called when the scanning fails due to an unexpected error (e.g. invalid directory, permission error).
-     *
-     * @param error The exception that caused the scan to fail.
-     */
+    /** Receives a scan failure. */
     void onError(Throwable error);
 }

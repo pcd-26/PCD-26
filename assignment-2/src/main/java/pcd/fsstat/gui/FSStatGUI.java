@@ -5,19 +5,16 @@ import pcd.fsstat.common.FSReport;
 import pcd.fsstat.common.FSReportJob;
 import pcd.fsstat.common.FSReportListener;
 import pcd.fsstat.common.SizeUnit;
-import pcd.fsstat.eventloop.EventLoopFSStat;
-import pcd.fsstat.reactive.ReactiveFSStat;
-import pcd.fsstat.virtualthreads.VirtualThreadsFSStat;
+import pcd.fsstat.paradigm.eventloop.EventLoopFSStat;
+import pcd.fsstat.paradigm.reactive.ReactiveFSStat;
+import pcd.fsstat.paradigm.virtualthreads.VirtualThreadsFSStat;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
 
-/**
- * Interactive Swing GUI application to demonstrate the filesystem size distribution analysis.
- * Supports configuring targets, selecting programming paradigms, and running/cancelling scans.
- */
+/** Swing interface for interactive FSStat scans. */
 public class FSStatGUI extends JFrame {
     private static final String PARADIGM_VT = "Virtual Threads";
     private static final String PARADIGM_RX = "Reactive Programming (Rx)";
@@ -41,6 +38,7 @@ public class FSStatGUI extends JFrame {
     private Disposable reactiveSubscription;
     private boolean scanInProgress = false;
 
+    /** Builds the full Swing interface and wires the user actions. */
     public FSStatGUI() {
         setTitle("FSStat - Filesystem Statistics Analyzer");
         setSize(800, 600);
@@ -161,6 +159,7 @@ public class FSStatGUI extends JFrame {
         add(statusBarPanel, BorderLayout.SOUTH);
 
         // --- BUTTON ACTIONS ---
+        // Directory selection is kept on the EDT because it opens a Swing chooser.
         browseButton.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -175,6 +174,7 @@ public class FSStatGUI extends JFrame {
         cancelScanButton.addActionListener(e -> cancelCurrentScan());
     }
 
+    /** Validates form inputs and starts the selected scan implementation. */
     private void beginScan() {
         String directoryPath = directoryPathField.getText().trim();
         if (directoryPath.isEmpty()) {
@@ -199,9 +199,11 @@ public class FSStatGUI extends JFrame {
         launchScanForParadigm(directoryPath, maximumFileSizeBytes, numberOfBands, selectedParadigm, sizeUnit);
     }
 
+    /** Cancels the currently running scan and restores the idle UI state. */
     private void cancelCurrentScan() {
         if (!scanInProgress) return;
 
+        // Cancel whichever asynchronous backend is currently active.
         if (currentScanJob != null) {
             currentScanJob.cancel();
             currentScanJob = null;
@@ -216,6 +218,7 @@ public class FSStatGUI extends JFrame {
         setScanInProgress(false);
     }
 
+    /** Refreshes summary labels and size-band rows from a report snapshot. */
     private void updateResultsView(FSReport report, SizeUnit displayUnit) {
         totalFileCountValue.setText(String.format("%,d", report.totalFiles()));
         durationValue.setText(report.formatDuration());
@@ -229,6 +232,7 @@ public class FSStatGUI extends JFrame {
         }
     }
 
+    /** Marks the scan as successfully finished in the UI. */
     private void finishScan(String message) {
         scanProgressBar.setIndeterminate(false);
         statusMessageLabel.setText(" " + message);
@@ -237,6 +241,7 @@ public class FSStatGUI extends JFrame {
         reactiveSubscription = null;
     }
 
+    /** Marks the scan as failed and shows the error dialog. */
     private void failScan(String errorMessage) {
         scanProgressBar.setIndeterminate(false);
         statusMessageLabel.setText(" Error: " + errorMessage);
@@ -246,6 +251,7 @@ public class FSStatGUI extends JFrame {
         JOptionPane.showMessageDialog(this, errorMessage, "Scan Error", JOptionPane.ERROR_MESSAGE);
     }
 
+    /** Enables or disables controls according to whether a scan is running. */
     private void setScanInProgress(boolean inProgress) {
         this.scanInProgress = inProgress;
         startScanButton.setEnabled(!inProgress);
@@ -257,6 +263,7 @@ public class FSStatGUI extends JFrame {
         paradigmSelector.setEnabled(!inProgress);
     }
 
+    /** Clears previous results and prepares the table for a new scan. */
     private void prepareScanUi(String paradigm, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
         resultsTableModel.setRowCount(0);
         for (int bandIndex = 0; bandIndex <= numberOfBands; bandIndex++) {
@@ -269,6 +276,7 @@ public class FSStatGUI extends JFrame {
         setScanInProgress(true);
     }
 
+    /** Creates a listener that safely forwards scan callbacks onto the Swing EDT. */
     private FSReportListener createGuiListener(SizeUnit sizeUnit) {
         return new FSReportListener() {
             @Override
@@ -291,6 +299,7 @@ public class FSStatGUI extends JFrame {
         };
     }
 
+    /** Routes the GUI scan request to the selected backend. */
     private void launchScanForParadigm(String directoryPath, long maximumFileSizeBytes, int numberOfBands, String paradigm, SizeUnit sizeUnit) {
         if (PARADIGM_VT.equals(paradigm)) {
             launchVirtualThreadsScan(directoryPath, maximumFileSizeBytes, numberOfBands, sizeUnit);
@@ -305,14 +314,17 @@ public class FSStatGUI extends JFrame {
         }
     }
 
+    /** Starts a virtual-thread scan from the GUI. */
     private void launchVirtualThreadsScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
         currentScanJob = VirtualThreadsFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, createGuiListener(sizeUnit));
     }
 
+    /** Starts a Vert.x event-loop scan from the GUI. */
     private void launchEventLoopScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
         currentScanJob = EventLoopFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, createGuiListener(sizeUnit));
     }
 
+    /** Starts an RxJava scan from the GUI and keeps its subscription for cancellation. */
     private void launchReactiveScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
         final FSReport[] latestReport = new FSReport[1];
         reactiveSubscription = ReactiveFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands)
@@ -332,11 +344,7 @@ public class FSStatGUI extends JFrame {
             );
     }
 
-    /**
-     * Entry point to launch the interactive Swing GUI application.
-     *
-     * @param args Command-line arguments (ignored).
-     */
+    /** Opens the Swing GUI. */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             try {

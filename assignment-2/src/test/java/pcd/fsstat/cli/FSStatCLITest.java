@@ -15,8 +15,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/** Tests CLI argument parsing, dispatch, and Rx subscription behavior. */
 public class FSStatCLITest {
 
+    /** The Rx CLI bridge subscribes once and completes with the latest report. */
     @Test
     public void subscribeReactiveScanUsesSingleSubscription() throws Exception {
         AtomicInteger subscriptions = new AtomicInteger();
@@ -52,6 +54,7 @@ public class FSStatCLITest {
         assertEquals(1, completedReport.get().totalFiles());
     }
 
+    /** Missing optional CLI arguments default to bytes and virtual threads. */
     @Test
     public void parseArgumentsUsesDefaultSizeUnitAndParadigm() {
         var parsed = FSStatCLI.parseArguments(new String[] {".", "10", "5"});
@@ -64,6 +67,7 @@ public class FSStatCLITest {
         assertEquals("vt", parsed.paradigm);
     }
 
+    /** CLI parsing accepts an explicit unit and paradigm. */
     @Test
     public void parseArgumentsAcceptsBinaryAliasesAndParadigm() {
         var parsed = FSStatCLI.parseArguments(new String[] {".", "10", "5", "MiB", "rx"});
@@ -73,17 +77,20 @@ public class FSStatCLITest {
         assertEquals("rx", parsed.paradigm);
     }
 
+    /** Unit parsing accepts binary aliases. */
     @Test
     public void parseArgumentsAcceptsOtherBinaryAliases() {
         assertEquals(SizeUnit.KILOBYTES, SizeUnit.parse("KiB"));
         assertEquals(SizeUnit.GIGABYTES, SizeUnit.parse("GiB"));
     }
 
+    /** CLI parsing rejects missing mandatory arguments. */
     @Test
     public void parseArgumentsRejectsMissingMandatoryValues() {
         assertNull(FSStatCLI.parseArguments(new String[] {".", "10"}));
     }
 
+    /** CLI dispatch reaches every supported implementation. */
     @Test
     public void dispatchScanRoutesToAllSupportedParadigms(@TempDir Path tempDir) throws Exception {
         assertDispatchCompletes(tempDir, "vt");
@@ -91,6 +98,7 @@ public class FSStatCLITest {
         assertDispatchCompletes(tempDir, "rx");
     }
 
+    /** Runs one CLI dispatch and asserts that it completes successfully. */
     private void assertDispatchCompletes(Path tempDir, String paradigm) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<FSReport> completedReport = new AtomicReference<>();

@@ -18,9 +18,9 @@ scans a directory recursively and produces a report containing:
 The project exposes three asynchronous implementations of the same logical
 behaviour:
 
-- `virtualthreads`
-- `reactive`
-- `eventloop`
+- `paradigm.virtualthreads`
+- `paradigm.reactive`
+- `paradigm.eventloop`
 
 The CLI and GUI can select any of the three implementations at runtime.
 
@@ -31,9 +31,9 @@ The CLI and GUI can select any of the three implementations at runtime.
 | Path | Responsibility |
 | :--- | :--- |
 | `src/main/java/pcd/fsstat/common` | Shared data types and utilities. |
-| `src/main/java/pcd/fsstat/virtualthreads` | Virtual-thread implementation. |
-| `src/main/java/pcd/fsstat/reactive` | RxJava implementation. |
-| `src/main/java/pcd/fsstat/eventloop` | Vert.x event-loop implementation. |
+| `src/main/java/pcd/fsstat/paradigm/virtualthreads` | Virtual-thread implementation. |
+| `src/main/java/pcd/fsstat/paradigm/reactive` | RxJava implementation. |
+| `src/main/java/pcd/fsstat/paradigm/eventloop` | Vert.x event-loop implementation. |
 | `src/main/java/pcd/fsstat/cli` | Console entry point. |
 | `src/main/java/pcd/fsstat/gui` | Swing demo application. |
 | `src/test/java/pcd/fsstat` | Unit, integration-style, and robustness tests. |
