@@ -17,19 +17,17 @@ import javax.swing.*;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameOverReason;
+import pcd.poool.model.game.GameSnapshot;
 import pcd.poool.model.game.GameStatus;
 import pcd.poool.model.game.Player;
 import pcd.poool.view.RenderSynch;
 
 /**
- * Swing frame responsible for rendering the board and translating user input
- * into shot commands.
+ * Swing window for the board.
  *
- * <p>Mouse input uses press-drag-release semantics: press starts aiming, drag
- * updates the preview, and release submits the shot. Keyboard arrows use a
- * short combination window so diagonal input can be shown and fired as a single
- * shot. The frame does not mutate the game directly; accepted shots are sent to
- * the handler supplied by the runner.
+ * <p>This class is intentionally presentation-only: it renders a copied view
+ * state, translates mouse/keyboard events into callbacks, and never mutates
+ * the authoritative game model directly.
  */
 public class ViewFrame extends JFrame {
 
@@ -41,12 +39,10 @@ public class ViewFrame extends JFrame {
     private static final int SMALL_BALL_STROKE_WIDTH = 1;
     private static final int PLAYER_BALL_STROKE_WIDTH = 3;
     private static final int BOT_BALL_STROKE_WIDTH = 3;
-    private static final int SHOT_PREVIEW_STROKE_WIDTH = 3;
     private static final float MIN_ARROW_WIDTH = 2.0f;
     private static final float MAX_ARROW_WIDTH = 5.0f;
     private static final float SHOT_PROJECTION_STROKE_WIDTH = 2.0f;
     private static final float[] SHOT_PROJECTION_DASH = {8.0f, 8.0f};
-    private static final int HUD_X = 20;
     private static final int HUD_STATS_X = 20;
     private static final int HUD_BALL_COUNT_Y = 40;
     private static final int HUD_FPS_Y = 90;
@@ -70,164 +66,132 @@ public class ViewFrame extends JFrame {
     private static final int CIRCLE_DIAMETER_FACTOR = 2;
     private static final int OVERLAY_TITLE_SIZE = 44;
     private static final int OVERLAY_HINT_SIZE = 18;
-    
-    /** Panel responsible for actual Swing painting. */
-    private VisualiserPanel panel;
-    /** Shared render state read by the EDT. */
-    private ViewModel model;
-    /** Monitor used to wait for frame completion. */
-    private RenderSynch sync;
-    /** Bit mask of arrow directions currently composing a keyboard shot. */
-    private int pressedShotDirections;
-    /** Timer that groups quick arrow-key combinations into one shot. */
-    private Timer shotTimer;
-    /** Whether a mouse drag aiming interaction is active. */
-    private boolean humanDragActive;
-    /** Whether a keyboard aiming interaction is active. */
-    private boolean humanKeyboardActive;
-    /** System time when the game started. */
-    private long gameStartSystemTime = System.currentTimeMillis();
-    /** Button to restart the game. */
-    private JButton newGameButton;
+
+
+    private BoardPanel boardPanel;
+
+    private ViewModel viewModel;
+
+    private RenderSynch renderSync;
+
+    private int pressedDirectionMask;
+
+    private Timer shotComboTimer;
+
+    private boolean mouseAimingActive;
+
+    private boolean keyboardAimingActive;
+
+    private long countdownStartMillis = System.currentTimeMillis();
+
+    private JButton restartButton;
 
     private void resetCountdown() {
-        gameStartSystemTime = System.currentTimeMillis();
-    }
-    
-    /**
-     * Creates a read-only frame.
-     *
-     * @param model model rendered by the frame
-     * @param w board width in pixels
-     * @param h board height in pixels
-     */
-    public ViewFrame(ViewModel model, int w, int h){
-        this(model, w, h, null, null);
+        countdownStartMillis = System.currentTimeMillis();
     }
 
-    /**
-     * Creates a frame with shot input support.
-     *
-     * @param model model rendered by the frame
-     * @param w board width in pixels
-     * @param h board height in pixels
-     * @param shotHandler callback receiving shot velocity requests
-     */
-    public ViewFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler){
-        this(model, w, h, shotHandler, null);
+
+    public ViewFrame(ViewModel viewModel, int w, int h){
+        this(viewModel, w, h, null, null);
     }
 
-    /**
-     * Creates a frame with shot and restart input support.
-     *
-     * @param model model rendered by the frame
-     * @param w board width in pixels
-     * @param h board height in pixels
-     * @param shotHandler callback receiving shot velocity requests
-     * @param restartHandler callback invoked when restart is requested
-     */
-    public ViewFrame(ViewModel model, int w, int h, Consumer<V2d> shotHandler, Runnable restartHandler){
-        this(model, w, h, shotHandler, restartHandler, null, null);
+
+    public ViewFrame(ViewModel viewModel, int w, int h, Consumer<V2d> shotHandler){
+        this(viewModel, w, h, shotHandler, null);
     }
 
-    /**
-     * Creates a fully interactive frame.
-     *
-     * @param model model rendered by the frame
-     * @param w board width in pixels
-     * @param h board height in pixels
-     * @param shotHandler callback receiving shot velocity requests
-     * @param restartHandler callback invoked when restart is requested
-     * @param humanAimingStartHandler callback used to authorize human aiming
-     * @param humanAimingStopHandler callback invoked when human aiming ends
-     */
+
+    public ViewFrame(ViewModel viewModel, int w, int h, Consumer<V2d> shotHandler, Runnable restartHandler){
+        this(viewModel, w, h, shotHandler, restartHandler, null, null);
+    }
+
+
     public ViewFrame(
-            ViewModel model,
+            ViewModel viewModel,
             int w,
             int h,
             Consumer<V2d> shotHandler,
             Runnable restartHandler,
             BooleanSupplier humanAimingStartHandler,
             Runnable humanAimingStopHandler){
-    	this.model = model;
-    	this.sync = new RenderSynch();
+    	this.viewModel = viewModel;
+    	this.renderSync = new RenderSynch();
     	setTitle(WINDOW_TITLE);
         setSize(w, h + WINDOW_DECORATION_HEIGHT);
         setResizable(false);
-        panel = new VisualiserPanel(w,h);
-        
-        // Setup New Game button with modern custom UI styling
-        newGameButton = new JButton("New Game") {
+        boardPanel = new BoardPanel(w,h);
+        restartButton = new JButton("New Game") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                
-                var game = ViewFrame.this.model.getGame();
+
+                var game = ViewFrame.this.viewModel.getGame();
                 boolean isBotWinner = (game != null && game.winner() == Player.BOT);
-                
+
                 Color bg;
                 if (isBotWinner) {
                     if (getModel().isPressed()) {
-                        bg = new Color(175, 25, 25); // Darker red when pressed
+                        bg = new Color(175, 25, 25);
                     } else if (getModel().isRollover()) {
-                        bg = new Color(240, 40, 40); // Lighter vibrant red on hover
+                        bg = new Color(240, 40, 40);
                     } else {
-                        bg = new Color(210, 30, 30); // Standard premium red
+                        bg = new Color(210, 30, 30);
                     }
                 } else {
                     if (getModel().isPressed()) {
-                        bg = new Color(25, 75, 175); // Darker blue when pressed
+                        bg = new Color(25, 75, 175);
                     } else if (getModel().isRollover()) {
-                        bg = new Color(40, 120, 240); // Lighter vibrant blue on hover
+                        bg = new Color(40, 120, 240);
                     } else {
-                        bg = new Color(30, 90, 210); // Standard premium blue
+                        bg = new Color(30, 90, 210);
                     }
                 }
-                
+
                 g2.setColor(bg);
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
-                
+
                 g2.setColor(Color.WHITE);
                 g2.setFont(getFont());
                 var fm = g2.getFontMetrics();
                 int x = (getWidth() - fm.stringWidth(getText())) / 2;
                 int y = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
                 g2.drawString(getText(), x, y);
-                
+
                 g2.dispose();
             }
         };
-        newGameButton.setContentAreaFilled(false);
-        newGameButton.setBorderPainted(false);
-        newGameButton.setFocusPainted(false);
-        newGameButton.setRolloverEnabled(true);
-        newGameButton.setFont(newGameButton.getFont().deriveFont(Font.BOLD, 16f));
-        newGameButton.setBounds(w / 2 - 75, (h + WINDOW_DECORATION_HEIGHT) / 2 + 85, 150, 40);
-        newGameButton.setFocusable(false);
-        newGameButton.setVisible(false);
-        newGameButton.addActionListener(e -> {
+        restartButton.setContentAreaFilled(false);
+        restartButton.setBorderPainted(false);
+        restartButton.setFocusPainted(false);
+        restartButton.setRolloverEnabled(true);
+        restartButton.setFont(restartButton.getFont().deriveFont(Font.BOLD, 16f));
+        restartButton.setBounds(w / 2 - 75, (h + WINDOW_DECORATION_HEIGHT) / 2 + 85, 150, 40);
+        restartButton.setFocusable(false);
+        restartButton.setVisible(false);
+        restartButton.addActionListener(e -> {
             resetInputState(humanAimingStopHandler);
             resetCountdown();
             if (restartHandler != null) {
                 restartHandler.run();
             }
         });
-        panel.setLayout(null);
-        panel.add(newGameButton);
-        
-        getContentPane().add(panel);
+        boardPanel.setLayout(null);
+        boardPanel.add(restartButton);
+
+        getContentPane().add(boardPanel);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         installInput(shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
     }
 
-    private void installInput(
+	private void installInput(
             Consumer<V2d> shotHandler,
             Runnable restartHandler,
             BooleanSupplier humanAimingStartHandler,
             Runnable humanAimingStopHandler) {
-        shotTimer = new Timer(SHOT_COMBO_WINDOW_MILLIS, event -> fireShot(shotHandler, humanAimingStopHandler));
-        shotTimer.setRepeats(false);
+        // Shot and restart callbacks come from the launcher.
+        shotComboTimer = new Timer(SHOT_COMBO_WINDOW_MILLIS, event -> fireShot(shotHandler, humanAimingStopHandler));
+        shotComboTimer.setRepeats(false);
         addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent event) {
@@ -245,27 +209,27 @@ public class ViewFrame extends JFrame {
                 if (direction == 0) {
                     return;
                 }
-                if (!humanKeyboardActive && !tryStartHumanAiming(humanAimingStartHandler)) {
+                if (!keyboardAimingActive && !tryStartHumanAiming(humanAimingStartHandler)) {
                     return;
                 }
-                humanKeyboardActive = true;
-                pressedShotDirections |= direction;
+                keyboardAimingActive = true;
+                pressedDirectionMask |= direction;
                 updateKeyboardPreview();
-                shotTimer.restart();
+                shotComboTimer.restart();
                 event.consume();
             }
         });
-        panel.addMouseListener(new MouseAdapter() {
+        boardPanel.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent event) {
                 if (shotHandler == null) {
                     return;
                 }
                 if (!tryStartHumanAiming(humanAimingStartHandler)) {
-                    humanDragActive = false;
+                    mouseAimingActive = false;
                     return;
                 }
-                humanDragActive = true;
+                mouseAimingActive = true;
                 updateMousePreview(event);
             }
 
@@ -274,23 +238,23 @@ public class ViewFrame extends JFrame {
                 if (shotHandler == null) {
                     return;
                 }
-                if (!humanDragActive) {
+                if (!mouseAimingActive) {
                     return;
                 }
                 fireMouseShotOnRelease(event, shotHandler);
-                model.clearShotPreview(Player.HUMAN);
-                humanDragActive = false;
+                viewModel.clearShotPreview(Player.HUMAN);
+                mouseAimingActive = false;
                 stopHumanAiming(humanAimingStopHandler);
-                panel.repaint();
+                boardPanel.repaint();
             }
         });
-        panel.addMouseMotionListener(new MouseAdapter() {
+        boardPanel.addMouseMotionListener(new MouseAdapter() {
             @Override
             public void mouseDragged(MouseEvent event) {
                 if (shotHandler == null) {
                     return;
                 }
-                if (!humanDragActive) {
+                if (!mouseAimingActive) {
                     return;
                 }
                 updateMousePreview(event);
@@ -302,7 +266,8 @@ public class ViewFrame extends JFrame {
     }
 
     private boolean tryStartHumanAiming(BooleanSupplier humanAimingStartHandler) {
-        if (System.currentTimeMillis() - gameStartSystemTime < 3000) {
+        // Block input during the opening countdown.
+        if (System.currentTimeMillis() - countdownStartMillis < 3000) {
             return false;
         }
         return humanAimingStartHandler == null || humanAimingStartHandler.getAsBoolean();
@@ -314,48 +279,46 @@ public class ViewFrame extends JFrame {
         }
     }
 
-    /**
-     * @return whether the current preview is owned by the bot
-     */
+
     static boolean isBotAiming(ViewModel viewModel) {
         var preview = viewModel.getShotPreview(Player.BOT);
         return preview != null && preview.player() == Player.BOT;
     }
 
     private void updateKeyboardPreview() {
-        var player = model.getPlayerBall();
+        var player = viewModel.getPlayerBall();
         if (player == null) {
             return;
         }
-        var shot = keyboardShotImpulse(pressedShotDirections);
+        var shot = keyboardShotImpulse(pressedDirectionMask);
         if (shot.abs() == 0) {
             return;
         }
-        model.setShotPreview(
+        viewModel.setShotPreview(
                 player.pos(),
                 player.pos().sum(shot.mul(KEYBOARD_PREVIEW_SCALE)),
                 shot.abs(),
                 Player.HUMAN);
-        panel.repaint();
+        boardPanel.repaint();
     }
 
     private void updateMousePreview(MouseEvent event) {
-        var player = model.getPlayerBall();
+        var player = viewModel.getPlayerBall();
         if (player == null) {
             return;
         }
-        var target = panel.toBoardPoint(event.getX(), event.getY());
+        var target = boardPanel.toBoardPoint(event.getX(), event.getY());
         double intensity = mouseShotIntensity(player.pos(), target);
-        model.setShotPreview(player.pos(), target, intensity);
-        panel.repaint();
+        viewModel.setShotPreview(player.pos(), target, intensity);
+        boardPanel.repaint();
     }
 
     private void fireMouseShotOnRelease(MouseEvent event, Consumer<V2d> shotHandler) {
-        var player = model.getPlayerBall();
+        var player = viewModel.getPlayerBall();
         if (player == null) {
             return;
         }
-        var target = panel.toBoardPoint(event.getX(), event.getY());
+        var target = boardPanel.toBoardPoint(event.getX(), event.getY());
         var shot = mouseShotImpulse(player.pos(), target);
         if (shot.abs() >= MIN_MOUSE_SHOT_IMPULSE) {
             shotHandler.accept(shot);
@@ -363,25 +326,25 @@ public class ViewFrame extends JFrame {
     }
 
     private void fireShot(Consumer<V2d> shotHandler, Runnable humanAimingStopHandler) {
-        var shot = keyboardShotImpulse(pressedShotDirections);
-        pressedShotDirections = 0;
+        var shot = keyboardShotImpulse(pressedDirectionMask);
+        pressedDirectionMask = 0;
         if (shot.abs() > 0) {
             shotHandler.accept(shot);
         }
-        humanKeyboardActive = false;
+        keyboardAimingActive = false;
         stopHumanAiming(humanAimingStopHandler);
-        model.clearShotPreview(Player.HUMAN);
-        panel.repaint();
+        viewModel.clearShotPreview(Player.HUMAN);
+        boardPanel.repaint();
     }
 
     private void resetInputState(Runnable humanAimingStopHandler) {
-        shotTimer.stop();
-        pressedShotDirections = 0;
-        humanDragActive = false;
-        humanKeyboardActive = false;
+        shotComboTimer.stop();
+        pressedDirectionMask = 0;
+        mouseAimingActive = false;
+        keyboardAimingActive = false;
         stopHumanAiming(humanAimingStopHandler);
-        model.clearShotPreview(Player.HUMAN);
-        panel.repaint();
+        viewModel.clearShotPreview(Player.HUMAN);
+        boardPanel.repaint();
     }
 
     private int directionFor(int keyCode) {
@@ -394,9 +357,7 @@ public class ViewFrame extends JFrame {
         };
     }
 
-    /**
-     * Converts currently pressed arrow directions into a fixed-magnitude shot.
-     */
+
     static V2d shotImpulseFor(boolean up, boolean down, boolean left, boolean right) {
         double x = 0;
         double y = 0;
@@ -415,9 +376,7 @@ public class ViewFrame extends JFrame {
         return new V2d(x, y).getNormalized().mul(SHOT_IMPULSE);
     }
 
-    /**
-     * Converts the internal keyboard direction bit mask into a shot vector.
-     */
+
     static V2d keyboardShotImpulse(int directions) {
         return shotImpulseFor(
                 (directions & UP_DIRECTION) != 0,
@@ -426,99 +385,70 @@ public class ViewFrame extends JFrame {
                 (directions & RIGHT_DIRECTION) != 0);
     }
 
-    /**
-     * Creates a fixed-strength impulse toward a target point.
-     */
+
     static V2d shotImpulseToward(P2d from, P2d target) {
         return target.sub(from).getNormalized().mul(SHOT_IMPULSE);
     }
 
-    /**
-     * Creates a mouse shot whose strength depends on drag distance.
-     */
+
     static V2d mouseShotImpulse(P2d from, P2d target) {
         return target.sub(from).getNormalized().mul(mouseShotIntensity(from, target));
     }
 
-    /**
-     * Maps mouse drag distance to shot strength, capped at the configured
-     * maximum so very long drags remain controllable.
-     */
+
     static double mouseShotIntensity(P2d from, P2d target) {
         double distance = target.sub(from).abs();
         double normalized = Math.min(distance, MAX_MOUSE_DRAG_DISTANCE) / MAX_MOUSE_DRAG_DISTANCE;
         return normalized * MAX_MOUSE_SHOT_IMPULSE;
     }
 
-    /**
-     * Calculates the shot preview stroke width based on the launch force intensity.
-     * The width spans from MIN_ARROW_WIDTH (2.0f) to MAX_ARROW_WIDTH (5.0f) when going from 0% to 100% force.
-     *
-     * @param intensity the current launch force intensity
-     * @return the scaled stroke width
-     */
+
     static float calculateShotPreviewWidth(double intensity) {
         double ratio = Math.max(0.0, Math.min(1.0, intensity / MAX_MOUSE_SHOT_IMPULSE));
         return (float) (MIN_ARROW_WIDTH + (MAX_ARROW_WIDTH - MIN_ARROW_WIDTH) * ratio);
     }
 
-    /**
-     * Requests a repaint and waits until the corresponding frame is rendered.
-     */
-    public void render(){
+
+	public void render(){
 		if (SwingUtilities.isEventDispatchThread()) {
 			throw new IllegalStateException("render() must not be called on the EDT");
 		}
-		long nf = sync.nextFrameToRender();
-		panel.setFrameToNotify(nf);
-        panel.repaint();
+		// Ask Swing to repaint and wait for completion.
+		long frameId = renderSync.nextFrameToRender();
+		boardPanel.setFrameToNotify(frameId);
+        boardPanel.repaint();
 		try {
-			sync.waitForFrameRendered(nf);
+			renderSync.waitForFrameRendered(frameId);
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 		}
     }
 
-    /**
-     * Disposes the underlying Swing window.
-     */
+
     public void close() {
         dispose();
     }
-        
-    /**
-     * Panel that converts board coordinates to screen coordinates and paints
-     * the current view model.
-     */
-    public class VisualiserPanel extends JPanel {
-        /** Screen-space X origin of the board. */
-        private int ox;
-        /** Screen-space Y origin of the board. */
-        private int oy;
-        /** Board-to-screen scale factor. */
-        private int delta;
-        /** Frame id to notify after the next paint operation. */
+
+
+    public class BoardPanel extends JPanel {
+
+        private int originX;
+
+        private int originY;
+
+        private int scale;
+
         private volatile long frameToNotify = NO_FRAME_TO_NOTIFY;
-        
-        /**
-         * Creates the visualiser panel.
-         *
-         * @param w panel width in pixels
-         * @param h panel height in pixels
-         */
-        public VisualiserPanel(int w, int h){
+
+
+        public BoardPanel(int w, int h){
             setSize(w, h + WINDOW_DECORATION_HEIGHT);
-            ox = w / CIRCLE_DIAMETER_FACTOR;
-            oy = h / CIRCLE_DIAMETER_FACTOR;
-            delta = Math.min(ox, oy);
+            originX = w / CIRCLE_DIAMETER_FACTOR;
+            originY = h / CIRCLE_DIAMETER_FACTOR;
+            scale = Math.min(originX, originY);
         }
 
-        /**
-         * Associates the next paint operation with a render synchronization
-         * frame id.
-         *
-         * @param frame frame id to signal when painting completes
-         */
+
         public void setFrameToNotify(long frame) {
         	frameToNotify = frame;
         }
@@ -529,42 +459,45 @@ public class ViewFrame extends JFrame {
         	try {
 	            super.paintComponent(g);
 	    		Graphics2D g2 = (Graphics2D) g;
-	    		var balls = model.getBalls();
-	    		
+	    		var balls = viewModel.getBalls();
+
+                // Draw the table axes and pockets.
 	    		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
 	    		          RenderingHints.VALUE_ANTIALIAS_ON);
 	    		g2.setRenderingHint(RenderingHints.KEY_RENDERING,
 	    		          RenderingHints.VALUE_RENDER_QUALITY);
-	            
+
 	    		g2.setColor(Color.LIGHT_GRAY);
 			    g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
-	    		g2.drawLine(ox, 0, ox, oy * CIRCLE_DIAMETER_FACTOR);
-	    		g2.drawLine(0, oy, ox * CIRCLE_DIAMETER_FACTOR, oy);
+	    		g2.drawLine(originX, 0, originX, originY * CIRCLE_DIAMETER_FACTOR);
+	    		g2.drawLine(0, originY, originX * CIRCLE_DIAMETER_FACTOR, originY);
 	    		g2.setColor(Color.BLACK);
-	    		g2.setStroke(new BasicStroke(HOLE_STROKE_WIDTH));
-	    		for (var h: model.getHoles()) {
+			    g2.setStroke(new BasicStroke(HOLE_STROKE_WIDTH));
+	    		for (var h: viewModel.getHoles()) {
 	                fillCircle(g2, h.center(), h.radius());
 	    		}
-	    		
+
+                // Draw the moving balls and the two cue balls.
 			    g2.setStroke(new BasicStroke(SMALL_BALL_STROKE_WIDTH));
-	    		for (var b: balls) {
-	                drawCircle(g2, b.pos(), b.radius());
+	    		for (var ball : balls) {
+	                drawCircle(g2, ball.pos(), ball.radius());
 	    		}
-		
+
 			    g2.setStroke(new BasicStroke(PLAYER_BALL_STROKE_WIDTH));
                 g2.setColor(new Color(30, 90, 210));
-	    		var pb = model.getPlayerBall();
-	    		if (pb != null) {
-	                drawCircle(g2, pb.pos(), pb.radius());
+	    		var playerBall = viewModel.getPlayerBall();
+	    		if (playerBall != null) {
+	                drawCircle(g2, playerBall.pos(), playerBall.radius());
 	    		}
 
                 g2.setStroke(new BasicStroke(BOT_BALL_STROKE_WIDTH));
                 g2.setColor(new Color(220, 30, 30));
-                var bot = model.getBotBall();
-                if (bot != null) {
-                    drawCircle(g2, bot.pos(), bot.radius());
+                var botBall = viewModel.getBotBall();
+                if (botBall != null) {
+                    drawCircle(g2, botBall.pos(), botBall.radius());
                 }
-			    
+
+                // Print the HUD with frame rate and game status.
                 g2.setColor(Color.BLACK);
 			    g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
                 Font oldFont = g2.getFont();
@@ -574,25 +507,23 @@ public class ViewFrame extends JFrame {
                 int centerCountX = (getWidth() - metrics.stringWidth(ballCountText)) / 2;
                 g2.drawString(ballCountText, centerCountX, HUD_BALL_COUNT_Y);
                 g2.setFont(oldFont);
-	    		g2.drawString(FPS_LABEL + model.getFramePerSec(), HUD_STATS_X, HUD_FPS_Y);
+	    		g2.drawString(FPS_LABEL + viewModel.getFramePerSec(), HUD_STATS_X, HUD_FPS_Y);
                 drawGameHud(g2);
                 drawShotPreview(g2);
                 drawCountdownOverlay(g2);
                 drawEndGameOverlay(g2);
-                
-                // Update New Game button visibility safely on EDT
-                var game = model.getGame();
+                var game = viewModel.getGame();
                 boolean finished = (game != null && game.status() == GameStatus.FINISHED);
-                if (newGameButton != null && newGameButton.isVisible() != finished) {
-                    SwingUtilities.invokeLater(() -> newGameButton.setVisible(finished));
+                if (restartButton != null && restartButton.isVisible() != finished) {
+                    SwingUtilities.invokeLater(() -> restartButton.setVisible(finished));
                 }
         	} finally {
-	    		sync.notifyFrameRendered(frame);
+	    		renderSync.notifyFrameRendered(frame);
         	}
         }
 
         private void drawCountdownOverlay(Graphics2D g2) {
-            long elapsed = System.currentTimeMillis() - gameStartSystemTime;
+            long elapsed = System.currentTimeMillis() - countdownStartMillis;
             if (elapsed >= 4000) {
                 return;
             }
@@ -613,9 +544,9 @@ public class ViewFrame extends JFrame {
 
             g2.setFont(oldFont.deriveFont(Font.BOLD, 72f));
             if (text.equals("GO!")) {
-                g2.setColor(new Color(40, 180, 90)); // Soft green
+                g2.setColor(new Color(40, 180, 90));
             } else {
-                g2.setColor(new Color(230, 80, 80)); // Soft red/orange
+                g2.setColor(new Color(230, 80, 80));
             }
 
             var metrics = g2.getFontMetrics();
@@ -629,7 +560,7 @@ public class ViewFrame extends JFrame {
         }
 
         private void drawEndGameOverlay(Graphics2D g2) {
-            var game = model.getGame();
+            var game = viewModel.getGame();
             if (game == null || game.status() != GameStatus.FINISHED) {
                 return;
             }
@@ -646,7 +577,7 @@ public class ViewFrame extends JFrame {
             drawCentered(g2, RESTART_HINT, getHeight() / 2 + 50);
         }
 
-        private String endGameDetail(pcd.poool.model.game.GameSnapshot game) {
+        private String endGameDetail(GameSnapshot game) {
             if (game.gameOverReason() == GameOverReason.HUMAN_CUE_BALL_POCKETED) {
                 return "Human cue ball was pocketed";
             }
@@ -663,7 +594,7 @@ public class ViewFrame extends JFrame {
         }
 
         private void drawShotPreview(Graphics2D g2) {
-            for (var preview : model.getShotPreviews()) {
+            for (var preview : viewModel.getShotPreviews()) {
                 drawShotPreview(g2, preview);
             }
         }
@@ -673,10 +604,8 @@ public class ViewFrame extends JFrame {
             var end = toScreenPoint(preview.to());
             g2.setColor(preview.player() == Player.BOT ? new Color(220, 30, 30) : new Color(30, 90, 210));
             float scaledWidth = calculateShotPreviewWidth(preview.intensity());
-            
-            // Draw the arrow vector (solid segment and arrowhead) with scaled width
             g2.setStroke(new BasicStroke(scaledWidth));
-            
+
             double dx = end.x() - start.x();
             double dy = end.y() - start.y();
             double distance = Math.hypot(dx, dy);
@@ -684,17 +613,17 @@ public class ViewFrame extends JFrame {
             if (distance > 0) {
                 double radius = 0;
                 if (preview.player() == Player.HUMAN) {
-                    var pb = model.getPlayerBall();
-                    if (pb != null) {
-                        radius = pb.radius();
+                    var playerBall = viewModel.getPlayerBall();
+                    if (playerBall != null) {
+                        radius = playerBall.radius();
                     }
                 } else if (preview.player() == Player.BOT) {
-                    var bot = model.getBotBall();
-                    if (bot != null) {
-                        radius = bot.radius();
+                    var botBall = viewModel.getBotBall();
+                    if (botBall != null) {
+                        radius = botBall.radius();
                     }
                 }
-                int screenRadius = (int) (radius * delta);
+                int screenRadius = (int) (radius * scale);
                 if (distance > screenRadius) {
                     int offsetX = (int) Math.round((dx / distance) * screenRadius);
                     int offsetY = (int) Math.round((dy / distance) * screenRadius);
@@ -703,13 +632,11 @@ public class ViewFrame extends JFrame {
                     arrowStart = end;
                 }
             }
-            
+
             g2.draw(new Line2D.Double(arrowStart.x(), arrowStart.y(), end.x(), end.y()));
             drawArrowHead(g2, start, end);
-            
-            // Draw the projection with the baseline width (dashed)
             drawShotProjection(g2, start, end);
-            
+
             g2.setStroke(new BasicStroke(AXIS_STROKE_WIDTH));
             g2.drawString(String.format("Power: %.0f%%",
                     100 * preview.intensity() / MAX_MOUSE_SHOT_IMPULSE),
@@ -761,7 +688,7 @@ public class ViewFrame extends JFrame {
             int arrowLength = 14;
             double leftAngle = angle + Math.PI * 0.8;
             double rightAngle = angle - Math.PI * 0.8;
-            
+
             int[] xPoints = {
                 end.x(),
                 (int) Math.round(end.x() + Math.cos(leftAngle) * arrowLength),
@@ -772,18 +699,18 @@ public class ViewFrame extends JFrame {
                 (int) Math.round(end.y() + Math.sin(leftAngle) * arrowLength),
                 (int) Math.round(end.y() + Math.sin(rightAngle) * arrowLength)
             };
-            
+
             g2.fillPolygon(xPoints, yPoints, 3);
         }
 
         private void drawGameHud(Graphics2D g2) {
-            var game = model.getGame();
+            var game = viewModel.getGame();
             if (game == null) {
                 return;
             }
             String humanText = game.humanCanShoot() ? "Human ready" : "Human busy";
             String botText = game.botCanShoot() ? "Bot ready" : "Bot busy";
-            
+
             g2.drawString(humanText, HUD_STATS_X, HUD_HUMAN_READY_Y);
             g2.drawString(botText, HUD_STATS_X, HUD_BOT_READY_Y);
             g2.drawString(statusText(game.status(), game.winner()), HUD_STATS_X, HUD_STATUS_Y);
@@ -792,28 +719,22 @@ public class ViewFrame extends JFrame {
             drawCornerScores(g2, game);
         }
 
-        private void drawCornerScores(Graphics2D g2, pcd.poool.model.game.GameSnapshot game) {
+        private void drawCornerScores(Graphics2D g2, GameSnapshot game) {
             Font oldFont = g2.getFont();
             Color oldColor = g2.getColor();
-
-            // Set a premium, large font for labels and scores
             Font labelFont = oldFont.deriveFont(Font.BOLD, 22f);
             Font scoreFont = oldFont.deriveFont(Font.BOLD, 36f);
 
-            int labelY = getHeight() - 25; // Label Y (bottom)
-            int scoreY = labelY - 40;      // Score Y (above label)
-
-            // 1. Human (Left bottom corner) in blue
+            int labelY = getHeight() - 25;
+            int scoreY = labelY - 40;
             g2.setFont(scoreFont);
-            g2.setColor(new Color(30, 90, 210)); // Human color
+            g2.setColor(new Color(30, 90, 210));
             g2.drawString(String.valueOf(game.humanScore()), 25, scoreY);
-            
+
             g2.setFont(labelFont);
             g2.drawString("Human", 25, labelY);
-
-            // 2. Bot (Right bottom corner) in red
             g2.setFont(scoreFont);
-            g2.setColor(new Color(220, 30, 30)); // Bot color
+            g2.setColor(new Color(220, 30, 30));
             var metrics = g2.getFontMetrics();
             int botScoreX = getWidth() - 25 - metrics.stringWidth(String.valueOf(game.botScore()));
             g2.drawString(String.valueOf(game.botScore()), botScoreX, scoreY);
@@ -822,8 +743,6 @@ public class ViewFrame extends JFrame {
             metrics = g2.getFontMetrics();
             int botLabelX = getWidth() - 25 - metrics.stringWidth("Bot");
             g2.drawString("Bot", botLabelX, labelY);
-
-            // Restore
             g2.setFont(oldFont);
             g2.setColor(oldColor);
         }
@@ -847,19 +766,19 @@ public class ViewFrame extends JFrame {
 
         private ScreenCircle toScreenCircle(P2d center, double radius) {
             var point = toScreenPoint(center);
-            int screenRadius = (int) (radius * delta);
+            int screenRadius = (int) (radius * scale);
             int diameter = screenRadius * CIRCLE_DIAMETER_FACTOR;
             return new ScreenCircle(point.x() - screenRadius, point.y() - screenRadius, diameter);
         }
 
         private ScreenPoint toScreenPoint(P2d point) {
-            return new ScreenPoint((int) (ox + point.x() * delta), (int) (oy - point.y() * delta));
+            return new ScreenPoint((int) (originX + point.x() * scale), (int) (originY - point.y() * scale));
         }
 
         private P2d toBoardPoint(int screenX, int screenY) {
-            return new P2d((screenX - ox) / (double) delta, (oy - screenY) / (double) delta);
+            return new P2d((screenX - originX) / (double) scale, (originY - screenY) / (double) scale);
         }
-        
+
     }
 
     private record ScreenCircle(int x, int y, int diameter) {}

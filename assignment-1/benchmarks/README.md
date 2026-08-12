@@ -1,5 +1,10 @@
 # Assignment 1 Benchmark Audit
 
+Benchmark code is development infrastructure, not part of the playable Poool
+architecture or final game JAR. Maven still compiles it so all commands below
+remain available from `target/classes`; only the packaging step excludes
+`pcd/poool/benchmark/**`.
+
 This document records the benchmark suite as it exists in the repository today.
 It is an audit of the current entry points, outputs, and measurement choices,
 not a proposal for the next benchmark design.
@@ -10,11 +15,11 @@ not a proposal for the next benchmark design.
 
 The benchmark code currently exposes these command-line entry points:
 
-- `pcd.poool.benchmark.BenchmarkPipeline`, launched by `assignment-1/scripts/run_benchmarks.py`
-- `pcd.poool.benchmark.BenchmarkSuite`
-- `pcd.poool.benchmark.HeadlessBenchmarkRunner`
-- `pcd.poool.benchmark.ScalabilityBenchmarkRunner`
-- `pcd.poool.benchmark.BenchmarkScalabilityAnalyzer`
+- `pcd.poool.benchmark.runner.BenchmarkPipeline`, launched by `assignment-1/scripts/run_benchmarks.py`
+- `pcd.poool.benchmark.runner.BenchmarkSuite`
+- `pcd.poool.benchmark.runner.HeadlessBenchmarkRunner`
+- `pcd.poool.benchmark.runner.ScalabilityBenchmarkRunner`
+- `pcd.poool.benchmark.postprocess.BenchmarkScalabilityAnalyzer`
 - `assignment-1/scripts/plot_benchmarks.py` for chart generation from an existing results snapshot
 
 The default local workflow is the Python wrapper plus `BenchmarkPipeline`.

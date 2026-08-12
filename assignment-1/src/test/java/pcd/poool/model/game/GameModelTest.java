@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.P2d;
 import pcd.poool.model.common.math.V2d;
@@ -13,6 +14,7 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
+import pcd.poool.model.physics.common.PhysicsStepper;
 
 class GameModelTest {
 
@@ -124,6 +126,17 @@ class GameModelTest {
         assertTrue(readyGame.canHumanShoot());
         assertTrue(readyGame.canBotShoot());
         assertTrue(readyGame.shootHuman(new V2d(1.6, 0)));
+    }
+
+    @Test
+    void providedPhysicsStepperIsUsedByGameModel() {
+        var stepCalls = new AtomicInteger();
+        PhysicsStepper stepper = (board, elapsedMillis) -> stepCalls.incrementAndGet();
+        var game = new GameModel(new DirectScoringConf(), stepper, GameModel.StartupCountdown.disabled());
+
+        game.step(PhysicsDefaults.FIXED_STEP_MILLIS);
+
+        assertEquals(1, stepCalls.get());
     }
 
     private void runUntilNotMoving(GameModel game, int maxSteps) {
