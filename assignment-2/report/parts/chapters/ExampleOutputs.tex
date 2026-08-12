@@ -1,0 +1,38 @@
+\clearpage
+\section{Example Outputs}
+
+The following examples summarize the validated behaviour on deterministic test
+datasets.
+
+\subsection{Empty Directory}
+
+For an empty directory, the report contains zero files and zero counts in all
+bands.
+
+\begin{verbatim}
+Total files: 0
+Bands: [0, 0, 0, 0, 0]
+\end{verbatim}
+
+\subsection{Flat Directory With Boundary Sizes}
+
+With \texttt{MaxFS = 100} and \texttt{NB = 4}, the tested flat dataset produced
+the following distribution:
+
+\begin{verbatim}
+Total files: 8
+Bands: [2, 1, 1, 2, 2]
+\end{verbatim}
+
+This dataset includes files sized 0, 10, 25, 50, 75, 100, 101, and 250 bytes.
+
+\subsection{Nested Hierarchy}
+
+The nested test fixture confirmed that recursive traversal counts files in
+subdirectories correctly and produces identical results in all three
+implementations.
+
+\begin{verbatim}
+Total files: 5
+Bands: [1, 1, 1, 1, 1]
+\end{verbatim}

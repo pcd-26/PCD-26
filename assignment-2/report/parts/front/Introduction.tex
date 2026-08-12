@@ -1,0 +1,23 @@
+\section{Introduction}
+
+Assignment 2 asks for an asynchronous library, \texttt{FSStatLib}, that scans a
+directory recursively and returns a report with two values:
+
+\begin{itemize}[leftmargin=*]
+  \item the total number of regular files found in the directory tree;
+  \item the distribution of file sizes in \texttt{NB + 1} bands, where the
+  range \texttt{[0, MaxFS]} is divided into \texttt{NB} bands and the last band
+  counts files larger than \texttt{MaxFS}.
+\end{itemize}
+
+The project provides three implementations of the same behaviour:
+
+\begin{itemize}[leftmargin=*]
+  \item a Virtual Threads version;
+  \item a Reactive version based on RxJava;
+  \item an Event-Loop version based on Vert.x.
+\end{itemize}
+
+The repository also contains a command-line interface, a small Swing GUI, and a
+test suite that checks correctness, robustness, and cross-implementation
+consistency.

@@ -1,0 +1,39 @@
+\clearpage
+\section{Problem Analysis}
+
+The assignment is concurrency-oriented because the scan is naturally
+asynchronous and because the implementation must expose three different
+programming styles. The computation is simple in principle, but the filesystem
+adds several sources of complexity:
+
+\begin{itemize}[leftmargin=*]
+  \item traversal is recursive and may reach deep directory hierarchies;
+  \item the scan must remain responsive while data is collected;
+  \item filesystem state may change while the scan is running;
+  \item invalid paths, unreadable directories, symbolic links, and special files
+  must not crash the program;
+  \item the same logical result must be produced by all three paradigms.
+\end{itemize}
+
+The design keeps the report model independent from the execution strategy. This
+makes the three implementations comparable while still allowing each engine to
+use its own scheduling style.
+
+\subsection{Shared Data Model}
+
+The shared package \texttt{pcd.fsstat.common} contains the minimal common
+model:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{FSReport}: immutable report object containing directory, size
+  threshold, band count, band histogram, total file count, and elapsed time;
+  \item \texttt{FSReportListener}: callback contract for asynchronous updates,
+  completion, and errors;
+  \item \texttt{FSReportJob}: cancellation handle for imperative scanners;
+  \item \texttt{SizeUnit}: user-facing unit conversion and formatting helper;
+  \item \texttt{FSUtils}: small helpers used to build reports from mutable
+  counters.
+\end{itemize}
+
+The report stores the band counts in a defensive copy so that callers cannot
+mutate it accidentally.

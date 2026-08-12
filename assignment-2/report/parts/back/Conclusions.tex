@@ -1,0 +1,19 @@
+\clearpage
+\section{Conclusions}
+
+Assignment 2 is implemented as a small asynchronous filesystem statistics
+library with three distinct execution styles. The project satisfies the main
+requirements of the assignment:
+
+\begin{itemize}[leftmargin=*]
+  \item recursive filesystem scanning;
+  \item file-count and size-band statistics;
+  \item three implementations based on virtual threads, RxJava, and Vert.x;
+  \item a CLI and a GUI demo;
+  \item validation and comparative testing across identical datasets;
+  \item documentation of the main design choices and limitations.
+\end{itemize}
+
+The codebase keeps the report model and the filesystem logic separate from the
+execution strategy, which makes the three implementations comparable while
+preserving their respective programming styles.
