@@ -1,0 +1,54 @@
+\clearpage
+\section{Validation}
+
+The repository contains a validation-oriented test suite:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{FSStatTest}: unit coverage for the shared model, parsing, and
+  the three engines on a small fixture;
+  \item \texttt{FSStatRobustnessCorrectnessTest}: edge cases and comparative
+  validation on identical datasets;
+  \item \texttt{FSStatCLITest}: CLI helper and parsing checks.
+\end{itemize}
+
+The suite verifies that all three implementations return the same logical
+report on:
+
+\begin{itemize}[leftmargin=*]
+  \item empty directories;
+  \item flat directories with boundary file sizes;
+  \item nested hierarchies;
+  \item a wider and deeper deterministic hierarchy;
+  \item invalid paths;
+  \item regular files used as input instead of directories;
+  \item unreadable directories, where the environment supports permission
+  changes;
+  \item symbolic-link cycles, where the environment supports them;
+  \item large sparse files;
+  \item concurrent file deletions while scanning;
+  \item special files and non-regular nodes, where the environment supports
+  them.
+\end{itemize}
+
+The final verification run executed \texttt{25} tests and all of them passed.
+
+\subsection{Benchmark Support}
+
+The repository also includes \texttt{FSStatBenchmark}, a small local utility
+that runs the three implementations repeatedly and prints timing summaries. It
+is useful for manual comparisons between paradigms, but the resulting numbers
+are necessarily environment-dependent, so this report does not claim a
+universal ordering between the engines.
+
+\subsection{Observed Limitations}
+
+Some checks depend on the host environment:
+
+\begin{itemize}[leftmargin=*]
+  \item permission changes may not be applied by the local filesystem;
+  \item symbolic links may be unavailable or restricted;
+  \item special files such as \texttt{/dev/null} are Unix-specific.
+\end{itemize}
+
+These limitations are documented in the validation notes and do not affect the
+core functional behaviour of the project.

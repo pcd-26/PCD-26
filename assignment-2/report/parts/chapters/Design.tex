@@ -1,0 +1,115 @@
+\clearpage
+\section{Design}
+
+\subsection{Overview}
+
+The three implementations are intentionally separate:
+
+\begin{itemize}[leftmargin=*]
+  \item the Virtual Threads version uses imperative recursion and a task per
+  directory;
+  \item the Reactive version models the scan as a stream of files and uses an
+  immutable accumulator;
+  \item the Event-Loop version uses Vert.x callbacks and asynchronous file
+  system operations.
+\end{itemize}
+
+The CLI and GUI can select the implementation at runtime. Both user interfaces
+share the same argument parsing and report rendering logic, while the scan
+engine changes underneath.
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm}}
+\toprule
+\textbf{Approach} & \textbf{State ownership} & \textbf{Scheduling model} & \textbf{Main trade-off} \\
+\midrule
+Virtual Threads & Shared counters with lock-free atomics and a task counter & Recursive task submission on a virtual-thread executor & Simple imperative code, but many tasks for very large trees \\
+Reactive & Immutable accumulator passed through the stream & Sequential observable generation with sampled updates & Clean functional model, but no parallel directory walk \\
+Event-Loop & Shared asynchronous state guarded by atomics and a visited-set & Vert.x callbacks with asynchronous I/O and periodic updates & Non-blocking design, but more coordination overhead \\
+\bottomrule
+\end{tabular}
+\caption{High-level comparison of the three implementations.}
+\end{table}
+
+\subsection{Virtual Threads Strategy}
+
+The Virtual Threads implementation uses a dedicated virtual-thread executor.
+Traversal is recursive: every subdirectory is scheduled as a separate task and
+completion is tracked with:
+
+\begin{itemize}[leftmargin=*]
+  \item a shared cancellation flag;
+  \item an \texttt{AtomicInteger} task counter;
+  \item a \texttt{CountDownLatch} that releases the waiting thread when all work
+  is done;
+  \item a periodic reporting thread that emits intermediate snapshots.
+\end{itemize}
+
+The implementation uses canonical paths to avoid revisiting the same directory
+more than once. File sizes are measured through \texttt{File.length()} and each
+regular file is assigned to one band through \texttt{FSReport.getBandIndex()}.
+
+\subsection{Reactive Strategy}
+
+The Reactive version uses RxJava 3 and follows a functional style.
+
+The directory traversal is produced by an \texttt{Observable<File>}. The stream
+is then transformed into a sequence of immutable scan states with
+\texttt{scan(initial, ...)}. Each emitted state contains:
+
+\begin{itemize}[leftmargin=*]
+  \item the directory being scanned;
+  \item the threshold and the number of bands;
+  \item the current file count;
+  \item the current histogram;
+  \item the start time, used to compute elapsed time.
+\end{itemize}
+
+The stream is sampled every 100 ms so that user interfaces are not flooded with
+too many updates. Cancellation is handled by disposing the subscription.
+
+This implementation deliberately keeps the directory walk sequential inside the
+observable generator. The goal is to keep the reactive control flow explicit
+and simple, not to emulate the virtual-thread scheduling strategy.
+
+\subsection{Event-Loop Strategy}
+
+The Event-Loop version uses Vert.x to keep the traversal asynchronous.
+
+The scan starts by creating a fresh \texttt{Vertx} instance and a periodic
+timer that produces progress updates. Blocking filesystem checks, such as
+canonical path validation, are wrapped in \texttt{executeBlocking} so they do
+not block the event loop.
+
+The asynchronous state tracks:
+
+\begin{itemize}[leftmargin=*]
+  \item the number of outstanding tasks;
+  \item a cancellation flag;
+  \item a set of canonical paths already visited;
+  \item the current totals and band counters;
+  \item the timer identifier used for progress updates.
+\end{itemize}
+
+The directory tree is explored with asynchronous \texttt{readDir()} and
+\texttt{props()} calls. Completion is detected when the outstanding task
+counter reaches zero.
+
+\subsection{User Interfaces}
+
+The CLI accepts:
+
+\begin{itemize}[leftmargin=*]
+  \item the target directory;
+  \item the maximum file size threshold;
+  \item the number of bands;
+  \item an optional size unit;
+  \item an optional paradigm selector (\texttt{vt}, \texttt{rx}, or
+  \texttt{loop}).
+\end{itemize}
+
+The GUI exposes the same parameters and adds start/cancel controls. Callback
+delivery is marshalled back onto the Swing EDT with
+\texttt{SwingUtilities.invokeLater}.
