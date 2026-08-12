@@ -4,7 +4,6 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import pcd.fsstat.common.FSReport;
-import pcd.fsstat.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
@@ -45,7 +44,14 @@ public class ReactiveFSStat {
 
         /** Converts the accumulator snapshot into the public report model. */
         FSReport toReport() {
-            return FSUtils.createReport(directoryPath, maximumFileSizeBytes, numberOfBands, fileCountsPerBand, totalFileCount, scanStartTime);
+            return new FSReport(
+                directoryPath,
+                maximumFileSizeBytes,
+                numberOfBands,
+                fileCountsPerBand,
+                totalFileCount,
+                System.currentTimeMillis() - scanStartTime
+            );
         }
     }
 

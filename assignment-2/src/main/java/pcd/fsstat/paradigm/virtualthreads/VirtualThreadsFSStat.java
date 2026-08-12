@@ -3,7 +3,6 @@ package pcd.fsstat.paradigm.virtualthreads;
 import pcd.fsstat.common.FSReport;
 import pcd.fsstat.common.FSReportJob;
 import pcd.fsstat.common.FSReportListener;
-import pcd.fsstat.common.FSUtils;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
@@ -43,7 +42,7 @@ public class VirtualThreadsFSStat {
             try {
                 while (!scanState.isCancelled && !Thread.currentThread().isInterrupted()) {
                     Thread.sleep(100);
-                    listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
+                    listener.onUpdate(createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
                 }
             } catch (InterruptedException ignored) {
             }
@@ -88,7 +87,7 @@ public class VirtualThreadsFSStat {
                 virtualThreadExecutor.shutdown();
 
                 if (!scanState.isCancelled) {
-                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
+                    listener.onCompleted(createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
                 }
             } catch (Throwable t) {
                 listener.onError(t);
@@ -180,6 +179,22 @@ public class VirtualThreadsFSStat {
                 fileCountsPerBand[bandIndex].increment();
             }
         }
+    }
+
+    /** Builds a report from the virtual-thread counters. */
+    private static FSReport createReport(
+        String directory,
+        long maxFS,
+        int nb,
+        LongAdder[] fileCountsPerBand,
+        LongAdder totalFileCount,
+        long scanStartTime
+    ) {
+        long[] bands = new long[fileCountsPerBand.length];
+        for (int bandIndex = 0; bandIndex < fileCountsPerBand.length; bandIndex++) {
+            bands[bandIndex] = fileCountsPerBand[bandIndex].sum();
+        }
+        return new FSReport(directory, maxFS, nb, bands, totalFileCount.sum(), System.currentTimeMillis() - scanStartTime);
     }
 
     /** Decrements the active-task counter and releases the waiter when the scan is idle. */
