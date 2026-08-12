@@ -34,8 +34,8 @@ public class FSStatGUI extends JFrame {
     private final DefaultTableModel resultsTableModel;
     private final JLabel statusMessageLabel;
 
-    private FSReportJob currentScanJob;
-    private Disposable reactiveSubscription;
+    private FSReportJob currentScanJob;             // Handle for imperative backends (Virtual Threads, Event Loop)
+    private Disposable reactiveSubscription;        // Handle for reactive backend (RxJava)
     private boolean scanInProgress = false;
 
     /** Builds the full Swing interface and wires the user actions. */
@@ -200,6 +200,7 @@ public class FSStatGUI extends JFrame {
         String selectedParadigm = (String) paradigmSelector.getSelectedItem();
         long maximumFileSizeBytes = sizeUnit.toBytes(maximumFileSizeInput);
 
+        // Prepare the UI for a new scan and clear previous results.
         prepareScanUi(selectedParadigm, maximumFileSizeBytes, numberOfBands, sizeUnit);
 
         // Start the selected backend only after the UI is in running state.
