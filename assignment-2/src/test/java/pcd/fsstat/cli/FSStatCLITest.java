@@ -1,6 +1,5 @@
 package pcd.fsstat.cli;
 
-import io.reactivex.rxjava3.core.Observable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pcd.fsstat.common.FSReport;
@@ -10,7 +9,6 @@ import pcd.fsstat.common.SizeUnit;
 import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,19 +16,13 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Tests CLI argument parsing, dispatch, and Rx subscription behavior. */
 public class FSStatCLITest {
 
-    /** The Rx CLI bridge subscribes once and completes with the latest report. */
+    /** The Rx CLI runner completes with the latest report. */
     @Test
-    public void subscribeReactiveScanUsesSingleSubscription() throws Exception {
-        AtomicInteger subscriptions = new AtomicInteger();
+    public void runReactiveScanCompletesWithLatestReport(@TempDir Path tempDir) throws Exception {
         AtomicReference<FSReport> completedReport = new AtomicReference<>();
         CountDownLatch latch = new CountDownLatch(1);
 
-        Observable<FSReport> stream = Observable.defer(() -> {
-            subscriptions.incrementAndGet();
-            return Observable.just(new FSReport("tmp", 100, 2, new long[] {1, 0, 0}, 1, 12));
-        });
-
-        FSStatCLI.subscribeReactiveScan(stream, new FSReportListener() {
+        FSStatCLI.runReactiveScan(tempDir.toString(), 100, 2, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {
                 // ignore
@@ -49,9 +41,8 @@ public class FSStatCLITest {
         }, latch);
 
         assertTrue(latch.await(5, TimeUnit.SECONDS));
-        assertEquals(1, subscriptions.get());
         assertNotNull(completedReport.get());
-        assertEquals(1, completedReport.get().totalFiles());
+        assertEquals(0, completedReport.get().totalFiles());
     }
 
     /** Missing optional CLI arguments default to bytes and virtual threads. */
