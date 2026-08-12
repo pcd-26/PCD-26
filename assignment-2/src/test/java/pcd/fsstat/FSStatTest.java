@@ -6,9 +6,9 @@ import pcd.fsstat.common.FSReport;
 import pcd.fsstat.common.FSReportJob;
 import pcd.fsstat.common.FSReportListener;
 import pcd.fsstat.common.SizeUnit;
-import pcd.fsstat.eventloop.EventLoopFSStat;
-import pcd.fsstat.reactive.ReactiveFSStat;
-import pcd.fsstat.virtualthreads.VirtualThreadsFSStat;
+import pcd.fsstat.paradigm.eventloop.EventLoopFSStat;
+import pcd.fsstat.paradigm.reactive.ReactiveFSStat;
+import pcd.fsstat.paradigm.virtualthreads.VirtualThreadsFSStat;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -21,8 +21,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/** Basic unit and integration tests for FSStat shared utilities and implementations. */
 public class FSStatTest {
 
+    /** File sizes map to the expected bands. */
     @Test
     public void testBandIndex() {
         assertEquals(0, FSReport.getBandIndex(0, 100, 4));
@@ -36,12 +38,14 @@ public class FSStatTest {
         assertEquals(4, FSReport.getBandIndex(101, 100, 4));
     }
 
+    /** Durations are formatted for display. */
     @Test
     public void testDurationFormatting() {
         assertEquals("1.234 s (1234 ms)", FSReport.formatDuration(1234));
         assertEquals("0.000 s (0 ms)", FSReport.formatDuration(0));
     }
 
+    /** Size units format values and parse aliases. */
     @Test
     public void testSizeUnitFormattingAndParsing() {
         assertEquals(SizeUnit.MEGABYTES, SizeUnit.parse("mb"));
@@ -50,6 +54,7 @@ public class FSStatTest {
         assertEquals("1,024 B", SizeUnit.BYTES.format(1024));
     }
 
+    /** Band labels use the selected display unit. */
     @Test
     public void testBandLabelsCanUseSelectedUnit() {
         FSReport report = new FSReport("root", 10 * 1024 * 1024L, 4, new long[] {0, 0, 0, 0, 0}, 0, 0);
@@ -59,6 +64,7 @@ public class FSStatTest {
         assertEquals(report.getBandLabel(4, SizeUnit.MEGABYTES), FSReport.formatBandLabel(report.maxFS(), report.nb(), 4, SizeUnit.MEGABYTES));
     }
 
+    /** Creates a deterministic fixture with nested files of known sizes. */
     private void createDummyFiles(Path tempDir) throws IOException {
         File file1 = tempDir.resolve("file1.txt").toFile();
         writeDummyContent(file1, 10);
@@ -76,6 +82,7 @@ public class FSStatTest {
         writeDummyContent(file4, 150);
     }
 
+    /** Writes a file containing a fixed number of bytes. */
     private void writeDummyContent(File file, int size) throws IOException {
         try (FileWriter fw = new FileWriter(file)) {
             for (int i = 0; i < size; i++) {
@@ -84,6 +91,7 @@ public class FSStatTest {
         }
     }
 
+    /** Creates a large directory tree used by cancellation tests. */
     private void createLargeDirectoryTree(Path root, int subdirectories, int filesPerDirectory) throws IOException {
         for (int dirIndex = 0; dirIndex < subdirectories; dirIndex++) {
             Path subdir = root.resolve("subdir_" + dirIndex);
@@ -95,6 +103,7 @@ public class FSStatTest {
         }
     }
 
+    /** Virtual threads scan the deterministic fixture correctly. */
     @Test
     public void testVirtualThreadsFSStat(@TempDir Path tempDir) throws Exception {
         createDummyFiles(tempDir);
@@ -136,6 +145,7 @@ public class FSStatTest {
         assertEquals(1, bands[4]);
     }
 
+    /** RxJava scans the deterministic fixture correctly. */
     @Test
     public void testReactiveFSStat(@TempDir Path tempDir) throws Exception {
         createDummyFiles(tempDir);
@@ -159,6 +169,7 @@ public class FSStatTest {
         assertEquals(1, bands[4]);
     }
 
+    /** RxJava emits a zero-file report for an empty root. */
     @Test
     public void testReactiveFSStatEmptyDirectory(@TempDir Path tempDir) {
         AtomicReference<FSReport> finalReport = new AtomicReference<>();
@@ -176,6 +187,7 @@ public class FSStatTest {
         }
     }
 
+    /** Vert.x scans the deterministic fixture correctly. */
     @Test
     public void testEventLoopFSStat(@TempDir Path tempDir) throws Exception {
         createDummyFiles(tempDir);
@@ -217,6 +229,7 @@ public class FSStatTest {
         assertEquals(1, bands[4]);
     }
 
+    /** Cancelling an event-loop scan suppresses terminal callbacks. */
     @Test
     public void testEventLoopCancellationStopsRunningScan(@TempDir Path tempDir) throws Exception {
         createLargeDirectoryTree(tempDir, 120, 80);

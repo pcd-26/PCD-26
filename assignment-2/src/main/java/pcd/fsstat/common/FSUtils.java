@@ -5,9 +5,11 @@ import java.util.concurrent.atomic.LongAdder;
 
 /** Shared helpers used by the three FSStat implementations. */
 public final class FSUtils {
+    /** Prevents instantiation of this utility class. */
     private FSUtils() {
     }
 
+    /** Creates an array of zero-initialized AtomicLong counters. */
     public static AtomicLong[] initAtomicLongs(int size) {
         AtomicLong[] counters = new AtomicLong[size];
         for (int i = 0; i < size; i++) {
@@ -16,6 +18,7 @@ public final class FSUtils {
         return counters;
     }
 
+    /** Converts AtomicLong counters into a plain long array snapshot. */
     public static long[] toLongArray(AtomicLong[] counters) {
         long[] values = new long[counters.length];
         for (int i = 0; i < counters.length; i++) {
@@ -24,6 +27,7 @@ public final class FSUtils {
         return values;
     }
 
+    /** Converts LongAdder counters into a plain long array snapshot. */
     public static long[] toLongArray(LongAdder[] counters) {
         long[] values = new long[counters.length];
         for (int i = 0; i < counters.length; i++) {
@@ -32,6 +36,7 @@ public final class FSUtils {
         return values;
     }
 
+    /** Builds a report from already materialized count values. */
     public static FSReport createReport(
         String directory,
         long maxFS,
@@ -43,6 +48,7 @@ public final class FSUtils {
         return new FSReport(directory, maxFS, nb, bandsCount, totalFiles, System.currentTimeMillis() - startTime);
     }
 
+    /** Builds a report by snapshotting AtomicLong counters. */
     public static FSReport createReport(
         String directory,
         long maxFS,
@@ -54,6 +60,7 @@ public final class FSUtils {
         return createReport(directory, maxFS, nb, toLongArray(bandsCount), totalFiles.get(), startTime);
     }
 
+    /** Builds a report by snapshotting LongAdder counters. */
     public static FSReport createReport(
         String directory,
         long maxFS,

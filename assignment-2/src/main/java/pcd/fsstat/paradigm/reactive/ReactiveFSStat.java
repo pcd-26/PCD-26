@@ -1,4 +1,4 @@
-package pcd.fsstat.reactive;
+package pcd.fsstat.paradigm.reactive;
 
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.ObservableEmitter;
@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 /** Computes directory file statistics reactively using RxJava 3. */
 public class ReactiveFSStat {
 
+    /** Immutable accumulator used by the Rx scan pipeline. */
     private static class ReactiveScanState {
         final String directoryPath;
         final long maximumFileSizeBytes;
@@ -20,6 +21,7 @@ public class ReactiveFSStat {
         final long[] fileCountsPerBand;
         final long scanStartTime;
 
+        /** Creates the initial empty accumulator for a scan. */
         ReactiveScanState(String directoryPath, long maximumFileSizeBytes, int numberOfBands, long scanStartTime) {
             this.directoryPath = directoryPath;
             this.maximumFileSizeBytes = maximumFileSizeBytes;
@@ -29,6 +31,7 @@ public class ReactiveFSStat {
             this.scanStartTime = scanStartTime;
         }
 
+        /** Creates the next accumulator after receiving one scanned file. */
         ReactiveScanState(ReactiveScanState previousState, File currentFile) {
             this.directoryPath = previousState.directoryPath;
             this.maximumFileSizeBytes = previousState.maximumFileSizeBytes;
@@ -40,13 +43,16 @@ public class ReactiveFSStat {
             this.scanStartTime = previousState.scanStartTime;
         }
 
+        /** Converts the accumulator snapshot into the public report model. */
         FSReport toReport() {
             return FSUtils.createReport(directoryPath, maximumFileSizeBytes, numberOfBands, fileCountsPerBand, totalFileCount, scanStartTime);
         }
     }
 
+    /** Builds a reactive report stream for the requested directory scan. */
     public static Observable<FSReport> getFSReport(String directory, long maxFS, int nb) {
         return Observable.defer(() -> {
+            // Validate lazily so errors are delivered through the Observable contract.
             File rootDirectory = new File(directory);
             if (!rootDirectory.exists() || !rootDirectory.isDirectory()) {
                 return Observable.error(new IllegalArgumentException("Target is not a valid directory: " + directory));
@@ -54,6 +60,7 @@ public class ReactiveFSStat {
             long scanStartTime = System.currentTimeMillis();
             ReactiveScanState initialState = new ReactiveScanState(directory, maxFS, nb, scanStartTime);
 
+            // Convert emitted files into immutable report snapshots and throttle progress updates.
             return scanFiles(rootDirectory)
                 .subscribeOn(Schedulers.io())
                 .scan(initialState, ReactiveScanState::new)
@@ -64,6 +71,7 @@ public class ReactiveFSStat {
         });
     }
 
+    /** Creates an Observable that emits every regular file under the root directory. */
     private static Observable<File> scanFiles(File rootDirectory) {
         return Observable.create(emitter -> {
             try {
@@ -80,11 +88,13 @@ public class ReactiveFSStat {
         });
     }
 
+    /** Walks directories recursively and emits regular files while respecting cancellation. */
     private static void emitDirectoryContents(File directory, ObservableEmitter<File> emitter, java.util.Set<String> visitedDirectories) {
         if (emitter.isDisposed()) {
             return;
         }
 
+        // Canonical paths keep symbolic-link cycles from being traversed again.
         try {
             String canonicalPath = directory.getCanonicalPath();
             if (!visitedDirectories.add(canonicalPath)) {
@@ -98,6 +108,7 @@ public class ReactiveFSStat {
         if (files == null) {
             return;
         }
+        // Recurse into directories and emit only regular files.
         for (File file : files) {
             if (emitter.isDisposed()) {
                 return;

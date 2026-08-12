@@ -4,22 +4,20 @@ import io.reactivex.rxjava3.core.Observable;
 import pcd.fsstat.common.FSReport;
 import pcd.fsstat.common.FSReportListener;
 import pcd.fsstat.common.SizeUnit;
-import pcd.fsstat.eventloop.EventLoopFSStat;
-import pcd.fsstat.reactive.ReactiveFSStat;
-import pcd.fsstat.virtualthreads.VirtualThreadsFSStat;
+import pcd.fsstat.paradigm.eventloop.EventLoopFSStat;
+import pcd.fsstat.paradigm.reactive.ReactiveFSStat;
+import pcd.fsstat.paradigm.virtualthreads.VirtualThreadsFSStat;
 
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
 
-/**
- * Command-line interface runner for the FSStat library.
- * Allows running directory scans and outputting results to the console without a GUI.
- */
+/** Command-line runner for FSStat scans. */
 public class FSStatCLI {
     private static final String PARADIGM_VT = "vt";
     private static final String PARADIGM_RX = "rx";
     private static final String PARADIGM_LOOP = "loop";
 
+    /** Stores validated command-line inputs in normalized form. */
     static final class ParsedArguments {
         final String directoryPath;
         final double maximumFileSizeInput;
@@ -27,6 +25,7 @@ public class FSStatCLI {
         final SizeUnit sizeUnit;
         final String paradigm;
 
+        /** Creates a parsed argument bundle for a CLI scan. */
         ParsedArguments(String directoryPath, double maximumFileSizeInput, int numberOfBands, SizeUnit sizeUnit, String paradigm) {
             this.directoryPath = directoryPath;
             this.maximumFileSizeInput = maximumFileSizeInput;
@@ -36,12 +35,9 @@ public class FSStatCLI {
         }
     }
 
-    /**
-     * Entry point to launch the CLI directory scan.
-     *
-     * @param args Command-line arguments: [directory] [maxFS] [nb] [sizeUnit?] [paradigm?]
-     */
+    /** Runs a scan from command-line arguments. */
     public static void main(String[] args) {
+        // Parse and validate the CLI contract before touching the filesystem.
         ParsedArguments parsed = parseArguments(args);
         if (parsed == null) {
             System.exit(1);
@@ -63,6 +59,7 @@ public class FSStatCLI {
         System.out.println("Number of bands: " + parsed.numberOfBands);
         System.out.println("----------------------------------------------");
 
+        // Use a latch so the CLI process waits for asynchronous completion.
         CountDownLatch completionSignal = new CountDownLatch(1);
 
         FSReportListener reportListener = new FSReportListener() {
@@ -94,11 +91,12 @@ public class FSStatCLI {
             System.err.println("Execution interrupted.");
         }
 
-        // Force shutdown RxJava schedulers if any were active
+        // Stop RxJava worker threads when the reactive backend was used.
         io.reactivex.rxjava3.schedulers.Schedulers.shutdown();
         System.exit(0);
     }
 
+    /** Parses directory, size, optional unit, and optional paradigm from CLI arguments. */
     static ParsedArguments parseArguments(String[] args) {
         if (args == null || args.length < 3) {
             System.err.println("Usage: java -cp ... pcd.fsstat.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
@@ -112,6 +110,7 @@ public class FSStatCLI {
         SizeUnit sizeUnit = SizeUnit.BYTES;
         String paradigm = "vt";
 
+        // Remaining arguments may appear as unit and/or paradigm.
         for (int i = 3; i < args.length; i++) {
             String value = args[i].toLowerCase();
             if ("vt".equals(value) || "rx".equals(value) || "loop".equals(value)) {
@@ -124,6 +123,7 @@ public class FSStatCLI {
         return new ParsedArguments(directoryPath, maximumFileSizeInput, numberOfBands, sizeUnit, paradigm);
     }
 
+    /** Dispatches the scan request to the selected implementation. */
     static void dispatchScan(
         String directoryPath,
         long maximumFileSizeBytes,
@@ -149,14 +149,17 @@ public class FSStatCLI {
         System.exit(1);
     }
 
+    /** Launches the virtual-thread implementation from the CLI. */
     static void runVirtualThreadsScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, FSReportListener reportListener) {
         VirtualThreadsFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, reportListener);
     }
 
+    /** Launches the Vert.x event-loop implementation from the CLI. */
     static void runEventLoopScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, FSReportListener reportListener) {
         EventLoopFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, reportListener);
     }
 
+    /** Launches the RxJava implementation from the CLI. */
     static void runReactiveScan(
         String directoryPath,
         long maximumFileSizeBytes,
@@ -167,6 +170,7 @@ public class FSStatCLI {
         subscribeReactiveScan(ReactiveFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands), reportListener, completionSignal);
     }
 
+    /** Subscribes once to the Rx stream and forwards updates through the common listener interface. */
     static void subscribeReactiveScan(
         Observable<FSReport> reportStream,
         FSReportListener reportListener,
@@ -192,6 +196,7 @@ public class FSStatCLI {
         );
     }
 
+    /** Prints the final report in a compact tabular console format. */
     private static void printFinalReport(FSReport report, SizeUnit outputUnit) {
         System.out.println("\n==============================================");
         System.out.println("FINAL FILE SIZE DISTRIBUTION REPORT");
