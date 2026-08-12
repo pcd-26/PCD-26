@@ -348,6 +348,7 @@ public class FSStatGUI extends JFrame {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             try {
+                // Use the native system style when it is available.
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception ignored) {}
             FSStatGUI frame = new FSStatGUI();
