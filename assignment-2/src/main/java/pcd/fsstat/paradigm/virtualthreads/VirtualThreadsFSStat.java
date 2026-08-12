@@ -5,6 +5,9 @@ import pcd.fsstat.common.FSReportJob;
 import pcd.fsstat.common.FSReportListener;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -26,6 +29,7 @@ public class VirtualThreadsFSStat {
         CountDownLatch completionSignal = new CountDownLatch(1);
         AtomicInteger activeTaskCount = new AtomicInteger(0);
 
+        // LongAdder is used for thread-safe counting without contention.
         LongAdder totalFileCount = new LongAdder();
         LongAdder[] fileCountsPerBand = new LongAdder[nb + 1];
         for (int bandIndex = 0; bandIndex <= nb; bandIndex++) {
@@ -33,7 +37,7 @@ public class VirtualThreadsFSStat {
         }
 
         long scanStartTime = System.currentTimeMillis();
-        java.util.Set<String> visitedDirectories = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        Set<String> visitedDirectories = ConcurrentHashMap.newKeySet();
 
         ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -125,7 +129,7 @@ public class VirtualThreadsFSStat {
         LongAdder[] fileCountsPerBand,
         VirtualThreadsScanState scanState,
         CountDownLatch completionSignal,
-        java.util.Set<String> visitedDirectories
+        Set<String> visitedDirectories
     ) {
         if (scanState.isCancelled) {
             return;
@@ -137,7 +141,7 @@ public class VirtualThreadsFSStat {
             if (!visitedDirectories.add(canonicalPath)) {
                 return;
             }
-        } catch (java.io.IOException ignored) {
+        } catch (IOException ignored) {
             return;
         }
 

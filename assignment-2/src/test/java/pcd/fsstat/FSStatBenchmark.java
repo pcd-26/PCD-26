@@ -6,6 +6,8 @@ import pcd.fsstat.paradigm.eventloop.EventLoopFSStat;
 import pcd.fsstat.paradigm.reactive.ReactiveFSStat;
 import pcd.fsstat.paradigm.virtualthreads.VirtualThreadsFSStat;
 
+import io.reactivex.rxjava3.schedulers.Schedulers;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -77,7 +79,7 @@ public class FSStatBenchmark {
                              "Event-Loop (Vert.x)", evTimes, evFiles);
 
         // Shutdown RxJava schedulers to let lingering threads terminate immediately.
-        io.reactivex.rxjava3.schedulers.Schedulers.shutdown();
+        Schedulers.shutdown();
     }
 
     /** Runs one virtual-thread benchmark scan and waits for its completion. */
