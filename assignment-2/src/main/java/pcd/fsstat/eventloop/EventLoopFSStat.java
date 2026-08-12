@@ -22,8 +22,7 @@ public class EventLoopFSStat {
     private enum PathValidationStatus {
         VALID,
         DUPLICATE,
-        NOT_DIRECTORY,
-        NOT_READABLE
+        NOT_DIRECTORY
     }
 
     private record PathValidationResult(PathValidationStatus status) { }
@@ -135,7 +134,7 @@ public class EventLoopFSStat {
                 markTaskCompleted(scanState, finishScanIfIdle);
                 return;
             }
-            if (pathValidation.status() == PathValidationStatus.NOT_DIRECTORY || pathValidation.status() == PathValidationStatus.NOT_READABLE) {
+            if (pathValidation.status() == PathValidationStatus.NOT_DIRECTORY) {
                 if (scanState.pendingTaskCount.get() == 1) {
                     listener.onError(new IllegalArgumentException("Target directory is not a readable directory: " + path));
                     scanState.requestCancel();
@@ -178,14 +177,6 @@ public class EventLoopFSStat {
                             markTaskCompleted(scanState, finishScanIfIdle);
                         });
                     }
-                } else {
-                    if (scanState.pendingTaskCount.get() == 1) {
-                        listener.onError(res.cause());
-                        scanState.requestCancel();
-                        if (scanState.progressTimerId != -1) {
-                            vertx.cancelTimer(scanState.progressTimerId);
-                        }
-                    }
                 }
 
                 markTaskCompleted(scanState, finishScanIfIdle);
@@ -202,9 +193,6 @@ public class EventLoopFSStat {
             }
             if (!scanState.visitedDirectories.add(canonicalPath)) {
                 return new PathValidationResult(PathValidationStatus.DUPLICATE);
-            }
-            if (!directoryFile.canRead()) {
-                return new PathValidationResult(PathValidationStatus.NOT_READABLE);
             }
             return new PathValidationResult(PathValidationStatus.VALID);
         });
