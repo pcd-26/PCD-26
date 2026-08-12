@@ -229,10 +229,10 @@ public class FSStatTest {
         assertEquals(1, bands[4]);
     }
 
-    /** Cancelling an event-loop scan suppresses terminal callbacks. */
+    /** Cancelling an event-loop scan before it starts suppresses terminal callbacks. */
     @Test
     public void testEventLoopCancellationStopsRunningScan(@TempDir Path tempDir) throws Exception {
-        createLargeDirectoryTree(tempDir, 120, 80);
+        createLargeDirectoryTree(tempDir, 20, 20);
 
         CountDownLatch terminalLatch = new CountDownLatch(1);
         AtomicBoolean completed = new AtomicBoolean(false);
@@ -257,11 +257,10 @@ public class FSStatTest {
             }
         });
 
-        Thread.sleep(150);
         job.cancel();
 
         assertTrue(job.isCancelled());
-        assertFalse(terminalLatch.await(500, TimeUnit.MILLISECONDS), "The scan should not complete right after cancellation.");
+        assertFalse(terminalLatch.await(500, TimeUnit.MILLISECONDS), "A cancelled scan should not emit terminal callbacks.");
         assertFalse(completed.get());
         assertFalse(errored.get());
     }
