@@ -3,135 +3,96 @@ package pcd.poool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import pcd.poool.model.game.Player;
-import pcd.poool.model.physics.common.BoardConf;
-import pcd.poool.model.physics.config.MassiveBoardConf;
-import pcd.poool.model.physics.config.StandardGameBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
+import pcd.poool.runtime.GameRuntime;
 import pcd.poool.runtime.RuntimeGameSnapshot;
 import pcd.poool.threaded.ThreadedGameRunner;
 import pcd.poool.view.board.View;
 import pcd.poool.view.board.ViewModel;
 
 /**
- * Playable platform-thread entry point for Poool.
+ * Playable platform-thread version of Poool.
  *
- * <p>The GUI loop only renders immutable snapshots. Physics and game-rule
- * mutations are owned by {@link ThreadedGameRunner}'s controller platform
- * thread, while the bot can run as a separate active component.
+ * <p>The launcher keeps the UI loop separate from the game runtime and talks
+ * to it through snapshots and callbacks. Compared with the sequential
+ * launcher, the important difference is that physics advances in its own
+ * thread while Swing only consumes published state.
  */
-public class ThreadedPoool {
+public final class ThreadedPoool {
 
     private static final int VIEW_WIDTH = 1200;
     private static final int VIEW_HEIGHT = 800;
     private static final long FRAME_SLEEP_MILLIS = 4;
     private static final double BOT_PREVIEW_SCALE = 0.35;
-    private static final BoardProfile BOARD_PROFILE = BoardProfile.THOUSAND;
 
-    /**
-     * Utility class; not meant to be instantiated.
-     */
     private ThreadedPoool() {
     }
 
-    /**
-     * Starts the playable platform-thread game.
-     *
-     * @param args ignored
-     */
     public static void main(String[] args) {
-        var boardProfile = BOARD_PROFILE.createConfiguration();
-        var runnerRef = new AtomicReference<>(newStartedRunner(boardProfile));
+        // The threaded launcher splits responsibilities: the runtime owns the
+        // mutable game state, while this loop only publishes snapshots to the
+        // view and reacts to restart requests.
+        var runtimeRef = new AtomicReference<GameRuntime>(startRuntime());
         var restartRequested = new AtomicBoolean(false);
         var viewModel = new ViewModel();
         var view = new View(
                 viewModel,
                 VIEW_WIDTH,
                 VIEW_HEIGHT,
-                velocity -> runnerRef.get().shootHuman(velocity),
-                () -> restartRequested.set(true),
-                () -> canStartHumanAiming(runnerRef.get()),
-                () -> viewModel.clearShotPreview(Player.HUMAN));
+                velocity -> runtimeRef.get().shootHuman(velocity), // Human shot.
+                () -> restartRequested.set(true), // Restart request.
+                () -> runtimeRef.get().snapshot().game().humanCanShoot(), // Human aiming gate.
+                () -> viewModel.clearShotPreview(Player.HUMAN)); // Clear human preview.
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> runnerRef.get().close(), "poool-threaded-shutdown"));
+        Runtime.getRuntime().addShutdownHook(
+                new Thread(() -> runtimeRef.get().close(), "poool-threaded-shutdown"));
 
         long startTime = System.currentTimeMillis();
         int renderedFrames = 0;
-
         while (true) {
             long now = System.currentTimeMillis();
             if (restartRequested.getAndSet(false)) {
-                var oldRunner = runnerRef.getAndSet(newStartedRunner(boardProfile));
-                oldRunner.close();
+                runtimeRef.get().close();
+                runtimeRef.set(startRuntime());
                 viewModel.clearShotPreview();
                 startTime = now;
                 renderedFrames = 0;
             }
 
-            renderedFrames++;
-            int framePerSec = framePerSec(renderedFrames, startTime, now);
-            var threadedSnapshot = runnerRef.get().snapshot();
-            viewModel.update(
-                    threadedSnapshot.smallBalls(),
-                    threadedSnapshot.humanBall(),
-                    threadedSnapshot.botBall(),
-                    threadedSnapshot.holes(),
-                    threadedSnapshot.game(),
-                    framePerSec);
-            updateBotShotPreview(threadedSnapshot, viewModel);
+            var snapshot = runtimeRef.get().snapshot();
+            int framesPerSecond = framesPerSecond(++renderedFrames, startTime, now);
+            copyToViewModel(snapshot, viewModel, framesPerSecond);
+            updateBotPreview(snapshot, viewModel);
             view.render();
             sleepFrame();
         }
     }
 
-    /**
-     * Instantiates and starts a new ThreadedGameRunner with the given board configuration.
-     *
-     * @param boardProfile the initial layout and setup of the board
-     * @return the started ThreadedGameRunner instance
-     */
-    private static ThreadedGameRunner newStartedRunner(BoardConf boardProfile) {
-        var runner = new ThreadedGameRunner(boardProfile);
-        runner.start();
-        return runner;
+    private static GameRuntime startRuntime() {
+        var runtime = new ThreadedGameRunner(new ThousandBallsBoardConf());
+        runtime.start();
+        return runtime;
     }
 
-    private enum BoardProfile {
-        STANDARD {
-            @Override
-            BoardConf createConfiguration() {
-                return new StandardGameBoardConf();
-            }
-        },
-        THOUSAND {
-            @Override
-            BoardConf createConfiguration() {
-                return new ThousandBallsBoardConf();
-            }
-        },
-        MASSIVE {
-            @Override
-            BoardConf createConfiguration() {
-                return new MassiveBoardConf();
-            }
-        };
-
-        abstract BoardConf createConfiguration();
+    private static int framesPerSecond(int renderedFrames, long startTime, long now) {
+        long elapsed = now - startTime;
+        return elapsed <= 0 ? 0 : (int) (renderedFrames * 1000 / elapsed);
     }
 
-    /**
-     * Grants human aiming while the latest game snapshot reports that the human
-     * cue ball is stopped and therefore eligible for a new shot.
-     */
-    private static boolean canStartHumanAiming(ThreadedGameRunner runner) {
-        return runner.snapshot().game().humanCanShoot();
+    private static void copyToViewModel(
+            RuntimeGameSnapshot snapshot,
+            ViewModel viewModel,
+            int framesPerSecond) {
+        viewModel.update(
+                snapshot.smallBalls(),
+                snapshot.humanBall(),
+                snapshot.botBall(),
+                snapshot.holes(),
+                snapshot.game(),
+                framesPerSecond);
     }
 
-    /**
-     * Projects the bot shot preview stored in the immutable runtime snapshot
-     * into the shared view model without giving the bot direct access to Swing
-     * or mutable game entities.
-     */
-    private static void updateBotShotPreview(RuntimeGameSnapshot snapshot, ViewModel viewModel) {
+    private static void updateBotPreview(RuntimeGameSnapshot snapshot, ViewModel viewModel) {
         if (!snapshot.game().botCanShoot() || snapshot.botBall() == null) {
             viewModel.clearShotPreview(Player.BOT);
             return;
@@ -148,25 +109,6 @@ public class ThreadedPoool {
                 Player.BOT);
     }
 
-    /**
-     * Computes the current frames per second (FPS) rate.
-     *
-     * @param renderedFrames total frames rendered during the run
-     * @param startTime the start time of the run in milliseconds
-     * @param now the current system time in milliseconds
-     * @return the calculated frames per second as an integer
-     */
-    private static int framePerSec(int renderedFrames, long startTime, long now) {
-        long elapsed = now - startTime;
-        if (elapsed <= 0) {
-            return 0;
-        }
-        return (int) (renderedFrames * 1000 / elapsed);
-    }
-
-    /**
-     * Puts the current thread to sleep for a configured frame duration to cap frame rate and yield CPU.
-     */
     private static void sleepFrame() {
         try {
             Thread.sleep(FRAME_SLEEP_MILLIS);

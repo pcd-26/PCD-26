@@ -17,8 +17,8 @@ DEFAULT_RESULTS_ROOT = ASSIGNMENT_ROOT / "benchmarks" / "results"
 DEFAULT_CHARTS_ROOT = ASSIGNMENT_ROOT / "benchmarks" / "charts"
 DEFAULT_MAVEN_GOAL = "compile"
 DEFAULT_MODE = "full"
-JAVA_MAIN_CLASS = "pcd.poool.benchmark.BenchmarkPipeline"
-SUITE_MAIN_CLASS = "pcd.poool.benchmark.BenchmarkSuite"
+JAVA_MAIN_CLASS = "pcd.poool.benchmark.runner.BenchmarkPipeline"
+SUITE_MAIN_CLASS = "pcd.poool.benchmark.runner.BenchmarkSuite"
 
 
 @dataclass(frozen=True)

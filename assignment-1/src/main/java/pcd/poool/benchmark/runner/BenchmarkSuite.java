@@ -1,4 +1,4 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.runner;
 
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -10,10 +10,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.core.BenchmarkRunResult;
+import pcd.poool.benchmark.core.BenchmarkRunner;
+import pcd.poool.benchmark.core.BenchmarkSummary;
+import pcd.poool.benchmark.core.RuntimeTelemetry;
+import pcd.poool.benchmark.io.BenchmarkCsvWriter;
+import pcd.poool.benchmark.io.RuntimeTelemetryCsvWriter;
+import pcd.poool.benchmark.postprocess.BenchmarkResultsExporter;
+import pcd.poool.benchmark.engine.BenchmarkCorrectnessGuard;
 
-/**
- * Executes the full benchmark matrix and exports the results.
- */
+/** Executes the full benchmark matrix and exports the results. */
 public final class BenchmarkSuite {
 
     private static final List<Integer> BALL_COUNTS = List.of(100, 500, 1_000, 1_500, 2_000, 2_500);
@@ -29,11 +36,7 @@ public final class BenchmarkSuite {
     private BenchmarkSuite() {
     }
 
-    /**
-     * Runs the complete benchmark matrix.
-     *
-     * @param args optional benchmark results root directory
-     */
+    /** Runs the complete benchmark matrix. */
     public static void main(String[] args) {
         Mode mode = Mode.FULL;
         int argIndex = 0;
@@ -58,30 +61,12 @@ public final class BenchmarkSuite {
         }
     }
 
-    /**
-     * Runs the suite using the default headless benchmark workload.
-     *
-     * @param resultsRoot root directory that will contain the latest run
-     * @param out progress stream
-     * @param err error stream
-     * @return suite execution report
-     * @throws Exception if directory creation fails
-     */
+    /** Runs the suite using the default headless benchmark workload. */
     public static SuiteReport run(Path resultsRoot, PrintStream out, PrintStream err) throws Exception {
         return run(resultsRoot, out, err, Mode.FULL);
     }
 
-    /**
-     * Runs the suite in the requested mode using the default headless
-     * benchmark workload.
-     *
-     * @param resultsRoot root directory that will contain the latest run
-     * @param out progress stream
-     * @param err error stream
-     * @param mode suite execution mode
-     * @return suite execution report
-     * @throws Exception if directory creation fails
-     */
+    /** Runs the suite in the requested mode using the default headless workload. */
     public static SuiteReport run(Path resultsRoot, PrintStream out, PrintStream err, Mode mode) throws Exception {
         var correctnessGuard = new BenchmarkCorrectnessGuard();
         return run(
@@ -91,17 +76,7 @@ public final class BenchmarkSuite {
                 err);
     }
 
-    /**
-     * Runs the suite with a custom workload factory, which is useful for
-     * testing failure handling.
-     *
-     * @param configs benchmark configurations
-     * @param workloadFactory factory that builds the timed workload for each config
-     * @param out progress stream
-     * @param err error stream
-     * @return suite execution report
-     * @throws Exception if directory creation or export fails unexpectedly
-     */
+    /** Runs the suite with a custom workload factory. */
     public static SuiteReport run(
             List<BenchmarkConfig> configs,
             WorkloadFactory workloadFactory,
@@ -209,13 +184,7 @@ public final class BenchmarkSuite {
         return new SuiteReport(outputDir, completedScenarios, failedScenarios);
     }
 
-    /**
-     * Builds the benchmark matrix for the suite.
-     *
-     * @param resultsRoot root directory that will contain the latest run
-     * @return benchmark configurations with a shared output directory
-     * @throws Exception if the output directory cannot be created
-     */
+    /** Builds the benchmark matrix for the suite. */
     public static List<BenchmarkConfig> buildMatrix(Path resultsRoot) throws Exception {
         Objects.requireNonNull(resultsRoot, "resultsRoot");
         Path outputDir = resultsRoot;
@@ -246,13 +215,7 @@ public final class BenchmarkSuite {
         return List.copyOf(configs);
     }
 
-    /**
-     * Builds the lightweight smoke benchmark matrix used by CI.
-     *
-     * @param resultsRoot root directory that will contain the latest run
-     * @return benchmark configurations for the smoke suite
-     * @throws Exception if the output directory cannot be created
-     */
+    /** Builds the lightweight smoke benchmark matrix used by CI. */
     public static List<BenchmarkConfig> buildSmokeMatrix(Path resultsRoot) throws Exception {
         Objects.requireNonNull(resultsRoot, "resultsRoot");
         Path outputDir = resultsRoot;
@@ -305,9 +268,7 @@ public final class BenchmarkSuite {
         };
     }
 
-    /**
-     * Suite execution mode.
-     */
+    /** Suite execution mode. */
     public enum Mode {
         FULL,
         SMOKE;
@@ -411,33 +372,11 @@ public final class BenchmarkSuite {
         BenchmarkRunner.BenchmarkExecutionWorkload create(BenchmarkConfig config);
     }
 
-    /**
-     * Immutable report for a suite execution.
-     *
-     * @param outputDir output directory containing the latest benchmark files
-     * @param completedConfigs number of configs completed successfully
-     * @param failedConfigs number of configs that failed during export
-     */
+    /** Immutable report for a suite execution. */
     public record SuiteReport(Path outputDir, int completedConfigs, int failedConfigs) {
     }
 
     private record ScenarioKey(int balls, int steps, long seed) {
     }
 
-    private static void resetDirectory(Path directory) throws Exception {
-        if (!Files.exists(directory)) {
-            return;
-        }
-        try (var paths = Files.walk(directory)) {
-            paths.sorted(java.util.Comparator.reverseOrder())
-                    .filter(path -> !path.equals(directory))
-                    .forEach(path -> {
-                        try {
-                            Files.deleteIfExists(path);
-                        } catch (Exception ex) {
-                            throw new IllegalStateException("failed to clear directory: " + directory, ex);
-                        }
-                    });
-        }
-    }
 }

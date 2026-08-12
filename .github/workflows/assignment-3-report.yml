@@ -70,6 +70,8 @@ jobs:
       - test-hotc
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 25
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -151,3 +153,14 @@ jobs:
         with:
           name: assignment-03-package
           path: ${{ steps.delivery_meta.outputs.zip_name }}
+
+      - name: Publish release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: latest
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          gh release upload "$RELEASE_TAG" "$DELIVERY_ZIP" --clobber

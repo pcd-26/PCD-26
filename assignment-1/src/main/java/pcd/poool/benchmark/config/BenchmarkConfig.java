@@ -1,27 +1,11 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.config;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Unified configuration model used by all benchmark runners.
- *
- * <p>The configuration keeps benchmark parameters in one place so runners do
- * not need to duplicate default values or validation rules.
- *
- * @param implementation execution strategy to benchmark
- * @param balls number of balls in the simulated workload
- * @param threads requested worker count
- * @param steps number of simulated steps
- * @param seed random seed used to build deterministic scenarios
- * @param warmupRuns number of warmup runs before measurement
- * @param measuredRuns number of measured runs
- * @param guiEnabled whether the benchmark includes GUI rendering
- * @param instrumentationEnabled whether additional profiling is enabled
- * @param outputDir directory used to export benchmark outputs
- */
+/** Shared configuration for all benchmark runners. */
 public record BenchmarkConfig(
         ImplementationType implementation,
         int balls,
@@ -37,12 +21,7 @@ public record BenchmarkConfig(
     public static final int DEFAULT_BALLS = 100;
     public static final int DEFAULT_THREADS = Math.max(1, Runtime.getRuntime().availableProcessors());
     public static final int DEFAULT_STEPS = 600;
-    /**
-     * Canonical deterministic seed shared by the benchmark entry points.
-     *
-     * <p>This matches the workload catalog seed so the direct runners and the
-     * suite produce comparable snapshots without requiring a seed override.
-     */
+    /** Canonical deterministic seed shared by the benchmark entry points. */
     public static final long DEFAULT_SEED = 42L;
     public static final int DEFAULT_WARMUP_RUNS = 2;
     public static final int DEFAULT_MEASURED_RUNS = 5;
@@ -66,11 +45,7 @@ public record BenchmarkConfig(
     private static final int TASK_PROFILING_REPEATS = 2;
     private static final int PROFILE_BALLS = 1_600;
 
-    /**
-     * Creates a default headless benchmark configuration.
-     *
-     * @return default benchmark configuration
-     */
+    /** Creates the default headless benchmark configuration. */
     public static BenchmarkConfig defaults() {
         return new BenchmarkConfig(
                 ImplementationType.SEQUENTIAL,
@@ -85,12 +60,7 @@ public record BenchmarkConfig(
                 DEFAULT_OUTPUT_DIR);
     }
 
-    /**
-     * Returns the default benchmark matrix used by the report-oriented headless
-     * comparisons.
-     *
-     * @return list of comparable benchmark configurations
-     */
+    /** Returns the report-oriented benchmark matrix. */
     public static List<BenchmarkConfig> defaultMatrix() {
         var configs = new ArrayList<BenchmarkConfig>();
         for (var balls : List.of(100, 500, 1_000, 1_500, 2_000, 2_500)) {
@@ -124,11 +94,7 @@ public record BenchmarkConfig(
         return List.copyOf(configs);
     }
 
-    /**
-     * Default configuration for the standalone sequential physics benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the standalone sequential physics benchmark config. */
     public static BenchmarkConfig physicsBenchmarkDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.SEQUENTIAL)
@@ -137,11 +103,7 @@ public record BenchmarkConfig(
                 .withWarmupRuns(0);
     }
 
-    /**
-     * Default configuration for the sequential gameplay benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the sequential gameplay benchmark config. */
     public static BenchmarkConfig sequentialGameDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.SEQUENTIAL)
@@ -151,11 +113,7 @@ public record BenchmarkConfig(
                 .withWarmupRuns(0);
     }
 
-    /**
-     * Default configuration for the threaded physics benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the threaded physics benchmark config. */
     public static BenchmarkConfig threadedPhysicsDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.THREADS)
@@ -165,11 +123,7 @@ public record BenchmarkConfig(
                 .withWarmupRuns(0);
     }
 
-    /**
-     * Default configuration for the task-based physics benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the task-based physics benchmark config. */
     public static BenchmarkConfig taskBasedPhysicsDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.EXECUTOR)
@@ -179,11 +133,7 @@ public record BenchmarkConfig(
                 .withMeasuredRuns(TASK_VS_THREADED_REPEATS);
     }
 
-    /**
-     * Default configuration for the task-vs-threaded comparison benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the task-vs-threaded comparison config. */
     public static BenchmarkConfig taskVsThreadedDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.THREADS)
@@ -193,11 +143,7 @@ public record BenchmarkConfig(
                 .withMeasuredRuns(TASK_VS_THREADED_REPEATS);
     }
 
-    /**
-     * Default configuration for the complete comparison benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the complete comparison benchmark config. */
     public static BenchmarkConfig completeComparisonDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.SEQUENTIAL)
@@ -207,11 +153,7 @@ public record BenchmarkConfig(
                 .withMeasuredRuns(COMPLETE_BENCHMARK_REPEATS);
     }
 
-    /**
-     * Default configuration for the threaded profiling benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the threaded profiling benchmark config. */
     public static BenchmarkConfig threadedProfilingDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.THREADS)
@@ -221,11 +163,7 @@ public record BenchmarkConfig(
                 .withWarmupRuns(0);
     }
 
-    /**
-     * Default configuration for the task-based profiling benchmark.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the task-based profiling benchmark config. */
     public static BenchmarkConfig taskProfilingDefaults() {
         return defaults()
                 .withImplementation(ImplementationType.EXECUTOR)
@@ -235,11 +173,7 @@ public record BenchmarkConfig(
                 .withWarmupRuns(TASK_PROFILING_WARMUP);
     }
 
-    /**
-     * Default configuration for the headless simulation runner.
-     *
-     * @return benchmark configuration
-     */
+    /** Creates the headless simulation runner config. */
     public static BenchmarkConfig headlessSimulationDefaults() {
         return defaults();
     }
@@ -268,20 +202,12 @@ public record BenchmarkConfig(
         }
     }
 
-    /**
-     * Returns the effective worker count for the selected implementation.
-     *
-     * @return worker count actually used by the runtime
-     */
+    /** Returns the worker count actually used by the runtime. */
     public int effectiveThreads() {
         return implementation == ImplementationType.SEQUENTIAL ? 1 : threads;
     }
 
-    /**
-     * Produces a compact machine-readable representation of the configuration.
-     *
-     * @return config fields formatted as key=value pairs
-     */
+    /** Returns the config as compact key=value pairs. */
     public String toKeyValueString() {
         return String.format(Locale.US,
                 "implementation=%s balls=%d threads=%d steps=%d seed=%d warmup_runs=%d measured_runs=%d gui_enabled=%s instrumentation_enabled=%s output_dir=%s",
@@ -297,115 +223,57 @@ public record BenchmarkConfig(
                 outputDir);
     }
 
-    /**
-     * Creates a copy with a different implementation.
-     *
-     * @param value execution strategy
-     * @return updated configuration
-     */
+    /** Returns a copy with a different implementation. */
     public BenchmarkConfig withImplementation(ImplementationType value) {
         return new BenchmarkConfig(value, balls, threads, steps, seed, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different ball count.
-     *
-     * @param value ball count
-     * @return updated configuration
-     */
+    /** Returns a copy with a different ball count. */
     public BenchmarkConfig withBalls(int value) {
         return new BenchmarkConfig(implementation, value, threads, steps, seed, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different thread count.
-     *
-     * @param value thread count
-     * @return updated configuration
-     */
+    /** Returns a copy with a different thread count. */
     public BenchmarkConfig withThreads(int value) {
         return new BenchmarkConfig(implementation, balls, value, steps, seed, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different step count.
-     *
-     * @param value step count
-     * @return updated configuration
-     */
+    /** Returns a copy with a different step count. */
     public BenchmarkConfig withSteps(int value) {
         return new BenchmarkConfig(implementation, balls, threads, value, seed, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different seed.
-     *
-     * @param value random seed
-     * @return updated configuration
-     */
+    /** Returns a copy with a different seed. */
     public BenchmarkConfig withSeed(long value) {
         return new BenchmarkConfig(implementation, balls, threads, steps, value, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different warmup count.
-     *
-     * @param value warmup run count
-     * @return updated configuration
-     */
+    /** Returns a copy with a different warmup count. */
     public BenchmarkConfig withWarmupRuns(int value) {
         return new BenchmarkConfig(implementation, balls, threads, steps, seed, value, measuredRuns, guiEnabled, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different measured-run count.
-     *
-     * @param value measured run count
-     * @return updated configuration
-     */
+    /** Returns a copy with a different measured-run count. */
     public BenchmarkConfig withMeasuredRuns(int value) {
         return new BenchmarkConfig(implementation, balls, threads, steps, seed, warmupRuns, value, guiEnabled, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different GUI flag.
-     *
-     * @param value whether GUI rendering is enabled
-     * @return updated configuration
-     */
+    /** Returns a copy with a different GUI flag. */
     public BenchmarkConfig withGuiEnabled(boolean value) {
         return new BenchmarkConfig(implementation, balls, threads, steps, seed, warmupRuns, measuredRuns, value, instrumentationEnabled, outputDir);
     }
 
-    /**
-     * Creates a copy with a different instrumentation flag.
-     *
-     * @param value whether instrumentation is enabled
-     * @return updated configuration
-     */
+    /** Returns a copy with a different instrumentation flag. */
     public BenchmarkConfig withInstrumentationEnabled(boolean value) {
         return new BenchmarkConfig(implementation, balls, threads, steps, seed, warmupRuns, measuredRuns, guiEnabled, value, outputDir);
     }
 
-    /**
-     * Creates a copy with a different output directory.
-     *
-     * @param value export directory
-     * @return updated configuration
-     */
+    /** Returns a copy with a different output directory. */
     public BenchmarkConfig withOutputDir(Path value) {
         return new BenchmarkConfig(implementation, balls, threads, steps, seed, warmupRuns, measuredRuns, guiEnabled, instrumentationEnabled, value);
     }
 
-    /**
-     * Returns the resolved worker-count matrix used for parallel benchmark runs.
-     *
-     * <p>The matrix includes the common small counts plus the machine-specific
-     * counts resolved at runtime, with duplicates removed and invalid counts
-     * filtered out.
-     *
-     * @return resolved worker-count matrix
-     */
+    /** Returns the worker-count matrix used by parallel benchmark runs. */
     public static List<Integer> workerMatrix() {
         int available = Runtime.getRuntime().availableProcessors();
         var threads = new java.util.LinkedHashSet<Integer>();
@@ -423,20 +291,13 @@ public record BenchmarkConfig(
         }
     }
 
-    /**
-     * Supported benchmark execution strategies.
-     */
+    /** Supported benchmark execution strategies. */
     public enum ImplementationType {
         SEQUENTIAL,
         THREADS,
         EXECUTOR;
 
-        /**
-         * Parses a textual implementation name.
-         *
-         * @param value implementation token
-         * @return parsed implementation type
-         */
+        /** Parses a textual implementation name. */
         public static ImplementationType parse(String value) {
             if (value == null) {
                 throw new IllegalArgumentException("implementation must not be null");

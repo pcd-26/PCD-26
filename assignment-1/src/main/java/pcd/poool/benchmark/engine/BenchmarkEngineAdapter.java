@@ -1,6 +1,7 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.engine;
 
 import java.util.OptionalInt;
+import pcd.poool.benchmark.core.BenchmarkRunner;
 import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.PhysicsStepper;
 

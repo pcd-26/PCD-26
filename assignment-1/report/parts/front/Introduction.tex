@@ -1,0 +1,13 @@
+\section{Introduction}
+
+Assignment 1 requires the development of two concurrent versions of \emph{Poool}: one based on platform threads and one based on the Executor framework. A sequential version is also provided as a correctness and performance baseline. The assignment additionally requires performance analysis and model checking with Java PathFinder (JPF).
+
+This report presents the three implemented execution strategies:
+
+\begin{itemize}
+    \item \textbf{Sequential baseline}: single-threaded reference implementation;
+    \item \textbf{Platform-thread version}: concurrent implementation based on long-lived platform-thread workers and explicit synchronization;
+    \item \textbf{Task-based version}: concurrent implementation based on a fixed thread pool, tasks, and \texttt{Future} barriers.
+\end{itemize}
+
+The three versions share the same domain model, game rules, graphical view, and immutable snapshot representation. They differ mainly in the execution strategy used by the runtime and the physics engine.

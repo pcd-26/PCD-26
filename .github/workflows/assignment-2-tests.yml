@@ -53,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -64,9 +66,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          stamp="$(date -u +'%Y%m%d-%H%M%S')-r${GITHUB_RUN_NUMBER}-a${GITHUB_RUN_ATTEMPT}"
-          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
-          echo "zip_name=Assignment-02-$stamp.zip" >> "$GITHUB_OUTPUT"
+          echo "zip_name=Assignment-02.zip" >> "$GITHUB_OUTPUT"
 
       - name: Install packaging tools
         run: |
@@ -118,3 +118,14 @@ jobs:
         with:
           name: assignment-02-package
           path: ${{ steps.delivery_meta.outputs.zip_name }}
+
+      - name: Publish release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: latest
+          DELIVERY_ZIP: ${{ steps.delivery_meta.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          gh release upload "$RELEASE_TAG" "$DELIVERY_ZIP" --clobber
