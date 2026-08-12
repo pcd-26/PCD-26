@@ -7,7 +7,6 @@ import io.vertx.core.file.FileSystem;
 import pcd.fsstat.common.FSReport;
 import pcd.fsstat.common.FSReportJob;
 import pcd.fsstat.common.FSReportListener;
-import pcd.fsstat.common.FSUtils;
 
 import java.io.File;
 import java.util.Set;
@@ -40,7 +39,10 @@ public class EventLoopFSStat {
 
         /** Creates counters for all normal bands plus the overflow band. */
         EventLoopScanState(int nb) {
-            fileCountsPerBand = FSUtils.initAtomicLongs(nb + 1);
+            fileCountsPerBand = new AtomicLong[nb + 1];
+            for (int bandIndex = 0; bandIndex <= nb; bandIndex++) {
+                fileCountsPerBand[bandIndex] = new AtomicLong(0);
+            }
         }
 
         /** Marks the scan as cancelled. */
@@ -66,7 +68,7 @@ public class EventLoopFSStat {
             if (scanState.cancelled() || scanState.closed.get()) {
                 return;
             }
-            listener.onUpdate(FSUtils.createReport(directory, maxFS, nb, scanState.fileCountsPerBand, scanState.totalFileCount, scanStartTime));
+            listener.onUpdate(createReport(directory, maxFS, nb, scanState, scanStartTime));
         });
 
         // Centralize final completion and Vert.x shutdown once all async tasks drain.
@@ -76,7 +78,7 @@ public class EventLoopFSStat {
                     vertx.cancelTimer(scanState.progressTimerId);
                 }
                 if (!scanState.cancelled()) {
-                    listener.onCompleted(FSUtils.createReport(directory, maxFS, nb, scanState.fileCountsPerBand, scanState.totalFileCount, scanStartTime));
+                    listener.onCompleted(createReport(directory, maxFS, nb, scanState, scanStartTime));
                 }
                 vertx.close();
             }
@@ -212,6 +214,28 @@ public class EventLoopFSStat {
             }
             return new PathValidationResult(PathValidationStatus.VALID);
         });
+    }
+
+    /** Builds a report from the event-loop counters. */
+    private static FSReport createReport(
+        String directory,
+        long maxFS,
+        int nb,
+        EventLoopScanState scanState,
+        long scanStartTime
+    ) {
+        long[] bands = new long[scanState.fileCountsPerBand.length];
+        for (int bandIndex = 0; bandIndex < scanState.fileCountsPerBand.length; bandIndex++) {
+            bands[bandIndex] = scanState.fileCountsPerBand[bandIndex].get();
+        }
+        return new FSReport(
+            directory,
+            maxFS,
+            nb,
+            bands,
+            scanState.totalFileCount.get(),
+            System.currentTimeMillis() - scanStartTime
+        );
     }
 
     /** Marks one async task done and finishes the scan when no tasks remain. */

@@ -86,14 +86,6 @@ implementations. It currently exposes:
 The internal model always stays in bytes; the enum is only used by the CLI and
 GUI for parsing and formatting.
 
-### `FSUtils`
-
-`FSUtils` holds small helpers that are shared across the three engines:
-
-- conversion from mutable counters to primitive arrays;
-- report construction with elapsed time;
-- `AtomicLong` array initialization for the event-loop implementation.
-
 ---
 
 ## 4. Implementation Notes
