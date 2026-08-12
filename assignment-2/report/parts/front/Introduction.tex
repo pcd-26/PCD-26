@@ -1,7 +1,7 @@
 \section{Introduction}
 
 Assignment 2 asks for an asynchronous library, \texttt{FSStatLib}, that scans a
-directory recursively and returns a report with two values:
+directory recursively and returns a report with two main values:
 
 \begin{itemize}[leftmargin=*]
   \item the total number of regular files found in the directory tree;
@@ -18,6 +18,13 @@ The project provides three implementations of the same behaviour:
   \item an Event-Loop version based on Vert.x.
 \end{itemize}
 
-The repository also contains a command-line interface, a small Swing GUI, and a
-test suite that checks correctness, robustness, and cross-implementation
-consistency.
+The three versions are not simple wrappers around a shared scanner. They are
+implemented separately in order to preserve the programming discipline of each
+paradigm: imperative asynchronous code for virtual threads, stream-based
+composition for RxJava, and callback-driven asynchronous I/O for Vert.x.
+
+The repository also contains a command-line interface and a Swing GUI. The GUI
+implements the optional interactive extension: it can start a scan, receive
+progressive updates, and cancel a running computation. A JUnit suite checks
+correctness, robustness, and cross-implementation consistency on deterministic
+filesystem fixtures.

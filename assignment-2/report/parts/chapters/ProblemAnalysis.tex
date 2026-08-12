@@ -3,8 +3,14 @@
 
 The assignment is concurrency-oriented because the scan is naturally
 asynchronous and because the implementation must expose three different
-programming styles. The computation is simple in principle, but the filesystem
-adds several sources of complexity:
+programming styles. The computation is simple in principle: visit every regular
+file, read its size, increment one total counter, and increment one histogram
+band. The difficulty comes from doing this over a real filesystem while keeping
+the caller responsive.
+
+\subsection{Filesystem and Concurrency Constraints}
+
+The filesystem adds several sources of complexity:
 
 \begin{itemize}[leftmargin=*]
   \item traversal is recursive and may reach deep directory hierarchies;
@@ -13,6 +19,27 @@ adds several sources of complexity:
   \item invalid paths, unreadable directories, symbolic links, and special files
   must not crash the program;
   \item the same logical result must be produced by all three paradigms.
+\end{itemize}
+
+The scan is mainly I/O-bound. Parallelism can improve responsiveness and can
+overlap independent directory operations, but it also introduces coordination
+costs. A correct implementation must therefore define when a directory is
+considered visited, how partial counters are updated, how completion is
+detected, and what cancellation means when work is already in flight.
+
+\subsection{Correctness Properties}
+
+The expected behaviour can be summarized through four properties:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Safety}: only regular files are counted and every counted file
+  contributes to exactly one size band;
+  \item \textbf{Consistency}: the three implementations must produce the same
+  report on the same stable directory tree;
+  \item \textbf{Responsiveness}: progress updates and GUI interactions must not
+  be blocked by the traversal;
+  \item \textbf{Clean termination}: completion, errors, and cancellation must
+  release the waiting CLI or restore the GUI state.
 \end{itemize}
 
 The design keeps the report model independent from the execution strategy. This
@@ -35,3 +62,12 @@ model:
 
 The report stores the band counts in a defensive copy so that callers cannot
 mutate it accidentally.
+
+\subsection{Band Semantics}
+
+The range \texttt{[0, MaxFS]} is divided into \texttt{NB} regular bands and an
+additional overflow band stores files larger than \texttt{MaxFS}. Boundary
+values are handled deterministically: a file exactly equal to \texttt{MaxFS}
+belongs to the last regular band, while \texttt{MaxFS + 1} belongs to the
+overflow band. This rule is centralized in \texttt{FSReport.getBandIndex()} and
+is tested explicitly with boundary-sized files.

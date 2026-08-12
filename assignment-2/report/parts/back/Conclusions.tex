@@ -17,3 +17,17 @@ requirements of the assignment:
 The codebase keeps the report model and the filesystem logic separate from the
 execution strategy, which makes the three implementations comparable while
 preserving their respective programming styles.
+
+The most important design result is that the same problem is solved through
+three genuinely different concurrency models: task-oriented recursion with
+virtual threads, stream composition with RxJava, and callback-driven
+asynchronous I/O with Vert.x. The implementations therefore demonstrate not
+only that the required report can be computed, but also how ownership,
+progress, cancellation, and completion change when the concurrency paradigm
+changes.
+
+The optional interactive part is covered by the Swing GUI, which keeps the UI
+responsive by routing updates through the Event Dispatch Thread and by exposing
+a cancel action for all three paradigms. The validation suite confirms that the
+engines agree on deterministic datasets and remain robust under common
+filesystem edge cases.
