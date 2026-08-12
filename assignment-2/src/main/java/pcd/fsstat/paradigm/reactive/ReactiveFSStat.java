@@ -6,6 +6,9 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import pcd.fsstat.common.FSReport;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** Computes directory file statistics reactively using RxJava 3. */
@@ -81,7 +84,7 @@ public class ReactiveFSStat {
     private static Observable<File> scanFiles(File rootDirectory) {
         return Observable.create(emitter -> {
             try {
-                java.util.Set<String> visitedDirectories = new java.util.HashSet<>();
+                Set<String> visitedDirectories = new HashSet<>();
                 emitDirectoryContents(rootDirectory, emitter, visitedDirectories);
                 if (!emitter.isDisposed()) {
                     emitter.onComplete();
@@ -95,7 +98,7 @@ public class ReactiveFSStat {
     }
 
     /** Walks directories recursively and emits regular files while respecting cancellation. */
-    private static void emitDirectoryContents(File directory, ObservableEmitter<File> emitter, java.util.Set<String> visitedDirectories) {
+    private static void emitDirectoryContents(File directory, ObservableEmitter<File> emitter, Set<String> visitedDirectories) {
         if (emitter.isDisposed()) {
             return;
         }
@@ -106,7 +109,7 @@ public class ReactiveFSStat {
             if (!visitedDirectories.add(canonicalPath)) {
                 return;
             }
-        } catch (java.io.IOException ignored) {
+        } catch (IOException ignored) {
             return;
         }
 

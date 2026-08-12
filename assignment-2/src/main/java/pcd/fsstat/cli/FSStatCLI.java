@@ -7,6 +7,8 @@ import pcd.fsstat.paradigm.eventloop.EventLoopFSStat;
 import pcd.fsstat.paradigm.reactive.ReactiveFSStat;
 import pcd.fsstat.paradigm.virtualthreads.VirtualThreadsFSStat;
 
+import io.reactivex.rxjava3.schedulers.Schedulers;
+
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
 
@@ -100,7 +102,7 @@ public class FSStatCLI {
         }
 
         // Stop RxJava worker threads when the reactive backend was used.
-        io.reactivex.rxjava3.schedulers.Schedulers.shutdown();
+        Schedulers.shutdown();
         System.exit(0);
     }
 
