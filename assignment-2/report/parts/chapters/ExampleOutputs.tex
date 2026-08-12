@@ -36,3 +36,21 @@ implementations.
 Total files: 5
 Bands: [1, 1, 1, 1, 1]
 \end{verbatim}
+
+\subsection{CLI Shape}
+
+A typical CLI run prints the selected configuration first, then rewrites the
+progress line while reports are produced, and finally prints a compact table:
+
+\begin{verbatim}
+Starting CLI scan using paradigm: VT
+Directory: /path/to/root
+Max Size Threshold: 10.0 MiB (10485760 bytes)
+Number of bands: 5
+...
+FINAL FILE SIZE DISTRIBUTION REPORT
+Size Range Band                | File Count
+\end{verbatim}
+
+The same report object drives the GUI table, so the presentation changes but
+the computed data does not.

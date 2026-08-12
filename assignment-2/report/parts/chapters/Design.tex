@@ -15,8 +15,9 @@ The three implementations are intentionally separate:
 \end{itemize}
 
 The CLI and GUI can select the implementation at runtime. Both user interfaces
-share the same argument parsing and report rendering logic, while the scan
-engine changes underneath.
+use the same report model and the same conceptual callback contract, while the
+scan engine changes underneath. The CLI renders reports as text; the GUI
+renders the same data as labels and a table.
 
 \begin{table}[h]
 \centering
@@ -36,8 +37,9 @@ Event-Loop & Shared asynchronous state guarded by atomics and a visited-set & Ve
 \subsection{Virtual Threads Strategy}
 
 The Virtual Threads implementation uses a dedicated virtual-thread executor.
-Traversal is recursive: every subdirectory is scheduled as a separate task and
-completion is tracked with:
+Traversal is recursive: every subdirectory is scheduled as a separate task.
+This keeps the code close to a normal recursive walk while allowing many
+blocking filesystem operations to coexist cheaply. Completion is tracked with:
 
 \begin{itemize}[leftmargin=*]
   \item a shared cancellation flag;
@@ -50,6 +52,12 @@ completion is tracked with:
 The implementation uses canonical paths to avoid revisiting the same directory
 more than once. File sizes are measured through \texttt{File.length()} and each
 regular file is assigned to one band through \texttt{FSReport.getBandIndex()}.
+
+Counters are shared because many virtual-thread tasks may discover files at the
+same time. The total count and band counters use \texttt{LongAdder}, which is a
+good fit for frequent concurrent increments. A simple \texttt{long} would lose
+updates, while a single heavily contended atomic counter would scale less well
+under many concurrent increments.
 
 \subsection{Reactive Strategy}
 
@@ -74,6 +82,11 @@ This implementation deliberately keeps the directory walk sequential inside the
 observable generator. The goal is to keep the reactive control flow explicit
 and simple, not to emulate the virtual-thread scheduling strategy.
 
+Because RxJava completion does not carry the last value, the CLI and GUI keep
+the latest emitted \texttt{FSReport}. When the stream completes, that report is
+forwarded as the final result through the same listener abstraction used by the
+other implementations.
+
 \subsection{Event-Loop Strategy}
 
 The Event-Loop version uses Vert.x to keep the traversal asynchronous.
@@ -97,6 +110,30 @@ The directory tree is explored with asynchronous \texttt{readDir()} and
 \texttt{props()} calls. Completion is detected when the outstanding task
 counter reaches zero.
 
+Unlike the virtual-thread version, the event-loop implementation must be
+careful not to block the event loop with canonical path checks. For this reason
+validation is executed with \texttt{executeBlocking}. The design also guards
+Vert.x shutdown with an atomic flag so that cancellation and normal completion
+cannot close the same instance twice.
+
+\subsection{Cancellation and Progress Updates}
+
+The three implementations expose the same user-visible behaviour, but
+cancellation is implemented differently:
+
+\begin{itemize}[leftmargin=*]
+  \item Virtual Threads set a cancellation flag, interrupt the reporter, and
+  stop the virtual-thread executor;
+  \item RxJava disposes the subscription, after which the generator observes
+  \texttt{isDisposed()} and stops emitting files;
+  \item Vert.x sets a cancellation flag, cancels the progress timer, and closes
+  the Vert.x instance when pending callbacks have drained.
+\end{itemize}
+
+Progress is deliberately throttled. Reports are emitted about every 100 ms,
+which avoids flooding the console or the Swing Event Dispatch Thread while
+still making long scans observable.
+
 \subsection{User Interfaces}
 
 The CLI accepts:
@@ -113,3 +150,9 @@ The CLI accepts:
 The GUI exposes the same parameters and adds start/cancel controls. Callback
 delivery is marshalled back onto the Swing EDT with
 \texttt{SwingUtilities.invokeLater}.
+
+For Virtual Threads and Vert.x, the GUI stores the returned
+\texttt{FSReportJob}. For RxJava, it stores the \texttt{Disposable}
+subscription. The cancel button checks both handles and cancels whichever one
+is active. This keeps the GUI independent from the internal details of the
+selected paradigm.

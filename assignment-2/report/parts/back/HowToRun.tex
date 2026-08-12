@@ -1,0 +1,48 @@
+\clearpage
+\section{How to Run}
+
+The project is a Maven module targeting Java 21.
+
+\subsection{Tests}
+
+The full validation suite can be executed with:
+
+\begin{verbatim}
+mvn -f assignment-2/pom.xml test
+\end{verbatim}
+
+The same command is used by CI for Assignment 2.
+
+\subsection{CLI}
+
+The CLI accepts the target directory, the maximum file-size threshold, the
+number of bands, and optionally a size unit and paradigm:
+
+\begin{verbatim}
+./assignment-2/run-cli.sh . 10 5 MiB vt
+./assignment-2/run-cli.sh . 10 5 MiB rx
+./assignment-2/run-cli.sh . 10 5 MiB loop
+\end{verbatim}
+
+On Windows, the equivalent PowerShell script is:
+
+\begin{verbatim}
+.\assignment-2\run-cli.ps1 . 10 5 MiB vt
+\end{verbatim}
+
+\subsection{GUI}
+
+The Swing demo can be launched with:
+
+\begin{verbatim}
+./assignment-2/run-gui.sh
+\end{verbatim}
+
+or, on Windows:
+
+\begin{verbatim}
+.\assignment-2\run-gui.ps1
+\end{verbatim}
+
+The GUI exposes the same scan parameters as the CLI and adds interactive start
+and cancel controls.

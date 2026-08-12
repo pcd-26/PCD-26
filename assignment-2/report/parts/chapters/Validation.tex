@@ -30,7 +30,20 @@ report on:
   them.
 \end{itemize}
 
-The final verification run executed \texttt{25} tests and all of them passed.
+The final verification run executed \texttt{26} tests and all of them passed.
+
+\subsection{Cross-Implementation Oracle}
+
+The main correctness strategy is comparative. For deterministic fixtures, the
+Virtual Threads result is compared with the Reactive and Event-Loop results.
+The comparison checks the total file count and every histogram band. This is
+useful because the implementations have different control structures: if all
+three agree on a non-trivial tree, it is unlikely that a scheduling-specific
+mistake is hidden in one version.
+
+The tests also validate the shared model directly: band boundaries, duration
+formatting, size-unit parsing, and formatted labels are checked independently
+from the filesystem traversal.
 
 \subsection{Benchmark Support}
 
@@ -52,3 +65,11 @@ Some checks depend on the host environment:
 
 These limitations are documented in the validation notes and do not affect the
 core functional behaviour of the project.
+
+\subsection{CI-Relevant Stabilization}
+
+Cancellation tests are written to avoid depending on machine speed. In
+particular, the Event-Loop cancellation test cancels immediately after the job
+handle is returned, instead of waiting for an arbitrary delay and hoping the
+scan is still running. This makes the test stable on both local machines and
+GitHub Actions.
