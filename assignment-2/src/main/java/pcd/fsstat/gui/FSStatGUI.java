@@ -349,6 +349,8 @@ public class FSStatGUI extends JFrame {
 
     /** Starts an RxJava scan from the GUI and keeps its subscription for cancellation. */
     private void launchReactiveScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
+        FSReportListener reportListener = createGuiListener(sizeUnit);
+
         // Store the latest update because Rx completion has no report argument.
         final FSReport[] latestReport = new FSReport[1];
 
@@ -357,17 +359,17 @@ public class FSStatGUI extends JFrame {
             .subscribe(
                 report -> {
                     latestReport[0] = report;
-                    SwingUtilities.invokeLater(() -> updateResultsView(report, sizeUnit));
+                    reportListener.onUpdate(report);
                 },
-                error -> SwingUtilities.invokeLater(() -> failScan(error.getMessage())),
-                () -> SwingUtilities.invokeLater(() -> {
+                reportListener::onError,
+                () -> {
                     // Very fast empty scans may complete with no intermediate update.
                     if (latestReport[0] != null) {
-                        finishScan("Scan completed in " + latestReport[0].formatDuration() + ".");
+                        reportListener.onCompleted(latestReport[0]);
                     } else {
-                        finishScan("Scan completed.");
+                        SwingUtilities.invokeLater(() -> finishScan("Scan completed."));
                     }
-                })
+                }
             );
     }
 

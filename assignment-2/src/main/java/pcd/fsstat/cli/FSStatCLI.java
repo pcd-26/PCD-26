@@ -1,6 +1,5 @@
 package pcd.fsstat.cli;
 
-import io.reactivex.rxjava3.core.Observable;
 import pcd.fsstat.common.FSReport;
 import pcd.fsstat.common.FSReportListener;
 import pcd.fsstat.common.SizeUnit;
@@ -183,18 +182,9 @@ public class FSStatCLI {
         FSReportListener reportListener,
         CountDownLatch completionSignal
     ) {
-        subscribeReactiveScan(ReactiveFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands), reportListener, completionSignal);
-    }
-
-    /** Subscribes once to the Rx stream and forwards updates through the common listener interface. */
-    static void subscribeReactiveScan(
-        Observable<FSReport> reportStream,
-        FSReportListener reportListener,
-        CountDownLatch completionSignal
-    ) {
         // Rx completion carries no value, so keep the latest emitted report.
         final FSReport[] latestReport = new FSReport[1];
-        reportStream.subscribe(
+        ReactiveFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands).subscribe(
             report -> {
                 latestReport[0] = report;
                 reportListener.onUpdate(report);
