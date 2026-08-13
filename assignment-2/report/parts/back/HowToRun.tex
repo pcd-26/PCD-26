@@ -1,48 +1,47 @@
 \clearpage
 \section{How to Run}
 
-The project is a Maven module targeting Java 21.
+\textbf{Prerequisites:} Java 21 and Maven.
 
 \subsection{Tests}
 
-The full validation suite can be executed with:
+Run the full validation suite with:
 
 \begin{verbatim}
 mvn -f assignment-2/pom.xml test
 \end{verbatim}
 
-The same command is used by CI for Assignment 2.
-
 \subsection{CLI}
 
-The CLI accepts the target directory, the maximum file-size threshold, the
-number of bands, and optionally a size unit and paradigm:
+The CLI entry point is \texttt{pcd.fsstat.cli.FSStatCLI}. The arguments are:
 
 \begin{verbatim}
-./assignment-2/run-cli.sh . 10 5 MiB vt
-./assignment-2/run-cli.sh . 10 5 MiB rx
-./assignment-2/run-cli.sh . 10 5 MiB loop
+<directory> <maximumFileSize> <numberOfBands> [sizeUnit] [paradigm]
 \end{verbatim}
 
-On Windows, the equivalent PowerShell script is:
+The last argument selects the implementation: \texttt{vt}, \texttt{rx}, or
+\texttt{loop}.
 
+From \texttt{assignment-2}:
+
+\small
 \begin{verbatim}
-.\assignment-2\run-cli.ps1 . 10 5 MiB vt
+mvn exec:java "-Dexec.mainClass=pcd.fsstat.cli.FSStatCLI" "-Dexec.args=. 10 5 MiB vt"
 \end{verbatim}
+\normalsize
+
+Replace \texttt{vt} with \texttt{rx} or \texttt{loop} to run the other
+implementations.
 
 \subsection{GUI}
 
-The Swing demo can be launched with:
+The Swing entry point is \texttt{pcd.fsstat.gui.FSStatGUI}.
 
+\small
 \begin{verbatim}
-./assignment-2/run-gui.sh
+mvn exec:java "-Dexec.mainClass=pcd.fsstat.gui.FSStatGUI"
 \end{verbatim}
+\normalsize
 
-or, on Windows:
-
-\begin{verbatim}
-.\assignment-2\run-gui.ps1
-\end{verbatim}
-
-The GUI exposes the same scan parameters as the CLI and adds interactive start
-and cancel controls.
+The GUI exposes the same scan parameters as the CLI and adds start and cancel
+controls.
