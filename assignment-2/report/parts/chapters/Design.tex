@@ -3,26 +3,27 @@
 
 \subsection{Overview}
 
-The three implementations are intentionally separate:
+The design keeps the three implementations \textbf{intentionally separate}.
+This follows the assignment requirement: each version should highlight its own
+programming discipline instead of sharing a common traversal engine.
 
 \begin{itemize}[leftmargin=*]
-  \item the Virtual Threads version uses imperative recursion and a task per
+  \item \textbf{Virtual threads}: imperative recursion and one task per
   directory;
-  \item the Reactive version models the scan as a stream of files and uses an
+  \item \textbf{Reactive}: an \texttt{Observable<File>} stream and an
   immutable accumulator;
-  \item the Event-Loop version uses Vert.x callbacks and asynchronous file
+  \item \textbf{Event-loop}: Vert.x callbacks and asynchronous file
   system operations.
 \end{itemize}
 
-The CLI and GUI can select the implementation at runtime. Both user interfaces
-use the same report model and the same conceptual callback contract, while the
-scan engine changes underneath. The CLI renders reports as text; the GUI
-renders the same data as labels and a table.
+The CLI and GUI can select the implementation at runtime. The public result is
+always the same \textbf{\texttt{FSReport}} model, while the scheduling and
+traversal strategy change underneath.
 
 \subsection{Library API}
 
-The asynchronous operation \texttt{getFSReport} is exposed by the three
-implementation classes:
+The asynchronous operation \textbf{\texttt{getFSReport}} is exposed by the
+three implementation classes:
 
 \begin{itemize}[leftmargin=*]
   \item \texttt{EventLoopFSStat.getFSReport(...)} starts a Vert.x scan and
@@ -33,12 +34,11 @@ implementation classes:
   scan and returns an \texttt{FSReportJob} cancellation handle.
 \end{itemize}
 
-The imperative versions deliver intermediate updates, completion, and errors
-through an \texttt{FSReportListener}. The reactive version delivers the same
-logical information through \texttt{onNext}, \texttt{onComplete}, and
-\texttt{onError}. The API therefore follows the conventions of each paradigm
-while preserving the same logical result: a sequence of progress reports and a
-final filesystem statistics report.
+The imperative versions use an \textbf{\texttt{FSReportListener}} for progress,
+completion, and errors. The reactive version uses the standard RxJava signals:
+\textbf{\texttt{onNext}}, \textbf{\texttt{onComplete}}, and
+\textbf{\texttt{onError}}. In all cases, the logical result is the same: a
+sequence of progress reports and a final filesystem statistics report.
 
 \begin{table}[h]
 \centering
@@ -57,123 +57,99 @@ Event-Loop & Shared asynchronous state guarded by atomics and a visited-set & Ve
 
 \subsection{Virtual Threads Strategy}
 
-The Virtual Threads implementation uses a dedicated virtual-thread executor.
-Traversal is recursive: every subdirectory is scheduled as a separate task.
-This keeps the code close to a normal recursive walk while allowing many
-blocking filesystem operations to coexist cheaply. Completion is tracked with:
+The Virtual Threads implementation keeps the code close to a normal recursive
+filesystem walk. Every subdirectory is submitted as a separate virtual-thread
+task, so many blocking filesystem operations can coexist without requiring a
+large pool of platform threads.
+
+The strategy is based on:
 
 \begin{itemize}[leftmargin=*]
-  \item a shared cancellation flag;
-  \item an \texttt{AtomicInteger} task counter;
-  \item a \texttt{CountDownLatch} that releases the waiting thread when all work
-  is done;
-  \item a periodic reporting thread that emits intermediate snapshots.
+  \item \textbf{scheduling}: recursive task submission on a virtual-thread
+  executor;
+  \item \textbf{completion}: an \texttt{AtomicInteger} task counter and a
+  \texttt{CountDownLatch};
+  \item \textbf{state}: \texttt{LongAdder} counters for total files and bands;
+  \item \textbf{cycles}: canonical paths are used to avoid revisiting the same
+  directory;
+  \item \textbf{updates}: a periodic reporting thread emits intermediate
+  snapshots.
 \end{itemize}
 
-The implementation uses canonical paths to avoid revisiting the same directory
-more than once. File sizes are measured through \texttt{File.length()} and each
-regular file is assigned to one band through \texttt{FSReport.getBandIndex()}.
-
-Counters are shared because many virtual-thread tasks may discover files at the
-same time. The total count and band counters use \texttt{LongAdder}, which is a
-good fit for frequent concurrent increments. A simple \texttt{long} would lose
-updates, while a single heavily contended atomic counter would scale less well
-under many concurrent increments.
+This version is the most direct one to read: the control flow remains
+imperative, while virtual threads make the blocking filesystem calls cheap to
+schedule.
 
 \subsection{Reactive Strategy}
 
-The Reactive version uses RxJava 3 and follows a functional style.
+The Reactive version represents the traversal as a stream. The directory walk
+emits regular files through an \texttt{Observable<File>}; the Rx pipeline then
+turns that stream into report snapshots.
 
-The directory traversal is produced by an \texttt{Observable<File>}. The stream
-is then transformed into a sequence of immutable scan states with
-\texttt{scan(initial, ...)}. Each emitted state contains:
+The strategy is based on:
 
 \begin{itemize}[leftmargin=*]
-  \item the directory being scanned;
-  \item the threshold and the number of bands;
-  \item the current file count;
-  \item the current histogram;
-  \item the start time, used to compute elapsed time.
+  \item \textbf{scheduling}: the blocking walk is subscribed on
+  \texttt{Schedulers.io()};
+  \item \textbf{state}: an immutable \texttt{ReactiveScanState} accumulator;
+  \item \textbf{accumulation}: \texttt{scan(initial, ...)} creates a new state
+  after each emitted file;
+  \item \textbf{updates}: \texttt{sample(...)} limits progress reports to about
+  one every 100 ms;
+  \item \textbf{cancellation}: disposing the subscription stops further
+  emissions.
 \end{itemize}
 
-The stream is sampled every 100 ms so that user interfaces are not flooded with
-too many updates. Cancellation is handled by disposing the subscription.
-
-This implementation deliberately keeps the directory walk sequential inside the
-observable generator. The goal is to keep the reactive control flow explicit
-and simple, not to emulate the virtual-thread scheduling strategy.
-
-Because RxJava completion does not carry the last value, the CLI and GUI keep
-the latest emitted \texttt{FSReport}. When the stream completes, that report is
-forwarded as the final result through the same listener abstraction used by the
-other implementations.
+The directory walk is deliberately sequential inside the observable generator.
+The goal is to keep the reactive control flow explicit instead of turning this
+version into another task-based implementation.
 
 \subsection{Event-Loop Strategy}
 
-The Event-Loop version uses Vert.x to keep the traversal asynchronous.
+The Event-Loop version uses Vert.x callbacks and asynchronous filesystem
+operations. The event loop receives completion events from directory reads,
+file-property reads, timers, and blocking validations delegated with
+\texttt{executeBlocking}.
 
-The scan starts by creating a fresh \texttt{Vertx} instance and a periodic
-timer that produces progress updates. Blocking filesystem checks, such as
-canonical path validation, are wrapped in \texttt{executeBlocking} so they do
-not block the event loop.
-
-The asynchronous state tracks:
+The strategy is based on:
 
 \begin{itemize}[leftmargin=*]
-  \item the number of outstanding tasks;
-  \item a cancellation flag;
-  \item a set of canonical paths already visited;
-  \item the current totals and band counters;
-  \item the timer identifier used for progress updates.
+  \item \textbf{scheduling}: asynchronous \texttt{readDir()} and
+  \texttt{props()} calls;
+  \item \textbf{state}: shared counters, a cancellation flag, and a visited
+  canonical-path set;
+  \item \textbf{completion}: a pending-task counter detects when all callbacks
+  have drained;
+  \item \textbf{updates}: a Vert.x periodic timer emits progress snapshots;
+  \item \textbf{safety}: an atomic closed flag prevents closing Vert.x twice.
 \end{itemize}
 
-The directory tree is explored with asynchronous \texttt{readDir()} and
-\texttt{props()} calls. Completion is detected when the outstanding task
-counter reaches zero.
+This version has the most coordination code, but it best expresses the
+event-loop rule: callbacks continue the computation, and the event loop is not
+blocked by filesystem work.
 
-Unlike the virtual-thread version, the event-loop implementation must be
-careful not to block the event loop with canonical path checks. For this reason
-validation is executed with \texttt{executeBlocking}. The design also guards
-Vert.x shutdown with an atomic flag so that cancellation and normal completion
-cannot close the same instance twice.
-
-\subsection{Cancellation and Progress Updates}
+\subsection{Progress, Cancellation, and Interfaces}
 
 The three implementations expose the same user-visible behaviour, but
 cancellation is implemented differently:
 
 \begin{itemize}[leftmargin=*]
-  \item Virtual Threads set a cancellation flag, interrupt the reporter, and
+  \item \textbf{Virtual threads}: set a cancellation flag, interrupt the
+  reporter, and
   stop the virtual-thread executor;
-  \item RxJava disposes the subscription, after which the generator observes
+  \item \textbf{Reactive}: dispose the subscription, after which the generator
+  observes
   \texttt{isDisposed()} and stops emitting files;
-  \item Vert.x sets a cancellation flag, cancels the progress timer, and closes
+  \item \textbf{Event-loop}: set a cancellation flag, cancel the progress
+  timer, and close
   the Vert.x instance when pending callbacks have drained.
 \end{itemize}
 
-Progress is deliberately throttled. Reports are emitted about every 100 ms,
-which avoids flooding the console or the Swing Event Dispatch Thread while
-still making long scans observable.
+Progress is deliberately throttled to about one report every 100 ms. This keeps
+the CLI readable and avoids flooding the Swing Event Dispatch Thread.
 
-\subsection{User Interfaces}
-
-The CLI accepts:
-
-\begin{itemize}[leftmargin=*]
-  \item the target directory;
-  \item the maximum file size threshold;
-  \item the number of bands;
-  \item an optional size unit;
-  \item an optional paradigm selector (\texttt{vt}, \texttt{rx}, or
-  \texttt{loop}).
-\end{itemize}
-
-The GUI exposes the same parameters and adds start/cancel controls. Callback
-delivery is marshalled back onto the Swing EDT with
-\texttt{SwingUtilities.invokeLater}.
-
-For Virtual Threads and Vert.x, the GUI stores the returned
-\texttt{FSReportJob}. For RxJava, it stores the \texttt{Disposable}
-subscription. The cancel button checks both handles and cancels whichever one
-is active. This keeps the GUI independent from the internal details of the
-selected paradigm.
+The \textbf{CLI} accepts the directory, \texttt{MaxFS}, \texttt{NB}, an
+optional size unit, and an optional paradigm selector
+(\texttt{vt}, \texttt{rx}, or \texttt{loop}). The \textbf{GUI} exposes the same
+parameters and adds start/cancel controls. GUI updates are marshalled back onto
+the Swing EDT with \texttt{SwingUtilities.invokeLater}.

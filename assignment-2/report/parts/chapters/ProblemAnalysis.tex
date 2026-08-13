@@ -1,14 +1,19 @@
 \clearpage
 \section{Problem Analysis}
 
-\texttt{FSStatLib} has to compute a report from three input parameters:
-\textbf{\texttt{D}}, the root directory to scan; \textbf{\texttt{MaxFS}}, the
-maximum file size used as threshold; and \textbf{\texttt{NB}}, the number of
-regular size bands. The operation is simple as a sequential computation: visit
-each file, read its size, update the total count, and increment the
-corresponding histogram band. The concurrent aspect comes from doing this
-\textbf{asynchronously} over a real filesystem, while still supporting
-\textbf{progress updates} and \textbf{cancellation}.
+\texttt{FSStatLib} computes a report from three input parameters:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{D}}: the root directory to scan;
+  \item \textbf{\texttt{MaxFS}}: the maximum file size used as threshold;
+  \item \textbf{\texttt{NB}}: the number of regular size bands.
+\end{itemize}
+
+As a sequential computation, the problem is simple: visit each file, read its
+size, update the total count, and increment the corresponding histogram band.
+The relevant part for this assignment is doing the same work
+\textbf{asynchronously}, while still supporting \textbf{progress updates} and
+\textbf{cancellation}.
 
 \subsection{Filesystem Traversal}
 
@@ -35,9 +40,10 @@ than raw CPU throughput.
 
 \subsection{Concurrency Requirements}
 
-The asynchronous API must return control to the caller without waiting for the
-whole directory tree to be processed. At the same time, the implementation must
-coordinate work that may still be in progress. In particular, it must define:
+The asynchronous API must \textbf{return immediately} instead of waiting for
+the whole directory tree to be processed. At the same time, the implementation
+must coordinate work that may still be in progress. In particular, it must
+define:
 
 \begin{itemize}[leftmargin=*]
   \item \textbf{scheduling}: how new directory work is started;
@@ -52,9 +58,12 @@ coordinate work that may still be in progress. In particular, it must define:
 \end{itemize}
 
 These requirements are solved differently in the three versions:
-\textbf{callbacks and pending operations} in the event-loop implementation,
-\textbf{stream accumulation} in the reactive implementation, and
-\textbf{task coordination} in the virtual-thread implementation.
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Event-loop}: callbacks and pending asynchronous operations;
+  \item \textbf{Reactive}: stream accumulation;
+  \item \textbf{Virtual threads}: task coordination.
+\end{itemize}
 
 \subsection{Report Semantics}
 
@@ -79,7 +88,7 @@ links as ordinary files.
 
 \subsection{Correctness Properties}
 
-The expected behaviour can be summarized through five properties:
+The expected behaviour can be summarized through these properties:
 
 \begin{itemize}[leftmargin=*]
   \item \textbf{Safety}: every counted file contributes to exactly one size
