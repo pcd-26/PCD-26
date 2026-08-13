@@ -84,7 +84,8 @@ The expected behaviour can be summarized through five properties:
 \begin{itemize}[leftmargin=*]
   \item \textbf{Safety}: every counted file contributes to exactly one size
   band;
-  \item \textbf{Completeness}: every reachable regular file is counted once;
+  \item \textbf{Completeness}: on a stable directory tree, every reachable
+  regular file is counted once;
   \item \textbf{Consistency}: the three implementations produce the same report
   on the same stable directory tree;
   \item \textbf{Responsiveness}: progress updates and GUI interactions are not
