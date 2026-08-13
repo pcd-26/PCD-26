@@ -60,11 +60,11 @@ public class ReactiveFSStat {
 
     /** Builds a reactive report stream for the requested directory scan. */
     public static Observable<FSReport> getFSReport(String directory, long maximumFileSizeBytes, int numberOfBands) {
-        return Observable.defer(() -> {
+        return Observable.defer(() -> { // defer: build the real pipeline only when a subscriber starts the scan.
             // Validate lazily so errors are delivered through the Observable contract.
             File rootDirectory = new File(directory);
             if (!rootDirectory.exists() || !rootDirectory.isDirectory()) {
-                return Observable.error(new IllegalArgumentException("Target is not a valid directory: " + directory));
+                return Observable.error(new IllegalArgumentException("Target is not a valid directory: " + directory)); // error: terminate through onError instead of throwing immediately.
             }
             long scanStartTime = System.currentTimeMillis();
             ReactiveScanState initialState = new ReactiveScanState(
@@ -74,29 +74,30 @@ public class ReactiveFSStat {
                 scanStartTime
             );
 
-            // Convert emitted files into immutable report snapshots and throttle progress updates.
             return scanFiles(rootDirectory)
-                .subscribeOn(Schedulers.io())
-                .scan(initialState, ReactiveScanState::new)
-                .skip(1)
-                .defaultIfEmpty(initialState)
-                .map(ReactiveScanState::toReport)
-                .sample(100, TimeUnit.MILLISECONDS, true);
+                .subscribeOn(Schedulers.io()) // subscribeOn: run the blocking directory walk on RxJava's I/O scheduler.
+                .scan(initialState, (previousState, currentFile) -> { // scan: receive old state + emitted File, then return the next state.
+                    return new ReactiveScanState(previousState, currentFile);
+                })
+                .skip(1) // skip: remove the initial empty accumulator emitted before the first File.
+                .defaultIfEmpty(initialState) // defaultIfEmpty: still emit an empty state when the directory has no files.
+                .map(state -> state.toReport()) // map: convert each internal accumulator snapshot into a public FSReport.
+                .sample(100, TimeUnit.MILLISECONDS, true); // sample: publish at most one report every 100 ms, including the final one.
         });
     }
 
     /** Creates an Observable that emits every regular file under the root directory. */
     private static Observable<File> scanFiles(File rootDirectory) {
-        return Observable.create(emitter -> {
+        return Observable.create(emitter -> { // create: adapt the recursive filesystem walk into an Observable<File> source.
             try {
                 Set<String> visitedDirectories = new HashSet<>();
                 emitDirectoryContents(rootDirectory, emitter, visitedDirectories);
                 if (!emitter.isDisposed()) {
-                    emitter.onComplete();
+                    emitter.onComplete(); // onComplete: signal that no more files will be emitted.
                 }
             } catch (Throwable t) {
                 if (!emitter.isDisposed()) {
-                    emitter.onError(t);
+                    emitter.onError(t); // onError: propagate traversal failures through the reactive stream.
                 }
             }
         });
@@ -130,7 +131,7 @@ public class ReactiveFSStat {
             if (childFile.isDirectory()) {
                 emitDirectoryContents(childFile, emitter, visitedDirectories);
             } else if (childFile.isFile()) {
-                emitter.onNext(childFile);
+                emitter.onNext(childFile); // onNext: push one discovered regular file to the downstream Rx pipeline.
             }
         }
     }

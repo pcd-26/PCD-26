@@ -1,31 +1,46 @@
 \section{Introduction}
 
-Assignment 2 asks for an asynchronous library, \texttt{FSStatLib}, that scans a
-directory recursively and returns a report with two main values:
+Assignment 2 requires the development of \textbf{\texttt{FSStatLib}}, an
+\textbf{asynchronous filesystem statistics library} exposing a
+\textbf{\texttt{getFSReport}} operation. Given a directory \texttt{D}, a
+maximum file size \texttt{MaxFS}, and a number of bands \texttt{NB}, the
+operation must recursively inspect \texttt{D} and its subdirectories and
+produce a report \texttt{R} containing:
 
 \begin{itemize}[leftmargin=*]
-  \item the total number of regular files found in the directory tree;
-  \item the distribution of file sizes in \texttt{numberOfBands + 1} bands,
-  where the range from zero to \texttt{maximumFileSizeBytes} is divided into
-  \texttt{numberOfBands} bands and the last band counts files larger than
-  \texttt{maximumFileSizeBytes}.
+  \item \textbf{total file count}: the number of files found in the directory
+  tree;
+  \item \textbf{file-size distribution}: \texttt{NB + 1} ranges, where
+  \texttt{[0, MaxFS]} is divided into \texttt{NB} regular bands and the last
+  range counts files whose size is greater than \texttt{MaxFS}.
 \end{itemize}
 
-The project provides three implementations of the same behaviour:
+The library provides \textbf{three implementations} of \texttt{getFSReport},
+one for each concurrency model:
 
 \begin{itemize}[leftmargin=*]
-  \item a Virtual Threads version;
-  \item a Reactive version based on RxJava;
-  \item an Event-Loop version based on Vert.x.
+  \item \textbf{Event-loop}: based on Vert.x;
+  \item \textbf{Reactive}: based on RxJava;
+  \item \textbf{Virtual threads}: based on Java 21 virtual threads.
 \end{itemize}
 
-The three versions are not simple wrappers around a shared scanner. They are
-implemented separately in order to preserve the programming discipline of each
-paradigm: imperative asynchronous code for virtual threads, stream-based
-composition for RxJava, and callback-driven asynchronous I/O for Vert.x.
+The implementations share the same \textbf{report model}, but use different
+\textbf{traversal strategies}:
 
-The repository also contains a command-line interface and a Swing GUI. The GUI
-implements the optional interactive extension: it can start a scan, receive
-progressive updates, and cancel a running computation. A JUnit suite checks
-correctness, robustness, and cross-implementation consistency on deterministic
-filesystem fixtures.
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Event-loop}: callback-driven traversal, with blocking checks
+  kept outside the Vert.x event loop;
+  \item \textbf{Reactive}: traversal represented as an
+  \texttt{Observable<File>} stream and accumulated into reports;
+  \item \textbf{Virtual threads}: imperative recursive traversal with
+  directory tasks executed on virtual threads.
+\end{itemize}
+
+Two example programs are included: a \textbf{command-line interface} and a
+\textbf{minimal Swing GUI}. The GUI covers the optional interactive extension:
+it can start a report generation, show dynamic statistics updates, and stop a
+running scan. The implementation counts \textbf{regular files} and skips
+non-regular filesystem entries such as devices or unsupported links, so the
+report remains stable on real directory trees. A \textbf{JUnit suite} checks
+correctness, robustness, cancellation, and consistency across the three
+versions.
