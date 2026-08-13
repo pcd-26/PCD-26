@@ -1,33 +1,15 @@
 \clearpage
 \section{Conclusions}
 
-Assignment 2 is implemented as a small asynchronous filesystem statistics
-library with three distinct execution styles. The project satisfies the main
-requirements of the assignment:
-
-\begin{itemize}[leftmargin=*]
-  \item recursive filesystem scanning;
-  \item file-count and size-band statistics;
-  \item three implementations based on virtual threads, RxJava, and Vert.x;
-  \item a CLI and a GUI demo;
-  \item validation and comparative testing across identical datasets;
-  \item documentation of the main design choices and limitations.
-\end{itemize}
+Assignment 2 delivers a compact asynchronous filesystem statistics library
+with three distinct execution styles. The main result is that the same report
+can be computed cleanly through three genuinely different concurrency models:
+task-oriented recursion with virtual threads, stream composition with RxJava,
+and callback-driven asynchronous I/O with Vert.x.
 
 The codebase keeps the report model and the filesystem logic separate from the
-execution strategy, which makes the three implementations comparable while
-preserving their respective programming styles.
-
-The most important design result is that the same problem is solved through
-three genuinely different concurrency models: task-oriented recursion with
-virtual threads, stream composition with RxJava, and callback-driven
-asynchronous I/O with Vert.x. The implementations therefore demonstrate not
-only that the required report can be computed, but also how ownership,
-progress, cancellation, and completion change when the concurrency paradigm
-changes.
-
-The optional interactive part is covered by the Swing GUI, which keeps the UI
-responsive by routing updates through the Event Dispatch Thread and by exposing
-a cancel action for all three paradigms. The validation suite confirms that the
-engines agree on deterministic datasets and remain robust under common
-filesystem edge cases.
+execution strategy, which makes the three implementations directly comparable
+without blurring their programming style. The optional interactive part is
+covered by the Swing GUI, and the validation suite confirms that the engines
+agree on deterministic datasets while remaining robust under common filesystem
+edge cases.
