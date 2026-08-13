@@ -1,0 +1,47 @@
+\clearpage
+\section{How to Run}
+
+\textbf{Prerequisites:} Java 21 and Maven.
+
+\subsection{Tests}
+
+Run the full validation suite with:
+
+\begin{verbatim}
+mvn -f assignment-2/pom.xml test
+\end{verbatim}
+
+\subsection{CLI}
+
+The CLI entry point is \texttt{pcd.fsstat.cli.FSStatCLI}. The arguments are:
+
+\begin{verbatim}
+<directory> <maximumFileSize> <numberOfBands> [sizeUnit] [paradigm]
+\end{verbatim}
+
+The last argument selects the implementation: \texttt{vt}, \texttt{rx}, or
+\texttt{loop}.
+
+From \texttt{assignment-2}:
+
+\small
+\begin{verbatim}
+mvn exec:java "-Dexec.mainClass=pcd.fsstat.cli.FSStatCLI" "-Dexec.args=. 10 5 MiB vt"
+\end{verbatim}
+\normalsize
+
+Replace \texttt{vt} with \texttt{rx} or \texttt{loop} to run the other
+implementations.
+
+\subsection{GUI}
+
+The Swing entry point is \texttt{pcd.fsstat.gui.FSStatGUI}.
+
+\small
+\begin{verbatim}
+mvn exec:java "-Dexec.mainClass=pcd.fsstat.gui.FSStatGUI"
+\end{verbatim}
+\normalsize
+
+The GUI exposes the same scan parameters as the CLI and adds start and cancel
+controls.

@@ -26,9 +26,9 @@
     "latex-workshop.latex.tools": [
         {
             "name": "make-report",
-            "command": "mingw32-make",
+            "command": "python",
             "args": [
-                "-C",
+                "C:/Users/alexs/Documents/GitHub/PCD-26/scripts/build_latex_report.py",
                 "%DIR%"
             ]
         }
