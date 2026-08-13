@@ -1,74 +1,94 @@
 \clearpage
 \section{Problem Analysis}
 
-The assignment is concurrency-oriented because the scan is naturally
-asynchronous and because the implementation must expose three different
-programming styles. The computation is simple in principle: visit every regular
-file, read its size, increment one total counter, and increment one histogram
-band. The difficulty comes from doing this over a real filesystem while keeping
-the caller responsive.
+\texttt{FSStatLib} has to compute a report from three input parameters:
+\textbf{\texttt{D}}, the root directory to scan; \textbf{\texttt{MaxFS}}, the
+maximum file size used as threshold; and \textbf{\texttt{NB}}, the number of
+regular size bands. The operation is simple as a sequential computation: visit
+each file, read its size, update the total count, and increment the
+corresponding histogram band. The concurrent aspect comes from doing this
+\textbf{asynchronously} over a real filesystem, while still supporting
+\textbf{progress updates} and \textbf{cancellation}.
 
-\subsection{Filesystem and Concurrency Constraints}
+\subsection{Filesystem Traversal}
 
-The filesystem adds several sources of complexity:
+The input directory may contain a large and irregular tree. A scanner must
+therefore handle:
 
 \begin{itemize}[leftmargin=*]
-  \item traversal is recursive and may reach deep directory hierarchies;
-  \item the scan must remain responsive while data is collected;
-  \item filesystem state may change while the scan is running;
-  \item invalid paths, unreadable directories, symbolic links, and special files
-  must not crash the program;
-  \item the same logical result must be produced by all three paradigms.
+  \item \textbf{recursion}: nested subdirectories must be visited;
+  \item \textbf{scale}: the tree may contain many small files or many
+  subdirectories;
+  \item \textbf{robustness}: on real filesystems, entries may change while the
+  scan is running, so transient access errors should not crash the program;
+  \item \textbf{invalid or special entries}: invalid paths, unreadable
+  directories, symbolic links, and special files must not crash or hang the
+  program;
+  \item \textbf{cycles}: repeated logical directories, for example through
+  symbolic links, must not cause infinite traversal.
 \end{itemize}
 
-The scan is mainly I/O-bound. Parallelism can improve responsiveness and can
-overlap independent directory operations, but it also introduces coordination
-costs. A correct implementation must therefore define when a directory is
-considered visited, how partial counters are updated, how completion is
-detected, and what cancellation means when work is already in flight.
+The scan is mainly \textbf{I/O-bound}. The expensive part is not the arithmetic
+needed to compute a band index, but the number of filesystem operations needed
+to list directories and inspect files. This makes responsiveness more important
+than raw CPU throughput.
+
+\subsection{Concurrency Requirements}
+
+The asynchronous API must return control to the caller without waiting for the
+whole directory tree to be processed. At the same time, the implementation must
+coordinate work that may still be in progress. In particular, it must define:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{scheduling}: how new directory work is started;
+  \item \textbf{state ownership}: where partial counters are stored and
+  updated;
+  \item \textbf{completion detection}: how the implementation detects that no
+  work is left;
+  \item \textbf{progress reporting}: how updates are produced without flooding
+  the CLI or GUI;
+  \item \textbf{cancellation}: what happens when cancellation is requested
+  while work is already in flight.
+\end{itemize}
+
+These requirements are solved differently in the three versions:
+\textbf{callbacks and pending operations} in the event-loop implementation,
+\textbf{stream accumulation} in the reactive implementation, and
+\textbf{task coordination} in the virtual-thread implementation.
+
+\subsection{Report Semantics}
+
+The report contains two logical results:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{total file count}: the number of regular files found under
+  \texttt{D}, including recursively visited subdirectories;
+  \item \textbf{file-size histogram}: an array of \texttt{NB + 1} counters.
+\end{itemize}
+
+The first \texttt{NB} counters represent the bands obtained by splitting
+\texttt{[0, MaxFS]}. The last counter is the \textbf{overflow band} and counts
+files larger than \texttt{MaxFS}. Boundary values are handled
+deterministically: a file exactly equal to \texttt{MaxFS} belongs to the
+\textbf{last regular band}, while a file larger than \texttt{MaxFS} belongs to
+the \textbf{overflow band}.
+
+The implementation counts \textbf{regular files} and skips non-regular
+filesystem entries. This avoids treating directories, devices, or unsupported
+links as ordinary files.
 
 \subsection{Correctness Properties}
 
-The expected behaviour can be summarized through four properties:
+The expected behaviour can be summarized through five properties:
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Safety}: only regular files are counted and every counted file
-  contributes to exactly one size band;
-  \item \textbf{Consistency}: the three implementations must produce the same
-  report on the same stable directory tree;
-  \item \textbf{Responsiveness}: progress updates and GUI interactions must not
-  be blocked by the traversal;
-  \item \textbf{Clean termination}: completion, errors, and cancellation must
-  release the waiting CLI or restore the GUI state.
+  \item \textbf{Safety}: every counted file contributes to exactly one size
+  band;
+  \item \textbf{Completeness}: every reachable regular file is counted once;
+  \item \textbf{Consistency}: the three implementations produce the same report
+  on the same stable directory tree;
+  \item \textbf{Responsiveness}: progress updates and GUI interactions are not
+  blocked by the traversal;
+  \item \textbf{Termination}: completion, errors, and cancellation leave the CLI
+  or GUI in a well-defined state.
 \end{itemize}
-
-The design keeps the report model independent from the execution strategy. This
-makes the three implementations comparable while still allowing each engine to
-use its own scheduling style.
-
-\subsection{Shared Data Model}
-
-The shared package \texttt{pcd.fsstat.common} contains the minimal common
-model:
-
-\begin{itemize}[leftmargin=*]
-  \item \texttt{FSReport}: immutable report object containing directory, size
-  threshold, band count, band histogram, total file count, and elapsed time;
-  \item \texttt{FSReportListener}: callback contract for asynchronous updates,
-  completion, and errors;
-  \item \texttt{FSReportJob}: cancellation handle for imperative scanners;
-  \item \texttt{SizeUnit}: user-facing unit conversion and formatting helper.
-\end{itemize}
-
-The report stores the band counts in a defensive copy so that callers cannot
-mutate it accidentally.
-
-\subsection{Band Semantics}
-
-The range from zero to the maximum file size threshold is divided into a
-configured number of regular bands, and an additional overflow band stores
-files larger than that threshold. Boundary values are handled deterministically:
-a file exactly equal to \texttt{maximumFileSizeBytes} belongs to the last
-regular band, while \texttt{maximumFileSizeBytes + 1} belongs to the overflow
-band. This rule is centralized in \texttt{FSReport.getBandIndex()} and is
-tested explicitly with boundary-sized files.
