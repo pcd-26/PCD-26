@@ -1,59 +1,98 @@
 \clearpage
 \section{Validation}
 
-The repository contains a validation-oriented test suite:
+Validation is based on automated \textbf{JUnit 5} tests. The goal is not only
+to check that one implementation returns plausible numbers, but also to verify
+that the three paradigms preserve the same \textbf{report semantics}.
+
+The test suite is organized as follows:
 
 \begin{itemize}[leftmargin=*]
-  \item \texttt{FSStatTest}: unit coverage for the shared model, parsing, and
+  \item \textbf{\texttt{FSStatTest}}: unit coverage for the shared model,
+  parsing, and
   the three engines on a small fixture;
-  \item \texttt{FSStatRobustnessCorrectnessTest}: edge cases and comparative
-  validation on identical datasets;
-  \item \texttt{FSStatCLITest}: CLI helper and parsing checks.
+  \item \textbf{\texttt{FSStatRobustnessCorrectnessTest}}: edge cases and
+  cross-implementation validation on identical datasets;
+  \item \textbf{\texttt{FSStatCLITest}}: CLI parsing, dispatching, and reactive
+  completion checks.
 \end{itemize}
 
-The suite verifies that all three implementations return the same logical
-report on:
+\subsection{Correctness Coverage}
+
+The suite checks the main functional cases required by the assignment:
 
 \begin{itemize}[leftmargin=*]
-  \item empty directories;
-  \item flat directories with boundary file sizes;
-  \item nested hierarchies;
-  \item a wider and deeper deterministic hierarchy;
-  \item invalid paths;
-  \item regular files used as input instead of directories;
-  \item unreadable directories, where the environment supports permission
-  changes;
-  \item symbolic-link cycles, where the environment supports them;
-  \item large sparse files;
-  \item concurrent file deletions while scanning;
-  \item special files and non-regular nodes, where the environment supports
-  them.
+  \item \textbf{empty directories}: all counters must be zero;
+  \item \textbf{flat directories}: known file sizes must be assigned to the
+  expected bands;
+  \item \textbf{nested directories}: recursive traversal must not lose files;
+  \item \textbf{wide/deep deterministic trees}: larger fixtures must produce
+  stable totals and histograms;
+  \item \textbf{boundary values}: files at \texttt{0}, band limits,
+  \texttt{MaxFS}, and above \texttt{MaxFS} must be classified
+  deterministically;
+  \item \textbf{large files}: sparse files larger than 32-bit integer ranges
+  must still be classified correctly.
 \end{itemize}
-
-The final verification run executed \texttt{26} tests and all of them passed.
 
 \subsection{Cross-Implementation Oracle}
 
-The main correctness strategy is comparative. For deterministic fixtures, the
-Virtual Threads result is compared with the Reactive and Event-Loop results.
-The comparison checks the total file count and every histogram band. This is
-useful because the implementations have different control structures: if all
-three agree on a non-trivial tree, it is unlikely that a scheduling-specific
-mistake is hidden in one version.
+The main correctness strategy is \textbf{comparative}. For deterministic
+fixtures, the Virtual Threads result is used as a reference report and is
+compared with the Reactive and Event-Loop results. The comparison checks:
+
+\begin{itemize}[leftmargin=*]
+  \item the \textbf{total file count};
+  \item the length of the \textbf{histogram};
+  \item every individual \textbf{band counter}.
+\end{itemize}
+
+This is useful because the implementations have different control structures.
+If the imperative virtual-thread version, the RxJava stream version, and the
+Vert.x callback version agree on the same non-trivial tree, the risk of a
+paradigm-specific scheduling error is lower.
 
 The tests also validate the shared model directly: band boundaries, duration
 formatting, size-unit parsing, and formatted labels are checked independently
 from the filesystem traversal.
 
-\subsection{Benchmark Support}
+\subsection{Robustness Coverage}
 
-The repository also includes \texttt{FSStatBenchmark}, a small local utility
-that runs the three implementations repeatedly and prints timing summaries. It
-is useful for manual comparisons between paradigms, but the resulting numbers
-are necessarily environment-dependent, so this report does not claim a
-universal ordering between the engines.
+The robustness tests cover filesystem situations that may occur in practice:
 
-\subsection{Observed Limitations}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{invalid roots}: non-existing paths must report an error;
+  \item \textbf{wrong root type}: a regular file cannot be used as the scan
+  root;
+  \item \textbf{permission issues}: unreadable entries must not crash the scan,
+  where the host filesystem enforces permissions;
+  \item \textbf{symbolic-link cycles}: repeated logical directories must not
+  cause infinite traversal, where symbolic links are available;
+  \item \textbf{concurrent mutation}: files deleted during a scan must not make
+  the program crash;
+  \item \textbf{special entries}: non-regular nodes are skipped, where the
+  platform exposes them.
+\end{itemize}
+
+\subsection{Cancellation and Interface Checks}
+
+The interactive extension is validated through cancellation and interface
+tests:
+
+\begin{itemize}[leftmargin=*]
+  \item the Event-Loop cancellation test cancels immediately after the
+  \texttt{FSReportJob} is returned and checks that no terminal callback is
+  emitted afterwards;
+  \item the CLI tests verify argument parsing, size-unit aliases, paradigm
+  selection, and dispatching to \texttt{vt}, \texttt{rx}, and \texttt{loop};
+  \item the reactive CLI path checks that the final listener completion uses
+  the latest report emitted by the \texttt{Observable}.
+\end{itemize}
+
+The Event-Loop cancellation test avoids arbitrary sleeps and machine-speed
+assumptions. This makes it more stable on local machines and CI runners.
+
+\subsection{Platform-Dependent Checks}
 
 Some checks depend on the host environment:
 
@@ -63,13 +102,7 @@ Some checks depend on the host environment:
   \item special files such as \texttt{/dev/null} are Unix-specific.
 \end{itemize}
 
-These limitations are documented in the validation notes and do not affect the
-core functional behaviour of the project.
+When one of these features is not available, the corresponding test skips only
+the platform-specific assertion. The core consistency checks remain valid.
 
-\subsection{CI-Relevant Stabilization}
-
-Cancellation tests are written to avoid depending on machine speed. In
-particular, the Event-Loop cancellation test cancels immediately after the job
-handle is returned, instead of waiting for an arbitrary delay and hoping the
-scan is still running. This makes the test stable on both local machines and
-GitHub Actions.
+The final verification run executed \texttt{26} tests and all of them passed.
