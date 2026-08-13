@@ -11,6 +11,7 @@ all: $(PDF)
 
 $(PDF): $(SOURCE)
 >pdflatex -interaction=nonstopmode -halt-on-error -jobname=report $(SOURCE)
+>pdflatex -interaction=nonstopmode -halt-on-error -jobname=report $(SOURCE)
 >rm -f $(TEMP_FILES)
 
 clean:
