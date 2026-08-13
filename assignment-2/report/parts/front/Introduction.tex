@@ -1,11 +1,18 @@
 \section{Introduction}
 
-Assignment 2 requires the development of \textbf{\texttt{FSStatLib}}, an
-\textbf{asynchronous filesystem statistics library} exposing a
-\textbf{\texttt{getFSReport}} operation. Given a directory \texttt{D}, a
-maximum file size \texttt{MaxFS}, and a number of bands \texttt{NB}, the
-operation must recursively inspect \texttt{D} and its subdirectories and
-produce a report \texttt{R} containing:
+Assignment 2 requires an \textbf{asynchronous filesystem statistics library},
+called \textbf{\texttt{FSStatLib}}, exposing a \textbf{\texttt{getFSReport}}
+operation. The operation receives:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{D}}: the root directory to scan;
+  \item \textbf{\texttt{MaxFS}}: the maximum file size used to build the
+  histogram;
+  \item \textbf{\texttt{NB}}: the number of regular size bands.
+\end{itemize}
+
+Starting from \texttt{D}, the library recursively inspects the directory tree
+and produces a report \texttt{R} containing:
 
 \begin{itemize}[leftmargin=*]
   \item \textbf{total file count}: the number of files found in the directory
@@ -15,32 +22,26 @@ produce a report \texttt{R} containing:
   range counts files whose size is greater than \texttt{MaxFS}.
 \end{itemize}
 
-The library provides \textbf{three implementations} of \texttt{getFSReport},
-one for each concurrency model:
+The deliverable contains \textbf{three implementations} of
+\texttt{getFSReport}, one for each concurrency model required by the
+assignment:
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Event-loop}: based on Vert.x;
-  \item \textbf{Reactive}: based on RxJava;
-  \item \textbf{Virtual threads}: based on Java 21 virtual threads.
+  \item \textbf{Event-loop}: Vert.x callbacks and asynchronous filesystem
+  operations, with blocking checks kept outside the event loop;
+  \item \textbf{Reactive}: an RxJava \texttt{Observable<File>} stream,
+  accumulated into report snapshots;
+  \item \textbf{Virtual threads}: imperative recursive traversal, with
+  directory tasks executed on Java 21 virtual threads.
 \end{itemize}
 
-The implementations share the same \textbf{report model}, but use different
-\textbf{traversal strategies}:
+The three versions share the same \textbf{report model}, but keep their
+\textbf{traversal strategies} separate. The project also includes a
+\textbf{command-line interface} and a \textbf{minimal Swing GUI}. The GUI can
+start a scan, show dynamic statistics updates, and cancel a running
+computation.
 
-\begin{itemize}[leftmargin=*]
-  \item \textbf{Event-loop}: callback-driven traversal, with blocking checks
-  kept outside the Vert.x event loop;
-  \item \textbf{Reactive}: traversal represented as an
-  \texttt{Observable<File>} stream and accumulated into reports;
-  \item \textbf{Virtual threads}: imperative recursive traversal with
-  directory tasks executed on virtual threads.
-\end{itemize}
-
-Two example programs are included: a \textbf{command-line interface} and a
-\textbf{minimal Swing GUI}. The GUI covers the optional interactive extension:
-it can start a report generation, show dynamic statistics updates, and stop a
-running scan. The implementation counts \textbf{regular files} and skips
-non-regular filesystem entries such as devices or unsupported links, so the
-report remains stable on real directory trees. A \textbf{JUnit suite} checks
-correctness, robustness, cancellation, and consistency across the three
-versions.
+Only \textbf{regular files} are counted. Non-regular filesystem entries, such
+as devices or unsupported links, are skipped so that scans remain robust on
+real directory trees. A \textbf{JUnit suite} checks correctness, robustness,
+cancellation, and consistency across the three versions.
