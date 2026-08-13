@@ -19,6 +19,27 @@ use the same report model and the same conceptual callback contract, while the
 scan engine changes underneath. The CLI renders reports as text; the GUI
 renders the same data as labels and a table.
 
+\subsection{Library API}
+
+The asynchronous operation \texttt{getFSReport} is exposed by the three
+implementation classes:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{EventLoopFSStat.getFSReport(...)} starts a Vert.x scan and
+  returns an \texttt{FSReportJob} cancellation handle;
+  \item \texttt{ReactiveFSStat.getFSReport(...)} returns an
+  \texttt{Observable<FSReport>}, i.e. a stream of partial and final reports;
+  \item \texttt{VirtualThreadsFSStat.getFSReport(...)} starts a virtual-thread
+  scan and returns an \texttt{FSReportJob} cancellation handle.
+\end{itemize}
+
+The imperative versions deliver intermediate updates, completion, and errors
+through an \texttt{FSReportListener}. The reactive version delivers the same
+logical information through \texttt{onNext}, \texttt{onComplete}, and
+\texttt{onError}. The API therefore follows the conventions of each paradigm
+while preserving the same logical result: a sequence of progress reports and a
+final filesystem statistics report.
+
 \begin{table}[h]
 \centering
 \renewcommand{\arraystretch}{1.2}
