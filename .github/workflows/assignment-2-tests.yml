@@ -35,7 +35,7 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base zip unzip
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
       - name: Build and test
         working-directory: assignment-2
@@ -71,7 +71,7 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base zip unzip
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
       - name: Create delivery package
         shell: bash
