@@ -19,8 +19,8 @@ public class FSStatBenchmark {
 
     private static final int WARMUP_RUNS = 2;
     private static final int MEASURE_RUNS = 5;
-    private static final long MAX_FS = 10 * 1024 * 1024; // 10MB
-    private static final int NB = 5;
+    private static final long MAXIMUM_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+    private static final int NUMBER_OF_BANDS = 5;
 
     /** Runs the benchmark against the given directory, or the current one by default. */
     public static void main(String[] args) throws Exception {
@@ -86,7 +86,7 @@ public class FSStatBenchmark {
     private static FSReport runVirtualThreads(String directory) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         FSReport[] result = new FSReport[1];
-        VirtualThreadsFSStat.getFSReport(directory, MAX_FS, NB, new FSReportListener() {
+        VirtualThreadsFSStat.getFSReport(directory, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
 
@@ -107,7 +107,7 @@ public class FSStatBenchmark {
 
     /** Runs one RxJava benchmark scan and returns its final report. */
     private static FSReport runReactive(String directory) {
-        return ReactiveFSStat.getFSReport(directory, MAX_FS, NB)
+        return ReactiveFSStat.getFSReport(directory, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS)
             .blockingLast();
     }
 
@@ -115,7 +115,7 @@ public class FSStatBenchmark {
     private static FSReport runEventLoop(String directory) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         FSReport[] result = new FSReport[1];
-        EventLoopFSStat.getFSReport(directory, MAX_FS, NB, new FSReportListener() {
+        EventLoopFSStat.getFSReport(directory, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
 

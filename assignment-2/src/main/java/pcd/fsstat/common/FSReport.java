@@ -5,8 +5,8 @@ import java.util.Locale;
 /** Immutable result of a filesystem statistics scan. */
 public record FSReport(
     String directory,
-    long maxFS,
-    int nb,
+    long maximumFileSizeBytes,
+    int numberOfBands,
     long[] bandsCount,
     long totalFiles,
     long durationMs
@@ -32,26 +32,36 @@ public record FSReport(
         return bandsCount.clone();
     }
 
+    /** Legacy accessor kept for compatibility with the assignment wording. */
+    public long maxFS() {
+        return maximumFileSizeBytes;
+    }
+
+    /** Legacy accessor kept for compatibility with the assignment wording. */
+    public int nb() {
+        return numberOfBands;
+    }
+
     /** Finds the band index for a file size. */
-    public static int getBandIndex(long size, long maxFS, int nb) {
-        if (size > maxFS) {
-            return nb;
+    public static int getBandIndex(long fileSizeBytes, long maximumFileSizeBytes, int numberOfBands) {
+        if (fileSizeBytes > maximumFileSizeBytes) {
+            return numberOfBands;
         }
-        if (nb <= 0) {
+        if (numberOfBands <= 0) {
             return 0;
         }
-        double bandWidth = (double) maxFS / nb;
-        if (bandWidth <= 0) {
+        double bandWidthBytes = (double) maximumFileSizeBytes / numberOfBands;
+        if (bandWidthBytes <= 0) {
             return 0;
         }
-        int idx = (int) (size / bandWidth);
-        if (idx >= nb) {
-            idx = nb - 1;
+        int bandIndex = (int) (fileSizeBytes / bandWidthBytes);
+        if (bandIndex >= numberOfBands) {
+            bandIndex = numberOfBands - 1;
         }
-        if (idx < 0) {
-            idx = 0;
+        if (bandIndex < 0) {
+            bandIndex = 0;
         }
-        return idx;
+        return bandIndex;
     }
 
     /** Formats a band label in bytes. */
@@ -61,23 +71,23 @@ public record FSReport(
 
     /** Formats a band label using the selected unit. */
     public String getBandLabel(int index, SizeUnit unit) {
-        return formatBandLabel(maxFS, nb, index, unit);
+        return formatBandLabel(maximumFileSizeBytes, numberOfBands, index, unit);
     }
 
     /** Formats a size-band range label. */
-    public static String formatBandLabel(long maxFS, int nb, int index, SizeUnit unit) {
-        if (index < 0 || index > nb) {
+    public static String formatBandLabel(long maximumFileSizeBytes, int numberOfBands, int index, SizeUnit unit) {
+        if (index < 0 || index > numberOfBands) {
             throw new IllegalArgumentException("Index out of bounds: " + index);
         }
-        if (index == nb) {
-            return String.format("> %s", unit.format(maxFS));
+        if (index == numberOfBands) {
+            return String.format("> %s", unit.format(maximumFileSizeBytes));
         }
-        double bandWidth = (double) maxFS / nb;
-        long min = Math.round(index * bandWidth);
-        long max = Math.round((index + 1) * bandWidth) - 1;
-        if (index == nb - 1) {
-            max = maxFS;
+        double bandWidthBytes = (double) maximumFileSizeBytes / numberOfBands;
+        long minimumBandSizeBytes = Math.round(index * bandWidthBytes);
+        long maximumBandSizeBytes = Math.round((index + 1) * bandWidthBytes) - 1;
+        if (index == numberOfBands - 1) {
+            maximumBandSizeBytes = maximumFileSizeBytes;
         }
-        return String.format("[%s - %s]", unit.format(min), unit.format(max));
+        return String.format("[%s - %s]", unit.format(minimumBandSizeBytes), unit.format(maximumBandSizeBytes));
     }
 }

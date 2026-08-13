@@ -12,7 +12,7 @@ To systematically validate correctness, correctness consistency, and error resil
    - **Setup**: Creates an empty temporary directory.
    - **Goal**: Confirm that all implementations report `0` total files and all size bands containing `0`.
 2. **Flat Directory with Boundary Sizes (`testFlatDirectoryConsistency`)**:
-   - **Setup**: Creates files of size exactly matching limits: `0`, `10`, `25`, `50`, `75`, `100`, `101`, and `250` bytes. The scanner uses `maxFS = 100` and `nb = 4` (width = 25).
+   - **Setup**: Creates files of size exactly matching limits: `0`, `10`, `25`, `50`, `75`, `100`, `101`, and `250` bytes. The scanner uses `maximumFileSizeBytes = 100` and `numberOfBands = 4` (width = 25).
    - **Goal**: Verify math and consistency for boundary values.
 3. **Deeply Nested Directory Hierarchy (`testNestedDirectoryConsistency`)**:
    - **Setup**: Recursively nested directories up to 4 levels deep containing various sized files.
@@ -95,7 +95,7 @@ Each implementation has different runtime behaviors, scalability constraints, an
   - Immunized from call-stack overflows since recursion is deferred asynchronously onto the event loop.
   - Extremely light on thread footprint.
 - **Limitations**:
-  - **NIO Context Overhead**: Every file property read (`fs.props`) and directory read (`fs.readDir`) is queued as a separate task on the event loop. For trees containing many tiny files, the scheduler overhead and task queues create significant memory pressure and can degrade performance.
+  - **NIO Context Overhead**: Every file property read (`vertxFileSystem.props`) and directory read (`vertxFileSystem.readDir`) is queued as a separate task on the event loop. For trees containing many tiny files, the scheduler overhead and task queues create significant memory pressure and can degrade performance.
   - **File Descriptor Limits**: Massive parallel non-blocking read/stat calls could exhaust available OS file descriptors if the OS limit is low and many directories are queued.
   - **Asynchronous Loop Cancellation**: Cancelling requires closing the entire Vertx context. Lingering NIO operations already scheduled on worker threads might complete and fire callbacks before the context shuts down, requiring safe state checks.
   - **Per-Scan Vert.x Instance**: A fresh Vert.x instance is created for each scan, which keeps scans isolated but adds setup overhead compared with a pooled runtime.

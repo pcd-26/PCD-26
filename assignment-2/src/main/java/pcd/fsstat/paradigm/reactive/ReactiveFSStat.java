@@ -59,7 +59,7 @@ public class ReactiveFSStat {
     }
 
     /** Builds a reactive report stream for the requested directory scan. */
-    public static Observable<FSReport> getFSReport(String directory, long maxFS, int nb) {
+    public static Observable<FSReport> getFSReport(String directory, long maximumFileSizeBytes, int numberOfBands) {
         return Observable.defer(() -> {
             // Validate lazily so errors are delivered through the Observable contract.
             File rootDirectory = new File(directory);
@@ -67,7 +67,12 @@ public class ReactiveFSStat {
                 return Observable.error(new IllegalArgumentException("Target is not a valid directory: " + directory));
             }
             long scanStartTime = System.currentTimeMillis();
-            ReactiveScanState initialState = new ReactiveScanState(directory, maxFS, nb, scanStartTime);
+            ReactiveScanState initialState = new ReactiveScanState(
+                directory,
+                maximumFileSizeBytes,
+                numberOfBands,
+                scanStartTime
+            );
 
             // Convert emitted files into immutable report snapshots and throttle progress updates.
             return scanFiles(rootDirectory)
@@ -113,19 +118,19 @@ public class ReactiveFSStat {
             return;
         }
 
-        File[] files = directory.listFiles();
-        if (files == null) {
+        File[] directoryChildren = directory.listFiles();
+        if (directoryChildren == null) {
             return;
         }
         // Recurse into directories and emit only regular files.
-        for (File file : files) {
+        for (File childFile : directoryChildren) {
             if (emitter.isDisposed()) {
                 return;
             }
-            if (file.isDirectory()) {
-                emitDirectoryContents(file, emitter, visitedDirectories);
-            } else if (file.isFile()) {
-                emitter.onNext(file);
+            if (childFile.isDirectory()) {
+                emitDirectoryContents(childFile, emitter, visitedDirectories);
+            } else if (childFile.isFile()) {
+                emitter.onNext(childFile);
             }
         }
     }

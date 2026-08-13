@@ -110,7 +110,7 @@ public class FSStatCLI {
     static ParsedArguments parseArguments(String[] args) {
         // The directory, max size, and band count are mandatory.
         if (args == null || args.length < 3) {
-            System.err.println("Usage: java -cp ... pcd.fsstat.cli.FSStatCLI <directory> <maxFS> <nb> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
+            System.err.println("Usage: java -cp ... pcd.fsstat.cli.FSStatCLI <directory> <maximumFileSize> <numberOfBands> [sizeUnit: B|KiB|MiB|GiB] [paradigm: vt|rx|loop]");
             System.err.println("Example: java -cp ... pcd.fsstat.cli.FSStatCLI . 10 5 MB vt");
             return null;
         }

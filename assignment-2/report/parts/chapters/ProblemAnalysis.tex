@@ -65,9 +65,10 @@ mutate it accidentally.
 
 \subsection{Band Semantics}
 
-The range \texttt{[0, MaxFS]} is divided into \texttt{NB} regular bands and an
-additional overflow band stores files larger than \texttt{MaxFS}. Boundary
-values are handled deterministically: a file exactly equal to \texttt{MaxFS}
-belongs to the last regular band, while \texttt{MaxFS + 1} belongs to the
-overflow band. This rule is centralized in \texttt{FSReport.getBandIndex()} and
-is tested explicitly with boundary-sized files.
+The range from zero to the maximum file size threshold is divided into a
+configured number of regular bands, and an additional overflow band stores
+files larger than that threshold. Boundary values are handled deterministically:
+a file exactly equal to \texttt{maximumFileSizeBytes} belongs to the last
+regular band, while \texttt{maximumFileSizeBytes + 1} belongs to the overflow
+band. This rule is centralized in \texttt{FSReport.getBandIndex()} and is
+tested explicitly with boundary-sized files.

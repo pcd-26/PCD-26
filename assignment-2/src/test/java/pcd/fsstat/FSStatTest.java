@@ -60,8 +60,14 @@ public class FSStatTest {
         FSReport report = new FSReport("root", 10 * 1024 * 1024L, 4, new long[] {0, 0, 0, 0, 0}, 0, 0);
         assertTrue(report.getBandLabel(0, SizeUnit.MEGABYTES).contains("MiB"));
         assertTrue(report.getBandLabel(4, SizeUnit.MEGABYTES).startsWith("> "));
-        assertEquals(report.getBandLabel(0, SizeUnit.MEGABYTES), FSReport.formatBandLabel(report.maxFS(), report.nb(), 0, SizeUnit.MEGABYTES));
-        assertEquals(report.getBandLabel(4, SizeUnit.MEGABYTES), FSReport.formatBandLabel(report.maxFS(), report.nb(), 4, SizeUnit.MEGABYTES));
+        assertEquals(
+            report.getBandLabel(0, SizeUnit.MEGABYTES),
+            FSReport.formatBandLabel(report.maximumFileSizeBytes(), report.numberOfBands(), 0, SizeUnit.MEGABYTES)
+        );
+        assertEquals(
+            report.getBandLabel(4, SizeUnit.MEGABYTES),
+            FSReport.formatBandLabel(report.maximumFileSizeBytes(), report.numberOfBands(), 4, SizeUnit.MEGABYTES)
+        );
     }
 
     /** Creates a deterministic fixture with nested files of known sizes. */

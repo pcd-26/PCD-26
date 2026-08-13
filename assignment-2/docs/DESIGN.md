@@ -46,9 +46,9 @@ To prevent GUI freezes in Swing, intermediate report updates must not saturate t
 #### `FSReport` (Record)
 An immutable value object containing:
 - `directory`: The scanned directory root path.
-- `maxFS`: The maximum file size threshold, stored internally in bytes.
-- `nb`: The number of file size bands.
-- `bandsCount`: Array of size `nb + 1` representing the file distribution.
+- `maximumFileSizeBytes`: The maximum file size threshold, stored internally in bytes.
+- `numberOfBands`: The number of file size bands.
+- `bandsCount`: Array of size `numberOfBands + 1` representing the file distribution.
 - `totalFiles`: Total number of files.
 - `durationMs`: Total duration of the scan so far, in milliseconds.
 

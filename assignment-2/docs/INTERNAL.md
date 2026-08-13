@@ -12,7 +12,7 @@ main implementation tradeoffs used in the three filesystem scanners.
 scans a directory recursively and produces a report containing:
 
 - the total number of regular files discovered;
-- the distribution of file sizes across `nb + 1` bands;
+- the distribution of file sizes across `numberOfBands + 1` bands;
 - the elapsed scan time.
 
 The project exposes three asynchronous implementations of the same logical
@@ -54,8 +54,8 @@ The `docs/` directory contains maintainers-only documentation:
 It stores:
 
 - the scanned directory path;
-- the `maxFS` threshold in bytes;
-- the number of bands `nb`;
+- the maximum file-size threshold in bytes;
+- the number of size bands;
 - the file counts per band;
 - the total number of scanned files;
 - the elapsed time in milliseconds.
