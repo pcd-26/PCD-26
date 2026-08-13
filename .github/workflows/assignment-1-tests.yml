@@ -75,7 +75,7 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base zip unzip
+          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-pictures zip unzip
 
       - name: Build report PDF
         working-directory: assignment-1/report
@@ -91,7 +91,9 @@ jobs:
           rm -rf package "$DELIVERY_ZIP"
           mkdir -p package/Assignment-01/doc
 
+          cp assignment-1/pom.xml package/Assignment-01/pom.xml
           cp -R assignment-1/src package/Assignment-01/src
+          find package/Assignment-01/src -type d -name benchmark -prune -exec rm -rf {} +
           cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-01)
@@ -104,10 +106,12 @@ jobs:
           set -euo pipefail
 
           unzip -l "$DELIVERY_ZIP"
+          test -f package/Assignment-01/pom.xml
           test -f package/Assignment-01/doc/report.pdf
           test -d package/Assignment-01/src/main
           test -d package/Assignment-01/src/test
-          test ! -e package/Assignment-01/pom.xml
+          test ! -d package/Assignment-01/src/main/java/pcd/poool/benchmark
+          test ! -d package/Assignment-01/src/test/java/pcd/poool/benchmark
           test ! -e package/Assignment-01/docs
           test ! -e package/Assignment-01/report
           test ! -e package/Assignment-01/target

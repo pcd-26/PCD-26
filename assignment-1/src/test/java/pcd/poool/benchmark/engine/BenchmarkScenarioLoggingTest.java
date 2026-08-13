@@ -1,8 +1,10 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
+import pcd.poool.benchmark.config.BenchmarkConfig;
+import pcd.poool.benchmark.util.BenchmarkScenarioLogging;
 
 class BenchmarkScenarioLoggingTest {
 

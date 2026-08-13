@@ -1,0 +1,144 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 312B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:11-jdk-jammy
+#2 DONE 0.5s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 221B done
+#3 DONE 0.0s
+
+#4 [1/5] FROM docker.io/library/eclipse-temurin:11-jdk-jammy@sha256:5870b4031653a918c3644901443f8c4cf6108340ec17ca39d48f58e31c30c095
+#4 resolve docker.io/library/eclipse-temurin:11-jdk-jammy@sha256:5870b4031653a918c3644901443f8c4cf6108340ec17ca39d48f58e31c30c095 0.0s done
+#4 DONE 0.0s
+
+#5 [2/5] RUN apt-get update && apt-get install -y     git     unzip     bash     && rm -rf /var/lib/apt/lists/*
+#5 CACHED
+
+#6 [3/5] RUN mkdir -p /home/jpf-core
+#6 CACHED
+
+#7 [4/5] WORKDIR /home/jpf-core
+#7 CACHED
+
+#8 [5/5] RUN git config --global --add safe.directory /home/jpf-core
+#8 CACHED
+
+#9 exporting to image
+#9 exporting layers done
+#9 exporting manifest sha256:c5a820058259c3d7fdc04df7c491af14d444eea25ea2610db756360649dd2080 done
+#9 exporting config sha256:ad329cd689984df0b78c010917943c951151427e071e90c7295a376c0d8c5647 done
+#9 exporting attestation manifest sha256:2b3ec2bc025e722caa95e5c7419976c30cf7ed3eb8a165e3616b0bddee6aed6b 0.0s done
+#9 exporting manifest list sha256:8e229a71b60d5cb0e57c513b22fb8c72daf6a8015847f5567ebd57f9f59478f5
+#9 exporting manifest list sha256:8e229a71b60d5cb0e57c513b22fb8c72daf6a8015847f5567ebd57f9f59478f5 0.0s done
+#9 naming to docker.io/library/jpf-core:latest done
+#9 unpacking to docker.io/library/jpf-core:latest 0.0s done
+#9 DONE 0.2s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/8oumm7hkrxxhx1g6o961ebshy
+Downloading https://services.gradle.org/distributions/gradle-8.4-bin.zip
+............10%............20%.............30%............40%.............50%............60%.............70%............80%.............90%............100%
+
+Welcome to Gradle 8.4!
+
+Here are the highlights of this release:
+ - Compiling and testing with Java 21
+ - Faster Java compilation on Windows
+ - Role focused dependency configurations creation
+
+For more details see https://docs.gradle.org/8.4/release-notes.html
+
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :compileAnnotationsJava UP-TO-DATE
+> Task :processAnnotationsResources NO-SOURCE
+> Task :annotationsClasses UP-TO-DATE
+> Task :copyLibs UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :processResources NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :generateBuildInfo
+> Task :generateVersion
+> Task :copyResources
+> Task :jar
+> Task :assemble
+> Task :compileExamplesJava UP-TO-DATE
+> Task :compileClassesJava UP-TO-DATE
+> Task :processClassesResources NO-SOURCE
+> Task :classesClasses UP-TO-DATE
+> Task :compileModulesJava UP-TO-DATE
+> Task :compilePeersJava UP-TO-DATE
+> Task :processPeersResources NO-SOURCE
+> Task :peersClasses UP-TO-DATE
+> Task :compileTestJava UP-TO-DATE
+> Task :compileModules UP-TO-DATE
+> Task :compile UP-TO-DATE
+> Task :createAnnotationsJar UP-TO-DATE
+> Task :createClassloaderSpecificTestsJar UP-TO-DATE
+> Task :createJpfClassesJar UP-TO-DATE
+> Task :createJpfJar
+> Task :createRunJpfJar UP-TO-DATE
+> Task :createRunTestJar UP-TO-DATE
+> Task :buildJars
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses UP-TO-DATE
+> Task :parallelTest UP-TO-DATE
+> Task :singleThreadTest UP-TO-DATE
+> Task :test SKIPPED
+> Task :check UP-TO-DATE
+> Task :build
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.4/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 41s
+22 actionable tasks: 5 executed, 17 up-to-date
+JavaPathfinder core system v8.0 (rev df58f6e86dcd749e1f460bcd6127e043a401926c) - (C) 2005-2014 United States Government. All rights reserved.
+
+
+====================================================== system under test
+pcd.poool.verification.jpf.ThreadedMiniHarness.main()
+
+====================================================== search started: 8/4/26, 7:06 PM
+
+====================================================== results
+no errors detected
+
+====================================================== statistics
+elapsed time:       00:00:01
+states:             new=774,visited=1117,backtracked=1891,end=4
+search:             maxDepth=35,constraints=0
+choice generators:  thread=774 (signal=116,lock=317,sharedRef=242,threadApi=51,reschedule=48), data=0
+heap:               new=533,released=98,maxLive=515,gcCycles=1891
+instructions:       22411
+max memory:         128MB
+loaded code:        classes=85,methods=1788
+
+====================================================== search finished: 8/4/26, 7:06 PM
+JavaPathfinder core system v8.0 (rev df58f6e86dcd749e1f460bcd6127e043a401926c) - (C) 2005-2014 United States Government. All rights reserved.
+
+
+====================================================== system under test
+pcd.poool.verification.jpf.TaskBasedMiniHarness.main()
+
+====================================================== search started: 8/4/26, 7:06 PM
+
+====================================================== results
+no errors detected
+
+====================================================== statistics
+elapsed time:       00:00:01
+states:             new=249,visited=288,backtracked=537,end=3
+search:             maxDepth=34,constraints=0
+choice generators:  thread=249 (signal=6,lock=55,sharedRef=104,threadApi=48,reschedule=36), data=0
+heap:               new=680,released=130,maxLive=515,gcCycles=537
+instructions:       16409
+max memory:         128MB
+loaded code:        classes=85,methods=1788
+
+====================================================== search finished: 8/4/26, 7:06 PM

@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
-import pcd.poool.model.physics.common.Ball;
+import pcd.poool.benchmark.core.SeededBenchmarkBoardConf;
 
 class SeededBenchmarkBoardConfTest {
 

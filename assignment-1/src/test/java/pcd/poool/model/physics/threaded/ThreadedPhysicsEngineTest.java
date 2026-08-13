@@ -19,7 +19,7 @@ import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsDefaults;
 import pcd.poool.model.physics.config.LargeBoardConf;
-import pcd.poool.model.physics.sequential.PhysicsEngine;
+import pcd.poool.model.physics.sequential.SequentialPhysicsEngine;
 import pcd.poool.model.physics.config.MinimalBoardConf;
 import pcd.poool.model.physics.config.ThousandBallsBoardConf;
 
@@ -68,7 +68,7 @@ class ThreadedPhysicsEngineTest {
         var conf = new SeparatedMotionBoardConf();
 
         try (var threadedEngine = new ThreadedPhysicsEngine(3)) {
-            var sequentialBoard = new Board(new PhysicsEngine());
+            var sequentialBoard = new Board(new SequentialPhysicsEngine());
             sequentialBoard.init(conf);
             sequentialBoard.kick(Player.HUMAN, new V2d(0.18, 0.03));
             sequentialBoard.kick(Player.BOT, new V2d(-0.12, -0.01));
@@ -112,7 +112,7 @@ class ThreadedPhysicsEngineTest {
 
             board.updateState(1);
 
-            var balls = board.getCollisionBalls();
+            var balls = board.getActiveBalls();
             var leftCueBall = balls.get(0);
             var lowerCueBall = balls.get(1);
             var sharedTarget = balls.get(2);
@@ -135,7 +135,7 @@ class ThreadedPhysicsEngineTest {
     void threadedPhysicsMatchesSequentialBaselineOnDenseCollisionScenario() {
         var conf = new LargeBoardConf();
 
-        var sequentialBoard = new Board(new PhysicsEngine());
+        var sequentialBoard = new Board(new SequentialPhysicsEngine());
         sequentialBoard.init(conf);
         sequentialBoard.kick(Player.HUMAN, new V2d(0.95, 0.15));
         sequentialBoard.kick(Player.BOT, new V2d(-0.9, -0.1));
@@ -199,28 +199,6 @@ class ThreadedPhysicsEngineTest {
 
             assertEquals(ThousandBallsBoardConf.SMALL_BALL_COUNT, board.getBalls().size());
             assertEquals(4, engine.workerCount());
-        }
-    }
-
-    /**
-     * Verifies that step profiling captures timing and execution metrics across workers.
-     */
-    @Test
-    @Timeout(3)
-    void profileStepReportsParallelWorkOnLargeBoard() {
-        try (var engine = new ThreadedPhysicsEngine(4)) {
-            var board = new Board(engine);
-            board.init(new ThousandBallsBoardConf());
-
-            var profile = engine.profileStep(board, PhysicsDefaults.FIXED_STEP_MILLIS);
-
-            assertEquals(4, engine.workerCount());
-            assertTrue(profile.submittedTasks() >= 4);
-            assertTrue(profile.taskSubmissionTimeMillis() >= 0.0);
-            assertTrue(profile.joinOrFutureWaitMillis() >= 0.0);
-            assertTrue(profile.movementMillis() >= 0.0);
-            assertTrue(profile.collisionDetectionMillis() >= 0.0);
-            assertTrue(profile.collisionResolutionMillis() >= 0.0);
         }
     }
 

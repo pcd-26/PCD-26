@@ -1,0 +1,47 @@
+\section{Introduction}
+
+Assignment 2 requires an \textbf{asynchronous filesystem statistics library},
+called \textbf{\texttt{FSStatLib}}, exposing a \textbf{\texttt{getFSReport}}
+operation. The operation receives:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{\texttt{D}}: the root directory to scan;
+  \item \textbf{\texttt{MaxFS}}: the maximum file size used to build the
+  histogram;
+  \item \textbf{\texttt{NB}}: the number of regular size bands.
+\end{itemize}
+
+Starting from \texttt{D}, the library recursively inspects the directory tree
+and produces a report \texttt{R} containing:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{total file count}: the number of files found in the directory
+  tree;
+  \item \textbf{file-size distribution}: \texttt{NB + 1} ranges, where
+  \texttt{[0, MaxFS]} is divided into \texttt{NB} regular bands and the last
+  range counts files whose size is greater than \texttt{MaxFS}.
+\end{itemize}
+
+The deliverable contains \textbf{three implementations} of
+\texttt{getFSReport}, one for each concurrency model required by the
+assignment:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Event-loop}: Vert.x callbacks and asynchronous filesystem
+  operations, with blocking checks kept outside the event loop;
+  \item \textbf{Reactive}: an RxJava \texttt{Observable<File>} stream,
+  accumulated into report snapshots;
+  \item \textbf{Virtual threads}: imperative recursive traversal, with
+  directory tasks executed on Java 21 virtual threads.
+\end{itemize}
+
+The three versions share the same \textbf{report model}, but keep their
+\textbf{traversal strategies} separate. The project also includes a
+\textbf{command-line interface} and a \textbf{minimal Swing GUI}. The GUI can
+start a scan, show dynamic statistics updates, and cancel a running
+computation.
+
+Only \textbf{regular files} are counted. Non-regular filesystem entries, such
+as devices or unsupported links, are skipped so that scans remain robust on
+real directory trees. A \textbf{JUnit suite} checks correctness, robustness,
+cancellation, and consistency across the three versions.

@@ -47,6 +47,13 @@
         <plugin>
           <artifactId>maven-jar-plugin</artifactId>
           <version>3.4.2</version>
+          <configuration>
+            <!-- Benchmark tooling remains runnable from target/classes but is
+                 not part of the final playable artifact. -->
+            <excludes>
+              <exclude>pcd/poool/benchmark/**</exclude>
+            </excludes>
+          </configuration>
         </plugin>
 <!--
         <plugin>

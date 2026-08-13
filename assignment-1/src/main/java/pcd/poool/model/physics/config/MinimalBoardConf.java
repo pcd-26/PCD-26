@@ -8,10 +8,7 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 
-/**
- * Minimal deterministic board configuration used by physics tests and quick
- * experiments.
- */
+/** Minimal deterministic board configuration used by physics tests. */
 public class MinimalBoardConf implements BoardConf {
 
 	private static final Boundary BOARD_BOUNDARY = new Boundary(-1.5, -1.0, 1.5, 1.0);
@@ -26,9 +23,7 @@ public class MinimalBoardConf implements BoardConf {
 	private static final P2d SECOND_SMALL_BALL_START = new P2d(0.05, 0.55);
 	private static final V2d RESTING = new V2d(0, 0);
 
-	/**
-	 * Creates the minimal board configuration.
-	 */
+	/** Creates the minimal board configuration. */
 	public MinimalBoardConf() {
 	}
 

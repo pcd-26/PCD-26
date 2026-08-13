@@ -3,9 +3,7 @@ package pcd.poool.runtime;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
-/**
- * Active bot component shared by concurrent runners.
- */
+// Active bot component shared by concurrent runners.
 public class BotAgent implements Runnable {
 
     private static final long IDLE_SLEEP_MILLIS = 5;
@@ -15,15 +13,7 @@ public class BotAgent implements Runnable {
     private final BooleanSupplier running;
     private final long thinkTimeMillis;
 
-    /**
-     * Creates a bot agent that observes immutable snapshots and submits bot shots
-     * through the owning runner.
-     *
-     * @param snapshots latest immutable runtime snapshot
-     * @param submitBotShot command submission callback
-     * @param running runtime liveness predicate
-     * @param thinkTimeMillis delay before submitting a bot shot
-     */
+    // Creates a bot agent that observes snapshots and submits bot shots.
     public BotAgent(
             Supplier<RuntimeGameSnapshot> snapshots,
             Runnable submitBotShot,
@@ -55,6 +45,7 @@ public class BotAgent implements Runnable {
         }
     }
 
+    // Sleeps briefly between bot polling iterations.
     private void sleepIdle() {
         try {
             Thread.sleep(IDLE_SLEEP_MILLIS);
