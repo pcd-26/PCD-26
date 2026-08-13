@@ -8,13 +8,13 @@ The project combines JUnit tests on the production code with Java PathFinder
 
 The Maven suite checks deterministic physics, collisions, pocketing, FIFO
 commands, concurrent submissions, failures, snapshots, shutdown, view input,
-and benchmark tooling. Running \texttt{mvn -f assignment-1/pom.xml test}
+and benchmark tooling. Running \texttt{mvn test}
 completed with \textbf{158 tests, 0 failures, and 0 errors}. Both JPF models were executed in Docker.
 
 \subsection{JPF verification}
 
 Two small harnesses model the coordination protocol without full physics,
-Swing, timers, or large collections \cite{visser2003}.
+Swing, timers, or large collections.
 \texttt{ThreadedMiniHarness} uses a producer, controller, and long-lived worker;
 \texttt{TaskBasedMiniHarness} creates and joins a short-lived task.
 
