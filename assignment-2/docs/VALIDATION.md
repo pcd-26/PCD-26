@@ -12,7 +12,7 @@ To systematically validate correctness, correctness consistency, and error resil
    - **Setup**: Creates an empty temporary directory.
    - **Goal**: Confirm that all implementations report `0` total files and all size bands containing `0`.
 2. **Flat Directory with Boundary Sizes (`testFlatDirectoryConsistency`)**:
-   - **Setup**: Creates files of size exactly matching limits: `0`, `10`, `25`, `50`, `75`, `100`, `101`, and `250` bytes. The scanner uses `maxFS = 100` and `nb = 4` (width = 25).
+   - **Setup**: Creates files of size exactly matching limits: `0`, `10`, `25`, `50`, `75`, `100`, `101`, and `250` bytes. The scanner uses `maximumFileSizeBytes = 100` and `numberOfBands = 4` (width = 25).
    - **Goal**: Verify math and consistency for boundary values.
 3. **Deeply Nested Directory Hierarchy (`testNestedDirectoryConsistency`)**:
    - **Setup**: Recursively nested directories up to 4 levels deep containing various sized files.
@@ -43,11 +43,25 @@ To systematically validate correctness, correctness consistency, and error resil
 
 ## 2. Test Execution & Outputs Consistency
 
-The standard validation flow starts from a clean build before execution (`clean compile`), so stale classes do not affect the result. Under that workflow, all tests compile and pass under Maven. Here is the execution summary:
+The standard validation flow starts from a clean build before execution, so stale classes do not affect the result. Under that workflow, all tests compile and pass under Maven. Here is the execution summary:
 
-- **Total Tests Run**: 19 (including happy-path unit tests and the robustness/correctness suite)
-- **Status**: 19 Passed, 0 Failed, 0 Skipped
-- **Consistency Verification**: In all test scenarios, the resulting `FSReport` (total file count, size distribution bands, structure) returned by Virtual Threads, RxJava, and Event-Loop are **perfectly identical**.
+- **Total Tests Run**: 25
+- **Status**: 25 Passed, 0 Failed, 0 Skipped
+- **Consistency Verification**: In all test scenarios, the resulting `FSReport` (total file count, size distribution bands, structure) returned by Virtual Threads, RxJava, and Event-Loop are **identical**.
+
+The suite covers:
+
+- a small deterministic fixture used by `FSStatTest`;
+- empty directories;
+- flat directories with boundary sizes;
+- nested hierarchies;
+- a wider/deeper deterministic hierarchy for comparative validation;
+- invalid paths and regular-file paths;
+- permission-restricted directories;
+- symlink cycles where supported;
+- large sparse files;
+- concurrent mutation while scanning;
+- special files and non-regular nodes where supported.
 
 ---
 
@@ -63,6 +77,7 @@ Each implementation has different runtime behaviors, scalability constraints, an
 - **Limitations**:
   - **Thread/Memory Overhead**: Spawning a virtual thread per subdirectory works well for moderate trees, but on massive directory trees (millions of folders), allocating millions of virtual threads could incur JVM memory pressure.
   - **Carrier Thread Pinning**: Under certain conditions where native OS libraries or legacy JVM file access operations block, the underlying carrier thread can be pinned, limiting concurrency.
+  - **Progress Granularity**: The periodic reporter emits snapshots every 100 ms, so very short scans may only surface a final update.
 
 ### 3.2. Reactive Programming (rx)
 
@@ -72,6 +87,7 @@ Each implementation has different runtime behaviors, scalability constraints, an
 - **Limitations**:
   - **Single-Threaded Directory Walker**: Unlike the virtual-thread implementation which walks subdirectories in parallel, the RxJava walk loop sequentially emits files on `Schedulers.io()`. This makes it slower for large directory trees.
   - **Stack Overflow Risk**: The sequential traversal uses stack recursion (`walkRecursive`). Extremely deep directory nesting (thousands of levels) will trigger a JVM `StackOverflowError`.
+  - **Single Subscription Completion**: The completion signal is derived from the final emitted report, so listener code must keep track of the last report if it needs it after completion.
 
 ### 3.3. Event-Loop / Vert.x (loop)
 
@@ -79,9 +95,10 @@ Each implementation has different runtime behaviors, scalability constraints, an
   - Immunized from call-stack overflows since recursion is deferred asynchronously onto the event loop.
   - Extremely light on thread footprint.
 - **Limitations**:
-  - **NIO Context Overhead**: Every file property read (`fs.props`) and directory read (`fs.readDir`) is queued as a separate task on the event loop. For trees containing many tiny files, the scheduler overhead and task queues create significant memory pressure and can degrade performance.
+  - **NIO Context Overhead**: Every file property read (`vertxFileSystem.props`) and directory read (`vertxFileSystem.readDir`) is queued as a separate task on the event loop. For trees containing many tiny files, the scheduler overhead and task queues create significant memory pressure and can degrade performance.
   - **File Descriptor Limits**: Massive parallel non-blocking read/stat calls could exhaust available OS file descriptors if the OS limit is low and many directories are queued.
   - **Asynchronous Loop Cancellation**: Cancelling requires closing the entire Vertx context. Lingering NIO operations already scheduled on worker threads might complete and fire callbacks before the context shuts down, requiring safe state checks.
+  - **Per-Scan Vert.x Instance**: A fresh Vert.x instance is created for each scan, which keeps scans isolated but adds setup overhead compared with a pooled runtime.
 
 ---
 

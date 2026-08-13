@@ -38,3 +38,11 @@ The deliverable must be a zipped folder `Assignment-02`, to be submitted on the 
 - `doc` directory with a short report in PDF (`report.pdf`). The report should include:
 	- A brief analsysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
 	- A brief description of the strategy adopted
+
+### Internal documentation
+
+Developer-oriented notes for the codebase live in:
+
+- [docs/INTERNAL.md](./docs/INTERNAL.md)
+- [docs/DESIGN.md](./docs/DESIGN.md)
+- [docs/VALIDATION.md](./docs/VALIDATION.md)

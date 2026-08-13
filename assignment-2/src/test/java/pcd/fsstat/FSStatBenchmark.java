@@ -1,10 +1,12 @@
-package pcd.assignment2;
+package pcd.fsstat;
 
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSReportListener;
-import pcd.assignment2.eventloop.EventLoopFSStat;
-import pcd.assignment2.reactive.ReactiveFSStat;
-import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSReportListener;
+import pcd.fsstat.paradigm.eventloop.EventLoopFSStat;
+import pcd.fsstat.paradigm.reactive.ReactiveFSStat;
+import pcd.fsstat.paradigm.virtualthreads.VirtualThreadsFSStat;
+
+import io.reactivex.rxjava3.schedulers.Schedulers;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -12,22 +14,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
-/**
- * Benchmark runner to measure and compare execution performance of the three filesystem analysis paradigms.
- */
+/** Small benchmark for comparing the three scan implementations. */
 public class FSStatBenchmark {
 
     private static final int WARMUP_RUNS = 2;
     private static final int MEASURE_RUNS = 5;
-    private static final long MAX_FS = 10 * 1024 * 1024; // 10MB
-    private static final int NB = 5;
+    private static final long MAXIMUM_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+    private static final int NUMBER_OF_BANDS = 5;
 
-    /**
-     * Executes the benchmark scanning the specified directory path (defaults to root workspace directory).
-     *
-     * @param args Custom target directory (optional).
-     * @throws Exception If thread waiting or execution fails.
-     */
+    /** Runs the benchmark against the given directory, or the current one by default. */
     public static void main(String[] args) throws Exception {
         String targetDir = args.length > 0 ? args[0] : ".";
         File dir = new File(targetDir);
@@ -36,7 +31,7 @@ public class FSStatBenchmark {
         System.out.println("Target Directory: " + dir.getAbsolutePath());
         System.out.println("=================================================");
 
-        // Warmup
+        // Warm up all implementations before measuring them.
         System.out.println("Running warmup runs...");
         for (int i = 0; i < WARMUP_RUNS; i++) {
             runVirtualThreads(targetDir);
@@ -45,7 +40,7 @@ public class FSStatBenchmark {
         }
         System.out.println("Warmup complete. Running measurements...");
 
-        // Measure Virtual Threads
+        // Measure the virtual-thread implementation.
         List<Long> vtTimes = new ArrayList<>();
         long vtFiles = 0;
         for (int i = 0; i < MEASURE_RUNS; i++) {
@@ -56,7 +51,7 @@ public class FSStatBenchmark {
             System.out.println(r.durationMs() + " ms (" + r.totalFiles() + " files)");
         }
 
-        // Measure Reactive
+        // Measure the RxJava implementation.
         List<Long> rxTimes = new ArrayList<>();
         long rxFiles = 0;
         for (int i = 0; i < MEASURE_RUNS; i++) {
@@ -67,7 +62,7 @@ public class FSStatBenchmark {
             System.out.println(r.durationMs() + " ms (" + r.totalFiles() + " files)");
         }
 
-        // Measure Event-Loop
+        // Measure the Vert.x event-loop implementation.
         List<Long> evTimes = new ArrayList<>();
         long evFiles = 0;
         for (int i = 0; i < MEASURE_RUNS; i++) {
@@ -78,19 +73,20 @@ public class FSStatBenchmark {
             System.out.println(r.durationMs() + " ms (" + r.totalFiles() + " files)");
         }
 
-        // Report comparisons
+        // Print the collected measurements.
         printComparisonTable("Virtual Threads", vtTimes, vtFiles,
                              "Reactive (RxJava)", rxTimes, rxFiles,
                              "Event-Loop (Vert.x)", evTimes, evFiles);
 
-        // Shutdown RxJava schedulers to let lingering threads terminate immediately
-        io.reactivex.rxjava3.schedulers.Schedulers.shutdown();
+        // Shutdown RxJava schedulers to let lingering threads terminate immediately.
+        Schedulers.shutdown();
     }
 
+    /** Runs one virtual-thread benchmark scan and waits for its completion. */
     private static FSReport runVirtualThreads(String directory) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         FSReport[] result = new FSReport[1];
-        VirtualThreadsFSStat.getFSReport(directory, MAX_FS, NB, new FSReportListener() {
+        VirtualThreadsFSStat.getFSReport(directory, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
 
@@ -109,15 +105,17 @@ public class FSStatBenchmark {
         return result[0];
     }
 
+    /** Runs one RxJava benchmark scan and returns its final report. */
     private static FSReport runReactive(String directory) {
-        return ReactiveFSStat.getFSReport(directory, MAX_FS, NB)
+        return ReactiveFSStat.getFSReport(directory, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS)
             .blockingLast();
     }
 
+    /** Runs one Vert.x benchmark scan and waits for its completion. */
     private static FSReport runEventLoop(String directory) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         FSReport[] result = new FSReport[1];
-        EventLoopFSStat.getFSReport(directory, MAX_FS, NB, new FSReportListener() {
+        EventLoopFSStat.getFSReport(directory, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
 
@@ -136,6 +134,7 @@ public class FSStatBenchmark {
         return result[0];
     }
 
+    /** Prints median and average timings for the benchmarked implementations. */
     private static void printComparisonTable(
         String label1, List<Long> times1, long files1,
         String label2, List<Long> times2, long files2,
@@ -152,6 +151,7 @@ public class FSStatBenchmark {
         System.out.println("=================================================\n");
     }
 
+    /** Prints one benchmark result row. */
     private static void printRow(String label, List<Long> times, long files) {
         double avg = times.stream().mapToLong(Long::longValue).average().orElse(0.0);
         Collections.sort(times);

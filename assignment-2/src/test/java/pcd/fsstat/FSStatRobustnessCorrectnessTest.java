@@ -1,12 +1,12 @@
-package pcd.assignment2;
+package pcd.fsstat;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import pcd.assignment2.common.FSReport;
-import pcd.assignment2.common.FSReportListener;
-import pcd.assignment2.eventloop.EventLoopFSStat;
-import pcd.assignment2.reactive.ReactiveFSStat;
-import pcd.assignment2.virtualthreads.VirtualThreadsFSStat;
+import pcd.fsstat.common.FSReport;
+import pcd.fsstat.common.FSReportListener;
+import pcd.fsstat.paradigm.eventloop.EventLoopFSStat;
+import pcd.fsstat.paradigm.reactive.ReactiveFSStat;
+import pcd.fsstat.paradigm.virtualthreads.VirtualThreadsFSStat;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -20,22 +20,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Robustness and correctness test suite for checking consistency, handling edge cases,
- * and error resilience across the VirtualThreads, RxJava, and EventLoop implementations of FSStatLib.
- */
+/** Cross-checks correctness and robustness across all FSStat implementations. */
 public class FSStatRobustnessCorrectnessTest {
 
-    private static final long MAX_FS = 100;
-    private static final int NB = 4;
+    private static final long MAXIMUM_FILE_SIZE_BYTES = 100;
+    private static final int NUMBER_OF_BANDS = 4;
 
-    /**
-     * Helper to write a dummy file of a specific size.
-     *
-     * @param file The file to write.
-     * @param size The size of the file in bytes.
-     * @throws IOException If write fails.
-     */
+    /** Writes a dummy file with the requested byte size. */
     private void writeDummyFile(File file, long size) throws IOException {
         if (file.getParentFile() != null && !file.getParentFile().exists()) {
             assertTrue(file.getParentFile().mkdirs());
@@ -47,20 +38,55 @@ public class FSStatRobustnessCorrectnessTest {
         }
     }
 
-    /**
-     * Runs the Virtual Threads scanner synchronously and returns the report.
-     *
-     * @param path  The root path to scan.
-     * @param maxFS The max file size.
-     * @param nb    The number of bands.
-     * @return The final FSReport.
-     * @throws Exception If scan fails or times out.
-     */
-    private FSReport runVirtualThreads(String path, long maxFS, int nb) throws Exception {
+    /** Builds a deterministic multi-level test hierarchy. */
+    private void createWideDeepHierarchy(Path root) throws IOException {
+        writeDummyFile(root.resolve("root_10.dat").toFile(), 10);
+
+        Path dirA = root.resolve("dirA");
+        Path dirB = root.resolve("dirB");
+        assertTrue(dirA.toFile().mkdir());
+        assertTrue(dirB.toFile().mkdir());
+
+        writeDummyFile(dirA.resolve("a_0.dat").toFile(), 0);
+        writeDummyFile(dirA.resolve("a_25.dat").toFile(), 25);
+        writeDummyFile(dirA.resolve("a_101.dat").toFile(), 101);
+
+        writeDummyFile(dirB.resolve("b_50.dat").toFile(), 50);
+        writeDummyFile(dirB.resolve("b_75.dat").toFile(), 75);
+        writeDummyFile(dirB.resolve("b_250.dat").toFile(), 250);
+
+        Path dirA1 = dirA.resolve("dirA1");
+        Path dirA2 = dirA.resolve("dirA2");
+        Path dirB1 = dirB.resolve("dirB1");
+        Path dirB2 = dirB.resolve("dirB2");
+        assertTrue(dirA1.toFile().mkdir());
+        assertTrue(dirA2.toFile().mkdir());
+        assertTrue(dirB1.toFile().mkdir());
+        assertTrue(dirB2.toFile().mkdir());
+
+        writeDummyFile(dirA1.resolve("a1_10.dat").toFile(), 10);
+        writeDummyFile(dirA1.resolve("a1_25.dat").toFile(), 25);
+        writeDummyFile(dirA1.resolve("a1_50.dat").toFile(), 50);
+
+        writeDummyFile(dirA2.resolve("a2_0.dat").toFile(), 0);
+        writeDummyFile(dirA2.resolve("a2_75.dat").toFile(), 75);
+        writeDummyFile(dirA2.resolve("a2_101.dat").toFile(), 101);
+
+        writeDummyFile(dirB1.resolve("b1_25.dat").toFile(), 25);
+        writeDummyFile(dirB1.resolve("b1_75.dat").toFile(), 75);
+        writeDummyFile(dirB1.resolve("b1_150.dat").toFile(), 150);
+
+        writeDummyFile(dirB2.resolve("b2_0.dat").toFile(), 0);
+        writeDummyFile(dirB2.resolve("b2_50.dat").toFile(), 50);
+        writeDummyFile(dirB2.resolve("b2_101.dat").toFile(), 101);
+    }
+
+    /** Runs the virtual-thread scanner and waits for the final report. */
+    private FSReport runVirtualThreads(String path, long maximumFileSizeBytes, int numberOfBands) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<FSReport> result = new AtomicReference<>();
         AtomicReference<Throwable> error = new AtomicReference<>();
-        VirtualThreadsFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
+        VirtualThreadsFSStat.getFSReport(path, maximumFileSizeBytes, numberOfBands, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
 
@@ -85,20 +111,12 @@ public class FSStatRobustnessCorrectnessTest {
         return result.get();
     }
 
-    /**
-     * Runs the Event Loop scanner synchronously and returns the report.
-     *
-     * @param path  The root path to scan.
-     * @param maxFS The max file size.
-     * @param nb    The number of bands.
-     * @return The final FSReport.
-     * @throws Exception If scan fails or times out.
-     */
-    private FSReport runEventLoop(String path, long maxFS, int nb) throws Exception {
+    /** Runs the event-loop scanner and waits for the final report. */
+    private FSReport runEventLoop(String path, long maximumFileSizeBytes, int numberOfBands) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<FSReport> result = new AtomicReference<>();
         AtomicReference<Throwable> error = new AtomicReference<>();
-        EventLoopFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
+        EventLoopFSStat.getFSReport(path, maximumFileSizeBytes, numberOfBands, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
 
@@ -123,31 +141,17 @@ public class FSStatRobustnessCorrectnessTest {
         return result.get();
     }
 
-    /**
-     * Runs the RxJava scanner synchronously and returns the report.
-     *
-     * @param path  The root path to scan.
-     * @param maxFS The max file size.
-     * @param nb    The number of bands.
-     * @return The final FSReport.
-     */
-    private FSReport runReactive(String path, long maxFS, int nb) {
-        return ReactiveFSStat.getFSReport(path, maxFS, nb)
+    /** Runs the reactive scanner and returns the final report. */
+    private FSReport runReactive(String path, long maximumFileSizeBytes, int numberOfBands) {
+        return ReactiveFSStat.getFSReport(path, maximumFileSizeBytes, numberOfBands)
                 .blockingLast();
     }
 
-    /**
-     * Asserts that Virtual Threads scanner fails with an exception.
-     *
-     * @param path  The path.
-     * @param maxFS The max file size.
-     * @param nb    The number of bands.
-     * @throws Exception If thread wait fails.
-     */
-    private void assertFailureVirtualThreads(String path, long maxFS, int nb) throws Exception {
+    /** Checks that the virtual-thread scanner reports failure. */
+    private void assertFailureVirtualThreads(String path, long maximumFileSizeBytes, int numberOfBands) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Throwable> error = new AtomicReference<>();
-        VirtualThreadsFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
+        VirtualThreadsFSStat.getFSReport(path, maximumFileSizeBytes, numberOfBands, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
             @Override
@@ -162,18 +166,11 @@ public class FSStatRobustnessCorrectnessTest {
         assertNotNull(error.get(), "Expected error for VirtualThreads scan on path: " + path);
     }
 
-    /**
-     * Asserts that Event Loop scanner fails with an exception.
-     *
-     * @param path  The path.
-     * @param maxFS The max file size.
-     * @param nb    The number of bands.
-     * @throws Exception If thread wait fails.
-     */
-    private void assertFailureEventLoop(String path, long maxFS, int nb) throws Exception {
+    /** Checks that the event-loop scanner reports failure. */
+    private void assertFailureEventLoop(String path, long maximumFileSizeBytes, int numberOfBands) throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Throwable> error = new AtomicReference<>();
-        EventLoopFSStat.getFSReport(path, maxFS, nb, new FSReportListener() {
+        EventLoopFSStat.getFSReport(path, maximumFileSizeBytes, numberOfBands, new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {}
             @Override
@@ -188,28 +185,17 @@ public class FSStatRobustnessCorrectnessTest {
         assertNotNull(error.get(), "Expected error for EventLoop scan on path: " + path);
     }
 
-    /**
-     * Asserts that Reactive scanner fails with an exception.
-     *
-     * @param path  The path.
-     * @param maxFS The max file size.
-     * @param nb    The number of bands.
-     */
-    private void assertFailureReactive(String path, long maxFS, int nb) {
+    /** Checks that the reactive scanner reports failure. */
+    private void assertFailureReactive(String path, long maximumFileSizeBytes, int numberOfBands) {
         try {
-            ReactiveFSStat.getFSReport(path, maxFS, nb).blockingLast();
+            ReactiveFSStat.getFSReport(path, maximumFileSizeBytes, numberOfBands).blockingLast();
             fail("Expected error for Reactive scan on path: " + path);
         } catch (Exception e) {
-            // Expected failure
+            // Expected path.
         }
     }
 
-    /**
-     * Asserts that two reports match exactly in counts and bands.
-     *
-     * @param expected The expected report.
-     * @param actual   The actual report.
-     */
+    /** Checks total-file and band counts match exactly. */
     private void assertReportsEqual(FSReport expected, FSReport actual) {
         assertNotNull(expected);
         assertNotNull(actual);
@@ -222,17 +208,12 @@ public class FSStatRobustnessCorrectnessTest {
         }
     }
 
-    /**
-     * Verifies that scanning an empty directory yields consistent results of 0 files.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Empty directories produce zero counts in every implementation. */
     @Test
     public void testEmptyDirectoryConsistency(@TempDir Path tempDir) throws Exception {
-        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAX_FS, NB);
-        FSReport rxReport = runReactive(tempDir.toString(), MAX_FS, NB);
-        FSReport evReport = runEventLoop(tempDir.toString(), MAX_FS, NB);
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
 
         assertReportsEqual(vtReport, rxReport);
         assertReportsEqual(vtReport, evReport);
@@ -243,12 +224,7 @@ public class FSStatRobustnessCorrectnessTest {
         }
     }
 
-    /**
-     * Verifies that flat directory scans catalog files correctly based on exact boundary values.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Boundary-sized files land in the expected bands. */
     @Test
     public void testFlatDirectoryConsistency(@TempDir Path tempDir) throws Exception {
         long[] sizes = {0, 10, 25, 50, 75, 100, 101, 250};
@@ -256,9 +232,9 @@ public class FSStatRobustnessCorrectnessTest {
             writeDummyFile(tempDir.resolve("file_" + i + ".dat").toFile(), sizes[i]);
         }
 
-        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAX_FS, NB);
-        FSReport rxReport = runReactive(tempDir.toString(), MAX_FS, NB);
-        FSReport evReport = runEventLoop(tempDir.toString(), MAX_FS, NB);
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
 
         assertReportsEqual(vtReport, rxReport);
         assertReportsEqual(vtReport, evReport);
@@ -273,12 +249,7 @@ public class FSStatRobustnessCorrectnessTest {
         assertEquals(2, bands[4]);
     }
 
-    /**
-     * Verifies that deeply nested directory scans count all files correctly without dropouts.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Nested directories are scanned recursively without losing files. */
     @Test
     public void testNestedDirectoryConsistency(@TempDir Path tempDir) throws Exception {
         writeDummyFile(tempDir.resolve("l1_f1.dat").toFile(), 10);
@@ -298,9 +269,9 @@ public class FSStatRobustnessCorrectnessTest {
 
         writeDummyFile(l4Dir.resolve("l4_f1.dat").toFile(), 120);
 
-        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAX_FS, NB);
-        FSReport rxReport = runReactive(tempDir.toString(), MAX_FS, NB);
-        FSReport evReport = runEventLoop(tempDir.toString(), MAX_FS, NB);
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
 
         assertReportsEqual(vtReport, rxReport);
         assertReportsEqual(vtReport, evReport);
@@ -315,41 +286,49 @@ public class FSStatRobustnessCorrectnessTest {
         assertEquals(1, bands[4]);
     }
 
-    /**
-     * Verifies that invalid paths trigger the error callback without throwing unhandled exceptions.
-     *
-     * @throws Exception If execution fails.
-     */
+    /** A wider hierarchy produces identical reports across implementations. */
+    @Test
+    public void testWideDeepDirectoryConsistency(@TempDir Path tempDir) throws Exception {
+        createWideDeepHierarchy(tempDir);
+
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+
+        assertReportsEqual(vtReport, rxReport);
+        assertReportsEqual(vtReport, evReport);
+
+        assertEquals(19, vtReport.totalFiles());
+        long[] bands = vtReport.bandsCount();
+        assertEquals(5, bands.length);
+        assertEquals(5, bands[0]);
+        assertEquals(3, bands[1]);
+        assertEquals(3, bands[2]);
+        assertEquals(3, bands[3]);
+        assertEquals(5, bands[4]);
+    }
+
+    /** Invalid roots are reported as scan failures. */
     @Test
     public void testInvalidDirectoryPath() throws Exception {
         String invalidPath = "/non-existent-dir-fsstat-validation-xyz-" + System.currentTimeMillis();
-        assertFailureVirtualThreads(invalidPath, MAX_FS, NB);
-        assertFailureReactive(invalidPath, MAX_FS, NB);
-        assertFailureEventLoop(invalidPath, MAX_FS, NB);
+        assertFailureVirtualThreads(invalidPath, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        assertFailureReactive(invalidPath, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        assertFailureEventLoop(invalidPath, MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
     }
 
-    /**
-     * Verifies that providing a regular file triggers the error callback.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Regular files cannot be used as scan roots. */
     @Test
     public void testRegularFilePath(@TempDir Path tempDir) throws Exception {
         File regularFile = tempDir.resolve("regular.txt").toFile();
         writeDummyFile(regularFile, 50);
 
-        assertFailureVirtualThreads(regularFile.getAbsolutePath(), MAX_FS, NB);
-        assertFailureReactive(regularFile.getAbsolutePath(), MAX_FS, NB);
-        assertFailureEventLoop(regularFile.getAbsolutePath(), MAX_FS, NB);
+        assertFailureVirtualThreads(regularFile.getAbsolutePath(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        assertFailureReactive(regularFile.getAbsolutePath(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        assertFailureEventLoop(regularFile.getAbsolutePath(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
     }
 
-    /**
-     * Verifies that unreadable subdirectories do not cause crashes, skipping unreadable areas.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Unreadable subdirectories are skipped without crashing. */
     @Test
     public void testRestrictedPermissions(@TempDir Path tempDir) throws Exception {
         Path allowedDir = tempDir.resolve("allowed");
@@ -367,9 +346,9 @@ public class FSStatRobustnessCorrectnessTest {
         }
 
         try {
-            FSReport vtReport = runVirtualThreads(tempDir.toString(), MAX_FS, NB);
-            FSReport rxReport = runReactive(tempDir.toString(), MAX_FS, NB);
-            FSReport evReport = runEventLoop(tempDir.toString(), MAX_FS, NB);
+            FSReport vtReport = runVirtualThreads(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+            FSReport rxReport = runReactive(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+            FSReport evReport = runEventLoop(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
 
             assertReportsEqual(vtReport, rxReport);
             assertReportsEqual(vtReport, evReport);
@@ -380,12 +359,7 @@ public class FSStatRobustnessCorrectnessTest {
         }
     }
 
-    /**
-     * Verifies that directories containing circular symlinks (loops) do not trigger infinite loops or hangs.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Circular symlinks do not cause infinite traversal. */
     @Test
     public void testCircularSymbolicLinks(@TempDir Path tempDir) throws Exception {
         Path cycleParent = tempDir.resolve("cycleParent");
@@ -401,23 +375,18 @@ public class FSStatRobustnessCorrectnessTest {
             return;
         }
 
-        FSReport vtReport = runVirtualThreads(cycleParent.toString(), MAX_FS, NB);
-        FSReport rxReport = runReactive(cycleParent.toString(), MAX_FS, NB);
-        FSReport evReport = runEventLoop(cycleParent.toString(), MAX_FS, NB);
+        FSReport vtReport = runVirtualThreads(cycleParent.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(cycleParent.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(cycleParent.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
 
         assertReportsEqual(vtReport, rxReport);
         assertReportsEqual(vtReport, evReport);
 
-        // The scanners should only count f1.dat once (since the cyclic link is detected and skipped)
+        // The cyclic link should not make the same file appear twice.
         assertEquals(1, vtReport.totalFiles());
     }
 
-    /**
-     * Verifies that large files (> 2 GB) are handled correctly without type overflow.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Large files are classified without integer overflow. */
     @Test
     public void testLargeFileSizes(@TempDir Path tempDir) throws Exception {
         File largeSparseFile = tempDir.resolve("large_sparse.dat").toFile();
@@ -426,12 +395,11 @@ public class FSStatRobustnessCorrectnessTest {
             raf.setLength(threeGigabytes);
         }
 
-        // maxFS = 1 GB, 4 bands (each band width = 250 MB).
-        // 3 GB file should be categorized in Band 4 (> 1 GB)
+        // A 3 GB file belongs to the overflow band.
         long oneGigabyte = 1_000_000_000L;
-        FSReport vtReport = runVirtualThreads(tempDir.toString(), oneGigabyte, NB);
-        FSReport rxReport = runReactive(tempDir.toString(), oneGigabyte, NB);
-        FSReport evReport = runEventLoop(tempDir.toString(), oneGigabyte, NB);
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), oneGigabyte, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(tempDir.toString(), oneGigabyte, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(tempDir.toString(), oneGigabyte, NUMBER_OF_BANDS);
 
         assertReportsEqual(vtReport, rxReport);
         assertReportsEqual(vtReport, evReport);
@@ -439,18 +407,13 @@ public class FSStatRobustnessCorrectnessTest {
         assertEquals(1, vtReport.totalFiles());
         long[] bands = vtReport.bandsCount();
         assertEquals(5, bands.length);
-        assertEquals(1, bands[4]); // should be in the highest band
+        assertEquals(1, bands[4]);
     }
 
-    /**
-     * Verifies that file modifications and deletions during a running scan do not crash the engines.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Concurrent file deletions do not crash running scans. */
     @Test
     public void testConcurrentFileMutation(@TempDir Path tempDir) throws Exception {
-        // Create 20 files
+        // Create a batch large enough for deletion to race with traversal.
         int totalFiles = 20;
         File[] files = new File[totalFiles];
         for (int i = 0; i < totalFiles; i++) {
@@ -458,10 +421,10 @@ public class FSStatRobustnessCorrectnessTest {
             writeDummyFile(files[i], 10);
         }
 
-        // Spawn a thread to delete files concurrent with the scan
+        // Delete half the files while scans are starting.
         Thread deletionThread = new Thread(() -> {
             try {
-                Thread.sleep(10); // Wait for the scan to start
+                Thread.sleep(10);
                 for (int i = 0; i < totalFiles; i += 2) {
                     Files.deleteIfExists(files[i].toPath());
                 }
@@ -471,25 +434,18 @@ public class FSStatRobustnessCorrectnessTest {
         });
         deletionThread.start();
 
-        // Run scans. They should complete successfully without throwing uncaught exceptions.
-        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAX_FS, NB);
-        FSReport rxReport = runReactive(tempDir.toString(), MAX_FS, NB);
-        FSReport evReport = runEventLoop(tempDir.toString(), MAX_FS, NB);
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
 
         deletionThread.join();
 
-        // Scans should not crash
         assertNotNull(vtReport);
         assertNotNull(rxReport);
         assertNotNull(evReport);
     }
 
-    /**
-     * Verifies that non-regular device files (like a symbolic link to /dev/null) are gracefully skipped.
-     *
-     * @param tempDir Path injected by Junit.
-     * @throws Exception If execution fails.
-     */
+    /** Non-regular filesystem entries are skipped. */
     @Test
     public void testSpecialFiles(@TempDir Path tempDir) throws Exception {
         File devNull = new File("/dev/null");
@@ -506,14 +462,13 @@ public class FSStatRobustnessCorrectnessTest {
             return;
         }
 
-        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAX_FS, NB);
-        FSReport rxReport = runReactive(tempDir.toString(), MAX_FS, NB);
-        FSReport evReport = runEventLoop(tempDir.toString(), MAX_FS, NB);
+        FSReport vtReport = runVirtualThreads(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport rxReport = runReactive(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
+        FSReport evReport = runEventLoop(tempDir.toString(), MAXIMUM_FILE_SIZE_BYTES, NUMBER_OF_BANDS);
 
         assertReportsEqual(vtReport, rxReport);
         assertReportsEqual(vtReport, evReport);
 
-        // Since /dev/null is a character special device, not a regular file, it should not be cataloged
         assertEquals(0, vtReport.totalFiles());
     }
 }
