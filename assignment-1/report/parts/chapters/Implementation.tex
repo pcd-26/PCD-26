@@ -239,5 +239,6 @@ mailbox. The threaded version joins controller and bot threads, then closes its
 physics workers. The task-based version terminates its executors and finally
 shuts down the physics pool.
 
-Benchmark classes remain available to scripts but are excluded from the game
-JAR by \texttt{maven-jar-plugin}; sketches remain under \texttt{reference/}.
+Benchmark classes are development-only and are excluded from the delivery
+package. The submitted archive contains the Maven descriptor, production
+sources, tests, and this report PDF.
