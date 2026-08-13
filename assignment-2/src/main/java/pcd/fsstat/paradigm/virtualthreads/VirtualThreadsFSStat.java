@@ -23,7 +23,7 @@ public class VirtualThreadsFSStat {
     }
 
     /** Starts an asynchronous filesystem scan backed by virtual threads. */
-    public static FSReportJob getFSReport(String directory, long maxFS, int nb, FSReportListener listener) {
+    public static FSReportJob getFSReport(String directory, long maximumFileSizeBytes, int numberOfBands, FSReportListener listener) {
         // Initialize shared counters and lifecycle coordination.
         VirtualThreadsScanState scanState = new VirtualThreadsScanState();
         CountDownLatch completionSignal = new CountDownLatch(1);
@@ -31,8 +31,8 @@ public class VirtualThreadsFSStat {
 
         // LongAdder is used for thread-safe counting without contention.
         LongAdder totalFileCount = new LongAdder();
-        LongAdder[] fileCountsPerBand = new LongAdder[nb + 1];
-        for (int bandIndex = 0; bandIndex <= nb; bandIndex++) {
+        LongAdder[] fileCountsPerBand = new LongAdder[numberOfBands + 1];
+        for (int bandIndex = 0; bandIndex <= numberOfBands; bandIndex++) {
             fileCountsPerBand[bandIndex] = new LongAdder();
         }
 
@@ -46,7 +46,14 @@ public class VirtualThreadsFSStat {
             try {
                 while (!scanState.isCancelled && !Thread.currentThread().isInterrupted()) {
                     Thread.sleep(100);
-                    listener.onUpdate(createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
+                    listener.onUpdate(createReport(
+                        directory,
+                        maximumFileSizeBytes,
+                        numberOfBands,
+                        fileCountsPerBand,
+                        totalFileCount,
+                        scanStartTime
+                    ));
                 }
             } catch (InterruptedException ignored) {
             }
@@ -66,8 +73,8 @@ public class VirtualThreadsFSStat {
                     try {
                         scanDirectoryRecursively(
                             rootDirectory,
-                            maxFS,
-                            nb,
+                            maximumFileSizeBytes,
+                            numberOfBands,
                             virtualThreadExecutor,
                             activeTaskCount,
                             totalFileCount,
@@ -91,7 +98,14 @@ public class VirtualThreadsFSStat {
                 virtualThreadExecutor.shutdown();
 
                 if (!scanState.isCancelled) {
-                    listener.onCompleted(createReport(directory, maxFS, nb, fileCountsPerBand, totalFileCount, scanStartTime));
+                    listener.onCompleted(createReport(
+                        directory,
+                        maximumFileSizeBytes,
+                        numberOfBands,
+                        fileCountsPerBand,
+                        totalFileCount,
+                        scanStartTime
+                    ));
                 }
             } catch (Throwable t) {
                 listener.onError(t);
@@ -121,8 +135,8 @@ public class VirtualThreadsFSStat {
     /** Recursively scans a directory and submits subdirectories as separate virtual-thread tasks. */
     private static void scanDirectoryRecursively(
         File currentDirectory,
-        long maxFS,
-        int nb,
+        long maximumFileSizeBytes,
+        int numberOfBands,
         ExecutorService virtualThreadExecutor,
         AtomicInteger activeTaskCount,
         LongAdder totalFileCount,
@@ -161,8 +175,8 @@ public class VirtualThreadsFSStat {
                     try {
                         scanDirectoryRecursively(
                             child,
-                            maxFS,
-                            nb,
+                            maximumFileSizeBytes,
+                            numberOfBands,
                             virtualThreadExecutor,
                             activeTaskCount,
                             totalFileCount,
@@ -179,7 +193,7 @@ public class VirtualThreadsFSStat {
             } else if (child.isFile()) {
                 totalFileCount.increment();
                 long fileSizeBytes = child.length();
-                int bandIndex = FSReport.getBandIndex(fileSizeBytes, maxFS, nb);
+                int bandIndex = FSReport.getBandIndex(fileSizeBytes, maximumFileSizeBytes, numberOfBands);
                 fileCountsPerBand[bandIndex].increment();
             }
         }
@@ -188,8 +202,8 @@ public class VirtualThreadsFSStat {
     /** Builds a report from the virtual-thread counters. */
     private static FSReport createReport(
         String directory,
-        long maxFS,
-        int nb,
+        long maximumFileSizeBytes,
+        int numberOfBands,
         LongAdder[] fileCountsPerBand,
         LongAdder totalFileCount,
         long scanStartTime
@@ -198,7 +212,14 @@ public class VirtualThreadsFSStat {
         for (int bandIndex = 0; bandIndex < fileCountsPerBand.length; bandIndex++) {
             bands[bandIndex] = fileCountsPerBand[bandIndex].sum();
         }
-        return new FSReport(directory, maxFS, nb, bands, totalFileCount.sum(), System.currentTimeMillis() - scanStartTime);
+        return new FSReport(
+            directory,
+            maximumFileSizeBytes,
+            numberOfBands,
+            bands,
+            totalFileCount.sum(),
+            System.currentTimeMillis() - scanStartTime
+        );
     }
 
     /** Decrements the active-task counter and releases the waiter when the scan is idle. */

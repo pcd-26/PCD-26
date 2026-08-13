@@ -5,9 +5,10 @@ directory recursively and returns a report with two main values:
 
 \begin{itemize}[leftmargin=*]
   \item the total number of regular files found in the directory tree;
-  \item the distribution of file sizes in \texttt{NB + 1} bands, where the
-  range \texttt{[0, MaxFS]} is divided into \texttt{NB} bands and the last band
-  counts files larger than \texttt{MaxFS}.
+  \item the distribution of file sizes in \texttt{numberOfBands + 1} bands,
+  where the range from zero to \texttt{maximumFileSizeBytes} is divided into
+  \texttt{numberOfBands} bands and the last band counts files larger than
+  \texttt{maximumFileSizeBytes}.
 \end{itemize}
 
 The project provides three implementations of the same behaviour:

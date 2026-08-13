@@ -67,7 +67,7 @@ public class FSStatGUI extends JFrame {
         constraints.gridx = 3; constraints.gridwidth = 1;
         configurationPanel.add(browseButton, constraints);
 
-        // MaxFS and NB
+        // Maximum file-size threshold and band count
         constraints.gridx = 0; constraints.gridy = 1;
         configurationPanel.add(new JLabel("Max File Size:"), constraints);
 

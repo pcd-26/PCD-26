@@ -38,9 +38,9 @@ public class EventLoopFSStat {
         long progressTimerId = -1;
 
         /** Creates counters for all normal bands plus the overflow band. */
-        EventLoopScanState(int nb) {
-            fileCountsPerBand = new AtomicLong[nb + 1];
-            for (int bandIndex = 0; bandIndex <= nb; bandIndex++) {
+        EventLoopScanState(int numberOfBands) {
+            fileCountsPerBand = new AtomicLong[numberOfBands + 1];
+            for (int bandIndex = 0; bandIndex <= numberOfBands; bandIndex++) {
                 fileCountsPerBand[bandIndex] = new AtomicLong(0);
             }
         }
@@ -57,10 +57,10 @@ public class EventLoopFSStat {
     }
 
     /** Starts an asynchronous filesystem scan using Vert.x callbacks. */
-    public static FSReportJob getFSReport(String directory, long maxFS, int nb, FSReportListener listener) {
+    public static FSReportJob getFSReport(String directory, long maximumFileSizeBytes, int numberOfBands, FSReportListener listener) {
         Vertx vertx = Vertx.vertx();
-        FileSystem fs = vertx.fileSystem();
-        EventLoopScanState scanState = new EventLoopScanState(nb);
+        FileSystem vertxFileSystem = vertx.fileSystem();
+        EventLoopScanState scanState = new EventLoopScanState(numberOfBands);
         long scanStartTime = System.currentTimeMillis();
 
         // Publish progress snapshots on the event loop at a fixed interval.
@@ -68,7 +68,7 @@ public class EventLoopFSStat {
             if (scanState.cancelled() || scanState.closed.get()) {
                 return;
             }
-            listener.onUpdate(createReport(directory, maxFS, nb, scanState, scanStartTime));
+            listener.onUpdate(createReport(directory, maximumFileSizeBytes, numberOfBands, scanState, scanStartTime));
         });
 
         // Centralize final completion and Vert.x shutdown once all async tasks drain.
@@ -78,14 +78,23 @@ public class EventLoopFSStat {
                     vertx.cancelTimer(scanState.progressTimerId);
                 }
                 if (!scanState.cancelled()) {
-                    listener.onCompleted(createReport(directory, maxFS, nb, scanState, scanStartTime));
+                    listener.onCompleted(createReport(directory, maximumFileSizeBytes, numberOfBands, scanState, scanStartTime));
                 }
                 vertx.close();
             }
         };
 
         scanState.pendingTaskCount.incrementAndGet();
-        vertx.runOnContext(v -> scanDirectory(directory, maxFS, nb, fs, scanState, finishScanIfIdle, vertx, listener));
+        vertx.runOnContext(ignored -> scanDirectory(
+            directory,
+            maximumFileSizeBytes,
+            numberOfBands,
+            vertxFileSystem,
+            scanState,
+            finishScanIfIdle,
+            vertx,
+            listener
+        ));
 
         return new FSReportJob() {
             /** Requests cancellation and closes Vert.x once pending callbacks drain. */
@@ -111,9 +120,9 @@ public class EventLoopFSStat {
     /** Scans a directory with asynchronous Vert.x filesystem operations. */
     private static void scanDirectory(
         String path,
-        long maxFS,
-        int nb,
-        FileSystem fs,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        FileSystem vertxFileSystem,
         EventLoopScanState scanState,
         Runnable finishScanIfIdle,
         Vertx vertx,
@@ -161,32 +170,41 @@ public class EventLoopFSStat {
                 return;
             }
 
-            fs.readDir(path).onComplete(res -> {
+            vertxFileSystem.readDir(path).onComplete(directoryReadResult -> {
                 if (scanState.cancelled()) {
                     markTaskCompleted(scanState, finishScanIfIdle);
                     return;
                 }
 
-                if (res.succeeded()) {
+                if (directoryReadResult.succeeded()) {
                     // Each child stat is counted as one pending async task.
-                    for (String childPath : res.result()) {
+                    for (String childPath : directoryReadResult.result()) {
                         scanState.pendingTaskCount.incrementAndGet();
-                        fs.props(childPath).onComplete(propsRes -> {
+                        vertxFileSystem.props(childPath).onComplete(filePropertiesResult -> {
                             if (scanState.cancelled()) {
                                 markTaskCompleted(scanState, finishScanIfIdle);
                                 return;
                             }
 
-                            if (propsRes.succeeded()) {
-                                FileProps props = propsRes.result();
-                                if (props.isDirectory()) {
+                            if (filePropertiesResult.succeeded()) {
+                                FileProps fileProperties = filePropertiesResult.result();
+                                if (fileProperties.isDirectory()) {
                                     // Directory traversal itself becomes another tracked async task.
                                     scanState.pendingTaskCount.incrementAndGet();
-                                    scanDirectory(childPath, maxFS, nb, fs, scanState, finishScanIfIdle, vertx, listener);
-                                } else if (props.isRegularFile()) {
+                                    scanDirectory(
+                                        childPath,
+                                        maximumFileSizeBytes,
+                                        numberOfBands,
+                                        vertxFileSystem,
+                                        scanState,
+                                        finishScanIfIdle,
+                                        vertx,
+                                        listener
+                                    );
+                                } else if (fileProperties.isRegularFile()) {
                                     scanState.totalFileCount.incrementAndGet();
-                                    long fileSizeBytes = props.size();
-                                    int bandIndex = FSReport.getBandIndex(fileSizeBytes, maxFS, nb);
+                                    long fileSizeBytes = fileProperties.size();
+                                    int bandIndex = FSReport.getBandIndex(fileSizeBytes, maximumFileSizeBytes, numberOfBands);
                                     scanState.fileCountsPerBand[bandIndex].incrementAndGet();
                                 }
                             }
@@ -219,8 +237,8 @@ public class EventLoopFSStat {
     /** Builds a report from the event-loop counters. */
     private static FSReport createReport(
         String directory,
-        long maxFS,
-        int nb,
+        long maximumFileSizeBytes,
+        int numberOfBands,
         EventLoopScanState scanState,
         long scanStartTime
     ) {
@@ -230,8 +248,8 @@ public class EventLoopFSStat {
         }
         return new FSReport(
             directory,
-            maxFS,
-            nb,
+            maximumFileSizeBytes,
+            numberOfBands,
             bands,
             scanState.totalFileCount.get(),
             System.currentTimeMillis() - scanStartTime
