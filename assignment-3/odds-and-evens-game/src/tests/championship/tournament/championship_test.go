@@ -9,6 +9,7 @@ import (
 	"odds-and-evens-game/championship/tournament"
 )
 
+// A one-player championship should end immediately.
 func TestPlayChampionshipWithOnePlayer(t *testing.T) {
 	players := mustPlayers(t, 1)
 
@@ -20,6 +21,7 @@ func TestPlayChampionshipWithOnePlayer(t *testing.T) {
 	assertRoundsAndMatches(t, result, 0, 0)
 }
 
+// Two players means one round and one match.
 func TestPlayChampionshipWithTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 2)
 
@@ -32,6 +34,7 @@ func TestPlayChampionshipWithTwoPlayers(t *testing.T) {
 	assertRoundSizes(t, result, []int{1})
 }
 
+// Four players should produce two rounds and three matches.
 func TestPlayChampionshipWithFourPlayers(t *testing.T) {
 	players := mustPlayers(t, 4)
 
@@ -44,6 +47,7 @@ func TestPlayChampionshipWithFourPlayers(t *testing.T) {
 	assertRoundSizes(t, result, []int{2, 1})
 }
 
+// Eight players should produce three rounds and seven matches.
 func TestPlayChampionshipWithEightPlayers(t *testing.T) {
 	players := mustPlayers(t, 8)
 
@@ -56,6 +60,7 @@ func TestPlayChampionshipWithEightPlayers(t *testing.T) {
 	assertRoundSizes(t, result, []int{4, 2, 1})
 }
 
+// Zero players is not a valid championship.
 func TestPlayChampionshipRejectsZeroPlayers(t *testing.T) {
 	_, err := tournament.PlayChampionship(nil, headsOnlyFactory)
 	if err == nil {
@@ -63,6 +68,7 @@ func TestPlayChampionshipRejectsZeroPlayers(t *testing.T) {
 	}
 }
 
+// The tournament only accepts power-of-two player counts.
 func TestPlayChampionshipRejectsNonPowerOfTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 3)
 
@@ -72,6 +78,7 @@ func TestPlayChampionshipRejectsNonPowerOfTwoPlayers(t *testing.T) {
 	}
 }
 
+// A bad match result must stop the whole tournament.
 func TestPlayChampionshipPropagatesMatchError(t *testing.T) {
 	players := mustPlayers(t, 4)
 
@@ -86,6 +93,7 @@ func TestPlayChampionshipPropagatesMatchError(t *testing.T) {
 	}
 }
 
+// The final result should always contain a valid champion.
 func TestPlayChampionshipChampionCount(t *testing.T) {
 	players := mustPlayers(t, 8)
 
@@ -101,6 +109,7 @@ func TestPlayChampionshipChampionCount(t *testing.T) {
 	}
 }
 
+// Each round should halve the number of active players.
 func TestPlayChampionshipRoundProgression(t *testing.T) {
 	players := mustPlayers(t, 8)
 
@@ -120,6 +129,7 @@ func TestPlayChampionshipRoundProgression(t *testing.T) {
 	}
 }
 
+// The winner list should match the bracket progression.
 func TestPlayChampionshipPropagatesWinnersAndHalvesPlayers(t *testing.T) {
 	players := mustPlayers(t, 8)
 
@@ -157,10 +167,12 @@ func TestPlayChampionshipPropagatesWinnersAndHalvesPlayers(t *testing.T) {
 	}
 }
 
+// headsOnlyFactory gives a deterministic tournament for tests.
 func headsOnlyFactory(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 	return match.NewFixedCoinTosser(domain.Heads)
 }
 
+// assertChampionID checks the final winner.
 func assertChampionID(t *testing.T, result domain.ChampionshipResult, want int) {
 	t.Helper()
 
@@ -169,6 +181,7 @@ func assertChampionID(t *testing.T, result domain.ChampionshipResult, want int) 
 	}
 }
 
+// assertRoundsAndMatches checks the tournament shape.
 func assertRoundsAndMatches(t *testing.T, result domain.ChampionshipResult, wantRounds, wantMatches int) {
 	t.Helper()
 
@@ -180,6 +193,7 @@ func assertRoundsAndMatches(t *testing.T, result domain.ChampionshipResult, want
 	}
 }
 
+// assertRoundSizes checks how many matches each round has.
 func assertRoundSizes(t *testing.T, result domain.ChampionshipResult, want []int) {
 	t.Helper()
 
@@ -194,6 +208,7 @@ func assertRoundSizes(t *testing.T, result domain.ChampionshipResult, want []int
 	}
 }
 
+// assertRoundParticipants checks the exact participant order for a round.
 func assertRoundParticipants(t *testing.T, roundResult domain.RoundResult, want []int) {
 	t.Helper()
 
@@ -208,6 +223,7 @@ func assertRoundParticipants(t *testing.T, roundResult domain.RoundResult, want 
 	}
 }
 
+// assertRoundWinners checks the exact winners order for a round.
 func assertRoundWinners(t *testing.T, roundResult domain.RoundResult, want []int) {
 	t.Helper()
 
@@ -222,6 +238,7 @@ func assertRoundWinners(t *testing.T, roundResult domain.RoundResult, want []int
 	}
 }
 
+// roundParticipants flattens the players involved in all matches.
 func roundParticipants(roundResult domain.RoundResult) []int {
 	participants := make([]int, 0, roundResult.MatchCount()*2)
 	for _, m := range roundResult.Matches() {
@@ -230,6 +247,7 @@ func roundParticipants(roundResult domain.RoundResult) []int {
 	return participants
 }
 
+// mustPlayers builds a valid player list for the tournament tests.
 func mustPlayers(t *testing.T, count int) []domain.Player {
 	t.Helper()
 

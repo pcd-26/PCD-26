@@ -6,6 +6,7 @@ import (
 	"odds-and-evens-game/championship/domain"
 )
 
+// The parser should accept the two legal coin sides.
 func TestParseCoinSideValid(t *testing.T) {
 	tests := []struct {
 		input string
@@ -26,6 +27,7 @@ func TestParseCoinSideValid(t *testing.T) {
 	}
 }
 
+// Any other value must fail fast.
 func TestParseCoinSideInvalid(t *testing.T) {
 	if _, err := domain.ParseCoinSide("edge"); err == nil {
 		t.Fatal("expected error for invalid coin side")

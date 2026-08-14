@@ -6,6 +6,7 @@ import (
 	"odds-and-evens-game/championship/domain"
 )
 
+// A valid player should keep the ID and name we pass in.
 func TestNewPlayerValid(t *testing.T) {
 	player, err := domain.NewPlayer(1, "Alice")
 	if err != nil {
@@ -19,12 +20,14 @@ func TestNewPlayerValid(t *testing.T) {
 	}
 }
 
+// Player IDs must be positive.
 func TestNewPlayerInvalidID(t *testing.T) {
 	if _, err := domain.NewPlayer(0, "Alice"); err == nil {
 		t.Fatal("expected error for non-positive player ID")
 	}
 }
 
+// Player names must not be empty.
 func TestNewPlayerEmptyName(t *testing.T) {
 	if _, err := domain.NewPlayer(1, ""); err == nil {
 		t.Fatal("expected error for empty player name")

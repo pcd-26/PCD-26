@@ -7,6 +7,7 @@ type RoundResult struct {
 	winners     []Player
 }
 
+// NewRoundResult copies the input slices so callers cannot mutate the stored data.
 func NewRoundResult(roundNumber int, matches []MatchResult, winners []Player) RoundResult {
 	return RoundResult{
 		roundNumber: roundNumber,

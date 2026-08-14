@@ -50,9 +50,12 @@ func (f FixedCoinTosser) Toss() domain.CoinSide {
 
 // PlayMatch resolves a single match between exactly two players.
 func PlayMatch(roundNumber, matchNumber int, tosser CoinTosser, firstPlayer, secondPlayer domain.Player) (domain.MatchResult, error) {
+	// Reject a missing coin source early.
 	if tosser == nil {
 		return domain.MatchResult{}, fmt.Errorf("coin tosser must not be nil")
 	}
+
+	// Validate both players before using them.
 	if err := validatePlayer(firstPlayer); err != nil {
 		return domain.MatchResult{}, fmt.Errorf("first player is invalid: %w", err)
 	}
@@ -60,6 +63,7 @@ func PlayMatch(roundNumber, matchNumber int, tosser CoinTosser, firstPlayer, sec
 		return domain.MatchResult{}, fmt.Errorf("second player is invalid: %w", err)
 	}
 
+	// Toss the coin once and map the result to the winner.
 	tossedSide := tosser.Toss()
 	switch tossedSide {
 	case domain.Heads:
@@ -71,7 +75,9 @@ func PlayMatch(roundNumber, matchNumber int, tosser CoinTosser, firstPlayer, sec
 	}
 }
 
+// validatePlayer keeps the match-level validation local to this package.
 func validatePlayer(player domain.Player) error {
+	// The match engine only accepts fully initialized players.
 	if player.ID() <= 0 {
 		return fmt.Errorf("player ID must be positive: %d", player.ID())
 	}

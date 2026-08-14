@@ -25,6 +25,7 @@ type matchOutcome struct {
 
 // PlayRound resolves one championship round concurrently.
 func PlayRound(roundNumber int, players []domain.Player, tosserFactory CoinTosserFactory) ([]domain.Player, []domain.MatchResult, error) {
+	// Basic input validation comes first.
 	if len(players) == 0 {
 		return nil, nil, fmt.Errorf("round must contain at least one player")
 	}
@@ -39,11 +40,13 @@ func PlayRound(roundNumber int, players []domain.Player, tosserFactory CoinTosse
 		return nil, nil, err
 	}
 
+	// Create one worker per match.
 	matchCount := len(players) / 2
 	// The coordinator owns this channel and receives exactly one outcome per match.
 	// It is intentionally never closed: the coordinator already knows the exact message count.
 	outcomes := make(chan matchOutcome)
 
+	// Start all matches in parallel.
 	for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
 		matchNumber := matchIndex + 1
 		firstPlayer := players[matchIndex*2]
@@ -57,11 +60,13 @@ func PlayRound(roundNumber int, players []domain.Player, tosserFactory CoinTosse
 				return
 			}
 
+			// Resolve the match and report its result.
 			result, err := match.PlayMatch(roundNumber, matchNumber, tosser, firstPlayer, secondPlayer)
 			outcomes <- matchOutcome{matchIndex: matchIndex, result: result, err: err}
 		}(matchIndex, matchNumber, firstPlayer, secondPlayer, tosser)
 	}
 
+	// Collect every outcome before deciding whether the round succeeded.
 	orderedResults := make([]domain.MatchResult, matchCount)
 	var firstErr error
 	for received := 0; received < matchCount; received++ {
@@ -76,6 +81,7 @@ func PlayRound(roundNumber int, players []domain.Player, tosserFactory CoinTosse
 		return nil, nil, firstErr
 	}
 
+	// Extract the winners in the same order as the matches.
 	winners := make([]domain.Player, matchCount)
 	for matchIndex, result := range orderedResults {
 		winners[matchIndex] = result.Winner()
@@ -84,7 +90,9 @@ func PlayRound(roundNumber int, players []domain.Player, tosserFactory CoinTosse
 	return winners, orderedResults, nil
 }
 
+// validatePlayers keeps the round validation rules close to the concurrency logic.
 func validatePlayers(players []domain.Player, scope string) error {
+	// Every player must be valid before the round starts.
 	for _, player := range players {
 		if player.ID() <= 0 {
 			return fmt.Errorf("invalid player in %s: player ID must be positive: %d", scope, player.ID())

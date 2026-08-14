@@ -8,12 +8,14 @@ import (
 	"odds-and-evens-game/championship/round"
 )
 
+// roundExecution stores the outcome of a round started in a goroutine.
 type roundExecution struct {
 	winners []domain.Player
 	results []domain.MatchResult
 	err     error
 }
 
+// coordinatedTosser blocks until the test lets the match continue.
 type coordinatedTosser struct {
 	matchNumber int
 	side        domain.CoinSide
@@ -22,6 +24,7 @@ type coordinatedTosser struct {
 	release     <-chan struct{}
 }
 
+// Toss signals start, waits for release, then signals completion.
 func (t coordinatedTosser) Toss() domain.CoinSide {
 	t.started <- t.matchNumber
 	<-t.release
@@ -29,6 +32,7 @@ func (t coordinatedTosser) Toss() domain.CoinSide {
 	return t.side
 }
 
+// signalRelease makes sure a waiting goroutine can proceed.
 func signalRelease(ch chan struct{}) {
 	select {
 	case ch <- struct{}{}:
@@ -36,6 +40,7 @@ func signalRelease(ch chan struct{}) {
 	}
 }
 
+// This test checks that the round waits for all matches before returning.
 func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	players := mustPlayers(t, 4)
 	started := make(chan int, 2)
@@ -110,6 +115,7 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	}
 }
 
+// This test checks that every player appears exactly once in a round.
 func TestPlayRoundUsesOneResultPerMatchAndNoPlayerTwice(t *testing.T) {
 	players := mustPlayers(t, 8)
 	started := make(chan int, 4)
@@ -162,6 +168,7 @@ func TestPlayRoundUsesOneResultPerMatchAndNoPlayerTwice(t *testing.T) {
 	assertRoundPlayerUsage(t, execution.results, []int{1, 2, 3, 4, 5, 6, 7, 8})
 }
 
+// This test checks that completion order does not affect result ordering.
 func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 	players := mustPlayers(t, 4)
 	started := make(chan int, 2)
@@ -217,6 +224,7 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 	assertWinnerIDs(t, execution.winners, []int{1, 4})
 }
 
+// This test checks that one bad match does not leave goroutines blocked.
 func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 	players := mustPlayers(t, 4)
 	started := make(chan int, 2)
@@ -271,6 +279,7 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 	}
 }
 
+// assertRoundPlayerUsage checks that each player appears exactly once.
 func assertRoundPlayerUsage(t *testing.T, results []domain.MatchResult, want []int) {
 	t.Helper()
 

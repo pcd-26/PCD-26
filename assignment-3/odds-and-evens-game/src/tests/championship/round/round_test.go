@@ -8,6 +8,7 @@ import (
 	"odds-and-evens-game/championship/round"
 )
 
+// A round with two players should produce exactly one winner.
 func TestPlayRoundWithTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 2)
 
@@ -28,6 +29,7 @@ func TestPlayRoundWithTwoPlayers(t *testing.T) {
 	}
 }
 
+// A larger round should preserve match order and winners.
 func TestPlayRoundWithFourPlayers(t *testing.T) {
 	players := mustPlayers(t, 4)
 
@@ -44,6 +46,7 @@ func TestPlayRoundWithFourPlayers(t *testing.T) {
 	assertMatchNumbers(t, results, []int{1, 2})
 }
 
+// The round logic should still work for eight players.
 func TestPlayRoundWithEightPlayers(t *testing.T) {
 	players := mustPlayers(t, 8)
 
@@ -60,6 +63,7 @@ func TestPlayRoundWithEightPlayers(t *testing.T) {
 	assertMatchNumbers(t, results, []int{1, 2, 3, 4})
 }
 
+// A round cannot run with zero players.
 func TestPlayRoundRejectsZeroPlayers(t *testing.T) {
 	_, _, err := round.PlayRound(1, nil, round.NewRandomCoinTosserFactory())
 	if err == nil {
@@ -67,6 +71,7 @@ func TestPlayRoundRejectsZeroPlayers(t *testing.T) {
 	}
 }
 
+// A round needs an even number of players.
 func TestPlayRoundRejectsOddNumberOfPlayers(t *testing.T) {
 	players := mustPlayers(t, 3)
 
@@ -76,6 +81,7 @@ func TestPlayRoundRejectsOddNumberOfPlayers(t *testing.T) {
 	}
 }
 
+// A bad match result should bubble up as a round error.
 func TestPlayRoundReportsMatchError(t *testing.T) {
 	players := mustPlayers(t, 4)
 
@@ -90,6 +96,7 @@ func TestPlayRoundReportsMatchError(t *testing.T) {
 	}
 }
 
+// mustPlayers builds a deterministic slice of valid players for tests.
 func mustPlayers(t *testing.T, count int) []domain.Player {
 	t.Helper()
 
@@ -105,6 +112,7 @@ func mustPlayers(t *testing.T, count int) []domain.Player {
 	return players
 }
 
+// assertWinnerIDs checks the winner order produced by the round.
 func assertWinnerIDs(t *testing.T, winners []domain.Player, want []int) {
 	t.Helper()
 
@@ -118,6 +126,7 @@ func assertWinnerIDs(t *testing.T, winners []domain.Player, want []int) {
 	}
 }
 
+// assertMatchNumbers checks that the round kept the original ordering.
 func assertMatchNumbers(t *testing.T, results []domain.MatchResult, want []int) {
 	t.Helper()
 

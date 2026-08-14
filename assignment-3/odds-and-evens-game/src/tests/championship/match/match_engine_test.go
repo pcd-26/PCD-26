@@ -7,6 +7,7 @@ import (
 	"odds-and-evens-game/championship/match"
 )
 
+// The match engine should return heads when the tosser says heads.
 func TestPlayMatchHeadsResult(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
@@ -20,6 +21,7 @@ func TestPlayMatchHeadsResult(t *testing.T) {
 	}
 }
 
+// The match engine should return tails when the tosser says tails.
 func TestPlayMatchTailsResult(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
@@ -33,6 +35,7 @@ func TestPlayMatchTailsResult(t *testing.T) {
 	}
 }
 
+// Winner selection depends only on the toss result.
 func TestPlayMatchCorrectWinner(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
@@ -54,6 +57,7 @@ func TestPlayMatchCorrectWinner(t *testing.T) {
 	}
 }
 
+// Match metadata must be preserved in the result.
 func TestPlayMatchRoundMetadata(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
@@ -67,6 +71,7 @@ func TestPlayMatchRoundMetadata(t *testing.T) {
 	}
 }
 
+// Match metadata must keep the original match number too.
 func TestPlayMatchMatchMetadata(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
@@ -80,6 +85,7 @@ func TestPlayMatchMatchMetadata(t *testing.T) {
 	}
 }
 
+// Invalid toss values must be rejected.
 func TestPlayMatchInvalidTossResult(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
@@ -90,6 +96,7 @@ func TestPlayMatchInvalidTossResult(t *testing.T) {
 	}
 }
 
+// Invalid players must be rejected before the toss is used.
 func TestPlayMatchInvalidPlayer(t *testing.T) {
 	validPlayer := mustPlayer(t, 2, "Bob")
 
@@ -99,6 +106,7 @@ func TestPlayMatchInvalidPlayer(t *testing.T) {
 	}
 }
 
+// mustPlayer is a small test helper that builds a valid player.
 func mustPlayer(t *testing.T, id int, name string) domain.Player {
 	t.Helper()
 

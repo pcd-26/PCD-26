@@ -6,6 +6,7 @@ type ChampionshipResult struct {
 	rounds   []RoundResult
 }
 
+// NewChampionshipResult copies the input rounds to keep the result immutable.
 func NewChampionshipResult(champion Player, rounds []RoundResult) ChampionshipResult {
 	return ChampionshipResult{
 		champion: champion,

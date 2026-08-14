@@ -9,6 +9,7 @@ import (
 	"odds-and-evens-game/championship"
 )
 
+// These tests exercise the public CLI helpers from the outside.
 func TestParsePlayersCountValid(t *testing.T) {
 	count, err := app.ParsePlayersCount([]string{"-players", "8"})
 	if err != nil {
@@ -19,6 +20,7 @@ func TestParsePlayersCountValid(t *testing.T) {
 	}
 }
 
+// This checks the validation for zero, which must be rejected.
 func TestParsePlayersCountRejectsZero(t *testing.T) {
 	_, err := app.ParsePlayersCount([]string{"-players", "0"})
 	if err == nil {
@@ -26,6 +28,7 @@ func TestParsePlayersCountRejectsZero(t *testing.T) {
 	}
 }
 
+// This checks the validation for non power-of-two player counts.
 func TestParsePlayersCountRejectsNonPowerOfTwo(t *testing.T) {
 	_, err := app.ParsePlayersCount([]string{"-players", "3"})
 	if err == nil {
@@ -33,6 +36,7 @@ func TestParsePlayersCountRejectsNonPowerOfTwo(t *testing.T) {
 	}
 }
 
+// This verifies the full CLI flow using a deterministic match script.
 func TestRunWithFactoryFormatsEightPlayerChampionship(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -90,6 +94,7 @@ func TestRunWithFactoryFormatsEightPlayerChampionship(t *testing.T) {
 	}
 }
 
+// This verifies that invalid input is reported as a CLI error.
 func TestRunWithFactoryRejectsInvalidInput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -103,12 +108,14 @@ func TestRunWithFactoryRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+// scriptedFactory returns the toss result requested by each match.
 func scriptedFactory(script map[int]map[int]championship.CoinSide) championship.CoinTosserFactory {
 	return func(roundNumber, matchNumber int, firstPlayer, secondPlayer championship.Player) championship.CoinTosser {
 		return championship.NewFixedCoinTosser(script[roundNumber][matchNumber])
 	}
 }
 
+// headsOnlyTosserFactory always gives heads, so the first player wins.
 func headsOnlyTosserFactory(roundNumber, matchNumber int, firstPlayer, secondPlayer championship.Player) championship.CoinTosser {
 	return championship.NewFixedCoinTosser(championship.Heads)
 }
