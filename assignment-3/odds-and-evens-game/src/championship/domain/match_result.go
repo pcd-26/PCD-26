@@ -1,4 +1,4 @@
-package championship
+package domain
 
 import "fmt"
 

@@ -1,25 +1,30 @@
-package championship
+package round
 
-import "fmt"
+import (
+	"fmt"
+
+	"odds-and-evens-game/championship/domain"
+	"odds-and-evens-game/championship/match"
+)
 
 // CoinTosserFactory creates a coin tosser for a specific match.
-type CoinTosserFactory func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser
+type CoinTosserFactory func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser
 
 // NewRandomCoinTosserFactory creates a factory that gives each match its own random tosser.
 func NewRandomCoinTosserFactory() CoinTosserFactory {
-	return func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
-		return NewRandomCoinTosser()
+	return func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
+		return match.NewRandomCoinTosser()
 	}
 }
 
 type matchOutcome struct {
 	matchIndex int
-	result     MatchResult
+	result     domain.MatchResult
 	err        error
 }
 
 // PlayRound resolves one championship round concurrently.
-func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]Player, []MatchResult, error) {
+func PlayRound(roundNumber int, players []domain.Player, tosserFactory CoinTosserFactory) ([]domain.Player, []domain.MatchResult, error) {
 	if len(players) == 0 {
 		return nil, nil, fmt.Errorf("round must contain at least one player")
 	}
@@ -43,21 +48,21 @@ func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]
 		matchNumber := matchIndex + 1
 		firstPlayer := players[matchIndex*2]
 		secondPlayer := players[matchIndex*2+1]
-		tosser := tosserFactory(round, matchNumber, firstPlayer, secondPlayer)
+		tosser := tosserFactory(roundNumber, matchNumber, firstPlayer, secondPlayer)
 
-		go func(matchIndex, matchNumber int, firstPlayer, secondPlayer Player, tosser CoinTosser) {
+		go func(matchIndex, matchNumber int, firstPlayer, secondPlayer domain.Player, tosser match.CoinTosser) {
 			// Each match goroutine sends exactly one outcome to the coordinator.
 			if tosser == nil {
 				outcomes <- matchOutcome{matchIndex: matchIndex, err: fmt.Errorf("coin tosser must not be nil")}
 				return
 			}
 
-			result, err := PlayMatch(round, matchNumber, tosser, firstPlayer, secondPlayer)
+			result, err := match.PlayMatch(roundNumber, matchNumber, tosser, firstPlayer, secondPlayer)
 			outcomes <- matchOutcome{matchIndex: matchIndex, result: result, err: err}
 		}(matchIndex, matchNumber, firstPlayer, secondPlayer, tosser)
 	}
 
-	orderedResults := make([]MatchResult, matchCount)
+	orderedResults := make([]domain.MatchResult, matchCount)
 	var firstErr error
 	for received := 0; received < matchCount; received++ {
 		outcome := <-outcomes
@@ -71,10 +76,23 @@ func PlayRound(round int, players []Player, tosserFactory CoinTosserFactory) ([]
 		return nil, nil, firstErr
 	}
 
-	winners := make([]Player, matchCount)
+	winners := make([]domain.Player, matchCount)
 	for matchIndex, result := range orderedResults {
 		winners[matchIndex] = result.Winner()
 	}
 
 	return winners, orderedResults, nil
+}
+
+func validatePlayers(players []domain.Player, scope string) error {
+	for _, player := range players {
+		if player.ID() <= 0 {
+			return fmt.Errorf("invalid player in %s: player ID must be positive: %d", scope, player.ID())
+		}
+		if player.Name() == "" {
+			return fmt.Errorf("invalid player in %s: player name must not be empty", scope)
+		}
+	}
+
+	return nil
 }

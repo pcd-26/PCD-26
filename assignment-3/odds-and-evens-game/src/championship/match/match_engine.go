@@ -1,14 +1,16 @@
-package championship
+package match
 
 import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"odds-and-evens-game/championship/domain"
 )
 
 // CoinTosser abstracts a coin toss source.
 type CoinTosser interface {
-	Toss() CoinSide
+	Toss() domain.CoinSide
 }
 
 // RandomCoinTosser produces random tosses for production use.
@@ -24,52 +26,52 @@ func NewRandomCoinTosser() *RandomCoinTosser {
 }
 
 // Toss returns a random coin side.
-func (r *RandomCoinTosser) Toss() CoinSide {
+func (r *RandomCoinTosser) Toss() domain.CoinSide {
 	if r.rng.Intn(2) == 0 {
-		return Heads
+		return domain.Heads
 	}
-	return Tails
+	return domain.Tails
 }
 
 // FixedCoinTosser always returns the same toss result.
 type FixedCoinTosser struct {
-	side CoinSide
+	side domain.CoinSide
 }
 
 // NewFixedCoinTosser creates a deterministic tosser for tests.
-func NewFixedCoinTosser(side CoinSide) FixedCoinTosser {
+func NewFixedCoinTosser(side domain.CoinSide) FixedCoinTosser {
 	return FixedCoinTosser{side: side}
 }
 
 // Toss returns the configured side.
-func (f FixedCoinTosser) Toss() CoinSide {
+func (f FixedCoinTosser) Toss() domain.CoinSide {
 	return f.side
 }
 
 // PlayMatch resolves a single match between exactly two players.
-func PlayMatch(roundNumber, matchNumber int, tosser CoinTosser, firstPlayer, secondPlayer Player) (MatchResult, error) {
+func PlayMatch(roundNumber, matchNumber int, tosser CoinTosser, firstPlayer, secondPlayer domain.Player) (domain.MatchResult, error) {
 	if tosser == nil {
-		return MatchResult{}, fmt.Errorf("coin tosser must not be nil")
+		return domain.MatchResult{}, fmt.Errorf("coin tosser must not be nil")
 	}
 	if err := validatePlayer(firstPlayer); err != nil {
-		return MatchResult{}, fmt.Errorf("first player is invalid: %w", err)
+		return domain.MatchResult{}, fmt.Errorf("first player is invalid: %w", err)
 	}
 	if err := validatePlayer(secondPlayer); err != nil {
-		return MatchResult{}, fmt.Errorf("second player is invalid: %w", err)
+		return domain.MatchResult{}, fmt.Errorf("second player is invalid: %w", err)
 	}
 
 	tossedSide := tosser.Toss()
 	switch tossedSide {
-	case Heads:
-		return NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, firstPlayer, tossedSide)
-	case Tails:
-		return NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, secondPlayer, tossedSide)
+	case domain.Heads:
+		return domain.NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, firstPlayer, tossedSide)
+	case domain.Tails:
+		return domain.NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, secondPlayer, tossedSide)
 	default:
-		return MatchResult{}, fmt.Errorf("invalid toss result: %q", tossedSide)
+		return domain.MatchResult{}, fmt.Errorf("invalid toss result: %q", tossedSide)
 	}
 }
 
-func validatePlayer(player Player) error {
+func validatePlayer(player domain.Player) error {
 	if player.ID() <= 0 {
 		return fmt.Errorf("player ID must be positive: %d", player.ID())
 	}

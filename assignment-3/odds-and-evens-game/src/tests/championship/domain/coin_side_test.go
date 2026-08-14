@@ -1,18 +1,22 @@
-package championship
+package domain_test
 
-import "testing"
+import (
+	"testing"
+
+	"odds-and-evens-game/championship/domain"
+)
 
 func TestParseCoinSideValid(t *testing.T) {
 	tests := []struct {
 		input string
-		want  CoinSide
+		want  domain.CoinSide
 	}{
-		{input: "heads", want: Heads},
-		{input: "tails", want: Tails},
+		{input: "heads", want: domain.Heads},
+		{input: "tails", want: domain.Tails},
 	}
 
 	for _, tt := range tests {
-		got, err := ParseCoinSide(tt.input)
+		got, err := domain.ParseCoinSide(tt.input)
 		if err != nil {
 			t.Fatalf("expected valid coin side %q, got error: %v", tt.input, err)
 		}
@@ -23,7 +27,7 @@ func TestParseCoinSideValid(t *testing.T) {
 }
 
 func TestParseCoinSideInvalid(t *testing.T) {
-	if _, err := ParseCoinSide("edge"); err == nil {
+	if _, err := domain.ParseCoinSide("edge"); err == nil {
 		t.Fatal("expected error for invalid coin side")
 	}
 }

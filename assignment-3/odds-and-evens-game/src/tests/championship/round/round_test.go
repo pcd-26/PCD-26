@@ -1,12 +1,18 @@
-package championship
+package round_test
 
-import "testing"
+import (
+	"testing"
+
+	"odds-and-evens-game/championship/domain"
+	"odds-and-evens-game/championship/match"
+	"odds-and-evens-game/championship/round"
+)
 
 func TestPlayRoundWithTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 2)
 
-	winners, results, err := PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
-		return NewFixedCoinTosser(Heads)
+	winners, results, err := round.PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
+		return match.NewFixedCoinTosser(domain.Heads)
 	})
 	if err != nil {
 		t.Fatalf("expected round to succeed, got error: %v", err)
@@ -25,11 +31,11 @@ func TestPlayRoundWithTwoPlayers(t *testing.T) {
 func TestPlayRoundWithFourPlayers(t *testing.T) {
 	players := mustPlayers(t, 4)
 
-	winners, results, err := PlayRound(2, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+	winners, results, err := round.PlayRound(2, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 		if matchNumber == 1 {
-			return NewFixedCoinTosser(Heads)
+			return match.NewFixedCoinTosser(domain.Heads)
 		}
-		return NewFixedCoinTosser(Tails)
+		return match.NewFixedCoinTosser(domain.Tails)
 	})
 	if err != nil {
 		t.Fatalf("expected round to succeed, got error: %v", err)
@@ -41,11 +47,11 @@ func TestPlayRoundWithFourPlayers(t *testing.T) {
 func TestPlayRoundWithEightPlayers(t *testing.T) {
 	players := mustPlayers(t, 8)
 
-	winners, results, err := PlayRound(3, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+	winners, results, err := round.PlayRound(3, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 		if matchNumber%2 == 0 {
-			return NewFixedCoinTosser(Heads)
+			return match.NewFixedCoinTosser(domain.Heads)
 		}
-		return NewFixedCoinTosser(Tails)
+		return match.NewFixedCoinTosser(domain.Tails)
 	})
 	if err != nil {
 		t.Fatalf("expected round to succeed, got error: %v", err)
@@ -55,7 +61,7 @@ func TestPlayRoundWithEightPlayers(t *testing.T) {
 }
 
 func TestPlayRoundRejectsZeroPlayers(t *testing.T) {
-	_, _, err := PlayRound(1, nil, NewRandomCoinTosserFactory())
+	_, _, err := round.PlayRound(1, nil, round.NewRandomCoinTosserFactory())
 	if err == nil {
 		t.Fatal("expected error for zero players")
 	}
@@ -64,7 +70,7 @@ func TestPlayRoundRejectsZeroPlayers(t *testing.T) {
 func TestPlayRoundRejectsOddNumberOfPlayers(t *testing.T) {
 	players := mustPlayers(t, 3)
 
-	_, _, err := PlayRound(1, players, NewRandomCoinTosserFactory())
+	_, _, err := round.PlayRound(1, players, round.NewRandomCoinTosserFactory())
 	if err == nil {
 		t.Fatal("expected error for odd number of players")
 	}
@@ -73,23 +79,23 @@ func TestPlayRoundRejectsOddNumberOfPlayers(t *testing.T) {
 func TestPlayRoundReportsMatchError(t *testing.T) {
 	players := mustPlayers(t, 4)
 
-	_, _, err := PlayRound(7, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+	_, _, err := round.PlayRound(7, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 		if matchNumber == 2 {
-			return NewFixedCoinTosser(CoinSide("edge"))
+			return match.NewFixedCoinTosser(domain.CoinSide("edge"))
 		}
-		return NewFixedCoinTosser(Heads)
+		return match.NewFixedCoinTosser(domain.Heads)
 	})
 	if err == nil {
 		t.Fatal("expected error from invalid match result")
 	}
 }
 
-func mustPlayers(t *testing.T, count int) []Player {
+func mustPlayers(t *testing.T, count int) []domain.Player {
 	t.Helper()
 
-	players := make([]Player, count)
+	players := make([]domain.Player, count)
 	for i := 0; i < count; i++ {
-		player, err := NewPlayer(i+1, "Player")
+		player, err := domain.NewPlayer(i+1, "Player")
 		if err != nil {
 			t.Fatalf("expected valid player, got error: %v", err)
 		}
@@ -99,7 +105,7 @@ func mustPlayers(t *testing.T, count int) []Player {
 	return players
 }
 
-func assertWinnerIDs(t *testing.T, winners []Player, want []int) {
+func assertWinnerIDs(t *testing.T, winners []domain.Player, want []int) {
 	t.Helper()
 
 	if len(winners) != len(want) {
@@ -112,7 +118,7 @@ func assertWinnerIDs(t *testing.T, winners []Player, want []int) {
 	}
 }
 
-func assertMatchNumbers(t *testing.T, results []MatchResult, want []int) {
+func assertMatchNumbers(t *testing.T, results []domain.MatchResult, want []int) {
 	t.Helper()
 
 	if len(results) != len(want) {

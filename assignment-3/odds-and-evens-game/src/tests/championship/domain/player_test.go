@@ -1,9 +1,13 @@
-package championship
+package domain_test
 
-import "testing"
+import (
+	"testing"
+
+	"odds-and-evens-game/championship/domain"
+)
 
 func TestNewPlayerValid(t *testing.T) {
-	player, err := NewPlayer(1, "Alice")
+	player, err := domain.NewPlayer(1, "Alice")
 	if err != nil {
 		t.Fatalf("expected valid player, got error: %v", err)
 	}
@@ -16,13 +20,13 @@ func TestNewPlayerValid(t *testing.T) {
 }
 
 func TestNewPlayerInvalidID(t *testing.T) {
-	if _, err := NewPlayer(0, "Alice"); err == nil {
+	if _, err := domain.NewPlayer(0, "Alice"); err == nil {
 		t.Fatal("expected error for non-positive player ID")
 	}
 }
 
 func TestNewPlayerEmptyName(t *testing.T) {
-	if _, err := NewPlayer(1, ""); err == nil {
+	if _, err := domain.NewPlayer(1, ""); err == nil {
 		t.Fatal("expected error for empty player name")
 	}
 }

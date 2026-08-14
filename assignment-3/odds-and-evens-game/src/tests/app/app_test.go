@@ -1,15 +1,16 @@
-package main
+package app_test
 
 import (
 	"bytes"
 	"strings"
 	"testing"
 
+	"odds-and-evens-game/app"
 	"odds-and-evens-game/championship"
 )
 
 func TestParsePlayersCountValid(t *testing.T) {
-	count, err := parsePlayersCount([]string{"-players", "8"})
+	count, err := app.ParsePlayersCount([]string{"-players", "8"})
 	if err != nil {
 		t.Fatalf("expected valid players flag, got error: %v", err)
 	}
@@ -19,14 +20,14 @@ func TestParsePlayersCountValid(t *testing.T) {
 }
 
 func TestParsePlayersCountRejectsZero(t *testing.T) {
-	_, err := parsePlayersCount([]string{"-players", "0"})
+	_, err := app.ParsePlayersCount([]string{"-players", "0"})
 	if err == nil {
 		t.Fatal("expected error for zero players")
 	}
 }
 
 func TestParsePlayersCountRejectsNonPowerOfTwo(t *testing.T) {
-	_, err := parsePlayersCount([]string{"-players", "3"})
+	_, err := app.ParsePlayersCount([]string{"-players", "3"})
 	if err == nil {
 		t.Fatal("expected error for non power-of-two players")
 	}
@@ -36,7 +37,7 @@ func TestRunWithFactoryFormatsEightPlayerChampionship(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := runWithFactory([]string{"-players", "8"}, stdout, stderr, scriptedFactory(map[int]map[int]championship.CoinSide{
+	exitCode := app.RunWithFactory([]string{"-players", "8"}, stdout, stderr, scriptedFactory(map[int]map[int]championship.CoinSide{
 		1: {1: championship.Heads, 2: championship.Heads, 3: championship.Heads, 4: championship.Heads},
 		2: {1: championship.Heads, 2: championship.Heads},
 		3: {1: championship.Heads},
@@ -93,7 +94,7 @@ func TestRunWithFactoryRejectsInvalidInput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := runWithFactory([]string{"-players", "3"}, stdout, stderr, headsOnlyTosserFactory)
+	exitCode := app.RunWithFactory([]string{"-players", "3"}, stdout, stderr, headsOnlyTosserFactory)
 	if exitCode == 0 {
 		t.Fatal("expected non-zero exit code")
 	}

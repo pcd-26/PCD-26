@@ -1,22 +1,28 @@
-package championship
+package round_test
 
-import "testing"
+import (
+	"testing"
+
+	"odds-and-evens-game/championship/domain"
+	"odds-and-evens-game/championship/match"
+	"odds-and-evens-game/championship/round"
+)
 
 type roundExecution struct {
-	winners []Player
-	results []MatchResult
+	winners []domain.Player
+	results []domain.MatchResult
 	err     error
 }
 
 type coordinatedTosser struct {
 	matchNumber int
-	side        CoinSide
+	side        domain.CoinSide
 	started     chan<- int
 	done        chan<- int
 	release     <-chan struct{}
 }
 
-func (t coordinatedTosser) Toss() CoinSide {
+func (t coordinatedTosser) Toss() domain.CoinSide {
 	t.started <- t.matchNumber
 	<-t.release
 	t.done <- t.matchNumber
@@ -41,12 +47,12 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	defer signalRelease(release2)
 
 	go func() {
-		winners, results, err := PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+		winners, results, err := round.PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 			switch matchNumber {
 			case 1:
 				return coordinatedTosser{
 					matchNumber: matchNumber,
-					side:        Heads,
+					side:        domain.Heads,
 					started:     started,
 					done:        done,
 					release:     release1,
@@ -54,7 +60,7 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 			default:
 				return coordinatedTosser{
 					matchNumber: matchNumber,
-					side:        Tails,
+					side:        domain.Tails,
 					started:     started,
 					done:        done,
 					release:     release2,
@@ -122,10 +128,10 @@ func TestPlayRoundUsesOneResultPerMatchAndNoPlayerTwice(t *testing.T) {
 	}()
 
 	go func() {
-		winners, results, err := PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+		winners, results, err := round.PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 			return coordinatedTosser{
 				matchNumber: matchNumber,
-				side:        Heads,
+				side:        domain.Heads,
 				started:     started,
 				done:        done,
 				release:     release[matchNumber-1],
@@ -167,11 +173,11 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 	defer signalRelease(release2)
 
 	go func() {
-		winners, results, err := PlayRound(2, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+		winners, results, err := round.PlayRound(2, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 			if matchNumber == 1 {
 				return coordinatedTosser{
 					matchNumber: matchNumber,
-					side:        Heads,
+					side:        domain.Heads,
 					started:     started,
 					done:        done,
 					release:     release1,
@@ -179,7 +185,7 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 			}
 			return coordinatedTosser{
 				matchNumber: matchNumber,
-				side:        Tails,
+				side:        domain.Tails,
 				started:     started,
 				done:        done,
 				release:     release2,
@@ -222,11 +228,11 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 	defer signalRelease(release2)
 
 	go func() {
-		winners, results, err := PlayRound(3, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer Player) CoinTosser {
+		winners, results, err := round.PlayRound(3, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
 			if matchNumber == 1 {
 				return coordinatedTosser{
 					matchNumber: matchNumber,
-					side:        CoinSide("edge"),
+					side:        domain.CoinSide("edge"),
 					started:     started,
 					done:        done,
 					release:     release1,
@@ -234,7 +240,7 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 			}
 			return coordinatedTosser{
 				matchNumber: matchNumber,
-				side:        Heads,
+				side:        domain.Heads,
 				started:     started,
 				done:        done,
 				release:     release2,
@@ -265,7 +271,7 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 	}
 }
 
-func assertRoundPlayerUsage(t *testing.T, results []MatchResult, want []int) {
+func assertRoundPlayerUsage(t *testing.T, results []domain.MatchResult, want []int) {
 	t.Helper()
 
 	if len(results) == 0 {
