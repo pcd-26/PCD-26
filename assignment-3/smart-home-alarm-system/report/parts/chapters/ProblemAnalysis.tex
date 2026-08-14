@@ -1,0 +1,12 @@
+\section{Problem Analysis}
+
+The Smart Home Alarm System is implemented with Apache Pekko typed actors.
+The key concurrency property is state ownership: the control unit serializes every transition, while keypad, sensors,
+and siren only exchange messages with it.
+The controller moves through five states: \textit{DISARMED}, \textit{EXIT\_DELAY}, \textit{ARMED}, \textit{ENTRY\_DELAY}, and
+\textit{ALARM}.
+Only a valid PIN or a timeout message can change the state.
+Sensor events are ignored while the system is disarmed, can start the entry delay only when they belong to an active
+zone, and have no effect once the alarm is active.
+This keeps the behavior deterministic and matches the assignment requirement to drive the system through explicit
+state transitions.

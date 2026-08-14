@@ -1,0 +1,9 @@
+\section{Validation}
+
+The test suite covers player validation, coin-side parsing, single-match behavior, round execution, full championship
+progression, and CLI input parsing.
+Concurrency-focused tests verify that matches in the same round start independently, that the coordinator waits for
+every result, that result ordering is stable, and that invalid tosses do not deadlock the round.
+The CLI tests also check the formatted championship output for an eight-player tournament.
+Together, these tests cover both the functional specification and the concurrency properties required by the assignment
+statement.

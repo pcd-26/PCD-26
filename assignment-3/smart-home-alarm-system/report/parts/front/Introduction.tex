@@ -1,0 +1,17 @@
+\section{Introduction}
+
+Assignment 3 requires the development of two concurrent systems based on message passing: a smart home alarm system in
+Java using Apache Pekko and a tournament game in Go using goroutines and channels.
+
+This report covers the smart-home alarm system. The main concern is state ownership: one actor must serialize the
+transitions of the alarm controller, while the keypad, sensors, and siren remain message-only collaborators.
+
+The report is organized into the following parts:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Problem analysis}: state model, zones, timers, and message flow;
+    \item \textbf{Design}: actor responsibilities and ownership of the alarm state;
+    \item \textbf{Validation}: test coverage and relevant edge cases;
+    \item \textbf{How to run}: build and execution commands;
+    \item \textbf{Conclusions}: final remarks about the concurrent design.
+\end{itemize}

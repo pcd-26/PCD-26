@@ -1,0 +1,12 @@
+\section{Design}
+
+The solution assigns one actor to each responsibility.
+The control unit owns the state machine, the configured PIN, the active-zone set, and the timers.
+The keypad buffers local key presses and forwards completed PIN submissions or arming requests.
+The sensor actor is a thin adapter that forwards intrusion events.
+The siren actor only stores the on/off status of the emergency device.
+
+Zone-based arming is implemented with an immutable set of active zones that is reset to the full set when the system
+returns to \textit{DISARMED}.
+Timeouts are modeled as normal messages and cancelled when the actor leaves the timed state.
+This keeps stale timeout messages harmless and keeps the implementation close to the actor model.

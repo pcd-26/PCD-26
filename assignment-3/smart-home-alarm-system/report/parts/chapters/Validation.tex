@@ -1,0 +1,9 @@
+\section{Validation}
+
+The test suite covers configuration parsing, the control-unit state machine, keypad forwarding, sensor forwarding,
+siren state changes, and the demo entry point.
+Dedicated tests cover partial arming and stale timeout handling.
+The state-machine tests exercise the path from arming to alarm and back to disarming, including ignored sensor events.
+This gives coverage for the nominal flow and the most relevant edge cases from the assignment statement.
+The direct actor tests are important because the assignment is mainly about concurrent behavior, so the correctness of
+the message protocol matters as much as the visible outcome.

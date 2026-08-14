@@ -1,0 +1,10 @@
+\section{How to Run}
+
+\begin{itemize}[leftmargin=*]
+  \item Build and test: \texttt{go test ./...} from the \texttt{src} directory
+  \item Run: \texttt{go run . -players 8}
+  \item Input rule: the CLI accepts only positive powers of two.
+\end{itemize}
+
+The fixed tossers used in the tests make the execution reproducible while still exercising the concurrent scheduling of
+the round workers.

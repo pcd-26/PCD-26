@@ -1,81 +1,46 @@
 \documentclass[11pt,a4paper]{article}
 
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
 \usepackage[margin=2.4cm]{geometry}
-\usepackage{lmodern}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
+
+% Helper macro to convert month numbers into English text
+\newcommand{\englishmonthname}[1]{%
+    \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
+}
+
+% UK format: DD Month YYYY (e.g., 14 August 2026)
+\newcommand{\todayFullUK}{%
+    \number\day\ \englishmonthname{\number\month} \number\year%
+}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.55em}
-\renewcommand{\arraystretch}{1.15}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
 
-\title{\vspace{-1.5cm}Assignment 3 -- Odds and Evens Game}
-\author{Alex Santini \\ Francesco Valentini}
-\date{\today}
+\title{Assignment 3 -- Odds and Evens Game}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
 
 \begin{document}
 
-\maketitle
+\input{parts/front/TitlePage}
 
-\begin{itemize}
-  \item \textbf{Scope:} Go implementation of a single-elimination heads-or-tails championship with message passing.
-  \item \textbf{Main concurrency issue:} matches in the same round are independent, but the next round must wait for all results.
-  \item \textbf{Validation focus:} round coordination, deterministic tests, result ordering, and CLI input validation.
-\end{itemize}
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\input{parts/front/Disclaimer}
+\pagenumbering{arabic}
 
-\section*{Problem Analysis}
-The championship is a single-elimination tournament written in Go.
-The assignment requires $N = 2^m$ players, so the tournament always runs for $m$ rounds and produces exactly one champion.
-The relevant concurrent aspect is that all matches inside the same round are independent, while the next round must wait for the current round to complete.
-This gives a natural barrier between rounds and a message-passing coordination problem rather than a shared-memory one.
-The model is therefore a good fit for goroutines and channels, because each match can execute independently while the coordinator preserves the tournament structure.
-
-\section*{Implementation Strategy}
-The solution uses one goroutine per match and one coordinator per round.
-Each match receives exactly two players and one coin tosser, then sends one result message back to the round coordinator.
-The coordinator collects all results, preserves match order, and builds the winner list for the next round.
-The championship coordinator repeats this process until only one player remains.
-The coin toss source is abstracted so production code can use randomness, while tests can inject deterministic tossers.
-This abstraction makes the tournament logic deterministic under test and still allows the final executable to behave like a real random championship.
-
-\section*{Result Model}
-The data model keeps the tournament outcome explicit.
-Each match stores its round number, match number, the two participants, the winner, and the tossed side.
-Each round stores the ordered list of match results together with the winners promoted to the next round.
-The championship result then stores the final champion and the sequence of rounds.
-This makes the output easy to render and also simplifies testing because the assertions can inspect each level separately.
-It also makes the command-line interface straightforward, because it only has to format already validated domain data.
-
-\section*{Concurrency Model}
-No shared mutable memory is used to decide match outcomes.
-Workers do not mutate the player slice or any global tournament state.
-The only synchronization mechanism is the channel used to deliver match outcomes.
-This keeps the execution safe, easy to reason about, and suitable for validation with controlled concurrency tests.
-The coordinator owns the aggregation step, so round completion is explicit and deterministic even when match completion order changes.
-In practice, this means the round is the unit of synchronization and the match is the unit of parallelism.
-
-\section*{Validation}
-The test suite covers player validation, coin-side parsing, single-match behavior, round execution, full championship progression, and CLI input parsing.
-Concurrency-focused tests verify that matches in the same round start independently, that the coordinator waits for every result, that result ordering is stable, and that invalid tosses do not deadlock the round.
-The CLI tests also check the formatted championship output for an eight-player tournament.
-Additional tests check error propagation for invalid coin toss outcomes and invalid player counts, which are the main failure modes exposed by the command-line interface.
-Together, these tests cover both the functional specification and the concurrency properties required by the assignment statement.
-
-\section*{Build and Run}
-\begin{itemize}
-  \item Build: \texttt{go test ./\ldots{}} from the \texttt{src} directory
-  \item Run: \texttt{go run . -players 8}
-  \item Input rule: the CLI accepts only positive powers of two.
-\end{itemize}
-
-The fixed tossers used in the tests make the execution reproducible while still exercising the concurrent scheduling of the round workers.
-This is useful because it keeps the same code path for testing and production while changing only the coin source.
-
-\section*{Conclusion}
-The final architecture satisfies the assignment constraints with a minimal message-passing design.
-The round coordinator acts as the synchronization barrier, so the implementation remains deterministic at the round level while still exploiting concurrency inside each round.
-The same structure also keeps the code small enough to validate manually and with automated tests.
-The result is a compact tournament engine that is easy to explain during the oral discussion and stable enough for repeatable validation.
+\input{parts/front/Introduction}
+\input{parts/chapters/ProblemAnalysis}
+\input{parts/chapters/Design}
+\input{parts/chapters/Validation}
+\input{parts/back/HowToRun}
+\input{parts/back/Conclusions}
 
 \end{document}

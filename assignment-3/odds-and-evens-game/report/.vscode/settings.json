@@ -1,0 +1,28 @@
+{
+    "latex-workshop.latex.autoBuild.run": "onSave",
+    "latex-workshop.latex.autoClean.run": "onBuilt",
+    "latex-workshop.latex.clean.fileTypes": [
+        "*.aux",
+        "*.log",
+        "*.out",
+        "*.toc"
+    ],
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "make report",
+            "tools": [
+                "make-report"
+            ]
+        }
+    ],
+    "latex-workshop.latex.tools": [
+        {
+            "name": "make-report",
+            "command": "python",
+            "args": [
+                "C:/Users/alexs/Documents/GitHub/PCD-26/scripts/build_latex_report.py",
+                "%DIR%"
+            ]
+        }
+    ]
+}

@@ -29,3 +29,5 @@ The deliverable must be a zipped folder `Assignment-03`, to be submitted on the 
 	- A brief analysis of the problem, focusing in particular aspects that are relevant from a  concurrent point of view.
 	- A brief description of the strategy adopted
 
+When editing the reports in VS Code, open `assignment-3.code-workspace` so saving `main.tex` triggers the PDF build automatically for both report folders.
+

@@ -1,0 +1,8 @@
+\section{Problem Analysis}
+
+The Odds and Evens Game is implemented in Go with goroutines and channels.
+The relevant concurrency issue is round ownership: all matches in the same round are independent, but the next round
+must wait for the current one to finish.
+The assignment requires $N = 2^m$ players, so the tournament always runs for $m$ rounds and produces exactly one champion.
+This makes the problem a natural fit for message passing, because each match can execute independently while the round
+coordinator preserves the bracket structure.

@@ -4,6 +4,10 @@
 **/*.iml
 **/.codex-tmp/
 **/.cache/
+!assignment-3/smart-home-alarm-system/report/.vscode/
+!assignment-3/smart-home-alarm-system/report/.vscode/settings.json
+!assignment-3/odds-and-evens-game/report/.vscode/
+!assignment-3/odds-and-evens-game/report/.vscode/settings.json
 
 # Python caches
 **/__pycache__/

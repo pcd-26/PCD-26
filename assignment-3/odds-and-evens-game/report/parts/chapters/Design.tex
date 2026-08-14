@@ -1,0 +1,13 @@
+\section{Design}
+
+The solution uses one goroutine per match and one coordinator per round.
+Each match receives exactly two players and one coin tosser, then sends one result message back to the round coordinator.
+The coordinator collects all results, preserves match order, and builds the winner list for the next round.
+The championship coordinator repeats this process until only one player remains.
+The coin-toss source is abstracted so production code can use randomness, while tests can inject deterministic tossers.
+
+The data model keeps the tournament outcome explicit.
+Each match stores its round number, match number, the two participants, the winner, and the tossed side.
+Each round stores the ordered list of match results together with the winners promoted to the next round.
+The championship result stores the final champion and the sequence of rounds.
+This keeps the rendering code simple and makes the tests easy to write.
