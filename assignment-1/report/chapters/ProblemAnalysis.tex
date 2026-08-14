@@ -1,0 +1,17 @@
+\section{Problem Analysis}
+
+The main difficulty is the management of a shared mutable board under asynchronous input and a non-trivial simulation workload.
+During each tick, many balls move, collide, and change status, so the implementation must preserve deterministic state transitions while still allowing useful concurrency.
+
+\begin{itemize}
+    \item \textbf{Computational cost}: collision detection and resolution become the dominant cost as the number of balls increases;
+    \item \textbf{Shared state}: the board must be updated consistently even when multiple events are active;
+    \item \textbf{Asynchronous input}: human and bot actions arrive while the simulation is running;
+    \item \textbf{Determinism}: concurrency must not alter the logical outcome of the match;
+    \item \textbf{Responsiveness}: the interface must remain reactive while the simulation progresses.
+\end{itemize}
+
+The concurrent part of the assignment starts from identifying which simulation work can be parallelized and which coordination must remain serialized.
+This is the first step toward preserving a consistent global view of the match while keeping the simulation efficient.
+
+\textbf{The objective} is to \textbf{exploit parallelism} while preserving \textbf{coherence} and \textbf{determinism}.
