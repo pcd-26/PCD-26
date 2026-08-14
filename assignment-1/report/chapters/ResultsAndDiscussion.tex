@@ -3,11 +3,9 @@
 
 \subsection{Benchmark Methodology}
 
-All benchmark values used for this report are available in the repository:
-\href{https://github.com/pcd-26/PCD-26}{pcd-26/PCD-26}. The figures in
-\texttt{assignment-1/report/images/} visualize the same summaries. The report uses a speedup snapshot with
-\textbf{1000}, \textbf{1500}, \textbf{2000}, and \textbf{2500} balls at \textbf{600} steps, seed \texttt{42}, and a
-worker-count snapshot for \textbf{2500} balls at \textbf{1000} steps, seed \texttt{42}.
+All benchmark values used for this report are available in the repository: \href{https://github.com/pcd-26/PCD-26}{pcd-26/PCD-26}.
+The figures in \texttt{assignment-1/report/images/} visualize the same summaries.
+The report uses a speedup snapshot with \textbf{1000}, \textbf{1500}, \textbf{2000}, and \textbf{2500} balls at \textbf{600} steps, seed \texttt{42}, and a worker-count snapshot for \textbf{2500} balls at \textbf{1000} steps, seed \texttt{42}.
 
 \begin{itemize}
     \item \textbf{Environment}: OpenJDK 17.0.19+10 on Windows 11, amd64;
@@ -16,8 +14,7 @@ worker-count snapshot for \textbf{2500} balls at \textbf{1000} steps, seed \text
     \item \textbf{Comparability rule}: only runs with the same workload parameters are compared.
 \end{itemize}
 
-The first table summarizes the speedup snapshot; the second table and the second figure summarize the worker-count
-snapshot.
+The first table summarizes the speedup snapshot; the second table and the second figure summarize the worker-count snapshot.
 
 \begin{itemize}
     \item \textbf{Speedup table}: compares the sequential median with the concurrent medians across workloads;
@@ -29,13 +26,12 @@ The speedup snapshot contains the following values:
 
 \begin{table}[htbp]
     \centering
-    \fontsize{12}{9.5}\selectfont
+    \fontsize{12}{16}\selectfont
     \setlength{\tabcolsep}{4pt}
     \renewcommand{\arraystretch}{0.9}
     \begin{tabular}{rlrrr}
         \hline
-        Balls & Implementation & Seq. median [ms] &
-        Concurrent median [ms] & Speedup \\
+        Balls & Implementation & Seq. median [ms] & Concurrent median [ms] & Speedup \\
         \hline
         1000 & threads  & 129.4819 & 117.7674 & 1.099 \\
         1000 & executor & 129.4819 & 107.5256 & 1.204 \\
@@ -47,26 +43,20 @@ The speedup snapshot contains the following values:
         2500 & executor & 433.9208 & 232.9631 & 1.863 \\
         \hline
     \end{tabular}
-    \caption{
-        Median speedup values for the local speedup snapshot (1000, 1500,
-        2000, and 2500 balls; 600 steps; seed 42) on Windows 11 amd64 with
-        OpenJDK 17.0.19+10 and 16 visible cores.
-    }
+    \caption{Median speedup values for the local speedup snapshot (1000, 1500, 2000, and 2500 balls; 600 steps; seed 42) on Windows 11 amd64 with OpenJDK 17.0.19+10 and 16 visible cores.}
 \end{table}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{images/speedup-vs-balls.png}
-    \caption{Speedup as the number of balls increases for the local speedup snapshot
-        (1000 to 2500 balls; 600 steps; seed 42) with 16 workers.}
+    \includegraphics[width=\linewidth]{images/speedup-vs-balls}
+    \caption{Speedup as the number of balls increases for the local speedup snapshot (1000 to 2500 balls; 600 steps; seed 42) with 16 workers.}
 \end{figure}
 
-The worker-count snapshot contains the medians for the 2500-ball scalability workload with \textbf{1000} steps and
-seed \texttt{42}.
+The worker-count snapshot contains the medians for the 2500-ball scalability workload with \textbf{1000} steps and seed \texttt{42}.
 
 \begin{table}[htbp]
     \centering
-    \fontsize{12}{10.5}\selectfont
+    \fontsize{12}{16}\selectfont
     \setlength{\tabcolsep}{4pt}
     \renewcommand{\arraystretch}{0.9}
     \begin{tabular}{lrrr}
@@ -94,11 +84,14 @@ seed \texttt{42}.
     }
 \end{table}
 
-The \textbf{benchmark evidence} shows a real but \textbf{sublinear} gain. On the speedup snapshot, both concurrent versions beat the sequential baseline at every measured workload. The executor-based engine is ahead at 1000 balls, while the threaded engine is ahead from 1500 through 2500 balls and reaches the largest speedup, \texttt{1.883766}. On the worker-count snapshot, both versions improve through 8 workers, where they reach their best medians, then regress at 16 and 17 workers. This saturation is consistent with the remaining \textbf{serial bottleneck}, scheduling costs, and contention once the useful parallelism of this workload is exhausted.
+The \textbf{benchmark evidence} shows a real but \textbf{sublinear} gain.
+On the speedup snapshot, both concurrent versions beat the sequential baseline at every measured workload.
+The executor-based engine is ahead at 1000 balls, while the threaded engine is ahead from 1500 through 2500 balls and reaches the largest speedup, \texttt{1.883766}.
+On the worker-count snapshot, both versions improve through 8 workers, where they reach their best medians, then regress at 16 and 17 workers.
+This saturation is consistent with the remaining \textbf{serial bottleneck}, scheduling costs, and contention once the useful parallelism of this workload is exhausted.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.84\linewidth]{images/speedup-vs-workers.png}
-    \caption{Speedup as the worker count changes for the local 2500-ball scalability
-    workload (1000 steps; seed 42).}
+    \includegraphics[width=0.84\linewidth]{images/speedup-vs-workers}
+    \caption{Speedup as the worker count changes for the local 2500-ball scalability workload (1000 steps; seed 42).}
 \end{figure}
