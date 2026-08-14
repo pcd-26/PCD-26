@@ -6,3 +6,14 @@ must wait for the current one to finish.
 The assignment requires $N = 2^m$ players, so the tournament always runs for $m$ rounds and produces exactly one champion.
 This makes the problem a natural fit for message passing, because each match can execute independently while the round
 coordinator preserves the bracket structure.
+
+For a tournament of $N$ players:
+\begin{itemize}[leftmargin=*]
+    \item round $k$ contains $N / 2^k$ matches;
+    \item the total number of matches is $\sum_{k=1}^{m} N / 2^k = N - 1$;
+    \item each match has exactly one winner;
+    \item each round halves the number of active players;
+    \item the tournament ends when only one player remains.
+\end{itemize}
+
+The implementation uses these rules directly, so the code stays close to the domain model.

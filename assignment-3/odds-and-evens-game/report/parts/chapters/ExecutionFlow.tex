@@ -1,0 +1,22 @@
+\section{Execution Flow}
+
+The execution flow is short and deterministic:
+\begin{enumerate}[leftmargin=*]
+    \item the CLI parses the `-players` flag and rejects non-positive or non power-of-two values;
+    \item `PlayChampionship` validates the player slice and copies it to avoid aliasing;
+    \item the championship coordinator starts round 1;
+    \item `PlayRound` creates one goroutine per match;
+    \item each worker resolves exactly one match through `PlayMatch`;
+    \item the round coordinator waits for one outcome per match and stores it in bracket order;
+    \item the promoted winners form the player slice for the next round;
+    \item the process repeats until one champion remains.
+\end{enumerate}
+
+The match worker is intentionally small.
+It only asks the tosser for one side, maps `Heads` to the first player and `Tails` to the second player, and returns a
+`MatchResult`.
+That keeps the concurrency boundary narrow and easy to test.
+
+The round coordinator is the synchronization point.
+It does not guess or poll for completion; it simply waits for the exact number of outcomes it already knows should arrive.
+That design is what makes the implementation easy to reason about and prevents the round from advancing too early.

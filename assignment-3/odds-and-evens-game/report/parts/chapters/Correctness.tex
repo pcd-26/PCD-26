@@ -1,0 +1,22 @@
+\section{Correctness}
+
+The implementation satisfies a small set of invariants:
+\begin{itemize}[leftmargin=*]
+    \item every match produces exactly one result message;
+    \item every match has exactly one winner;
+    \item every round consumes an even number of players;
+    \item every round halves the player count;
+    \item the championship stops when one player remains;
+    \item result ordering is stable even when goroutines complete out of order;
+    \item invalid tossers and invalid players are reported as errors instead of producing undefined behavior.
+\end{itemize}
+
+The round barrier is the key safety property.
+Because the coordinator waits for exactly one outcome per match, the next round cannot start before the current round
+is complete.
+Because outcomes are stored by match index, the bracket order remains stable independently of scheduling.
+
+Error handling is also explicit.
+If a tosser is `nil`, or if it returns an invalid side, the error is propagated immediately after all workers have been
+accounted for.
+This prevents deadlock and keeps the error path well defined.

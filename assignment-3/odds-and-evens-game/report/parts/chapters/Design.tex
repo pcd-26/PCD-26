@@ -6,8 +6,18 @@ The coordinator collects all results, preserves match order, and builds the winn
 The championship coordinator repeats this process until only one player remains.
 The coin-toss source is abstracted so production code can use randomness, while tests can inject deterministic tossers.
 
+The implementation is split into three layers:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{CLI layer}: validates the player count, constructs the initial player slice, and renders the final result;
+    \item \textbf{Championship layer}: drives the full elimination and owns the round progression;
+    \item \textbf{Round layer}: runs match workers concurrently and rebuilds the next player list.
+\end{itemize}
+
 The data model keeps the tournament outcome explicit.
 Each match stores its round number, match number, the two participants, the winner, and the tossed side.
 Each round stores the ordered list of match results together with the winners promoted to the next round.
 The championship result stores the final champion and the sequence of rounds.
 This keeps the rendering code simple and makes the tests easy to write.
+
+The coordinator owns the result ordering by `matchIndex`, so completion order and presentation order are decoupled.
+This is important because goroutines can finish in any order, but the bracket must remain deterministic.
