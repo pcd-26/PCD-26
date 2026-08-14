@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"heads-or-tails-championship/championship"
+	"odds-and-evens-game/championship"
 )
 
 func main() {

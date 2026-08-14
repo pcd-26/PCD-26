@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"heads-or-tails-championship/championship"
+	"odds-and-evens-game/championship"
 )
 
 func TestParsePlayersCountValid(t *testing.T) {

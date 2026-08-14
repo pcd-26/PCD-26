@@ -1,6 +1,6 @@
 # Report
 
-This directory contains the LaTeX source for the Heads-or-Tails Championship
+This directory contains the LaTeX source for the Odds and Evens Game
 report.
 
 When opened in VS Code, saving `main.tex` triggers an automatic build and

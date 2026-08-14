@@ -1,8 +1,8 @@
-# Heads-or-Tails Championship Report
+# Odds and Evens Game Report
 
 ## 1. Problem Analysis
 
-The Heads-or-Tails Championship is a single-elimination tournament.
+The Odds and Evens Game is a single-elimination tournament.
 If the initial player count is `N = 2^m`, then the tournament has `m = log2(N)` rounds.
 Each round halves the number of active players, so the total number of matches is `N - 1`.
 This matches the elimination tree implemented by the championship coordinator.

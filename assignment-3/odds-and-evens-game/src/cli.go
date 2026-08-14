@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"heads-or-tails-championship/championship"
+	"odds-and-evens-game/championship"
 )
 
 func run(args []string, stdout, stderr io.Writer, tosserFactory championship.CoinTosserFactory) int {
@@ -41,7 +41,7 @@ func runWithFactory(args []string, stdout, stderr io.Writer, tosserFactory champ
 }
 
 func parsePlayersCount(args []string) (int, error) {
-	flagSet := flag.NewFlagSet("hotc", flag.ContinueOnError)
+	flagSet := flag.NewFlagSet("odds-and-evens-game", flag.ContinueOnError)
 	flagSet.SetOutput(io.Discard)
 
 	players := flagSet.Int("players", 0, "number of players")
