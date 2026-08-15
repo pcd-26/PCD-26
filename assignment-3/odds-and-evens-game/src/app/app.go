@@ -7,11 +7,12 @@ import (
 	"strings"
 
 	"odds-and-evens-game/championship/domain"
+	"odds-and-evens-game/championship/match"
 	"odds-and-evens-game/championship/tournament"
 )
 
 // Run executes the CLI.
-func Run(args []string, stdout, stderr io.Writer) int {
+func Run(args []string, stdout, stderr io.Writer, toss func() domain.CoinSide) int {
 	playersCount, err := ParsePlayersCount(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -24,7 +25,11 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	result, err := tournament.PlayChampionship(players)
+	if toss == nil {
+		toss = match.RandomTossSide
+	}
+
+	result, err := tournament.PlayChampionship(players, toss)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

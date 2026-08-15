@@ -1,7 +1,6 @@
 package round_test
 
 import (
-	"sync/atomic"
 	"testing"
 
 	"odds-and-evens-game/championship/domain"
@@ -22,16 +21,20 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	done := make(chan int, 2)
 	release := make(chan struct{})
 	resultCh := make(chan roundExecution, 1)
+	turns := make(chan int, 2)
+	turns <- 1
+	turns <- 2
 
-	withTossSide(t, func() domain.CoinSide {
-		started <- 1
+	toss := func() domain.CoinSide {
+		call := <-turns
+		started <- call
 		<-release
-		done <- 1
+		done <- call
 		return domain.Heads
-	})
+	}
 
 	go func() {
-		winners, results, err := round.PlayRound(1, players)
+		winners, results, err := round.PlayRound(1, players, toss)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
@@ -74,12 +77,14 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 	release1 := make(chan struct{})
 	release2 := make(chan struct{})
 	resultCh := make(chan roundExecution, 1)
-	var calls int32
+	turns := make(chan int, 2)
+	turns <- 1
+	turns <- 2
 
-	withTossSide(t, func() domain.CoinSide {
-		n := atomic.AddInt32(&calls, 1)
-		started <- int(n)
-		if n == 1 {
+	toss := func() domain.CoinSide {
+		call := <-turns
+		started <- call
+		if call == 1 {
 			<-release1
 			done <- 1
 			return domain.Heads
@@ -87,10 +92,10 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 		<-release2
 		done <- 2
 		return domain.Heads
-	})
+	}
 
 	go func() {
-		winners, results, err := round.PlayRound(2, players)
+		winners, results, err := round.PlayRound(2, players, toss)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
@@ -124,12 +129,14 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 	release1 := make(chan struct{})
 	release2 := make(chan struct{})
 	resultCh := make(chan roundExecution, 1)
-	var calls int32
+	turns := make(chan int, 2)
+	turns <- 1
+	turns <- 2
 
-	withTossSide(t, func() domain.CoinSide {
-		n := atomic.AddInt32(&calls, 1)
-		started <- int(n)
-		if n == 1 {
+	toss := func() domain.CoinSide {
+		call := <-turns
+		started <- call
+		if call == 1 {
 			<-release1
 			done <- 1
 			return domain.CoinSide("edge")
@@ -137,10 +144,10 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 		<-release2
 		done <- 2
 		return domain.Heads
-	})
+	}
 
 	go func() {
-		winners, results, err := round.PlayRound(3, players)
+		winners, results, err := round.PlayRound(3, players, toss)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 

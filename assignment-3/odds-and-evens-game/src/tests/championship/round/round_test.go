@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"odds-and-evens-game/championship/domain"
-	"odds-and-evens-game/championship/match"
 	"odds-and-evens-game/championship/round"
 )
 
@@ -12,9 +11,7 @@ import (
 func TestPlayRoundWithTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 2)
 
-	withTossSide(t, func() domain.CoinSide { return domain.Heads })
-
-	winners, results, err := round.PlayRound(1, players)
+	winners, results, err := round.PlayRound(1, players, func() domain.CoinSide { return domain.Heads })
 	if err != nil {
 		t.Fatalf("expected round to succeed, got error: %v", err)
 	}
@@ -33,9 +30,7 @@ func TestPlayRoundWithTwoPlayers(t *testing.T) {
 func TestPlayRoundWithFourPlayers(t *testing.T) {
 	players := mustPlayers(t, 4)
 
-	withTossSide(t, func() domain.CoinSide { return domain.Heads })
-
-	winners, results, err := round.PlayRound(2, players)
+	winners, results, err := round.PlayRound(2, players, func() domain.CoinSide { return domain.Heads })
 	if err != nil {
 		t.Fatalf("expected round to succeed, got error: %v", err)
 	}
@@ -47,9 +42,7 @@ func TestPlayRoundWithFourPlayers(t *testing.T) {
 func TestPlayRoundWithEightPlayers(t *testing.T) {
 	players := mustPlayers(t, 8)
 
-	withTossSide(t, func() domain.CoinSide { return domain.Heads })
-
-	winners, results, err := round.PlayRound(3, players)
+	winners, results, err := round.PlayRound(3, players, func() domain.CoinSide { return domain.Heads })
 	if err != nil {
 		t.Fatalf("expected round to succeed, got error: %v", err)
 	}
@@ -59,7 +52,7 @@ func TestPlayRoundWithEightPlayers(t *testing.T) {
 
 // A round cannot run with zero players.
 func TestPlayRoundRejectsZeroPlayers(t *testing.T) {
-	_, _, err := round.PlayRound(1, nil)
+	_, _, err := round.PlayRound(1, nil, func() domain.CoinSide { return domain.Heads })
 	if err == nil {
 		t.Fatal("expected error for zero players")
 	}
@@ -69,7 +62,7 @@ func TestPlayRoundRejectsZeroPlayers(t *testing.T) {
 func TestPlayRoundRejectsOddNumberOfPlayers(t *testing.T) {
 	players := mustPlayers(t, 3)
 
-	_, _, err := round.PlayRound(1, players)
+	_, _, err := round.PlayRound(1, players, func() domain.CoinSide { return domain.Heads })
 	if err == nil {
 		t.Fatal("expected error for odd number of players")
 	}
@@ -79,9 +72,7 @@ func TestPlayRoundRejectsOddNumberOfPlayers(t *testing.T) {
 func TestPlayRoundReportsMatchError(t *testing.T) {
 	players := mustPlayers(t, 4)
 
-	withTossSide(t, func() domain.CoinSide { return domain.CoinSide("edge") })
-
-	_, _, err := round.PlayRound(7, players)
+	_, _, err := round.PlayRound(7, players, func() domain.CoinSide { return domain.CoinSide("edge") })
 	if err == nil {
 		t.Fatal("expected error from invalid match result")
 	}
@@ -129,14 +120,4 @@ func assertMatchNumbers(t *testing.T, results []domain.MatchResult, want []int) 
 			t.Fatalf("unexpected match number at index %d: got %d want %d", i, result.MatchNumber(), want[i])
 		}
 	}
-}
-
-func withTossSide(t *testing.T, toss func() domain.CoinSide) {
-	t.Helper()
-
-	original := match.TossSide
-	match.TossSide = toss
-	t.Cleanup(func() {
-		match.TossSide = original
-	})
 }

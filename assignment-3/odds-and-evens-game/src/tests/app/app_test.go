@@ -7,7 +7,6 @@ import (
 
 	"odds-and-evens-game/app"
 	"odds-and-evens-game/championship/domain"
-	"odds-and-evens-game/championship/match"
 )
 
 // These tests exercise the public CLI helpers from the outside.
@@ -42,9 +41,7 @@ func TestRunFormatsEightPlayerChampionship(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	withTossSide(t, func() domain.CoinSide { return domain.Heads })
-
-	exitCode := app.Run([]string{"-players", "8"}, stdout, stderr)
+	exitCode := app.Run([]string{"-players", "8"}, stdout, stderr, func() domain.CoinSide { return domain.Heads })
 	if exitCode != 0 {
 		t.Fatalf("expected zero exit code, got %d, stderr=%s", exitCode, stderr.String())
 	}
@@ -69,21 +66,11 @@ func TestRunRejectsInvalidInput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := app.Run([]string{"-players", "3"}, stdout, stderr)
+	exitCode := app.Run([]string{"-players", "3"}, stdout, stderr, func() domain.CoinSide { return domain.Heads })
 	if exitCode == 0 {
 		t.Fatal("expected non-zero exit code")
 	}
 	if !strings.Contains(stderr.String(), "power of two") {
 		t.Fatalf("expected validation error, got stderr=%q", stderr.String())
 	}
-}
-
-func withTossSide(t *testing.T, toss func() domain.CoinSide) {
-	t.Helper()
-
-	original := match.TossSide
-	match.TossSide = toss
-	t.Cleanup(func() {
-		match.TossSide = original
-	})
 }

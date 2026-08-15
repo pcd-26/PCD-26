@@ -8,15 +8,11 @@ import (
 	"odds-and-evens-game/championship/domain"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-// TossSide returns the side of a random coin toss.
-var TossSide = randomTossSide
-
 // PlayMatch resolves a single match between exactly two players.
-func PlayMatch(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) (domain.MatchResult, error) {
+func PlayMatch(roundNumber, matchNumber int, toss func() domain.CoinSide, firstPlayer, secondPlayer domain.Player) (domain.MatchResult, error) {
+	if toss == nil {
+		return domain.MatchResult{}, fmt.Errorf("coin toss function must not be nil")
+	}
 	if err := validatePlayer(firstPlayer); err != nil {
 		return domain.MatchResult{}, fmt.Errorf("first player is invalid: %w", err)
 	}
@@ -24,7 +20,7 @@ func PlayMatch(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Pl
 		return domain.MatchResult{}, fmt.Errorf("second player is invalid: %w", err)
 	}
 
-	tossedSide := TossSide()
+	tossedSide := toss()
 	switch tossedSide {
 	case domain.Heads:
 		return domain.NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, firstPlayer, tossedSide)
@@ -35,8 +31,10 @@ func PlayMatch(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Pl
 	}
 }
 
-func randomTossSide() domain.CoinSide {
-	if rand.Intn(2) == 0 {
+// RandomTossSide returns a random coin side using a local RNG.
+func RandomTossSide() domain.CoinSide {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	if rng.Intn(2) == 0 {
 		return domain.Heads
 	}
 	return domain.Tails
