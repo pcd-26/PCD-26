@@ -3,7 +3,7 @@
 
 \texttt{FSStatLib} computes a report from three input parameters:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{\texttt{D}}: the root directory to scan;
   \item \textbf{\texttt{MaxFS}}: the maximum file size used as threshold;
   \item \textbf{\texttt{NB}}: the number of regular size bands.
@@ -20,7 +20,7 @@ The relevant part for this assignment is doing the same work
 The input directory may contain a large and irregular tree. A scanner must
 therefore handle:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{recursion}: nested subdirectories must be visited;
   \item \textbf{scale}: the tree may contain many small files or many
   subdirectories;
@@ -45,7 +45,7 @@ the whole directory tree to be processed. At the same time, the implementation
 must coordinate work that may still be in progress. In particular, it must
 define:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{scheduling}: how new directory work is started;
   \item \textbf{state ownership}: where partial counters are stored and
   updated;
@@ -59,7 +59,7 @@ define:
 
 These requirements are solved differently in the three versions:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{Event-loop}: callbacks and pending asynchronous operations;
   \item \textbf{Reactive}: stream accumulation;
   \item \textbf{Virtual threads}: task coordination.
@@ -69,7 +69,7 @@ These requirements are solved differently in the three versions:
 
 The report contains two logical results:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{total file count}: the number of regular files found under
   \texttt{D}, including recursively visited subdirectories;
   \item \textbf{file-size histogram}: an array of \texttt{NB + 1} counters.
@@ -90,7 +90,7 @@ links as ordinary files.
 
 The expected behaviour can be summarized through these properties:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{Safety}: every counted file contributes to exactly one size
   band;
   \item \textbf{Completeness}: on a stable directory tree, every reachable
