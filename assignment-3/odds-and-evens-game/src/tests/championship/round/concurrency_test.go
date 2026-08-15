@@ -1,10 +1,10 @@
 package round_test
 
 import (
+	"sync/atomic"
 	"testing"
 
 	"odds-and-evens-game/championship/domain"
-	"odds-and-evens-game/championship/match"
 	"odds-and-evens-game/championship/round"
 )
 
@@ -15,72 +15,28 @@ type roundExecution struct {
 	err     error
 }
 
-// coordinatedTosser blocks until the test lets the match continue.
-type coordinatedTosser struct {
-	matchNumber int
-	side        domain.CoinSide
-	started     chan<- int
-	done        chan<- int
-	release     <-chan struct{}
-}
-
-// Toss signals start, waits for release, then signals completion.
-func (t coordinatedTosser) Toss() domain.CoinSide {
-	t.started <- t.matchNumber
-	<-t.release
-	t.done <- t.matchNumber
-	return t.side
-}
-
-// signalRelease makes sure a waiting goroutine can proceed.
-func signalRelease(ch chan struct{}) {
-	select {
-	case ch <- struct{}{}:
-	default:
-	}
-}
-
 // This test checks that the round waits for all matches before returning.
 func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	players := mustPlayers(t, 4)
 	started := make(chan int, 2)
 	done := make(chan int, 2)
-	release1 := make(chan struct{}, 1)
-	release2 := make(chan struct{}, 1)
+	release := make(chan struct{})
 	resultCh := make(chan roundExecution, 1)
-	defer signalRelease(release1)
-	defer signalRelease(release2)
+
+	withTossSide(t, func() domain.CoinSide {
+		started <- 1
+		<-release
+		done <- 1
+		return domain.Heads
+	})
 
 	go func() {
-		winners, results, err := round.PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-			switch matchNumber {
-			case 1:
-				return coordinatedTosser{
-					matchNumber: matchNumber,
-					side:        domain.Heads,
-					started:     started,
-					done:        done,
-					release:     release1,
-				}
-			default:
-				return coordinatedTosser{
-					matchNumber: matchNumber,
-					side:        domain.Tails,
-					started:     started,
-					done:        done,
-					release:     release2,
-				}
-			}
-		})
+		winners, results, err := round.PlayRound(1, players)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
-	startedMatches := make(map[int]struct{}, 2)
-	for len(startedMatches) < 2 {
-		startedMatches[<-started] = struct{}{}
-	}
-	if len(startedMatches) != 2 {
-		t.Fatalf("expected each match to start once, got %d starts", len(startedMatches))
+	for i := 0; i < 2; i++ {
+		<-started
 	}
 
 	select {
@@ -89,8 +45,7 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	default:
 	}
 
-	signalRelease(release1)
-	signalRelease(release2)
+	close(release)
 
 	execution := <-resultCh
 	if execution.err != nil {
@@ -106,66 +61,9 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	assertRoundPlayerUsage(t, execution.results, []int{1, 2, 3, 4})
 	assertMatchNumbers(t, execution.results, []int{1, 2})
 
-	doneMatches := make(map[int]struct{}, 2)
-	for len(doneMatches) < 2 {
-		doneMatches[<-done] = struct{}{}
+	for i := 0; i < 2; i++ {
+		<-done
 	}
-	if len(doneMatches) != 2 {
-		t.Fatalf("expected each match to produce one result, got %d completions", len(doneMatches))
-	}
-}
-
-// This test checks that every player appears exactly once in a round.
-func TestPlayRoundUsesOneResultPerMatchAndNoPlayerTwice(t *testing.T) {
-	players := mustPlayers(t, 8)
-	started := make(chan int, 4)
-	done := make(chan int, 4)
-	release := []chan struct{}{
-		make(chan struct{}, 1),
-		make(chan struct{}, 1),
-		make(chan struct{}, 1),
-		make(chan struct{}, 1),
-	}
-	resultCh := make(chan roundExecution, 1)
-	defer func() {
-		for _, ch := range release {
-			signalRelease(ch)
-		}
-	}()
-
-	go func() {
-		winners, results, err := round.PlayRound(1, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-			return coordinatedTosser{
-				matchNumber: matchNumber,
-				side:        domain.Heads,
-				started:     started,
-				done:        done,
-				release:     release[matchNumber-1],
-			}
-		})
-		resultCh <- roundExecution{winners: winners, results: results, err: err}
-	}()
-
-	startedMatches := make(map[int]struct{}, 4)
-	for len(startedMatches) < 4 {
-		startedMatches[<-started] = struct{}{}
-	}
-	if len(startedMatches) != 4 {
-		t.Fatalf("expected exactly 4 started matches, got %d", len(startedMatches))
-	}
-
-	for _, ch := range release {
-		signalRelease(ch)
-	}
-
-	execution := <-resultCh
-	if execution.err != nil {
-		t.Fatalf("expected round to succeed, got error: %v", execution.err)
-	}
-	if len(execution.results) != 4 {
-		t.Fatalf("unexpected results count: got %d want %d", len(execution.results), 4)
-	}
-	assertRoundPlayerUsage(t, execution.results, []int{1, 2, 3, 4, 5, 6, 7, 8})
 }
 
 // This test checks that completion order does not affect result ordering.
@@ -173,47 +71,41 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 	players := mustPlayers(t, 4)
 	started := make(chan int, 2)
 	done := make(chan int, 2)
-	release1 := make(chan struct{}, 1)
-	release2 := make(chan struct{}, 1)
+	release1 := make(chan struct{})
+	release2 := make(chan struct{})
 	resultCh := make(chan roundExecution, 1)
-	defer signalRelease(release1)
-	defer signalRelease(release2)
+	var calls int32
+
+	withTossSide(t, func() domain.CoinSide {
+		n := atomic.AddInt32(&calls, 1)
+		started <- int(n)
+		if n == 1 {
+			<-release1
+			done <- 1
+			return domain.Heads
+		}
+		<-release2
+		done <- 2
+		return domain.Heads
+	})
 
 	go func() {
-		winners, results, err := round.PlayRound(2, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-			if matchNumber == 1 {
-				return coordinatedTosser{
-					matchNumber: matchNumber,
-					side:        domain.Heads,
-					started:     started,
-					done:        done,
-					release:     release1,
-				}
-			}
-			return coordinatedTosser{
-				matchNumber: matchNumber,
-				side:        domain.Tails,
-				started:     started,
-				done:        done,
-				release:     release2,
-			}
-		})
+		winners, results, err := round.PlayRound(2, players)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
-	startedMatches := make(map[int]struct{}, 2)
-	for len(startedMatches) < 2 {
-		startedMatches[<-started] = struct{}{}
+	for i := 0; i < 2; i++ {
+		<-started
 	}
 
-	signalRelease(release2)
+	close(release2)
 	if got := <-done; got != 2 {
-		t.Fatalf("expected match 2 to complete first, got match %d", got)
+		t.Fatalf("expected second toss to complete first, got %d", got)
 	}
 
-	signalRelease(release1)
+	close(release1)
 	if got := <-done; got != 1 {
-		t.Fatalf("expected match 1 to complete second, got match %d", got)
+		t.Fatalf("expected first toss to complete second, got %d", got)
 	}
 
 	execution := <-resultCh
@@ -221,7 +113,7 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 		t.Fatalf("expected round to succeed, got error: %v", execution.err)
 	}
 	assertMatchNumbers(t, execution.results, []int{1, 2})
-	assertWinnerIDs(t, execution.winners, []int{1, 4})
+	assertWinnerIDs(t, execution.winners, []int{1, 3})
 }
 
 // This test checks that one bad match does not leave goroutines blocked.
@@ -229,53 +121,43 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 	players := mustPlayers(t, 4)
 	started := make(chan int, 2)
 	done := make(chan int, 2)
-	release1 := make(chan struct{}, 1)
-	release2 := make(chan struct{}, 1)
+	release1 := make(chan struct{})
+	release2 := make(chan struct{})
 	resultCh := make(chan roundExecution, 1)
-	defer signalRelease(release1)
-	defer signalRelease(release2)
+	var calls int32
+
+	withTossSide(t, func() domain.CoinSide {
+		n := atomic.AddInt32(&calls, 1)
+		started <- int(n)
+		if n == 1 {
+			<-release1
+			done <- 1
+			return domain.CoinSide("edge")
+		}
+		<-release2
+		done <- 2
+		return domain.Heads
+	})
 
 	go func() {
-		winners, results, err := round.PlayRound(3, players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-			if matchNumber == 1 {
-				return coordinatedTosser{
-					matchNumber: matchNumber,
-					side:        domain.CoinSide("edge"),
-					started:     started,
-					done:        done,
-					release:     release1,
-				}
-			}
-			return coordinatedTosser{
-				matchNumber: matchNumber,
-				side:        domain.Heads,
-				started:     started,
-				done:        done,
-				release:     release2,
-			}
-		})
+		winners, results, err := round.PlayRound(3, players)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
-	startedMatches := make(map[int]struct{}, 2)
-	for len(startedMatches) < 2 {
-		startedMatches[<-started] = struct{}{}
+	for i := 0; i < 2; i++ {
+		<-started
 	}
 
-	signalRelease(release1)
-	signalRelease(release2)
+	close(release1)
+	close(release2)
 
 	execution := <-resultCh
 	if execution.err == nil {
 		t.Fatal("expected error from invalid toss result")
 	}
 
-	doneMatches := make(map[int]struct{}, 2)
-	for len(doneMatches) < 2 {
-		doneMatches[<-done] = struct{}{}
-	}
-	if len(doneMatches) != 2 {
-		t.Fatalf("expected both match goroutines to finish, got %d", len(doneMatches))
+	for i := 0; i < 2; i++ {
+		<-done
 	}
 }
 

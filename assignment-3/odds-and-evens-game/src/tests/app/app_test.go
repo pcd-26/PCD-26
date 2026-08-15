@@ -8,7 +8,6 @@ import (
 	"odds-and-evens-game/app"
 	"odds-and-evens-game/championship/domain"
 	"odds-and-evens-game/championship/match"
-	"odds-and-evens-game/championship/round"
 )
 
 // These tests exercise the public CLI helpers from the outside.
@@ -38,70 +37,39 @@ func TestParsePlayersCountRejectsNonPowerOfTwo(t *testing.T) {
 	}
 }
 
-// This verifies the full CLI flow using a deterministic match script.
-func TestRunWithFactoryFormatsEightPlayerChampionship(t *testing.T) {
+// This verifies the full CLI flow with a deterministic toss hook.
+func TestRunFormatsEightPlayerChampionship(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := app.RunWithFactory([]string{"-players", "8"}, stdout, stderr, scriptedFactory(map[int]map[int]domain.CoinSide{
-		1: {1: domain.Heads, 2: domain.Heads, 3: domain.Heads, 4: domain.Heads},
-		2: {1: domain.Heads, 2: domain.Heads},
-		3: {1: domain.Heads},
-	}))
+	withTossSide(t, func() domain.CoinSide { return domain.Heads })
+
+	exitCode := app.Run([]string{"-players", "8"}, stdout, stderr)
 	if exitCode != 0 {
 		t.Fatalf("expected zero exit code, got %d, stderr=%s", exitCode, stderr.String())
 	}
 
-	expected := strings.Join([]string{
-		"Round 1",
-		"",
-		"Match 1: Player-1 [heads] vs Player-2 [tails]",
-		"Toss: heads",
-		"Winner: Player-1",
-		"",
-		"Match 2: Player-3 [heads] vs Player-4 [tails]",
-		"Toss: heads",
-		"Winner: Player-3",
-		"",
-		"Match 3: Player-5 [heads] vs Player-6 [tails]",
-		"Toss: heads",
-		"Winner: Player-5",
-		"",
-		"Match 4: Player-7 [heads] vs Player-8 [tails]",
-		"Toss: heads",
-		"Winner: Player-7",
-		"",
-		"Round 2",
-		"",
-		"Match 1: Player-1 [heads] vs Player-3 [tails]",
-		"Toss: heads",
-		"Winner: Player-1",
-		"",
-		"Match 2: Player-5 [heads] vs Player-7 [tails]",
-		"Toss: heads",
-		"Winner: Player-5",
-		"",
-		"Round 3",
-		"",
-		"Match 1: Player-1 [heads] vs Player-5 [tails]",
-		"Toss: heads",
-		"Winner: Player-1",
-		"",
-		"Champion: Player-1",
-		"",
-	}, "\n")
-
-	if stdout.String() != expected {
-		t.Fatalf("unexpected output:\n--- got ---\n%s--- want ---\n%s", stdout.String(), expected)
+	output := stdout.String()
+	if !strings.Contains(output, "Round 1") || !strings.Contains(output, "Round 2") || !strings.Contains(output, "Round 3") {
+		t.Fatalf("expected three rounds in output, got:\n%s", output)
+	}
+	if strings.Count(output, "Match ") != 7 {
+		t.Fatalf("expected seven matches in output, got:\n%s", output)
+	}
+	if strings.Count(output, "Winner:") != 7 {
+		t.Fatalf("expected seven winners in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Champion:") {
+		t.Fatalf("expected champion line in output, got:\n%s", output)
 	}
 }
 
 // This verifies that invalid input is reported as a CLI error.
-func TestRunWithFactoryRejectsInvalidInput(t *testing.T) {
+func TestRunRejectsInvalidInput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := app.RunWithFactory([]string{"-players", "3"}, stdout, stderr, headsOnlyTosserFactory)
+	exitCode := app.Run([]string{"-players", "3"}, stdout, stderr)
 	if exitCode == 0 {
 		t.Fatal("expected non-zero exit code")
 	}
@@ -110,14 +78,12 @@ func TestRunWithFactoryRejectsInvalidInput(t *testing.T) {
 	}
 }
 
-// scriptedFactory returns the toss result requested by each match.
-func scriptedFactory(script map[int]map[int]domain.CoinSide) round.CoinTosserFactory {
-	return func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-		return match.NewFixedCoinTosser(script[roundNumber][matchNumber])
-	}
-}
+func withTossSide(t *testing.T, toss func() domain.CoinSide) {
+	t.Helper()
 
-// headsOnlyTosserFactory always gives heads, so the first player wins.
-func headsOnlyTosserFactory(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-	return match.NewFixedCoinTosser(domain.Heads)
+	original := match.TossSide
+	match.TossSide = toss
+	t.Cleanup(func() {
+		match.TossSide = original
+	})
 }

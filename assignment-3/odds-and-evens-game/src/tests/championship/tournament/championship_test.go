@@ -5,7 +5,6 @@ import (
 
 	"odds-and-evens-game/championship/domain"
 	"odds-and-evens-game/championship/match"
-	"odds-and-evens-game/championship/round"
 	"odds-and-evens-game/championship/tournament"
 )
 
@@ -13,7 +12,7 @@ import (
 func TestPlayChampionshipWithOnePlayer(t *testing.T) {
 	players := mustPlayers(t, 1)
 
-	result, err := tournament.PlayChampionship(players, round.NewRandomCoinTosserFactory())
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		t.Fatalf("expected championship to succeed, got error: %v", err)
 	}
@@ -25,7 +24,9 @@ func TestPlayChampionshipWithOnePlayer(t *testing.T) {
 func TestPlayChampionshipWithTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 2)
 
-	result, err := tournament.PlayChampionship(players, headsOnlyFactory)
+	withTossSide(t, func() domain.CoinSide { return domain.Heads })
+
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		t.Fatalf("expected championship to succeed, got error: %v", err)
 	}
@@ -38,7 +39,9 @@ func TestPlayChampionshipWithTwoPlayers(t *testing.T) {
 func TestPlayChampionshipWithFourPlayers(t *testing.T) {
 	players := mustPlayers(t, 4)
 
-	result, err := tournament.PlayChampionship(players, headsOnlyFactory)
+	withTossSide(t, func() domain.CoinSide { return domain.Heads })
+
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		t.Fatalf("expected championship to succeed, got error: %v", err)
 	}
@@ -51,7 +54,9 @@ func TestPlayChampionshipWithFourPlayers(t *testing.T) {
 func TestPlayChampionshipWithEightPlayers(t *testing.T) {
 	players := mustPlayers(t, 8)
 
-	result, err := tournament.PlayChampionship(players, headsOnlyFactory)
+	withTossSide(t, func() domain.CoinSide { return domain.Heads })
+
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		t.Fatalf("expected championship to succeed, got error: %v", err)
 	}
@@ -62,7 +67,7 @@ func TestPlayChampionshipWithEightPlayers(t *testing.T) {
 
 // Zero players is not a valid championship.
 func TestPlayChampionshipRejectsZeroPlayers(t *testing.T) {
-	_, err := tournament.PlayChampionship(nil, headsOnlyFactory)
+	_, err := tournament.PlayChampionship(nil)
 	if err == nil {
 		t.Fatal("expected error for zero players")
 	}
@@ -72,7 +77,7 @@ func TestPlayChampionshipRejectsZeroPlayers(t *testing.T) {
 func TestPlayChampionshipRejectsNonPowerOfTwoPlayers(t *testing.T) {
 	players := mustPlayers(t, 3)
 
-	_, err := tournament.PlayChampionship(players, headsOnlyFactory)
+	_, err := tournament.PlayChampionship(players)
 	if err == nil {
 		t.Fatal("expected error for non power of two player count")
 	}
@@ -82,12 +87,9 @@ func TestPlayChampionshipRejectsNonPowerOfTwoPlayers(t *testing.T) {
 func TestPlayChampionshipPropagatesMatchError(t *testing.T) {
 	players := mustPlayers(t, 4)
 
-	_, err := tournament.PlayChampionship(players, func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-		if roundNumber == 1 && matchNumber == 2 {
-			return match.NewFixedCoinTosser(domain.CoinSide("edge"))
-		}
-		return match.NewFixedCoinTosser(domain.Heads)
-	})
+	withTossSide(t, func() domain.CoinSide { return domain.CoinSide("edge") })
+
+	_, err := tournament.PlayChampionship(players)
 	if err == nil {
 		t.Fatal("expected error from invalid match result")
 	}
@@ -97,7 +99,9 @@ func TestPlayChampionshipPropagatesMatchError(t *testing.T) {
 func TestPlayChampionshipChampionCount(t *testing.T) {
 	players := mustPlayers(t, 8)
 
-	result, err := tournament.PlayChampionship(players, headsOnlyFactory)
+	withTossSide(t, func() domain.CoinSide { return domain.Heads })
+
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		t.Fatalf("expected championship to succeed, got error: %v", err)
 	}
@@ -113,7 +117,9 @@ func TestPlayChampionshipChampionCount(t *testing.T) {
 func TestPlayChampionshipRoundProgression(t *testing.T) {
 	players := mustPlayers(t, 8)
 
-	result, err := tournament.PlayChampionship(players, headsOnlyFactory)
+	withTossSide(t, func() domain.CoinSide { return domain.Heads })
+
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		t.Fatalf("expected championship to succeed, got error: %v", err)
 	}
@@ -133,7 +139,9 @@ func TestPlayChampionshipRoundProgression(t *testing.T) {
 func TestPlayChampionshipPropagatesWinnersAndHalvesPlayers(t *testing.T) {
 	players := mustPlayers(t, 8)
 
-	result, err := tournament.PlayChampionship(players, headsOnlyFactory)
+	withTossSide(t, func() domain.CoinSide { return domain.Heads })
+
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		t.Fatalf("expected championship to succeed, got error: %v", err)
 	}
@@ -165,11 +173,6 @@ func TestPlayChampionshipPropagatesWinnersAndHalvesPlayers(t *testing.T) {
 	if result.Champion().ID() != 1 {
 		t.Fatalf("unexpected champion: got %d want %d", result.Champion().ID(), 1)
 	}
-}
-
-// headsOnlyFactory gives a deterministic tournament for tests.
-func headsOnlyFactory(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
-	return match.NewFixedCoinTosser(domain.Heads)
 }
 
 // assertChampionID checks the final winner.
@@ -245,6 +248,16 @@ func roundParticipants(roundResult domain.RoundResult) []int {
 		participants = append(participants, m.FirstPlayer().ID(), m.SecondPlayer().ID())
 	}
 	return participants
+}
+
+func withTossSide(t *testing.T, toss func() domain.CoinSide) {
+	t.Helper()
+
+	original := match.TossSide
+	match.TossSide = toss
+	t.Cleanup(func() {
+		match.TossSide = original
+	})
 }
 
 // mustPlayers builds a valid player list for the tournament tests.

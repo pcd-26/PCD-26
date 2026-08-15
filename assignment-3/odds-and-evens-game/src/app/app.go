@@ -7,17 +7,11 @@ import (
 	"strings"
 
 	"odds-and-evens-game/championship/domain"
-	"odds-and-evens-game/championship/round"
 	"odds-and-evens-game/championship/tournament"
 )
 
-// Run executes the CLI with a random coin tosser factory.
-func Run(args []string, stdout, stderr io.Writer, tosserFactory round.CoinTosserFactory) int {
-	return RunWithFactory(args, stdout, stderr, tosserFactory)
-}
-
-// RunWithFactory executes the CLI using the provided coin tosser factory.
-func RunWithFactory(args []string, stdout, stderr io.Writer, tosserFactory round.CoinTosserFactory) int {
+// Run executes the CLI.
+func Run(args []string, stdout, stderr io.Writer) int {
 	playersCount, err := ParsePlayersCount(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -30,7 +24,7 @@ func RunWithFactory(args []string, stdout, stderr io.Writer, tosserFactory round
 		return 1
 	}
 
-	result, err := tournament.PlayChampionship(players, tosserFactory)
+	result, err := tournament.PlayChampionship(players)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
