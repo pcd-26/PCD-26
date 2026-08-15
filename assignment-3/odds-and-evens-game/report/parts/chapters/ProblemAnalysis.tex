@@ -1,19 +1,24 @@
-\section{Problem Analysis}
+\section{Introduction and Problem Analysis}
 
-The Odds and Evens Game is implemented in Go with goroutines and channels.
-The relevant concurrency issue is round ownership: all matches in the same round are independent, but the next round
+This report describes the \textbf{Odds and Evens Game}, the \textbf{Go} exercise of Assignment 3.
+The game is implemented in Go with \textbf{goroutines} and \textbf{channels}.
+The relevant concurrency issue is \textbf{round ownership}: all matches in the same round are independent, but the next round
 must wait for the current one to finish.
-The assignment requires $N = 2^m$ players, so the tournament always runs for $m$ rounds and produces exactly one champion.
-This makes the problem a natural fit for message passing, because each match can execute independently while the round
-coordinator preserves the bracket structure.
+The assignment requires $N = 2^m$ players, so the tournament always runs for $m$ rounds and produces exactly one
+\textbf{champion}.
+This makes the problem a natural fit for \textbf{message passing}, because each match can execute independently while the
+round coordinator preserves the \textbf{bracket structure} and enforces the \textbf{round barrier}.
 
-For a tournament of $N$ players:
+In this report, a \emph{\textbf{match}} is a single game between two players that produces one winner.
+A \emph{\textbf{round}} is a set of independent matches played in parallel, after which the winners are promoted to the next round.
+
+For a tournament of $N$ players, the structure is simple:
 \begin{itemize}
-    \item round $k$ contains $N / 2^k$ matches;
-    \item the total number of matches is $\sum_{k=1}^{m} N / 2^k = N - 1$;
-    \item each match has exactly one winner;
-    \item each round halves the number of active players;
-    \item the tournament ends when only one player remains.
+    \item each \textbf{round} has half as many players as the previous one;
+    \item each \textbf{match} produces exactly one \textbf{winner};
+    \item the total number of matches is always $N - 1$;
+    \item the tournament ends when only one \textbf{player} remains.
 \end{itemize}
 
-The implementation uses these rules directly, so the code stays close to the domain model.
+The implementation uses these rules directly, so the code stays close to the \textbf{domain model} and the concurrency
+structure remains easy to reason about.

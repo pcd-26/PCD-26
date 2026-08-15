@@ -21,6 +21,29 @@
 \setlength{\emergencystretch}{2em}
 \renewcommand{\arraystretch}{1.12}
 
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{220,220,220}
+\lstdefinestyle{reportcode}{
+    language=Go,
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    frameround=tttt,
+    xleftmargin=1em,
+    xrightmargin=0.5em,
+    framexleftmargin=0.8em,
+    framexrightmargin=0.8em,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    breaklines=true,
+    breakatwhitespace=true,
+    tabsize=4,
+    aboveskip=0.8em,
+    belowskip=0.8em
+}
+
 \title{Assignment 3 -- Odds and Evens Game}
 \author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
 \date{PCD a.y. 2025/2026 -- \todayFullUK}
@@ -35,12 +58,9 @@
 \input{parts/front/Disclaimer}
 \pagenumbering{arabic}
 
-\input{parts/front/Introduction}
 \input{parts/chapters/ProblemAnalysis}
 \input{parts/chapters/Design}
 \input{parts/chapters/ExecutionFlow}
-\input{parts/chapters/Correctness}
-\input{parts/chapters/Complexity}
 \input{parts/chapters/Validation}
 \input{parts/back/HowToRun}
 \input{parts/back/Conclusions}

@@ -1,22 +1,50 @@
 \section{Execution Flow}
 
-The execution flow is short and deterministic:
+The championship progresses sequentially from round to round, while the matches inside each round run in parallel.
+
 \begin{enumerate}
-    \item the CLI parses the `-players` flag and rejects non-positive or non power-of-two values;
-    \item `PlayChampionship` validates the player slice and copies it to avoid aliasing;
-    \item the championship coordinator starts round 1;
-    \item `PlayRound` creates one goroutine per match;
-    \item each worker resolves exactly one match through `PlayMatch`;
-    \item the round coordinator waits for one outcome per match and stores it in bracket order;
-    \item the promoted winners form the player slice for the next round;
-    \item the process repeats until one champion remains.
+    \item `PlayChampionship` starts the tournament and keeps the current player list.
+    \item `PlayRound` splits that list into pairs and launches one \textbf{goroutine} per \textbf{match}.
+    \item Each worker calls `PlayMatch` exactly once.
+    \item The round coordinator waits for one outcome per match.
+    \item Results are stored by `matchIndex`, so the bracket order remains stable even if workers finish out of order.
+    \item The winners returned by the round become the input of the next round.
 \end{enumerate}
 
-The match worker is intentionally small.
-It only asks the tosser for one side, maps `Heads` to the first player and `Tails` to the second player, and returns a
-`MatchResult`.
-That keeps the concurrency boundary narrow and easy to test.
+The worker logic is intentionally small.
+It calls the toss function exactly once, maps `Heads` to the first player and `Tails` to the second player, and returns a
+`MatchResult` with the round number, match number, participants, winner, and tossed side.
 
-The round coordinator is the synchronization point.
-It does not guess or poll for completion; it simply waits for the exact number of outcomes it already knows should arrive.
-That design is what makes the implementation easy to reason about and prevents the round from advancing too early.
+The round coordinator is the \textbf{synchronization point}.
+It does not poll or guess completion; it waits for exactly one result per started match.
+That is the key mechanism that keeps the implementation concurrent inside each round and deterministic at the bracket level.
+
+\medskip
+
+\noindent\textbf{Concurrent match launch in \texttt{src/championship/round/round.go}}
+\begin{lstlisting}[style=reportcode]
+for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
+    matchNumber := matchIndex + 1
+    firstPlayer := players[matchIndex*2]
+    secondPlayer := players[matchIndex*2+1]
+
+    go func(matchIndex, matchNumber int, firstPlayer, secondPlayer domain.Player) {
+        result, err := match.PlayMatch(roundNumber, matchNumber, toss, firstPlayer, secondPlayer)
+        outcomes <- matchOutcome{matchIndex: matchIndex, result: result, err: err}
+    }(matchIndex, matchNumber, firstPlayer, secondPlayer)
+}
+\end{lstlisting}
+
+\noindent\textbf{Round orchestration in \texttt{src/championship/tournament/championship.go}}
+\begin{lstlisting}[style=reportcode]
+for len(currentPlayers) > 1 {
+    winners, matches, err := round.PlayRound(roundNumber, currentPlayers, toss)
+    if err != nil {
+        return domain.ChampionshipResult{}, err
+    }
+
+    roundResults = append(roundResults, domain.NewRoundResult(roundNumber, matches, winners))
+    currentPlayers = winners
+    roundNumber++
+}
+\end{lstlisting}

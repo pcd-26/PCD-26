@@ -1,23 +1,24 @@
 \section{Design}
 
-The solution uses one goroutine per match and one coordinator per round.
-Each match receives exactly two players and one coin tosser, then sends one result message back to the round coordinator.
-The coordinator collects all results, preserves match order, and builds the winner list for the next round.
+The solution uses one \textbf{goroutine} per \textbf{match} and one \textbf{coordinator} per \textbf{round}.
+Each match receives exactly two players and one \textbf{toss function}, then sends one result message back to the round coordinator.
+The coordinator collects all results, preserves match order, and builds the \textbf{winner list} for the next round.
 The championship coordinator repeats this process until only one player remains.
-The coin-toss source is abstracted so production code can use randomness, while tests can inject deterministic tossers.
 
 The implementation is split into three layers:
 \begin{itemize}
     \item \textbf{CLI layer}: validates the player count, constructs the initial player slice, and renders the final result;
-    \item \textbf{Championship layer}: drives the full elimination and owns the round progression;
-    \item \textbf{Round layer}: runs match workers concurrently and rebuilds the next player list.
+    \item \textbf{Championship layer}: drives the full elimination and owns the \textbf{round progression};
+    \item \textbf{Round layer}: runs \textbf{match workers} concurrently and rebuilds the next player list.
 \end{itemize}
 
 The data model keeps the tournament outcome explicit.
-Each match stores its round number, match number, the two participants, the winner, and the tossed side.
-Each round stores the ordered list of match results together with the winners promoted to the next round.
-The championship result stores the final champion and the sequence of rounds.
-This keeps the rendering code simple and makes the tests easy to write.
+Each \textbf{match} stores its round number, match number, the two participants, the winner, and the tossed side.
+Each \textbf{round} stores the ordered list of match results together with the promoted winners.
+The \textbf{championship result} stores the final champion and the full sequence of rounds.
+This keeps the rendering code simple, makes the tests easy to write, and avoids recomputing tournament history from the
+final champion alone.
 
-The coordinator owns the result ordering by `matchIndex`, so completion order and presentation order are decoupled.
-This is important because goroutines can finish in any order, but the bracket must remain deterministic.
+The coordinator preserves the result order using \texttt{matchIndex}, so completion order and presentation order are
+decoupled. This is important because \textbf{goroutines} can finish in any order, but the bracket must remain
+deterministic.

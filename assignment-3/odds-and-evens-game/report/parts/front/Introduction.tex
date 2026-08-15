@@ -1,20 +1,5 @@
 \section{Introduction}
 
-Assignment 3 requires the development of two concurrent systems based on message passing: a smart home alarm system in
-Java using Apache Pekko and a tournament game in Go using goroutines and channels.
-
-This report covers the tournament game. The main concern is round ownership: all matches inside the same round are
-independent, but the next round must wait for the current one to finish.
-
-The report is organized into the following parts:
-
-\begin{itemize}
-    \item \textbf{Problem analysis}: round barrier, winner promotion, and message flow;
-    \item \textbf{Design}: goroutine structure and coordinator responsibilities;
-    \item \textbf{Execution flow}: from CLI validation to the final champion;
-    \item \textbf{Correctness}: ordering, synchronization, and failure handling;
-    \item \textbf{Complexity}: work and span of the tournament;
-    \item \textbf{Validation}: test coverage and relevant edge cases;
-    \item \textbf{How to run}: build and execution commands;
-    \item \textbf{Conclusions}: final remarks about the concurrent design.
-\end{itemize}
+This report describes the \textbf{Odds and Evens Game}, the \textbf{Go} exercise of Assignment 3.
+The central concern is \textbf{round ownership}: matches within the same round are independent, but the next round must wait
+until all current matches have completed.

@@ -1,11 +1,11 @@
 \section{How to Run}
 
 \begin{itemize}
-  \item Build and test: \texttt{go test ./...} from the \texttt{src} directory
-  \item Run the race detector: \texttt{go test -race ./...}
-  \item Run: \texttt{go run . -players 8}
-  \item Input rule: the CLI accepts only positive powers of two.
+  \item From the \texttt{src} directory, run the full test suite with \texttt{go test ./...}
+  \item To check concurrency safety, run the race detector with \texttt{go test -race ./...}
+  \item To start a tournament, run \texttt{go run . -players 8}
+  \item The \textbf{CLI} accepts only positive powers of two.
 \end{itemize}
 
-The fixed tossers used in the tests make the execution reproducible while still exercising the concurrent scheduling of
-the round workers.
+The tests use \textbf{deterministic} toss functions, so the execution is reproducible while the concurrent scheduling of
+the round workers is still exercised.
