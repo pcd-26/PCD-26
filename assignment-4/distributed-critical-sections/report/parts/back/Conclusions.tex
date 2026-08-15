@@ -1,0 +1,8 @@
+\clearpage
+\section{Conclusions}
+
+The middleware is small but complete: RabbitMQ provides the shared state, the
+token queue enforces mutual exclusion, and the bootstrap lock prevents
+inconsistent initialization. The result is a clean distributed protocol that
+matches the assignment requirements without introducing unnecessary
+complexity.

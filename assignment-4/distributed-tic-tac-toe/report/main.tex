@@ -1,61 +1,77 @@
 \documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.4cm]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
-\usepackage{hyperref}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
 
-\title{Report PCD 2025-2026\\Distributed Tic-Tac-Toe with Java RMI\\Assignment 4 - Exercise 2}
-\author{Alex Santini \\ Francesco Valentini}
-\date{\today}
+% Helper macro to convert month numbers into English text
+\newcommand{\englishmonthname}[1]{%
+    \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
+}
+
+% UK format: DD Month YYYY (e.g., 5 August 2026)
+\newcommand{\todayFullUK}{%
+    \number\day\ \englishmonthname{\number\month} \number\year%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+
+\definecolor{codebg}{RGB}{249,250,252}
+\definecolor{codeframe}{RGB}{205,211,219}
+\definecolor{codekeyword}{RGB}{0,102,204}
+\definecolor{codetype}{RGB}{124,58,237}
+\definecolor{codecomment}{RGB}{92,104,120}
+\definecolor{codestring}{RGB}{196,52,43}
+\definecolor{codeaccent}{RGB}{0,145,145}
+
+\lstdefinestyle{codestyle}{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    rulecolor=\color{codeframe},
+    backgroundcolor=\color{codebg},
+    numbers=left,
+    numberstyle=\tiny,
+    numbersep=8pt,
+    breaklines=true,
+    columns=fullflexible,
+    showstringspaces=false,
+    tabsize=4,
+    language=Java,
+    keywordstyle=\bfseries\color{codekeyword},
+    keywordstyle=[2]\bfseries\color{codetype},
+    commentstyle=\itshape\color{codecomment},
+    stringstyle=\color{codestring},
+    emph={lobby,game,board,callback,registry,snapshot,client,server,room},
+    morekeywords=[2]{Remote,RemoteException,UnicastRemoteObject,ConcurrentHashMap,ExecutorService,CompletableFuture,BoardState,GameStatus,Lobby,Game,PlayerClient,LobbyImpl,GameImpl,GameControllerImpl},
+    emphstyle=\color{codeaccent},
+    captionpos=b
+}
+
+\title{Assignment 4 -- Distributed Tic-Tac-Toe with Java RMI}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
 
 \begin{document}
 
-\maketitle
+\input{parts/front/TitlePage}
 
-\section{Problem}
-The assignment requires a distributed Tic-Tac-Toe game in which a player can create a named match and another player can join it later. The implementation must use Java RMI and follow distributed object computing and concurrent programming principles.
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
 
-The core challenge is not the game board itself, which is small, but the coordination around it. Once the match is exposed remotely, the server must protect the board, the turn order, and the lifecycle of the game against concurrent access and client failures.
-
-\section{Concurrency Analysis}
-The distributed setting introduces three main concerns.
-\begin{itemize}
-    \item The server must own the authoritative match state so that clients never race on shared mutable data.
-    \item Lobby operations and game operations can happen concurrently, so create/join/move requests must be synchronized at the right granularity.
-    \item Client notifications must be asynchronous, because remote callbacks can block or fail independently of the game logic.
-\end{itemize}
-
-That means the lobby and each game need different synchronization strategies. The lobby is responsible for naming and matchmaking, while each game is responsible for turn correctness and match termination. Keeping those scopes separate avoids a single coarse lock around the whole server and makes concurrent matches independent from one another.
-
-\section{Strategy}
-The solution uses a standard RMI split.
-\begin{itemize}
-    \item The registry only hosts the lookup service.
-    \item The lobby is the matchmaking entry point and creates remote game objects.
-    \item Each game instance owns one match, validates all moves, and keeps turn order and status consistent.
-    \item Clients export callback objects and receive immutable \texttt{BoardState} snapshots.
-\end{itemize}
-
-The implementation keeps the code small by giving each class one responsibility. \texttt{LobbyImpl} manages room lifecycle, \texttt{GameImpl} manages game rules, and \texttt{GameControllerImpl} bridges remote callbacks to the local UI or CLI. Finished matches are pruned after they reach a terminal state.
-
-The game model is intentionally snapshot-based. Clients receive immutable \texttt{BoardState} objects, so remote updates never leak mutable server internals. This makes the callback protocol easier to reason about and also simplifies testing, because a received board can be compared directly without worrying about later mutations.
-
-\section{Validation}
-The test suite covers the required behavior.
-\begin{itemize}
-    \item \texttt{GameStatusTest} checks the state helpers used by the game model.
-    \item \texttt{GameImplTest} covers move validation, game results, snapshots, and concurrency.
-    \item \texttt{LobbyImplTest} covers create/join behavior, duplicate rooms, pruning, and concurrent lobby calls.
-    \item \texttt{DtttRmiIntegrationTest} exercises the full registry-server-client path with real RMI stubs.
-\end{itemize}
-
-The suite covers both rule correctness and distributed behavior. The unit tests check the game logic in isolation, while the integration test confirms that the registry, server, and client callback path work together exactly as a remote system should.
-
-\section{Trade-offs}
-The implementation favors a clear teaching-oriented design. It does not try to introduce persistence or matchmaking policies beyond the assignment scope, and it keeps the remote protocol intentionally small. In return, the code stays easy to verify, the concurrency boundaries are obvious, and the project remains faithful to the course goals.
-
-\section{Conclusion}
-The project satisfies the distributed-game requirements with a clean server-centric design.
-One authoritative state owner, immutable snapshots, and explicit remote callbacks are enough to keep the system simple, robust, and easy to explain in an oral discussion.
+\input{parts/front/Introduction}
+\input{parts/chapters/ProblemAnalysis}
+\input{parts/chapters/Design}
+\input{parts/chapters/Validation}
+\input{parts/back/Conclusions}
 
 \end{document}

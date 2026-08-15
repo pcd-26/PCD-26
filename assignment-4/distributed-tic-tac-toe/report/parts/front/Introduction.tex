@@ -1,0 +1,12 @@
+\clearpage
+\section{Introduction}
+
+The assignment requires a distributed Tic-Tac-Toe game in which a player can
+create a named match and another player can join it later. The implementation
+must use Java RMI and follow distributed object computing and concurrent
+programming principles.
+
+The core challenge is not the game board itself, which is small, but the
+coordination around it. Once the match is exposed remotely, the server must
+protect the board, the turn order, and the lifecycle of the game against
+concurrent access and client failures.

@@ -1,0 +1,28 @@
+\clearpage
+\section{Design}
+
+The implementation uses typed actors and receptionist-based discovery.
+\begin{itemize}
+    \item The control unit registers itself and discovers sirens dynamically.
+    \item Keypads subscribe to control-unit updates and forward PIN submissions.
+    \item Sensors keep a stable \texttt{sensorId} and send serializable \texttt{SensorInfo} messages.
+    \item The runtime startup helper builds the Pekko Cluster configuration for three supported nodes.
+\end{itemize}
+
+The control unit starts in \texttt{RECOVERY} after creation or restart. Only a
+correct PIN can move it back to \texttt{DISARMED}. Until then, arming commands
+and sensor activations are ignored or logged.
+
+The design keeps the code small by separating responsibilities cleanly.
+Startup code builds the cluster configuration, actors implement the alarm
+protocol, and shared messages remain serializable and stable across nodes.
+This makes the system easy to test locally while still matching the
+distributed deployment model required by the assignment.
+
+\subsection{Trade-offs}
+
+This solution prefers clarity over maximum generality. It supports the
+required distributed roles and recovery semantics, but it does not try to add
+persistence, replication, or more advanced cluster topologies. That choice
+keeps the code aligned with the assignment and avoids introducing complexity
+that would not improve the learning goals.

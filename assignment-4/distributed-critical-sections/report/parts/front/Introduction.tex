@@ -1,0 +1,13 @@
+\clearpage
+\section{Introduction}
+
+The optional assignment asks for a simple middleware that provides distributed
+critical sections to independent processes. The key requirement is that a
+process must use the middleware without needing to know anything about the
+other participants, and the implementation must rely on a message-oriented
+middleware such as RabbitMQ.
+
+The problem is a good fit for message passing because the coordination concern
+is very small but very strict: at any time exactly one process may hold the
+critical section. The middleware therefore needs a shared broker-managed
+token, not shared memory or direct process-to-process coordination.

@@ -1,0 +1,17 @@
+\clearpage
+\section{Validation}
+
+The JUnit suite exercises the protocol end to end.
+\begin{itemize}
+    \item concurrent bootstrap creates exactly one token;
+    \item interrupted bootstrap is recoverable;
+    \item crash while holding the token causes requeueing;
+    \item multiple processes respect mutual exclusion;
+    \item repeated acquire/release cycles work correctly;
+    \item invalid release attempts are rejected;
+    \item different critical-section names do not interfere.
+\end{itemize}
+
+These tests matter because they exercise the exact distributed failure modes
+the assignment cares about: concurrent startup, ownership loss, requeueing
+after crash, and independence between unrelated critical sections.

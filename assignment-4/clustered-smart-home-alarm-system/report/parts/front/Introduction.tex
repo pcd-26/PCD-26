@@ -1,0 +1,14 @@
+\clearpage
+\section{Introduction}
+
+The assignment asks to distribute the smart home alarm system over an Apache
+Pekko Cluster while preserving the same alarm behavior as the previous
+assignment. The system must support at least three nodes, allow sensors and
+keypads to run on different nodes, and recover safely if the control unit is
+restarted.
+
+The important point is that distribution must not change the meaning of the
+alarm system. A sensor activation still has the same effect, the timing rules
+still apply, and the control unit must remain the only authority for the
+system state. The cluster is therefore an execution detail, not a change in
+the domain rules.

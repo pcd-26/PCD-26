@@ -1,0 +1,15 @@
+\clearpage
+\section{Validation}
+
+The implementation is covered by unit and integration tests.
+\begin{itemize}
+    \item \texttt{ControlUnitActorTest} checks the state machine, timing behavior, and recovery rules.
+    \item \texttt{SensorActorTest} and \texttt{KeypadActorTest} check receptionist discovery and message delivery.
+    \item \texttt{ClusteredSystemTest} verifies three-node cluster formation, sensor handling, and restart recovery.
+    \item \texttt{NodeStartupTest} checks the startup parser and cluster seed-node generation.
+\end{itemize}
+
+The tests are useful not only because they confirm correctness, but because
+they document the intended distributed behavior. In particular, they lock in
+the three-node setup, the recovery semantics, and the fact that the control
+unit never assumes a dangerous default after a restart.

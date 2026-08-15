@@ -1,61 +1,77 @@
 \documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.4cm]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
-\usepackage{hyperref}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
 
-\title{Report PCD 2025-2026\\Clustered Smart Home Alarm System\\Assignment 4 - Exercise 1}
-\author{Alex Santini \\ Francesco Valentini}
-\date{\today}
+% Helper macro to convert month numbers into English text
+\newcommand{\englishmonthname}[1]{%
+    \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
+}
+
+% UK format: DD Month YYYY (e.g., 5 August 2026)
+\newcommand{\todayFullUK}{%
+    \number\day\ \englishmonthname{\number\month} \number\year%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+
+\definecolor{codebg}{RGB}{249,250,252}
+\definecolor{codeframe}{RGB}{205,211,219}
+\definecolor{codekeyword}{RGB}{0,102,204}
+\definecolor{codetype}{RGB}{124,58,237}
+\definecolor{codecomment}{RGB}{92,104,120}
+\definecolor{codestring}{RGB}{196,52,43}
+\definecolor{codeaccent}{RGB}{0,145,145}
+
+\lstdefinestyle{codestyle}{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    rulecolor=\color{codeframe},
+    backgroundcolor=\color{codebg},
+    numbers=left,
+    numberstyle=\tiny,
+    numbersep=8pt,
+    breaklines=true,
+    columns=fullflexible,
+    showstringspaces=false,
+    tabsize=4,
+    language=Java,
+    keywordstyle=\bfseries\color{codekeyword},
+    keywordstyle=[2]\bfseries\color{codetype},
+    commentstyle=\itshape\color{codecomment},
+    stringstyle=\color{codestring},
+    emph={controlUnit,sensor,keypad,siren,cluster,receptionist,recovery,pin,node},
+    morekeywords=[2]{ActorRef,Behavior,Behaviors,ActorSystem,ServiceKey,Receptionist,Duration,List,Optional,Serializable,ControlUnitActor,SensorActor,KeypadActor,SirenActor,SensorInfo},
+    emphstyle=\color{codeaccent},
+    captionpos=b
+}
+
+\title{Assignment 4 -- Clustered Smart Home Alarm System}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
 
 \begin{document}
 
-\maketitle
+\input{parts/front/TitlePage}
 
-\section{Problem}
-The assignment asks to distribute the smart home alarm system over an Apache Pekko Cluster while preserving the same alarm behavior as the previous assignment. The system must support at least three nodes, allow sensors and keypads to run on different nodes, and recover safely if the control unit is restarted.
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
 
-The important point is that distribution must not change the meaning of the alarm system. A sensor activation still has the same effect, the timing rules still apply, and the control unit must remain the only authority for the system state. The cluster is therefore an execution detail, not a change in the domain rules.
-
-\section{Concurrency Analysis}
-The main concurrency issues are ownership of the alarm state, asynchronous sensor input, and failure recovery.
-\begin{itemize}
-    \item The control unit is the single authority for the alarm state machine.
-    \item Sensors and keypads are independent actors that communicate only through messages.
-    \item The control unit must ignore sensor events while recovering, because a restart loses the previous in-memory state.
-    \item Timing rules still matter, so arming and intrusion delays must remain deterministic.
-\end{itemize}
-
-This setup creates a classic distributed-systems problem: the system must stay responsive even when actors live on different nodes, but it must also avoid unsafe assumptions after failures. The recovery state is therefore not an implementation accident. It is the safe default that prevents the restarted node from acting as if it knew the previous alarm condition.
-
-\section{Strategy}
-The implementation uses typed actors and receptionist-based discovery.
-\begin{itemize}
-    \item The control unit registers itself and discovers sirens dynamically.
-    \item Keypads subscribe to control-unit updates and forward PIN submissions.
-    \item Sensors keep a stable \texttt{sensorId} and send serializable \texttt{SensorInfo} messages.
-    \item The runtime startup helper builds the Pekko Cluster configuration for three supported nodes.
-\end{itemize}
-
-The control unit starts in \texttt{RECOVERY} after creation or restart. Only a correct PIN can move it back to \texttt{DISARMED}. Until then, arming commands and sensor activations are ignored or logged.
-
-The design keeps the code small by separating responsibilities cleanly. Startup code builds the cluster configuration, actors implement the alarm protocol, and shared messages remain serializable and stable across nodes. This makes the system easy to test locally while still matching the distributed deployment model required by the assignment.
-
-\section{Validation}
-The implementation is covered by unit and integration tests.
-\begin{itemize}
-    \item \texttt{ControlUnitActorTest} checks the state machine, timing behavior, and recovery rules.
-    \item \texttt{SensorActorTest} and \texttt{KeypadActorTest} check receptionist discovery and message delivery.
-    \item \texttt{ClusteredSystemTest} verifies three-node cluster formation, sensor handling, and restart recovery.
-    \item \texttt{NodeStartupTest} checks the startup parser and cluster seed-node generation.
-\end{itemize}
-
-The tests are useful not only because they confirm correctness, but because they document the intended distributed behavior. In particular, they lock in the three-node setup, the recovery semantics, and the fact that the control unit never assumes a dangerous default after a restart.
-
-\section{Trade-offs}
-This solution prefers clarity over maximum generality. It supports the required distributed roles and recovery semantics, but it does not try to add persistence, replication, or more advanced cluster topologies. That choice keeps the code aligned with the assignment and avoids introducing complexity that would not improve the learning goals.
-
-\section{Conclusion}
-The project keeps the alarm semantics from the previous assignment, but makes the deployment distributed and failure-aware. The design is intentionally small: typed messages, a single state owner, dynamic discovery, and safe recovery are enough to satisfy the assignment while keeping the code easy to reason about.
+\input{parts/front/Introduction}
+\input{parts/chapters/ProblemAnalysis}
+\input{parts/chapters/Design}
+\input{parts/chapters/Validation}
+\input{parts/back/Conclusions}
 
 \end{document}

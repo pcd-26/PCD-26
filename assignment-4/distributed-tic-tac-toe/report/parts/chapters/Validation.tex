@@ -1,0 +1,15 @@
+\clearpage
+\section{Validation}
+
+The test suite covers the required behavior.
+\begin{itemize}
+    \item \texttt{GameStatusTest} checks the state helpers used by the game model.
+    \item \texttt{GameImplTest} covers move validation, game results, snapshots, and concurrency.
+    \item \texttt{LobbyImplTest} covers create/join behavior, duplicate rooms, pruning, and concurrent lobby calls.
+    \item \texttt{DtttRmiIntegrationTest} exercises the full registry-server-client path with real RMI stubs.
+\end{itemize}
+
+The suite covers both rule correctness and distributed behavior. The unit
+tests check the game logic in isolation, while the integration test confirms
+that the registry, server, and client callback path work together exactly as a
+remote system should.

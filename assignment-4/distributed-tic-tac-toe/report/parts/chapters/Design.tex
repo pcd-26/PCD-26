@@ -1,0 +1,30 @@
+\clearpage
+\section{Design}
+
+The solution uses a standard RMI split.
+\begin{itemize}
+    \item The registry only hosts the lookup service.
+    \item The lobby is the matchmaking entry point and creates remote game objects.
+    \item Each game instance owns one match, validates all moves, and keeps turn order and status consistent.
+    \item Clients export callback objects and receive immutable \texttt{BoardState} snapshots.
+\end{itemize}
+
+The implementation keeps the code small by giving each class one
+responsibility. \texttt{LobbyImpl} manages room lifecycle, \texttt{GameImpl}
+manages game rules, and \texttt{GameControllerImpl} bridges remote callbacks
+to the local UI or CLI. Finished matches are pruned after they reach a
+terminal state.
+
+The game model is intentionally snapshot-based. Clients receive immutable
+\texttt{BoardState} objects, so remote updates never leak mutable server
+internals. This makes the callback protocol easier to reason about and also
+simplifies testing, because a received board can be compared directly without
+worrying about later mutations.
+
+\subsection{Trade-offs}
+
+The implementation favors a clear teaching-oriented design. It does not try
+to introduce persistence or matchmaking policies beyond the assignment scope,
+and it keeps the remote protocol intentionally small. In return, the code
+stays easy to verify, the concurrency boundaries are obvious, and the project
+remains faithful to the course goals.

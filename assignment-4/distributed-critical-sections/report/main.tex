@@ -1,65 +1,77 @@
 \documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.4cm]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
-\usepackage{hyperref}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
 
-\title{Report PCD 2025-2026\\Distributed Critical Sections with a Message-Oriented Middleware\\Assignment 4 - Exercise 3}
-\author{Alex Santini \\ Francesco Valentini}
-\date{\today}
+% Helper macro to convert month numbers into English text
+\newcommand{\englishmonthname}[1]{%
+    \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
+}
+
+% UK format: DD Month YYYY (e.g., 5 August 2026)
+\newcommand{\todayFullUK}{%
+    \number\day\ \englishmonthname{\number\month} \number\year%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+
+\definecolor{codebg}{RGB}{249,250,252}
+\definecolor{codeframe}{RGB}{205,211,219}
+\definecolor{codekeyword}{RGB}{0,102,204}
+\definecolor{codetype}{RGB}{124,58,237}
+\definecolor{codecomment}{RGB}{92,104,120}
+\definecolor{codestring}{RGB}{196,52,43}
+\definecolor{codeaccent}{RGB}{0,145,145}
+
+\lstdefinestyle{codestyle}{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    rulecolor=\color{codeframe},
+    backgroundcolor=\color{codebg},
+    numbers=left,
+    numberstyle=\tiny,
+    numbersep=8pt,
+    breaklines=true,
+    columns=fullflexible,
+    showstringspaces=false,
+    tabsize=4,
+    language=Java,
+    keywordstyle=\bfseries\color{codekeyword},
+    keywordstyle=[2]\bfseries\color{codetype},
+    commentstyle=\itshape\color{codecomment},
+    stringstyle=\color{codestring},
+    emph={token,queue,broker,criticalSection,bootstrap,delivery,channel,connection},
+    morekeywords=[2]{Connection,Channel,DeliverCallback,CancelCallback,AMQP,IOException,TimeoutException,ConcurrentHashMap,CountDownLatch,AtomicBoolean,RabbitMqCriticalSectionMiddleware},
+    emphstyle=\color{codeaccent},
+    captionpos=b
+}
+
+\title{Assignment 4 -- Distributed Critical Sections with a Message-Oriented Middleware}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
 
 \begin{document}
 
-\maketitle
+\input{parts/front/TitlePage}
 
-\section{Problem}
-The optional assignment asks for a simple middleware that provides distributed critical sections to independent processes. The key requirement is that a process must use the middleware without needing to know anything about the other participants, and the implementation must rely on a message-oriented middleware such as RabbitMQ.
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
 
-The problem is a good fit for message passing because the coordination concern is very small but very strict: at any time exactly one process may hold the critical section. The middleware therefore needs a shared broker-managed token, not shared memory or direct process-to-process coordination.
-
-\section{Concurrency Analysis}
-The problem is a distributed mutual exclusion protocol with failure recovery.
-\begin{itemize}
-    \item At most one process may enter the critical section at a time.
-    \item The middleware must tolerate crashes without leaving the section permanently locked.
-    \item Bootstrap must be safe, so token creation cannot happen twice.
-    \item Different critical-section names must remain independent.
-\end{itemize}
-
-The subtle part is that safety must survive failures. If the holder crashes, the system should not stay blocked forever, and if bootstrap is interrupted, the next process should be able to recover the queue without manual cleanup. That is why the design relies on broker semantics instead of keeping a second local copy of state.
-
-\section{Strategy}
-The implementation uses a token-queue protocol on RabbitMQ.
-\begin{itemize}
-    \item Each critical section uses its own durable token queue.
-    \item The queue contains exactly one persistent token when the section is available.
-    \item \texttt{enter()} consumes the token with manual acknowledgments and blocks until it is delivered.
-    \item \texttt{exit()} cancels the local consumer and requeues the same delivery with \texttt{basicNack(..., requeue = true)}.
-    \item A temporary exclusive bootstrap-lock queue serializes initialization and keeps the protocol recoverable.
-\end{itemize}
-
-This design keeps the public API intentionally small: \texttt{enter()}, \texttt{exit()}, and \texttt{close()}. Recovery is broker-driven, so if a process crashes while holding the token, RabbitMQ requeues the unacknowledged delivery automatically.
-
-The bootstrap lock is important because it removes the only race that could otherwise create duplicate tokens. Once the token exists, the queue itself becomes the single source of truth. That keeps the protocol easy to explain: the presence of the token means the section is free, and the absence of the token means somebody owns it.
-
-\section{Validation}
-The JUnit suite exercises the protocol end to end.
-\begin{itemize}
-    \item concurrent bootstrap creates exactly one token;
-    \item interrupted bootstrap is recoverable;
-    \item crash while holding the token causes requeueing;
-    \item multiple processes respect mutual exclusion;
-    \item repeated acquire/release cycles work correctly;
-    \item invalid release attempts are rejected;
-    \item different critical-section names do not interfere.
-\end{itemize}
-
-These tests matter because they exercise the exact distributed failure modes the assignment cares about: concurrent startup, ownership loss, requeueing after crash, and independence between unrelated critical sections.
-
-\section{Trade-offs}
-The middleware deliberately solves one problem well instead of becoming a generic coordination framework. It models one critical section as one token queue, which keeps the API tiny and the reasoning straightforward. The trade-off is that the broker is part of the availability story, but that is acceptable here because the assignment explicitly asks for a MOM-based solution.
-
-\section{Conclusion}
-The middleware is small but complete: RabbitMQ provides the shared state, the token queue enforces mutual exclusion, and the bootstrap lock prevents inconsistent initialization. The result is a clean distributed protocol that matches the assignment requirements without introducing unnecessary complexity.
+\input{parts/front/Introduction}
+\input{parts/chapters/ProblemAnalysis}
+\input{parts/chapters/Design}
+\input{parts/chapters/Validation}
+\input{parts/back/Conclusions}
 
 \end{document}

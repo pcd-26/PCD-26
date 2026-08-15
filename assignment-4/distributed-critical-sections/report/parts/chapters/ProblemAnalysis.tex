@@ -1,0 +1,16 @@
+\clearpage
+\section{Problem Analysis}
+
+The problem is a distributed mutual exclusion protocol with failure recovery.
+\begin{itemize}
+    \item At most one process may enter the critical section at a time.
+    \item The middleware must tolerate crashes without leaving the section permanently locked.
+    \item Bootstrap must be safe, so token creation cannot happen twice.
+    \item Different critical-section names must remain independent.
+\end{itemize}
+
+The subtle part is that safety must survive failures. If the holder crashes,
+the system should not stay blocked forever, and if bootstrap is interrupted,
+the next process should be able to recover the queue without manual cleanup.
+That is why the design relies on broker semantics instead of keeping a second
+local copy of state.

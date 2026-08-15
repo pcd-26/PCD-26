@@ -1,0 +1,17 @@
+\clearpage
+\section{Problem Analysis}
+
+The main concurrency issues are ownership of the alarm state, asynchronous
+sensor input, and failure recovery.
+\begin{itemize}
+    \item The control unit is the single authority for the alarm state machine.
+    \item Sensors and keypads are independent actors that communicate only through messages.
+    \item The control unit must ignore sensor events while recovering, because a restart loses the previous in-memory state.
+    \item Timing rules still matter, so arming and intrusion delays must remain deterministic.
+\end{itemize}
+
+This setup creates a classic distributed-systems problem: the system must stay
+responsive even when actors live on different nodes, but it must also avoid
+unsafe assumptions after failures. The recovery state is therefore not an
+implementation accident. It is the safe default that prevents the restarted
+node from acting as if it knew the previous alarm condition.

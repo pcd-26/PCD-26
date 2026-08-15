@@ -1,0 +1,31 @@
+\clearpage
+\section{Design}
+
+The implementation uses a token-queue protocol on RabbitMQ.
+\begin{itemize}
+    \item Each critical section uses its own durable token queue.
+    \item The queue contains exactly one persistent token when the section is available.
+    \item \texttt{enter()} consumes the token with manual acknowledgments and blocks until it is delivered.
+    \item \texttt{exit()} cancels the local consumer and requeues the same delivery with \texttt{basicNack(..., requeue = true)}.
+    \item A temporary exclusive bootstrap-lock queue serializes initialization and keeps the protocol recoverable.
+\end{itemize}
+
+This design keeps the public API intentionally small: \texttt{enter()},
+\texttt{exit()}, and \texttt{close()}. Recovery is broker-driven, so if a
+process crashes while holding the token, RabbitMQ requeues the unacknowledged
+delivery automatically.
+
+The bootstrap lock is important because it removes the only race that could
+otherwise create duplicate tokens. Once the token exists, the queue itself
+becomes the single source of truth. That keeps the protocol easy to explain:
+the presence of the token means the section is free, and the absence of the
+token means somebody owns it.
+
+\subsection{Trade-offs}
+
+The middleware deliberately solves one problem well instead of becoming a
+generic coordination framework. It models one critical section as one token
+queue, which keeps the API tiny and the reasoning straightforward. The
+trade-off is that the broker is part of the availability story, but that is
+acceptable here because the assignment explicitly asks for a MOM-based
+solution.
