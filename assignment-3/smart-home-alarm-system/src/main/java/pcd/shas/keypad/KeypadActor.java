@@ -14,6 +14,8 @@ import java.util.Set;
 
 public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
 
+    // Protocol
+
     public interface Command {}
 
     public record PressKey(char key) implements Command {}
@@ -41,8 +43,12 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         }
     }
 
+    // State
+
     private final ActorRef<ControlUnitActor.Command> controlUnit;
     private final StringBuilder typedPin = new StringBuilder();
+
+    // Creation
 
     // Creates the keypad adapter that translates local input into control-unit messages.
     public static Behavior<Command> create(ActorRef<ControlUnitActor.Command> controlUnit) {
@@ -54,6 +60,8 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         super(context);
         this.controlUnit = controlUnit;
     }
+
+    // Message handlers
 
     @Override
     public Receive<Command> createReceive() {
@@ -107,6 +115,8 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         controlUnit.tell(new ControlUnitActor.RequestPartialArming(command.pin(), command.activeZones()));
         return this;
     }
+
+    // Helpers
 
     private void submitTypedPin() {
         if (typedPin.isEmpty()) {

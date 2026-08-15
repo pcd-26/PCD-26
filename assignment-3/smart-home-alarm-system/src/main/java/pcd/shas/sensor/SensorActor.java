@@ -16,14 +16,20 @@ import java.util.Objects;
 
 public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
+    // Protocol
+
     public interface Command {}
 
     public record Activate() implements Command {}
+
+    // Sensor setup
 
     private final String sensorId;
     private final SensorType sensorType;
     private final Zone installedZone;
     private final ActorRef<ControlUnitActor.Command> controlUnit;
+
+    // Creation
 
     // Creates a reusable actor for both motion and door/window sensors.
     public static Behavior<Command> create(
@@ -50,6 +56,8 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         this.controlUnit = controlUnit;
     }
 
+    // Message handlers
+
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
@@ -70,6 +78,8 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         controlUnit.tell(new ControlUnitActor.SensorActivated(event.info()));
         return this;
     }
+
+    // Helpers
 
     private static void validateSensorSetup(
         String sensorId,

@@ -23,6 +23,8 @@ public final class ControlUnitActor {
 
     private ControlUnitActor() {}
 
+    // Protocol
+
     public interface Command {}
 
     public record PinSubmitted(String pin) implements Command {
@@ -70,6 +72,8 @@ public final class ControlUnitActor {
 
     record EntryDelayTimeout() implements Command {}
 
+    // Creation
+
     public static Behavior<Command> create(String correctPin, ActorRef<SirenActor.Command> siren) {
         return create(correctPin, Duration.ofSeconds(5), Duration.ofSeconds(5), siren);
     }
@@ -90,6 +94,8 @@ public final class ControlUnitActor {
             return disarmed(alarm);
         }));
     }
+
+    // Runtime context
 
     // Shared dependencies and operations used by every state of the actor.
     private record AlarmRuntime(
@@ -138,11 +144,14 @@ public final class ControlUnitActor {
         }
     }
 
+    // State behaviors
+
     // DISARMED: sensors are ignored; a valid arming request starts the exit delay.
     private static Behavior<Command> disarmed(AlarmRuntime alarm) {
         return Behaviors.receive(Command.class)
             .onMessage(RequestFullArming.class, message -> {
                 if (alarm.correctPin().equals(message.pin())) {
+                    // Correct PIN: start the exit phase with every zone enabled.
                     alarm.context().getLog().info("Transition DISARMED -> EXIT_DELAY with all zones active");
                     alarm.startExitDelay();
                     return exitDelay(alarm, ALL_ZONES);
@@ -152,6 +161,7 @@ public final class ControlUnitActor {
             })
             .onMessage(RequestPartialArming.class, message -> {
                 if (alarm.correctPin().equals(message.pin())) {
+                    // Correct PIN: start the exit phase, but only for the selected zones.
                     alarm.context().getLog().info("Transition DISARMED -> EXIT_DELAY with zones {} active", message.activeZones());
                     alarm.startExitDelay();
                     return exitDelay(alarm, message.activeZones());
@@ -160,6 +170,7 @@ public final class ControlUnitActor {
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.DISARMED);
             })
             .onMessage(PinSubmitted.class, message -> {
+                // A PIN alone cannot arm the system: full or partial mode is required.
                 alarm.context().getLog().info("PIN submitted while DISARMED, but arming mode is required");
                 return Behaviors.same();
             })
@@ -176,6 +187,7 @@ public final class ControlUnitActor {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
                 if (alarm.accepts(message)) {
+                    // During exit delay, the correct PIN cancels arming and returns to disarmed.
                     alarm.cancelExitDelay();
                     alarm.context().getLog().info("Transition EXIT_DELAY -> DISARMED");
                     alarm.deactivateSiren();
@@ -187,6 +199,7 @@ public final class ControlUnitActor {
             .onMessage(SensorActivated.class, message ->
                 ignoreSensorBecauseStateIsInactive(alarm, AlarmState.EXIT_DELAY, message.sensorInfo()))
             .onMessage(ExitDelayTimeout.class, message -> {
+                // Once the exit timer expires, sensors in active zones become relevant.
                 alarm.cancelExitDelay();
                 alarm.context().getLog().info("Transition EXIT_DELAY -> ARMED");
                 return armed(alarm, zonesBeingArmed);
@@ -201,6 +214,7 @@ public final class ControlUnitActor {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
                 if (alarm.accepts(message)) {
+                    // The correct PIN can disarm directly, even before any sensor fires.
                     alarm.cancelEntryDelay();
                     alarm.context().getLog().info("Transition ARMED -> DISARMED");
                     alarm.deactivateSiren();
@@ -213,6 +227,7 @@ public final class ControlUnitActor {
                 SensorInfo sensor = message.sensorInfo();
 
                 if (armedZones.contains(sensor.zone())) {
+                    // Sensor in an active zone: start entry delay instead of the siren.
                     alarm.context().getLog().info(
                         "Transition ARMED -> ENTRY_DELAY due to sensor activation: sensor={}, type={}, zone={}",
                         sensor.id(),
@@ -223,6 +238,7 @@ public final class ControlUnitActor {
                     return entryDelay(alarm, armedZones);
                 }
 
+                // Sensor in an inactive zone: real event, but irrelevant for the alarm.
                 return ignoreSensorBecauseZoneIsNotArmed(alarm, sensor);
             })
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
@@ -236,6 +252,7 @@ public final class ControlUnitActor {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
                 if (alarm.accepts(message)) {
+                    // The user entered the PIN in time: cancel the entry countdown.
                     alarm.cancelEntryDelay();
                     alarm.context().getLog().info("Transition ENTRY_DELAY -> DISARMED");
                     alarm.deactivateSiren();
@@ -247,6 +264,7 @@ public final class ControlUnitActor {
             .onMessage(SensorActivated.class, message ->
                 ignoreSensorBecauseStateIsInactive(alarm, AlarmState.ENTRY_DELAY, message.sensorInfo()))
             .onMessage(EntryDelayTimeout.class, message -> {
+                // No valid PIN arrived in time: enter the emergency state.
                 alarm.cancelEntryDelay();
                 alarm.context().getLog().info("Transition ENTRY_DELAY -> ALARM");
                 alarm.activateSiren();
@@ -262,6 +280,7 @@ public final class ControlUnitActor {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
                 if (alarm.accepts(message)) {
+                    // In alarm, the only valid exit is the correct PIN, which stops the siren.
                     alarm.context().getLog().info("Transition ALARM -> DISARMED");
                     alarm.deactivateSiren();
                     return disarmed(alarm);
@@ -270,12 +289,15 @@ public final class ControlUnitActor {
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.ALARM);
             })
             .onMessage(SensorActivated.class, message ->
+                // Alarm is already active: extra sensors do not change the state.
                 ignoreSensorBecauseStateIsInactive(alarm, AlarmState.ALARM, message.sensorInfo()))
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
             .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.ALARM))
             .build();
     }
+
+    // Helpers
 
     private static Behavior<Command> replyWithState(ActorRef<StateSnapshot> replyTo, AlarmState state) {
         replyTo.tell(new StateSnapshot(state));

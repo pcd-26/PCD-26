@@ -18,6 +18,8 @@ import java.util.Set;
 
 public final class RootActor extends AbstractBehavior<RootActor.Command> {
 
+    // Protocol
+
     public interface Command {}
 
     public record SubmitPin(String pin) implements Command {}
@@ -38,6 +40,8 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
 
     private record SirenStateObserved(SirenActor.StateSnapshot snapshot) implements Command {}
 
+    // Actor references
+
     private final ActorRef<KeypadActor.Command> keypad;
     private final ActorRef<SensorActor.Command> frontDoorSensor;
     private final ActorRef<SensorActor.Command> livingRoomSensor;
@@ -45,6 +49,8 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
     private final ActorRef<SirenActor.Command> siren;
     private final ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter;
     private final ActorRef<SirenActor.StateSnapshot> sirenStateAdapter;
+
+    // Creation
 
     // Creates the alarm actor graph and exposes a small command protocol.
     public static Behavior<Command> create(AlarmConfiguration alarmConfiguration) {
@@ -94,6 +100,8 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
         this.controlStateAdapter = controlStateAdapter;
         this.sirenStateAdapter = sirenStateAdapter;
     }
+
+    // Message routing
 
     @Override
     public Receive<Command> createReceive() {

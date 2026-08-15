@@ -11,6 +11,8 @@ public final class SirenActor implements AlertDevice {
 
     private SirenActor() {}
 
+    // Protocol
+
     public interface Command extends AlertDevice.Command {}
 
     public record Activate() implements Command {}
@@ -25,10 +27,14 @@ public final class SirenActor implements AlertDevice {
 
     public record StateSnapshot(boolean active) {}
 
+    // Creation
+
     // Starts the siren actor in its silent state.
     public static Behavior<Command> create() {
         return Behaviors.setup(SirenActor::silent);
     }
+
+    // Behaviors
 
     // Silent and active are separate behaviors, so duplicate commands are naturally idempotent.
     private static Behavior<Command> silent(ActorContext<Command> context) {
