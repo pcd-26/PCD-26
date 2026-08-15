@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"odds-and-evens-game/app"
-	"odds-and-evens-game/championship"
+	"odds-and-evens-game/championship/domain"
+	"odds-and-evens-game/championship/match"
+	"odds-and-evens-game/championship/round"
 )
 
 // These tests exercise the public CLI helpers from the outside.
@@ -41,10 +43,10 @@ func TestRunWithFactoryFormatsEightPlayerChampionship(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := app.RunWithFactory([]string{"-players", "8"}, stdout, stderr, scriptedFactory(map[int]map[int]championship.CoinSide{
-		1: {1: championship.Heads, 2: championship.Heads, 3: championship.Heads, 4: championship.Heads},
-		2: {1: championship.Heads, 2: championship.Heads},
-		3: {1: championship.Heads},
+	exitCode := app.RunWithFactory([]string{"-players", "8"}, stdout, stderr, scriptedFactory(map[int]map[int]domain.CoinSide{
+		1: {1: domain.Heads, 2: domain.Heads, 3: domain.Heads, 4: domain.Heads},
+		2: {1: domain.Heads, 2: domain.Heads},
+		3: {1: domain.Heads},
 	}))
 	if exitCode != 0 {
 		t.Fatalf("expected zero exit code, got %d, stderr=%s", exitCode, stderr.String())
@@ -109,13 +111,13 @@ func TestRunWithFactoryRejectsInvalidInput(t *testing.T) {
 }
 
 // scriptedFactory returns the toss result requested by each match.
-func scriptedFactory(script map[int]map[int]championship.CoinSide) championship.CoinTosserFactory {
-	return func(roundNumber, matchNumber int, firstPlayer, secondPlayer championship.Player) championship.CoinTosser {
-		return championship.NewFixedCoinTosser(script[roundNumber][matchNumber])
+func scriptedFactory(script map[int]map[int]domain.CoinSide) round.CoinTosserFactory {
+	return func(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
+		return match.NewFixedCoinTosser(script[roundNumber][matchNumber])
 	}
 }
 
 // headsOnlyTosserFactory always gives heads, so the first player wins.
-func headsOnlyTosserFactory(roundNumber, matchNumber int, firstPlayer, secondPlayer championship.Player) championship.CoinTosser {
-	return championship.NewFixedCoinTosser(championship.Heads)
+func headsOnlyTosserFactory(roundNumber, matchNumber int, firstPlayer, secondPlayer domain.Player) match.CoinTosser {
+	return match.NewFixedCoinTosser(domain.Heads)
 }

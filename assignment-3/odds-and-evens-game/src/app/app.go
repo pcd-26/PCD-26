@@ -6,38 +6,36 @@ import (
 	"io"
 	"strings"
 
-	"odds-and-evens-game/championship"
+	"odds-and-evens-game/championship/domain"
+	"odds-and-evens-game/championship/round"
+	"odds-and-evens-game/championship/tournament"
 )
 
 // Run executes the CLI with a random coin tosser factory.
-func Run(args []string, stdout, stderr io.Writer, tosserFactory championship.CoinTosserFactory) int {
+func Run(args []string, stdout, stderr io.Writer, tosserFactory round.CoinTosserFactory) int {
 	return RunWithFactory(args, stdout, stderr, tosserFactory)
 }
 
 // RunWithFactory executes the CLI using the provided coin tosser factory.
-func RunWithFactory(args []string, stdout, stderr io.Writer, tosserFactory championship.CoinTosserFactory) int {
-	// Step 1: read and validate the command-line input.
+func RunWithFactory(args []string, stdout, stderr io.Writer, tosserFactory round.CoinTosserFactory) int {
 	playersCount, err := ParsePlayersCount(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
 
-	// Step 2: build the tournament players.
 	players, err := BuildPlayers(playersCount)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
 
-	// Step 3: run the championship logic.
-	result, err := championship.PlayChampionship(players, tosserFactory)
+	result, err := tournament.PlayChampionship(players, tosserFactory)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
 
-	// Step 4: print the final report.
 	if err := RenderChampionship(stdout, result); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -77,12 +75,11 @@ func ParsePlayersCount(args []string) (int, error) {
 }
 
 // BuildPlayers creates the canonical list of players for the tournament.
-func BuildPlayers(count int) ([]championship.Player, error) {
-	players := make([]championship.Player, count)
+func BuildPlayers(count int) ([]domain.Player, error) {
+	players := make([]domain.Player, count)
 
-	// Players are generated in bracket order: Player-1, Player-2, and so on.
 	for i := 1; i <= count; i++ {
-		player, err := championship.NewPlayer(i, fmt.Sprintf("Player-%d", i))
+		player, err := domain.NewPlayer(i, fmt.Sprintf("Player-%d", i))
 		if err != nil {
 			return nil, err
 		}
@@ -93,23 +90,21 @@ func BuildPlayers(count int) ([]championship.Player, error) {
 }
 
 // RenderChampionship writes a textual summary of the tournament.
-func RenderChampionship(out io.Writer, result championship.ChampionshipResult) error {
-	// Print each round in order.
+func RenderChampionship(out io.Writer, result domain.ChampionshipResult) error {
 	for _, round := range result.Rounds() {
 		if _, err := fmt.Fprintf(out, "Round %d\n\n", round.RoundNumber()); err != nil {
 			return err
 		}
 
-		// Print the matches inside the round in their original order.
 		for _, match := range round.Matches() {
 			if _, err := fmt.Fprintf(
 				out,
 				"Match %d: %s [%s] vs %s [%s]\n",
 				match.MatchNumber(),
 				match.FirstPlayer().Name(),
-				championship.Heads,
+				domain.Heads,
 				match.SecondPlayer().Name(),
-				championship.Tails,
+				domain.Tails,
 			); err != nil {
 				return err
 			}
@@ -122,7 +117,6 @@ func RenderChampionship(out io.Writer, result championship.ChampionshipResult) e
 		}
 	}
 
-	// Print the final winner at the end.
 	if _, err := fmt.Fprintf(out, "Champion: %s\n", result.Champion().Name()); err != nil {
 		return err
 	}
