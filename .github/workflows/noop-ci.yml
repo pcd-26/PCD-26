@@ -3,9 +3,6 @@ name: No-op CI
 on:
   pull_request:
   push:
-    branches:
-      - main
-      - dev
 
 permissions:
   contents: read
