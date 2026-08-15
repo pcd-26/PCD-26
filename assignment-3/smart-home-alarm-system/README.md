@@ -65,6 +65,8 @@ mvn exec:java
 In the CLI, arming is requested with `arm full <PIN>` or
 `arm partial <PIN> ...`. When the system is already armed, in entry delay, or
 in alarm, `pin <PIN>` disarms the system or silences the siren.
+Sensor events can be simulated with `front door`, `ground floor`,
+`living room`, and `bedroom`, covering all configured zones.
 
 To run the scripted demo:
 

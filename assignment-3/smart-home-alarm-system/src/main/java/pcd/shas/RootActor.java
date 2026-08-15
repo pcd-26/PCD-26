@@ -30,7 +30,11 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
 
     public record ActivateFrontDoor() implements Command {}
 
+    public record ActivateGroundFloor() implements Command {}
+
     public record ActivateLivingRoom() implements Command {}
+
+    public record ActivateBedroom() implements Command {}
 
     public record PrintStatus() implements Command {}
 
@@ -44,7 +48,9 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
 
     private final ActorRef<KeypadActor.Command> keypad;
     private final ActorRef<SensorActor.Command> frontDoorSensor;
+    private final ActorRef<SensorActor.Command> groundFloorSensor;
     private final ActorRef<SensorActor.Command> livingRoomSensor;
+    private final ActorRef<SensorActor.Command> bedroomSensor;
     private final ActorRef<ControlUnitActor.Command> controlUnit;
     private final ActorRef<SirenActor.Command> siren;
     private final ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter;
@@ -72,7 +78,9 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
                 context,
                 context.spawn(KeypadActor.create(controlUnit), "keypad"),
                 context.spawn(SensorActor.create("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnit), "front-door-sensor"),
+                context.spawn(SensorActor.create("ground_floor_window", SensorType.DOOR_WINDOW, Zone.GROUND_FLOOR, controlUnit), "ground-floor-sensor"),
                 context.spawn(SensorActor.create("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA, controlUnit), "living-room-sensor"),
+                context.spawn(SensorActor.create("bedroom_motion", SensorType.MOTION, Zone.SLEEPING_AREA, controlUnit), "bedroom-sensor"),
                 controlUnit,
                 siren,
                 context.messageAdapter(ControlUnitActor.StateSnapshot.class, ControlStateObserved::new),
@@ -85,7 +93,9 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
         ActorContext<Command> context,
         ActorRef<KeypadActor.Command> keypad,
         ActorRef<SensorActor.Command> frontDoorSensor,
+        ActorRef<SensorActor.Command> groundFloorSensor,
         ActorRef<SensorActor.Command> livingRoomSensor,
+        ActorRef<SensorActor.Command> bedroomSensor,
         ActorRef<ControlUnitActor.Command> controlUnit,
         ActorRef<SirenActor.Command> siren,
         ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter,
@@ -94,7 +104,9 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
         super(context);
         this.keypad = keypad;
         this.frontDoorSensor = frontDoorSensor;
+        this.groundFloorSensor = groundFloorSensor;
         this.livingRoomSensor = livingRoomSensor;
+        this.bedroomSensor = bedroomSensor;
         this.controlUnit = controlUnit;
         this.siren = siren;
         this.controlStateAdapter = controlStateAdapter;
@@ -114,8 +126,12 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
             .onMessage(RequestPartialArming.class, this::onRequestPartialArming)
             // Handles a simulated front-door sensor activation.
             .onMessage(ActivateFrontDoor.class, this::onActivateFrontDoor)
+            // Handles a simulated ground-floor window sensor activation.
+            .onMessage(ActivateGroundFloor.class, this::onActivateGroundFloor)
             // Handles a simulated living-room motion sensor activation.
             .onMessage(ActivateLivingRoom.class, this::onActivateLivingRoom)
+            // Handles a simulated bedroom motion sensor activation.
+            .onMessage(ActivateBedroom.class, this::onActivateBedroom)
             // Handles a CLI status request.
             .onMessage(PrintStatus.class, this::onPrintStatus)
             // Handles the control-unit reply to a status request.
@@ -147,8 +163,18 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
         return this;
     }
 
+    private Behavior<Command> onActivateGroundFloor(ActivateGroundFloor command) {
+        groundFloorSensor.tell(new SensorActor.Activate());
+        return this;
+    }
+
     private Behavior<Command> onActivateLivingRoom(ActivateLivingRoom command) {
         livingRoomSensor.tell(new SensorActor.Activate());
+        return this;
+    }
+
+    private Behavior<Command> onActivateBedroom(ActivateBedroom command) {
+        bedroomSensor.tell(new SensorActor.Activate());
         return this;
     }
 

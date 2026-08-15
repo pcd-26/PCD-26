@@ -1,12 +1,62 @@
 \section{Design}
 
-The solution assigns one actor to each responsibility.
-The control unit owns the state machine, the configured PIN, the active-zone set, and the timers.
-The keypad buffers local key presses and forwards completed PIN submissions or arming requests.
-The sensor actor is a thin adapter that forwards intrusion events.
-The siren actor only stores the on/off status of the emergency device.
+The solution assigns one actor to each responsibility:
+\begin{itemize}
+    \item \textbf{RootActor}: creates the actor graph and routes CLI or demo commands to the right actor;
+    \item \textbf{KeypadActor}: represents the keypad and forwards PIN-related commands to the control unit;
+    \item \textbf{SensorActor}: represents a physical sensor and emits one activation event at a time;
+    \item \textbf{ControlUnitActor}: owns the alarm state machine, timers, PIN validation, and active zones;
+    \item \textbf{SirenActor}: owns the siren on/off state.
+\end{itemize}
 
-Zone-based arming is implemented with an immutable set of active zones that is reset to the full set when the system
-returns to \textit{DISARMED}.
-Timeouts are modeled as normal messages and cancelled when the actor leaves the timed state.
-This keeps stale timeout messages harmless and keeps the implementation close to the actor model.
+The actors communicate only through typed messages.
+The root actor is the only actor directly addressed by the CLI and by the demo.
+It forwards commands to the keypad or to one of the sensor actors, while status requests are implemented with
+\textbf{message adapters} that convert replies from the control unit and siren into messages of the root protocol.
+
+The most important design choice is in the \textbf{ControlUnitActor}.
+The alarm state is represented by the currently active \textbf{Behavior}.
+For example, after a successful arming request the actor returns the behavior for \textit{EXIT\_DELAY}; after the exit
+timeout, it returns the behavior for \textit{ARMED}.
+This avoids a central switch over a mutable state variable and keeps each state close to the messages it can handle.
+
+\medskip
+
+\noindent\textbf{State-specific behavior in \texttt{ControlUnitActor}}
+\begin{lstlisting}[style=reportcode]
+private static Behavior<Command> exitDelay(AlarmRuntime alarm, Set<Zone> zonesBeingArmed) {
+    return Behaviors.receive(Command.class)
+        .onMessage(PinSubmitted.class, message -> {
+            if (alarm.accepts(message)) {
+                alarm.cancelExitDelay();
+                return disarmed(alarm);
+            }
+
+            return stayInSameStateAfterWrongPin(alarm, AlarmState.EXIT_DELAY);
+        })
+        .onMessage(ExitDelayTimeout.class, message -> {
+            alarm.cancelExitDelay();
+            return armed(alarm, zonesBeingArmed);
+        })
+        .build();
+}
+\end{lstlisting}
+
+Timers are also modeled through messages.
+When a timed state starts, the control unit schedules a timeout message to itself.
+If the actor leaves that state before the timeout, the timer is cancelled; if a stale timeout still reaches the mailbox,
+the current behavior simply ignores it.
+
+\medskip
+
+\noindent\textbf{Timer scheduling in \texttt{ControlUnitActor}}
+\begin{lstlisting}[style=reportcode]
+void startEntryDelay() {
+    timers.startSingleTimer(ENTRY_DELAY_TIMER, new EntryDelayTimeout(), entryDelay);
+}
+\end{lstlisting}
+
+Zone-based arming is implemented with an immutable set of active zones carried by the armed behaviors.
+The set is created when arming starts and is then passed through \textit{EXIT\_DELAY}, \textit{ARMED},
+\textit{ENTRY\_DELAY}, and \textit{ALARM}.
+When the system returns to \textit{DISARMED}, that armed-zone context is discarded.

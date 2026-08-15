@@ -1,9 +1,29 @@
 \section{Validation}
 
-The test suite covers configuration parsing, the control-unit state machine, keypad forwarding, sensor forwarding,
-siren state changes, and the demo entry point.
-Dedicated tests cover partial arming and stale timeout handling.
-The state-machine tests exercise the path from arming to alarm and back to disarming, including ignored sensor events.
-This gives coverage for the nominal flow and the most relevant edge cases from the assignment statement.
-The direct actor tests are important because the assignment is mainly about concurrent behavior, so the correctness of
-the message protocol matters as much as the visible outcome.
+The implementation is validated with automated tests based on JUnit 5 and the Pekko typed test kit.
+The test suite covers:
+\begin{itemize}
+    \item configuration loading from \texttt{application.conf};
+    \item domain-model validation for sensors, events, states, and zones;
+    \item keypad forwarding of PIN and arming requests;
+    \item sensor forwarding of activation events;
+    \item siren activation, deactivation, and state queries;
+    \item complete control-unit transitions across all alarm states;
+    \item partial arming and ignored events from inactive zones;
+    \item stale timeout messages received in states where they are no longer relevant;
+    \item CLI command parsing and demo execution.
+\end{itemize}
+
+The most important tests are the control-unit tests, because the control unit is the only owner of the alarm state.
+They verify that sensors are ignored in \textit{DISARMED} and \textit{EXIT\_DELAY}, that active-zone sensors start
+\textit{ENTRY\_DELAY}, that the entry timeout activates the siren, and that the correct PIN always returns the system to
+\textit{DISARMED}.
+
+From a concurrency point of view, the relevant safety property is that no actor shares mutable state with another actor.
+The control unit processes one message at a time from its mailbox, so concurrent inputs are serialized before they can
+change the alarm behavior.
+Timers are checked as ordinary messages, which makes timed transitions testable in the same way as keypad and sensor
+events.
+
+The resulting coverage validates both the functional requirements and the message-passing structure required by the
+assignment.

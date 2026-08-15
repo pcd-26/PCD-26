@@ -66,6 +66,10 @@ public final class DemoMain {
         system.tell(new RootActor.ActivateLivingRoom());
         sleep(STEP_GAP);
 
+        system.log().info("Demo step: a bedroom sensor in an inactive zone is ignored");
+        system.tell(new RootActor.ActivateBedroom());
+        sleep(STEP_GAP);
+
         system.log().info("Demo step: a perimeter sensor in an active zone triggers ENTRY_DELAY");
         system.tell(new RootActor.ActivateFrontDoor());
         sleep(STEP_GAP);

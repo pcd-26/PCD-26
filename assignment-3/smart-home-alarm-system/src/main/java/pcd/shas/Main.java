@@ -79,8 +79,18 @@ public final class Main {
             return true;
         }
 
+        if (command.equalsIgnoreCase("ground floor")) {
+            system.tell(new RootActor.ActivateGroundFloor());
+            return true;
+        }
+
         if (command.equalsIgnoreCase("living room")) {
             system.tell(new RootActor.ActivateLivingRoom());
+            return true;
+        }
+
+        if (command.equalsIgnoreCase("bedroom")) {
+            system.tell(new RootActor.ActivateBedroom());
             return true;
         }
 
@@ -122,8 +132,14 @@ public final class Main {
               front door
                 Simulate a door/window sensor event in the PERIMETER zone.
 
+              ground floor
+                Simulate a door/window sensor event in the GROUND_FLOOR zone.
+
               living room
                 Simulate a motion sensor event in the LIVING_AREA zone.
+
+              bedroom
+                Simulate a motion sensor event in the SLEEPING_AREA zone.
 
               status
                 Print the current alarm state and whether the siren is active.
