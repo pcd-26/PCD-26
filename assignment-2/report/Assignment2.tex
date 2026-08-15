@@ -18,6 +18,11 @@
     \number\day\ \englishmonthname{\number\month} \number\year%
 }
 
+% US format: Month DD, YYYY (e.g., August 5, 2026)
+\newcommand{\todayFullUS}{%
+    \englishmonthname{\number\month} \number\day, \number\year%
+}
+
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.55em}
 \setlength{\emergencystretch}{2em}
@@ -25,23 +30,22 @@
 
 \title{Assignment 2 -- FSStatLib}
 \author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
-\date{PCD a.y. 2025/2026 -- \todayFullUK}
+\date{PCD a.y. 2025/2026 -- \todayFullUS}
 
 \begin{document}
 
-\input{parts/front/TitlePage}
+\input{front/TitlePage}
 
 \pagenumbering{roman}
 \tableofcontents
 \newpage
-\input{parts/front/Disclaimer}
 \pagenumbering{arabic}
 
-\input{parts/front/Introduction}
-\input{parts/chapters/ProblemAnalysis}
-\input{parts/chapters/Design}
-\input{parts/chapters/Validation}
-\input{parts/back/HowToRun}
-\input{parts/back/Conclusions}
+\input{front/Introduction}
+\input{chapters/ProblemAnalysis}
+\input{chapters/Design}
+\input{chapters/Validation}
+\input{back/HowToRun}
+\input{back/Conclusions}
 
 \end{document}
