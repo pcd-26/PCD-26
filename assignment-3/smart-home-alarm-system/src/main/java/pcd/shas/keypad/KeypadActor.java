@@ -66,9 +66,13 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
+            // Handles one physical keypad key press.
             .onMessage(PressKey.class, this::onKeyPressed)
+            // Handles a complete PIN submitted directly.
             .onMessage(SubmitPin.class, this::onPinSubmittedDirectly)
+            // Handles a full-arming request with PIN.
             .onMessage(RequestFullArming.class, this::onFullArmingRequested)
+            // Handles a partial-arming request with PIN and zones.
             .onMessage(RequestPartialArming.class, this::onPartialArmingRequested)
             .build();
     }

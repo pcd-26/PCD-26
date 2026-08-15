@@ -61,6 +61,7 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
+            // Handles one sensor activation event.
             .onMessage(Activate.class, this::onActivated)
             .build();
     }

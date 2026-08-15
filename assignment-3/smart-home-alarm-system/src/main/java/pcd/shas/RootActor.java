@@ -106,14 +106,23 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
+            // Handles a PIN submitted by CLI or demo.
             .onMessage(SubmitPin.class, this::onSubmitPin)
+            // Handles a request to arm every zone.
             .onMessage(RequestFullArming.class, this::onRequestFullArming)
+            // Handles a request to arm only selected zones.
             .onMessage(RequestPartialArming.class, this::onRequestPartialArming)
+            // Handles a simulated front-door sensor activation.
             .onMessage(ActivateFrontDoor.class, this::onActivateFrontDoor)
+            // Handles a simulated living-room motion sensor activation.
             .onMessage(ActivateLivingRoom.class, this::onActivateLivingRoom)
+            // Handles a CLI status request.
             .onMessage(PrintStatus.class, this::onPrintStatus)
+            // Handles the control-unit reply to a status request.
             .onMessage(ControlStateObserved.class, this::onControlStateObserved)
+            // Handles the siren reply to a status request.
             .onMessage(SirenStateObserved.class, this::onSirenStateObserved)
+            // Handles actor-system shutdown requested by the main program.
             .onMessage(Stop.class, this::onStop)
             .build();
     }

@@ -39,11 +39,14 @@ public final class SirenActor implements AlertDevice {
     // Silent and active are separate behaviors, so duplicate commands are naturally idempotent.
     private static Behavior<Command> silent(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
+            // Handles siren activation while it is currently silent.
             .onMessage(Activate.class, message -> {
                 context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
                 return active(context);
             })
+            // Handles duplicate deactivation while already silent.
             .onMessage(Deactivate.class, message -> Behaviors.same())
+            // Handles status queries while the siren is silent.
             .onMessage(QueryState.class, message -> {
                 message.replyTo().tell(new StateSnapshot(false));
                 return Behaviors.same();
@@ -53,11 +56,14 @@ public final class SirenActor implements AlertDevice {
 
     private static Behavior<Command> active(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
+            // Handles duplicate activation while already active.
             .onMessage(Activate.class, message -> Behaviors.same())
+            // Handles siren deactivation while it is currently active.
             .onMessage(Deactivate.class, message -> {
                 context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
                 return silent(context);
             })
+            // Handles status queries while the siren is active.
             .onMessage(QueryState.class, message -> {
                 message.replyTo().tell(new StateSnapshot(true));
                 return Behaviors.same();
