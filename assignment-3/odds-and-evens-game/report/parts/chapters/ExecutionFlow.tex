@@ -3,17 +3,17 @@
 The championship progresses sequentially from round to round, while the matches inside each round run in parallel.
 
 \begin{enumerate}
-    \item `PlayChampionship` starts the tournament and keeps the current player list.
-    \item `PlayRound` splits that list into pairs and launches one \textbf{goroutine} per \textbf{match}.
-    \item Each worker calls `PlayMatch` exactly once.
+    \item \texttt{PlayChampionship} starts the tournament and keeps the current player list.
+    \item \texttt{PlayRound} splits that list into pairs and launches one \textbf{goroutine} per \textbf{match}.
+    \item Each worker calls \texttt{PlayMatch} exactly once.
     \item The round coordinator waits for one outcome per match.
-    \item Results are stored by `matchIndex`, so the bracket order remains stable even if workers finish out of order.
+    \item Results are stored by \texttt{matchIndex}, so the bracket order remains stable even if workers finish out of order.
     \item The winners returned by the round become the input of the next round.
 \end{enumerate}
 
 The worker logic is intentionally small.
-It calls the toss function exactly once, maps `Heads` to the first player and `Tails` to the second player, and returns a
-`MatchResult` with the round number, match number, participants, winner, and tossed side.
+It calls the toss function exactly once, maps \texttt{Heads} to the first player and \texttt{Tails} to the second player, and returns a
+\texttt{MatchResult} with the round number, match number, participants, winner, and tossed side.
 
 The round coordinator is the \textbf{synchronization point}.
 It does not poll or guess completion; it waits for exactly one result per started match.

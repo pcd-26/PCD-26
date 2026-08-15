@@ -61,7 +61,7 @@ jobs:
 
       - name: Build and test Odds and Evens Game (Go)
         working-directory: assignment-3/odds-and-evens-game/src
-        run: go test -v ./tests/...
+        run: go test -v ./...
 
   package:
     name: Build Assignment-03 zip

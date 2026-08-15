@@ -3,7 +3,6 @@ package match
 import (
 	"fmt"
 	"math/rand"
-	"time"
 
 	"odds-and-evens-game/championship/domain"
 )
@@ -31,10 +30,9 @@ func PlayMatch(roundNumber, matchNumber int, toss func() domain.CoinSide, firstP
 	}
 }
 
-// RandomTossSide returns a random coin side using a local RNG.
+// RandomTossSide returns a random coin side.
 func RandomTossSide() domain.CoinSide {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	if rng.Intn(2) == 0 {
+	if rand.Intn(2) == 0 {
 		return domain.Heads
 	}
 	return domain.Tails
