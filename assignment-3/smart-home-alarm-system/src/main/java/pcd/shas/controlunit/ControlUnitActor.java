@@ -12,92 +12,34 @@ import pcd.shas.siren.SirenActor;
 
 import java.time.Duration;
 import java.util.EnumSet;
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 
-/**
- * Control unit for the smart home alarm system.
- *
- * <p>The actor owns the configured PIN and the current alarm state. It is
- * implemented as an immutable typed-state machine with internal timers for the
- * delay transitions.</p>
- */
 public final class ControlUnitActor {
 
-    /**
-     * Timer key used for exit delay single-shot timer.
-     */
-    private static final Object EXIT_DELAY_TIMER_KEY = "exit-delay";
+    private static final Object EXIT_DELAY_TIMER = "exit-delay";
+    private static final Object ENTRY_DELAY_TIMER = "entry-delay";
+    private static final Set<Zone> ALL_ZONES = Set.copyOf(EnumSet.allOf(Zone.class));
 
-    /**
-     * Timer key used for entry delay single-shot timer.
-     */
-    private static final Object ENTRY_DELAY_TIMER_KEY = "entry-delay";
-
-    /**
-     * Constant set containing all defined system zones, representing full arming mode.
-     */
-    private static final Set<Zone> FULL_ARMS = Set.copyOf(EnumSet.allOf(Zone.class));
-
-    /**
-     * Private constructor to prevent instantiation of utility class.
-     */
     private ControlUnitActor() {}
 
-    /**
-     * Root protocol for the control unit.
-     */
     public interface Command {}
 
-    /**
-     * Submission of a PIN code.
-     *
-     * @param pin the submitted PIN
-     */
     public record PinSubmitted(String pin) implements Command {
-        /**
-         * Compact constructor validating that the submitted PIN is non-null.
-         *
-         * @throws NullPointerException if {@code pin} is null
-         */
         public PinSubmitted {
             Objects.requireNonNull(pin, "pin");
         }
     }
 
-    /**
-     * Sensor activation event.
-     *
-     * @param sensorInfo the activated sensor
-     */
     public record SensorActivated(SensorInfo sensorInfo) implements Command {
-        /**
-         * Compact constructor validating that sensor info is non-null.
-         *
-         * @throws NullPointerException if {@code sensorInfo} is null
-         */
         public SensorActivated {
             Objects.requireNonNull(sensorInfo, "sensorInfo");
         }
     }
 
-    /**
-     * Configures the next arming cycle to activate all zones.
-     */
     public record ArmAll() implements Command {}
 
-    /**
-     * Configures the next arming cycle to activate only the selected zones.
-     *
-     * @param activeZones immutable set of zones that should be active when armed
-     */
     public record ArmPartial(Set<Zone> activeZones) implements Command {
-        /**
-         * Compact constructor validating that active zones set is non-null and non-empty.
-         *
-         * @throws NullPointerException if {@code activeZones} is null
-         * @throws IllegalArgumentException if {@code activeZones} is empty
-         */
         public ArmPartial {
             Objects.requireNonNull(activeZones, "activeZones");
             if (activeZones.isEmpty()) {
@@ -107,331 +49,263 @@ public final class ControlUnitActor {
         }
     }
 
-    /**
-     * Query for the current alarm state, used by tests.
-     *
-     * @param replyTo actor that should receive the state snapshot
-     */
     public record QueryState(ActorRef<StateSnapshot> replyTo) implements Command {
-        /**
-         * Compact constructor validating that replyTo actor reference is non-null.
-         *
-         * @throws NullPointerException if {@code replyTo} is null
-         */
         public QueryState {
             Objects.requireNonNull(replyTo, "replyTo");
         }
     }
 
-    /**
-     * Snapshot of the current alarm state.
-     *
-     * @param state the current alarm state
-     */
     public record StateSnapshot(AlarmState state) {
-        /**
-         * Compact constructor validating that state is non-null.
-         *
-         * @throws NullPointerException if {@code state} is null
-         */
         public StateSnapshot {
             Objects.requireNonNull(state, "state");
         }
     }
 
-    /**
-     * Internal command triggered when the exit-delay timer expires.
-     */
     record ExitDelayTimeout() implements Command {}
 
-    /**
-     * Internal command triggered when the entry-delay timer expires.
-     */
     record EntryDelayTimeout() implements Command {}
 
-    /**
-     * Creates the control unit with default delay durations.
-     *
-     * @param configuredPin the alarm PIN
-     * @param siren the typed siren actor
-     * @return the typed behavior
-     */
-    public static Behavior<Command> create(String configuredPin, ActorRef<SirenActor.Command> siren) {
-        return create(configuredPin, Duration.ofSeconds(5), Duration.ofSeconds(5), siren);
+    // Entry point with the default demo timings.
+    public static Behavior<Command> create(String correctPin, ActorRef<SirenActor.Command> siren) {
+        return create(correctPin, Duration.ofSeconds(5), Duration.ofSeconds(5), siren);
     }
 
-    /**
-     * Creates the control unit with custom delay durations.
-     *
-     * @param configuredPin the alarm PIN
-     * @param exitDelayDuration delay before the system becomes armed
-     * @param entryDelayDuration delay before the system enters alarm after intrusion
-     * @param siren the typed siren actor
-     * @return the typed behavior
-     */
+    // Builds the central state-machine actor and wires Pekko timers into its protocol.
     public static Behavior<Command> create(
-        String configuredPin,
+        String correctPin,
         Duration exitDelayDuration,
         Duration entryDelayDuration,
         ActorRef<SirenActor.Command> siren
     ) {
-        validateConfiguredPin(configuredPin);
+        validateCorrectPin(correctPin);
         Objects.requireNonNull(exitDelayDuration, "exitDelayDuration");
         Objects.requireNonNull(entryDelayDuration, "entryDelayDuration");
         Objects.requireNonNull(siren, "siren");
 
         return Behaviors.setup(context ->
             Behaviors.withTimers(timers ->
-                disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS)
+                disarmed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, ALL_ZONES)
             )
         );
     }
 
-    /**
-     * Behavior handling commands when the control unit is in DISARMED state.
-     */
+    // DISARMED: sensors are ignored; a correct PIN starts the exit delay.
     private static Behavior<Command> disarmed(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
-        String configuredPin,
+        String correctPin,
         Duration exitDelayDuration,
         Duration entryDelayDuration,
         ActorRef<SirenActor.Command> siren,
-        Set<Zone> selectedZones
+        Set<Zone> zonesForNextArming
     ) {
         return Behaviors.receive(Command.class)
             .onMessage(ArmAll.class, message -> {
                 context.getLog().info("Configuring full arming");
-                return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
+                return disarmed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, ALL_ZONES);
             })
             .onMessage(ArmPartial.class, message -> {
                 context.getLog().info("Configuring partial arming for zones {}", message.activeZones());
-                return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, message.activeZones());
+                return disarmed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, message.activeZones());
             })
             .onMessage(PinSubmitted.class, message -> {
-                if (configuredPin.equals(message.pin())) {
+                if (correctPin.equals(message.pin())) {
                     context.getLog().info("Transition DISARMED -> EXIT_DELAY");
-                    timers.startSingleTimer(EXIT_DELAY_TIMER_KEY, new ExitDelayTimeout(), exitDelayDuration);
-                    return exitDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, selectedZones);
+                    timers.startSingleTimer(EXIT_DELAY_TIMER, new ExitDelayTimeout(), exitDelayDuration);
+                    return exitDelay(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, zonesForNextArming);
                 }
 
-                return ignorePinSubmission(context, AlarmState.DISARMED);
+                return stayInSameStateAfterWrongPin(context, AlarmState.DISARMED);
             })
-            .onMessage(SensorActivated.class, message -> {
-                return ignoreSensorActivation(context, AlarmState.DISARMED, message.sensorInfo());
-            })
+            .onMessage(SensorActivated.class, message ->
+                ignoreSensorBecauseStateIsInactive(context, AlarmState.DISARMED, message.sensorInfo()))
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.DISARMED))
+            .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.DISARMED))
             .build();
     }
 
-    /**
-     * Behavior handling commands when the control unit is in EXIT_DELAY state.
-     */
+    // EXIT_DELAY: occupants can leave; sensors still do not count as intrusions.
     private static Behavior<Command> exitDelay(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
-        String configuredPin,
+        String correctPin,
         Duration exitDelayDuration,
         Duration entryDelayDuration,
         ActorRef<SirenActor.Command> siren,
-        Set<Zone> selectedZones
+        Set<Zone> zonesBeingArmed
     ) {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
-                if (configuredPin.equals(message.pin())) {
-                    timers.cancel(EXIT_DELAY_TIMER_KEY);
+                if (correctPin.equals(message.pin())) {
+                    timers.cancel(EXIT_DELAY_TIMER);
                     context.getLog().info("Transition EXIT_DELAY -> DISARMED");
                     siren.tell(new SirenActor.Deactivate());
-                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
+                    return disarmed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, ALL_ZONES);
                 }
 
-                return ignorePinSubmission(context, AlarmState.EXIT_DELAY);
+                return stayInSameStateAfterWrongPin(context, AlarmState.EXIT_DELAY);
             })
-            .onMessage(SensorActivated.class, message -> {
-                return ignoreSensorActivation(context, AlarmState.EXIT_DELAY, message.sensorInfo());
-            })
+            .onMessage(SensorActivated.class, message ->
+                ignoreSensorBecauseStateIsInactive(context, AlarmState.EXIT_DELAY, message.sensorInfo()))
             .onMessage(ExitDelayTimeout.class, message -> {
-                timers.cancel(EXIT_DELAY_TIMER_KEY);
+                timers.cancel(EXIT_DELAY_TIMER);
                 context.getLog().info("Transition EXIT_DELAY -> ARMED");
-                return armed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, selectedZones);
+                return armed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, zonesBeingArmed);
             })
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.EXIT_DELAY))
+            .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.EXIT_DELAY))
             .build();
     }
 
-    /**
-     * Behavior handling commands when the control unit is in ARMED state.
-     */
+    // ARMED: only sensors in active zones can start the entry-delay countdown.
     private static Behavior<Command> armed(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
-        String configuredPin,
+        String correctPin,
         Duration exitDelayDuration,
         Duration entryDelayDuration,
         ActorRef<SirenActor.Command> siren,
-        Set<Zone> activeZones
+        Set<Zone> armedZones
     ) {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
-                if (configuredPin.equals(message.pin())) {
+                if (correctPin.equals(message.pin())) {
                     context.getLog().info("Transition ARMED -> DISARMED");
-                    timers.cancel(ENTRY_DELAY_TIMER_KEY);
+                    timers.cancel(ENTRY_DELAY_TIMER);
                     siren.tell(new SirenActor.Deactivate());
-                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
+                    return disarmed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, ALL_ZONES);
                 }
 
-                return ignorePinSubmission(context, AlarmState.ARMED);
+                return stayInSameStateAfterWrongPin(context, AlarmState.ARMED);
             })
             .onMessage(SensorActivated.class, message -> {
-                SensorInfo sensorInfo = message.sensorInfo();
-                if (activeZones.contains(sensorInfo.zone())) {
+                SensorInfo triggeredSensor = message.sensorInfo();
+
+                if (armedZones.contains(triggeredSensor.zone())) {
                     context.getLog().info(
                         "Transition ARMED -> ENTRY_DELAY due to sensor activation: sensor={}, type={}, zone={}",
-                        sensorInfo.id(),
-                        sensorInfo.type(),
-                        sensorInfo.zone()
+                        triggeredSensor.id(),
+                        triggeredSensor.type(),
+                        triggeredSensor.zone()
                     );
-                    timers.startSingleTimer(ENTRY_DELAY_TIMER_KEY, new EntryDelayTimeout(), entryDelayDuration);
-                    return entryDelay(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, activeZones);
+                    timers.startSingleTimer(ENTRY_DELAY_TIMER, new EntryDelayTimeout(), entryDelayDuration);
+                    return entryDelay(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, armedZones);
                 }
 
-                return ignoreInactiveZone(context, sensorInfo);
+                return ignoreSensorBecauseZoneIsNotArmed(context, triggeredSensor);
             })
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.ARMED))
+            .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.ARMED))
             .build();
     }
 
-    /**
-     * Behavior handling commands when the control unit is in ENTRY_DELAY state.
-     */
+    // ENTRY_DELAY: the user has a short window to disarm before the alarm starts.
     private static Behavior<Command> entryDelay(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
-        String configuredPin,
+        String correctPin,
         Duration exitDelayDuration,
         Duration entryDelayDuration,
         ActorRef<SirenActor.Command> siren,
-        Set<Zone> activeZones
+        Set<Zone> armedZones
     ) {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
-                if (configuredPin.equals(message.pin())) {
-                    timers.cancel(ENTRY_DELAY_TIMER_KEY);
+                if (correctPin.equals(message.pin())) {
+                    timers.cancel(ENTRY_DELAY_TIMER);
                     context.getLog().info("Transition ENTRY_DELAY -> DISARMED");
                     siren.tell(new SirenActor.Deactivate());
-                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
+                    return disarmed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, ALL_ZONES);
                 }
 
-                return ignorePinSubmission(context, AlarmState.ENTRY_DELAY);
+                return stayInSameStateAfterWrongPin(context, AlarmState.ENTRY_DELAY);
             })
-            .onMessage(SensorActivated.class, message -> {
-                return ignoreSensorActivation(context, AlarmState.ENTRY_DELAY, message.sensorInfo());
-            })
+            .onMessage(SensorActivated.class, message ->
+                ignoreSensorBecauseStateIsInactive(context, AlarmState.ENTRY_DELAY, message.sensorInfo()))
             .onMessage(EntryDelayTimeout.class, message -> {
-                timers.cancel(ENTRY_DELAY_TIMER_KEY);
+                timers.cancel(ENTRY_DELAY_TIMER);
                 context.getLog().info("Transition ENTRY_DELAY -> ALARM");
                 siren.tell(new SirenActor.Activate());
-                return alarm(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, activeZones);
+                return alarm(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, armedZones);
             })
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.ENTRY_DELAY))
+            .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.ENTRY_DELAY))
             .build();
     }
 
-    /**
-     * Behavior handling commands when the control unit is in ALARM state.
-     */
+    // ALARM: the siren stays active until the correct PIN is submitted.
     private static Behavior<Command> alarm(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
-        String configuredPin,
+        String correctPin,
         Duration exitDelayDuration,
         Duration entryDelayDuration,
         ActorRef<SirenActor.Command> siren,
-        Set<Zone> activeZones
+        Set<Zone> armedZones
     ) {
         return Behaviors.receive(Command.class)
             .onMessage(PinSubmitted.class, message -> {
-                if (configuredPin.equals(message.pin())) {
+                if (correctPin.equals(message.pin())) {
                     context.getLog().info("Transition ALARM -> DISARMED");
                     siren.tell(new SirenActor.Deactivate());
-                    return disarmed(context, timers, configuredPin, exitDelayDuration, entryDelayDuration, siren, FULL_ARMS);
+                    return disarmed(context, timers, correctPin, exitDelayDuration, entryDelayDuration, siren, ALL_ZONES);
                 }
 
-                return ignorePinSubmission(context, AlarmState.ALARM);
+                return stayInSameStateAfterWrongPin(context, AlarmState.ALARM);
             })
-            .onMessage(SensorActivated.class, message -> {
-                return ignoreSensorActivation(context, AlarmState.ALARM, message.sensorInfo());
-            })
+            .onMessage(SensorActivated.class, message ->
+                ignoreSensorBecauseStateIsInactive(context, AlarmState.ALARM, message.sensorInfo()))
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> replyState(message.replyTo(), AlarmState.ALARM))
+            .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.ALARM))
             .build();
     }
 
-    /**
-     * Replies to a state query without changing the current behavior.
-     */
-    private static Behavior<Command> replyState(ActorRef<StateSnapshot> replyTo, AlarmState state) {
+    // Query messages are test/demo helpers and never alter the actor state.
+    private static Behavior<Command> replyWithState(ActorRef<StateSnapshot> replyTo, AlarmState state) {
         replyTo.tell(new StateSnapshot(state));
         return Behaviors.same();
     }
 
-    /**
-     * Logs and ignores a PIN submission in the given state.
-     */
-    private static Behavior<Command> ignorePinSubmission(ActorContext<Command> context, AlarmState state) {
+    // Invalid PINs are intentionally non-disruptive in every state.
+    private static Behavior<Command> stayInSameStateAfterWrongPin(ActorContext<Command> context, AlarmState state) {
         context.getLog().info("Ignoring PIN submission while {} is active", state);
         return Behaviors.same();
     }
 
-    /**
-     * Logs and ignores a sensor activation in the given state.
-     */
-    private static Behavior<Command> ignoreSensorActivation(
+    // Sensor events outside ARMED mode are logged but do not change the state machine.
+    private static Behavior<Command> ignoreSensorBecauseStateIsInactive(
         ActorContext<Command> context,
         AlarmState state,
-        SensorInfo sensorInfo
+        SensorInfo sensor
     ) {
         context.getLog().info(
             "Ignoring sensor activation while {} is active: sensor={}, type={}, zone={}",
             state,
-            sensorInfo.id(),
-            sensorInfo.type(),
-            sensorInfo.zone()
+            sensor.id(),
+            sensor.type(),
+            sensor.zone()
         );
         return Behaviors.same();
     }
 
-    /**
-     * Logs and ignores a sensor activation in armed mode when the zone is inactive.
-     */
-    private static Behavior<Command> ignoreInactiveZone(ActorContext<Command> context, SensorInfo sensorInfo) {
+    // Partial arming keeps sensors from inactive zones from starting the entry delay.
+    private static Behavior<Command> ignoreSensorBecauseZoneIsNotArmed(ActorContext<Command> context, SensorInfo sensor) {
         context.getLog().info(
             "Ignoring sensor activation while ARMED because zone {} is inactive: sensor={}, type={}",
-            sensorInfo.zone(),
-            sensorInfo.id(),
-            sensorInfo.type()
+            sensor.zone(),
+            sensor.id(),
+            sensor.type()
         );
         return Behaviors.same();
     }
 
-    /**
-     * Validates that the configured PIN is non-null and non-blank.
-     *
-     * @param configuredPin the PIN to validate
-     * @throws NullPointerException if {@code configuredPin} is null
-     * @throws IllegalArgumentException if {@code configuredPin} is blank
-     */
-    private static void validateConfiguredPin(String configuredPin) {
-        Objects.requireNonNull(configuredPin, "configuredPin");
-        if (configuredPin.isBlank()) {
-            throw new IllegalArgumentException("configuredPin cannot be blank");
+    private static void validateCorrectPin(String correctPin) {
+        Objects.requireNonNull(correctPin, "correctPin");
+        if (correctPin.isBlank()) {
+            throw new IllegalArgumentException("correctPin cannot be blank");
         }
     }
 }
