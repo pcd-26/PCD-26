@@ -1,6 +1,5 @@
 package pcd.shas;
 
-import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.Behavior;
@@ -13,21 +12,11 @@ import java.util.Objects;
 public final class Main {
 
     private static final String SYSTEM_NAME = "shas";
-    private static final Config FAST_DEMO_CONFIG = ConfigFactory.parseString(
-        """
-        shas {
-          correctPin = "1234"
-          exitDelay = 300 milliseconds
-          entryDelay = 300 milliseconds
-        }
-        """
-    );
 
     private Main() {}
 
     public static void main(String[] args) {
-        Config config = FAST_DEMO_CONFIG.withFallback(ConfigFactory.load()).resolve();
-        AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(config);
+        AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(ConfigFactory.load());
         ActorSystem<Void> system = ActorSystem.create(createRootBehavior(alarmConfiguration), SYSTEM_NAME);
         system.getWhenTerminated().toCompletableFuture().join();
     }

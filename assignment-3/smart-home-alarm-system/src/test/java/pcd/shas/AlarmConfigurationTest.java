@@ -15,8 +15,8 @@ class AlarmConfigurationTest {
         AlarmConfiguration configuration = AlarmConfiguration.from(ConfigFactory.load());
 
         assertEquals("1234", configuration.correctPin());
-        assertEquals(Duration.ofSeconds(5), configuration.exitDelay());
-        assertEquals(Duration.ofSeconds(5), configuration.entryDelay());
+        assertEquals(Duration.ofMillis(300), configuration.exitDelay());
+        assertEquals(Duration.ofMillis(300), configuration.entryDelay());
     }
 
     @Test
