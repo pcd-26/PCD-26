@@ -18,7 +18,8 @@ The most important design choice is in the \textbf{ControlUnitActor}.
 The alarm state is represented by the currently active \textbf{Behavior}.
 For example, after a successful arming request the actor returns the behavior for \textit{EXIT\_DELAY}; after the exit
 timeout, it returns the behavior for \textit{ARMED}.
-This avoids a central switch over a mutable state variable and keeps each state close to the messages it can handle.
+This avoids a central switch over a mutable state variable: each state behavior lists the messages accepted in that
+state.
 
 \medskip
 

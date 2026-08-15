@@ -10,7 +10,7 @@ All three versions are fully playable. The simulation advances correctly,
 accepts keyboard and mouse shots, controls the bot, updates scores, detects the
 end of the game, and supports restarting without relaunching the application.
 
-The design preserves a clear ownership rule. The controller owns mutable game
+The design preserves a single-writer ownership rule. The controller owns mutable game
 state; workers process disjoint ranges or private accumulators. Phase barriers
 separate parallel computation from deterministic accumulation and snapshot
 publication. This keeps input and rendering responsive without exposing the
@@ -25,6 +25,6 @@ memory traffic, and oversubscription outweigh additional parallelism.
 The evidence is complementary. JUnit validates game and physics behaviour; JPF
 explores the bounded synchronization protocols; benchmarks quantify performance
 on the complete implementation. The main limitation is that model checking
-does not cover numerical physics or arbitrary workloads. Nevertheless, the
+does not cover numerical physics or arbitrary workloads. The
 results support the central design choice: parallelize independent physics work
 while keeping global state transitions explicit and deterministic.

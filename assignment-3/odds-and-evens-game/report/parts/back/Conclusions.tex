@@ -1,7 +1,6 @@
 \section{Conclusions}
 
-The final architecture satisfies the assignment constraints with a minimal \textbf{message-passing} design.
+The final architecture satisfies the assignment constraints with a \textbf{message-passing} design.
 The round coordinator acts as the synchronization barrier, so the implementation remains deterministic at the
 \textbf{round} level while still exploiting concurrency inside each round.
-The result is a compact tournament engine that is faithful to the \textbf{no-shared-memory} requirement and stable enough for
-repeatable validation.
+The tournament engine satisfies the \textbf{no-shared-memory} requirement and supports repeatable validation.

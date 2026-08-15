@@ -2,8 +2,8 @@
 
 The system can be used through two entry points.
 \texttt{Main} starts an interactive CLI using the normal configuration from \texttt{application.conf}.
-\texttt{DemoMain} starts the same actor graph with shorter delays and sends a fixed sequence of messages, useful for a
-quick smoke test of the state machine.
+\texttt{DemoMain} starts the same actor graph with shorter delays and sends a fixed sequence of messages that exercise
+the main state-machine transitions.
 
 The normal full-arming flow is:
 \begin{enumerate}
@@ -44,4 +44,4 @@ The CLI exposes one simulated sensor for each configured zone: front door for \t
 The root actor does not wait synchronously for replies.
 When the CLI asks for status, the root actor sends query messages to the control unit and the siren.
 Their replies come back later as normal messages through Pekko message adapters.
-This preserves the asynchronous message-passing style also for read-only operations.
+This keeps read-only operations inside the same asynchronous message-passing model.

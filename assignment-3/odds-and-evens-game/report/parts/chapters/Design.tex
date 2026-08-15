@@ -12,12 +12,11 @@ The implementation is split into three layers:
     \item \textbf{Round layer}: runs \textbf{match workers} concurrently and rebuilds the next player list.
 \end{itemize}
 
-The data model keeps the tournament outcome explicit.
+The data model stores the tournament outcome explicitly.
 Each \textbf{match} stores its round number, match number, the two participants, the winner, and the tossed side.
 Each \textbf{round} stores the ordered list of match results together with the promoted winners.
 The \textbf{championship result} stores the final champion and the full sequence of rounds.
-This keeps the rendering code simple, makes the tests easy to write, and avoids recomputing tournament history from the
-final champion alone.
+Rendering and tests read the stored tournament history instead of recomputing it from the final champion alone.
 
 The coordinator preserves the result order using \texttt{matchIndex}, so completion order and presentation order are
 decoupled. This is important because \textbf{goroutines} can finish in any order, but the bracket must remain

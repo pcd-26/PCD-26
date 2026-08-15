@@ -11,8 +11,8 @@ The championship progresses sequentially from round to round, while the matches 
     \item The winners returned by the round become the input of the next round.
 \end{enumerate}
 
-The worker logic is intentionally small.
-It calls the toss function exactly once, maps \texttt{Heads} to the first player and \texttt{Tails} to the second player, and returns a
+The worker logic calls the toss function exactly once, maps \texttt{Heads} to the first player and \texttt{Tails} to the
+second player, and returns a
 \texttt{MatchResult} with the round number, match number, participants, winner, and tossed side.
 
 The round coordinator is the \textbf{synchronization point}.

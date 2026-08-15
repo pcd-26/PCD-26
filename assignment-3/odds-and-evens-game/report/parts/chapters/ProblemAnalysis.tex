@@ -12,7 +12,7 @@ round coordinator preserves the \textbf{bracket structure} and enforces the \tex
 In this report, a \emph{\textbf{match}} is a single game between two players that produces one winner.
 A \emph{\textbf{round}} is a set of independent matches played in parallel, after which the winners are promoted to the next round.
 
-For a tournament of $N$ players, the structure is simple:
+For a tournament of $N$ players, the structure is fixed:
 \begin{itemize}
     \item each \textbf{round} has half as many players as the previous one;
     \item each \textbf{match} produces exactly one \textbf{winner};
@@ -20,5 +20,5 @@ For a tournament of $N$ players, the structure is simple:
     \item the tournament ends when only one \textbf{player} remains.
 \end{itemize}
 
-The implementation uses these rules directly, so the code stays close to the \textbf{domain model} and the concurrency
-structure remains easy to reason about.
+The implementation follows these rules directly: the tournament model and the concurrency structure use the same
+round-and-match decomposition.
