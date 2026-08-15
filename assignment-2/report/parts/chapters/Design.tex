@@ -7,7 +7,7 @@ The design keeps the three implementations \textbf{intentionally separate}.
 This follows the assignment requirement: each version should highlight its own
 programming discipline instead of sharing a common traversal engine.
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{Virtual threads}: imperative recursion and one task per
   directory;
   \item \textbf{Reactive}: an \texttt{Observable<File>} stream and an
@@ -25,7 +25,7 @@ traversal strategy change underneath.
 The asynchronous operation \textbf{\texttt{getFSReport}} is exposed by the
 three implementation classes:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \texttt{EventLoopFSStat.getFSReport(...)} starts a Vert.x scan and
   returns an \texttt{FSReportJob} cancellation handle;
   \item \texttt{ReactiveFSStat.getFSReport(...)} returns an
@@ -64,7 +64,7 @@ large pool of platform threads.
 
 The strategy is based on:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{scheduling}: recursive task submission on a virtual-thread
   executor;
   \item \textbf{completion}: an \texttt{AtomicInteger} task counter and a
@@ -88,7 +88,7 @@ turns that stream into report snapshots.
 
 The strategy is based on:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{scheduling}: the blocking walk is subscribed on
   \texttt{Schedulers.io()};
   \item \textbf{state}: an immutable \texttt{ReactiveScanState} accumulator;
@@ -113,7 +113,7 @@ file-property reads, timers, and blocking validations delegated with
 
 The strategy is based on:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{scheduling}: asynchronous \texttt{readDir()} and
   \texttt{props()} calls;
   \item \textbf{state}: shared counters, a cancellation flag, and a visited
@@ -133,7 +133,7 @@ blocked by filesystem work.
 The three implementations expose the same user-visible behaviour, but
 cancellation is implemented differently:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{Virtual threads}: set a cancellation flag, interrupt the
   reporter, and
   stop the virtual-thread executor;

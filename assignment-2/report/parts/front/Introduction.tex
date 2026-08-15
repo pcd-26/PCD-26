@@ -4,7 +4,7 @@ Assignment 2 requires an \textbf{asynchronous filesystem statistics library},
 called \textbf{\texttt{FSStatLib}}, exposing a \textbf{\texttt{getFSReport}}
 operation. The operation receives:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{\texttt{D}}: the root directory to scan;
   \item \textbf{\texttt{MaxFS}}: the maximum file size used to build the
   histogram;
@@ -14,7 +14,7 @@ operation. The operation receives:
 Starting from \texttt{D}, the library recursively inspects the directory tree
 and produces a report \texttt{R} containing:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{total file count}: the number of files found in the directory
   tree;
   \item \textbf{file-size distribution}: \texttt{NB + 1} ranges, where
@@ -26,7 +26,7 @@ The deliverable contains \textbf{three implementations} of
 \texttt{getFSReport}, one for each concurrency model required by the
 assignment:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{Event-loop}: Vert.x callbacks and asynchronous filesystem
   operations, with blocking checks kept outside the event loop;
   \item \textbf{Reactive}: an RxJava \texttt{Observable<File>} stream,

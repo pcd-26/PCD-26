@@ -7,7 +7,7 @@ that the three paradigms preserve the same \textbf{report semantics}.
 
 The test suite is organized as follows:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{\texttt{FSStatTest}}: unit coverage for the shared model,
   parsing, and
   the three engines on a small fixture;
@@ -21,7 +21,7 @@ The test suite is organized as follows:
 
 The suite checks the main functional cases required by the assignment:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{empty directories}: all counters must be zero;
   \item \textbf{flat directories}: known file sizes must be assigned to the
   expected bands;
@@ -41,7 +41,7 @@ The main correctness strategy is \textbf{comparative}. For deterministic
 fixtures, the Virtual Threads result is used as a reference report and is
 compared with the Reactive and Event-Loop results. The comparison checks:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item the \textbf{total file count};
   \item the length of the \textbf{histogram};
   \item every individual \textbf{band counter}.
@@ -60,7 +60,7 @@ from the filesystem traversal.
 
 The robustness tests cover filesystem situations that may occur in practice:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item \textbf{invalid roots}: non-existing paths must report an error;
   \item \textbf{wrong root type}: a regular file cannot be used as the scan
   root;
@@ -79,7 +79,7 @@ The robustness tests cover filesystem situations that may occur in practice:
 The interactive extension is validated through cancellation and interface
 tests:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item the Event-Loop cancellation test cancels immediately after the
   \texttt{FSReportJob} is returned and checks that no terminal callback is
   emitted afterwards;
@@ -96,7 +96,7 @@ assumptions. This makes it more stable on local machines and CI runners.
 
 Some checks depend on the host environment:
 
-\begin{itemize}[leftmargin=*]
+\begin{itemize}
   \item permission changes may not be applied by the local filesystem;
   \item symbolic links may be unavailable or restricted;
   \item special files such as \texttt{/dev/null} are Unix-specific.
