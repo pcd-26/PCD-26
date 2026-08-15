@@ -25,17 +25,14 @@ class MainTest {
     }
 
     @Test
-    void demoRootBehaviorCompletesTheDemoScenario() {
+    void demoMainScriptCompletes() {
         var configuration = new AlarmConfiguration("1234", Duration.ofMillis(300), Duration.ofMillis(300));
-        ActorSystem<Void> system = ActorSystem.create(DemoMain.createRootBehavior(configuration), "main-test");
+        ActorSystem<RootActor.Command> system = ActorSystem.create(RootActor.create(configuration), "main-test");
 
         try {
-            assertTimeoutPreemptively(
-                Duration.ofSeconds(10),
-                () -> system.getWhenTerminated().toCompletableFuture().join()
-            );
+            assertTimeoutPreemptively(Duration.ofSeconds(10), () -> DemoMain.runDemo(system, configuration));
         } finally {
-            system.terminate();
+            system.tell(new RootActor.Stop());
             system.getWhenTerminated().toCompletableFuture().join();
         }
     }

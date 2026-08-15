@@ -1,4 +1,4 @@
-package pcd.shas.cli;
+package pcd.shas;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -6,7 +6,6 @@ import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
-import pcd.shas.AlarmConfiguration;
 import pcd.shas.common.SensorType;
 import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
@@ -17,7 +16,7 @@ import pcd.shas.siren.SirenActor;
 import java.util.Objects;
 import java.util.Set;
 
-public final class CliRootActor extends AbstractBehavior<CliRootActor.Command> {
+public final class RootActor extends AbstractBehavior<RootActor.Command> {
 
     public interface Command {}
 
@@ -47,7 +46,7 @@ public final class CliRootActor extends AbstractBehavior<CliRootActor.Command> {
     private final ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter;
     private final ActorRef<SirenActor.StateSnapshot> sirenStateAdapter;
 
-    // Creates a small actor graph that can be driven by console commands.
+    // Creates the alarm actor graph and exposes a small command protocol.
     public static Behavior<Command> create(AlarmConfiguration alarmConfiguration) {
         Objects.requireNonNull(alarmConfiguration, "alarmConfiguration");
 
@@ -63,7 +62,7 @@ public final class CliRootActor extends AbstractBehavior<CliRootActor.Command> {
                 "control-unit"
             );
 
-            return new CliRootActor(
+            return new RootActor(
                 context,
                 context.spawn(KeypadActor.create(controlUnit), "keypad"),
                 context.spawn(SensorActor.create("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnit), "front-door-sensor"),
@@ -76,7 +75,7 @@ public final class CliRootActor extends AbstractBehavior<CliRootActor.Command> {
         });
     }
 
-    private CliRootActor(
+    private RootActor(
         ActorContext<Command> context,
         ActorRef<KeypadActor.Command> keypad,
         ActorRef<SensorActor.Command> frontDoorSensor,

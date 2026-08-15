@@ -2,7 +2,6 @@ package pcd.shas;
 
 import com.typesafe.config.ConfigFactory;
 import org.apache.pekko.actor.typed.ActorSystem;
-import pcd.shas.cli.CliRootActor;
 import pcd.shas.common.Zone;
 
 import java.util.Locale;
@@ -17,7 +16,7 @@ public final class Main {
 
     public static void main(String[] args) {
         AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(ConfigFactory.load());
-        ActorSystem<CliRootActor.Command> system = ActorSystem.create(CliRootActor.create(alarmConfiguration), SYSTEM_NAME);
+        ActorSystem<RootActor.Command> system = ActorSystem.create(RootActor.create(alarmConfiguration), SYSTEM_NAME);
 
         printHelp();
         try (Scanner scanner = new Scanner(System.in)) {
@@ -27,12 +26,12 @@ public final class Main {
                 }
             }
         } finally {
-            system.tell(new CliRootActor.Stop());
+            system.tell(new RootActor.Stop());
             system.getWhenTerminated().toCompletableFuture().join();
         }
     }
 
-    private static boolean handleCommand(String input, ActorSystem<CliRootActor.Command> system) {
+    private static boolean handleCommand(String input, ActorSystem<RootActor.Command> system) {
         String command = input.trim();
         if (command.isEmpty()) {
             return true;
@@ -48,12 +47,12 @@ public final class Main {
         }
 
         if (command.equalsIgnoreCase("status")) {
-            system.tell(new CliRootActor.PrintStatus());
+            system.tell(new RootActor.PrintStatus());
             return true;
         }
 
         if (command.startsWith("arm full ")) {
-            system.tell(new CliRootActor.RequestFullArming(command.substring("arm full ".length()).trim()));
+            system.tell(new RootActor.RequestFullArming(command.substring("arm full ".length()).trim()));
             return true;
         }
 
@@ -63,7 +62,7 @@ public final class Main {
                 if (parts.length < 2) {
                     throw new IllegalArgumentException("PIN and at least one zone are required");
                 }
-                system.tell(new CliRootActor.RequestPartialArming(parts[0], parseZones(parts[1])));
+                system.tell(new RootActor.RequestPartialArming(parts[0], parseZones(parts[1])));
             } catch (IllegalArgumentException exception) {
                 System.out.println("Invalid arming request. Use: arm partial <PIN> PERIMETER GROUND_FLOOR");
             }
@@ -71,17 +70,17 @@ public final class Main {
         }
 
         if (command.startsWith("pin ")) {
-            system.tell(new CliRootActor.SubmitPin(command.substring("pin ".length()).trim()));
+            system.tell(new RootActor.SubmitPin(command.substring("pin ".length()).trim()));
             return true;
         }
 
         if (command.equalsIgnoreCase("front door")) {
-            system.tell(new CliRootActor.ActivateFrontDoor());
+            system.tell(new RootActor.ActivateFrontDoor());
             return true;
         }
 
         if (command.equalsIgnoreCase("living room")) {
-            system.tell(new CliRootActor.ActivateLivingRoom());
+            system.tell(new RootActor.ActivateLivingRoom());
             return true;
         }
 
