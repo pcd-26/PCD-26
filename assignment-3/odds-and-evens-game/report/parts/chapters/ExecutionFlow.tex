@@ -1,7 +1,7 @@
 \section{Execution Flow}
 
 The execution flow is short and deterministic:
-\begin{enumerate}[leftmargin=*]
+\begin{enumerate}
     \item the CLI parses the `-players` flag and rejects non-positive or non power-of-two values;
     \item `PlayChampionship` validates the player slice and copies it to avoid aliasing;
     \item the championship coordinator starts round 1;
