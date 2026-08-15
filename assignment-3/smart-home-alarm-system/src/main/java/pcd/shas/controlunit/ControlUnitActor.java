@@ -181,7 +181,7 @@ public final class ControlUnitActor {
             })
             // Handles sensor events while the system is inactive.
             .onMessage(SensorActivated.class, message ->
-                ignoreSensorBecauseStateIsInactive(alarm, AlarmState.DISARMED, message.sensorInfo()))
+                ignoreSensorWithoutStateChange(alarm, AlarmState.DISARMED, message.sensorInfo()))
             // Ignores stale exit-delay timeout messages.
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             // Ignores stale entry-delay timeout messages.
@@ -208,7 +208,7 @@ public final class ControlUnitActor {
             })
             // Handles sensor events while occupants are still leaving.
             .onMessage(SensorActivated.class, message ->
-                ignoreSensorBecauseStateIsInactive(alarm, AlarmState.EXIT_DELAY, message.sensorInfo()))
+                ignoreSensorWithoutStateChange(alarm, AlarmState.EXIT_DELAY, message.sensorInfo()))
             // Handles the automatic end of the exit delay.
             .onMessage(ExitDelayTimeout.class, message -> {
                 // Once the exit timer expires, sensors in active zones become relevant.
@@ -283,7 +283,7 @@ public final class ControlUnitActor {
             })
             // Handles extra sensor events while the entry countdown is already running.
             .onMessage(SensorActivated.class, message ->
-                ignoreSensorBecauseStateIsInactive(alarm, AlarmState.ENTRY_DELAY, message.sensorInfo()))
+                ignoreSensorWithoutStateChange(alarm, AlarmState.ENTRY_DELAY, message.sensorInfo()))
             // Handles the automatic end of the entry delay.
             .onMessage(EntryDelayTimeout.class, message -> {
                 // No valid PIN arrived in time: enter the emergency state.
@@ -316,7 +316,7 @@ public final class ControlUnitActor {
             // Handles extra sensor events after the alarm has already started.
             .onMessage(SensorActivated.class, message ->
                 // Alarm is already active: extra sensors do not change the state.
-                ignoreSensorBecauseStateIsInactive(alarm, AlarmState.ALARM, message.sensorInfo()))
+                ignoreSensorWithoutStateChange(alarm, AlarmState.ALARM, message.sensorInfo()))
             // Ignores stale exit-delay timeout messages.
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             // Ignores stale entry-delay timeout messages.
@@ -338,7 +338,7 @@ public final class ControlUnitActor {
         return Behaviors.same();
     }
 
-    private static Behavior<Command> ignoreSensorBecauseStateIsInactive(
+    private static Behavior<Command> ignoreSensorWithoutStateChange(
         AlarmRuntime alarm,
         AlarmState state,
         SensorInfo sensor
