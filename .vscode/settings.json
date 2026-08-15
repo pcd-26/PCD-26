@@ -6,7 +6,9 @@
         "assignment-3"
     ],
     "latex-workshop.latex.autoBuild.run": "onSave",
-    "latex-workshop.latex.autoClean.run": "onBuilt",
+    "latex-workshop.latex.autoClean.run": "never",
+    "latex-workshop.latex.recipe.default": "make report",
+    "latex-workshop.view.pdf.viewer": "tab",
     "latex-workshop.latex.clean.fileTypes": [
         "*.aux",
         "*.log",
@@ -24,11 +26,27 @@
     "latex-workshop.latex.tools": [
         {
             "name": "make-report",
-            "command": "mingw32-make",
+            "command": "python",
             "args": [
-                "-C",
+                "-c",
+                "from pathlib import Path; import runpy, sys; d = Path(sys.argv[1]).resolve(); repo = next((p for p in (d, *d.parents) if (p / 'scripts' / 'build_latex_report.py').is_file()), None); sys.exit(0) if repo is None else runpy.run_path(str(repo / 'scripts' / 'build_latex_report.py'), run_name='__main__')",
                 "%DIR%"
             ]
         }
-    ]
+    ],
+    "java.import.exclusions": [
+        "**/verification/jpf/.jpf-core"
+    ],
+    "java.project.resourceFilters": [
+        "node_modules",
+        ".git",
+        ".jpf-core"
+    ],
+    "files.exclude": {
+        "**/verification/jpf/.jpf-core": true
+    },
+    "files.watcherExclude": {
+        "**/target/**": true,
+        "**/verification/jpf/.jpf-core/**": true
+    }
 }

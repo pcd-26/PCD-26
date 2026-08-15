@@ -1,9 +1,2 @@
-/**
- * Runtime support shared by the concurrent launchers.
- *
- * <p>The support classes in this package implement the common command queue,
- * bot agent, command submission, command receipt, snapshot publication, and
- * immutable runner snapshot mechanics reused by the threaded and task-based
- * variants.
- */
+/** Runtime support shared by the concurrent launchers. */
 package pcd.poool.runtime;

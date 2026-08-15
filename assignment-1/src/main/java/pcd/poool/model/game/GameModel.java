@@ -5,14 +5,7 @@ import pcd.poool.model.physics.common.Board;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.PhysicsStepper;
 
-/**
- * Shared gameplay model used by both sequential and threaded runtimes.
- *
- * <p>The class owns the game rules above the passive physics engine: score
- * accounting, cue-ball availability, end-game conditions, and timing metrics.
- * Human and bot readiness are independent, while callers still serialize
- * mutation through the chosen runtime strategy.</p>
- */
+// Shared gameplay model and match state.
 public class GameModel {
 
     private static final double MIN_SHOT_SPEED = 0.05;
@@ -20,17 +13,13 @@ public class GameModel {
     private static final V2d FALLBACK_BOT_SHOT = new V2d(0.35, -1.0).getNormalized().mul(BOT_SHOT_SPEED);
     private static final long DEFAULT_COUNTDOWN_MILLIS = 3_000;
 
-    private final long gameStartSystemTime = System.currentTimeMillis();
-    private final StartupCountdown startupCountdown;
+    private final long startTimeMillis = System.currentTimeMillis();
+    private final StartupCountdown countdown;
 
-    /**
-     * Checks if the 3-second game start countdown is active.
-     *
-     * @return true if countdown is active, false otherwise
-     */
+    // Checks whether the startup countdown still blocks shots.
     public synchronized boolean isCountdownActive() {
-        return startupCountdown.enabled()
-                && (System.currentTimeMillis() - gameStartSystemTime < startupCountdown.durationMillis());
+        return countdown.enabled()
+                && (System.currentTimeMillis() - startTimeMillis < countdown.durationMillis());
     }
 
     private final Board board;
@@ -39,131 +28,70 @@ public class GameModel {
     private GameOverReason gameOverReason;
     private int humanScore;
     private int botScore;
-    private long elapsedMillis;
-    private long simulatedSteps;
-    private long totalStepNanos;
+    private long simulatedElapsedMillis;
+    private long stepCount;
+    private long accumulatedStepNanos;
 
-    /**
-     * Creates a new game from the given board configuration.
-     *
-     * @param conf initial board layout, cue balls, small balls, bounds, and holes
-     */
+    // Creates a new game with the default physics engine.
     public GameModel(BoardConf conf) {
         this(conf, null);
     }
 
-    /**
-     * Creates a new game from the given board configuration and physics
-     * stepping strategy.
-     *
-     * @param conf initial board layout, cue balls, small balls, bounds, and holes
-     * @param physicsStepper physics strategy, or {@code null} for the default
-     *        sequential engine
-     */
+    // Creates a new game with a custom physics stepper and the default countdown policy.
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper) {
         this(conf, physicsStepper, StartupCountdown.enabledDefault());
     }
 
-    /**
-     * Creates a new game from the given board configuration, physics strategy,
-     * and startup countdown configuration.
-     *
-     * @param conf initial board layout, cue balls, small balls, bounds, and holes
-     * @param physicsStepper physics strategy, or {@code null} for the default
-     *        sequential engine
-     * @param startupCountdown startup countdown configuration
-     */
+    // Creates a new game with explicit physics and countdown settings.
     public GameModel(BoardConf conf, PhysicsStepper physicsStepper, StartupCountdown startupCountdown) {
         board = physicsStepper == null ? new Board() : new Board(physicsStepper);
         board.init(conf);
         if (startupCountdown == null) {
             throw new IllegalArgumentException("startupCountdown must not be null");
         }
-        this.startupCountdown = startupCountdown;
+        this.countdown = startupCountdown;
         status = GameStatus.RUNNING_STILL;
     }
 
-    /**
-     * Attempts to kick the human cue ball.
-     *
-     * @param velocity impulse-like velocity assigned to the human cue ball
-     * @return {@code true} when the shot was accepted
-     */
+    // Attempts to shoot the human cue ball.
     public synchronized boolean shootHuman(V2d velocity) {
         return shoot(Player.HUMAN, velocity);
     }
 
-    /**
-     * Attempts to kick the bot cue ball using the deterministic bot policy.
-     *
-     * @return {@code true} when the bot cue ball was available and the shot was accepted
-     */
+    // Attempts to shoot the bot cue ball using the deterministic bot policy.
     public synchronized boolean shootBot() {
-        return shoot(Player.BOT, chooseBotShot());
+        return shoot(Player.BOT, computeBotShot());
     }
 
-    /**
-     * Computes the bot shot without mutating the game.
-     *
-     * <p>The runner uses this for the red preview vector before the bot actually
-     * kicks. A zero vector means the bot cannot currently shoot.
-     *
-     * @return bot shot velocity preview
-     */
+    // Computes the bot shot without mutating the game state.
     public synchronized V2d previewBotShot() {
         if (!canBotShoot()) {
             return new V2d(0, 0);
         }
-        return chooseBotShot();
+        return computeBotShot();
     }
 
-    /**
-     * Checks human cue-ball readiness.
-     *
-     * @return whether the human cue ball is present, stopped, and the game is not finished
-     */
+    // Checks whether the human cue ball can be shot now.
     public synchronized boolean canHumanShoot() {
         return canShoot(Player.HUMAN);
     }
 
-    /**
-     * Checks bot cue-ball readiness.
-     *
-     * @return whether the bot cue ball is present, stopped, and the game is not finished
-     */
+    // Checks whether the bot cue ball can be shot now.
     public synchronized boolean canBotShoot() {
         return canShoot(Player.BOT);
     }
 
-    /**
-     * Attempts to kick one player's cue ball.
-     *
-     * <p>This is not turn-based: each player is accepted independently when
-     * their own cue ball is stopped. Very small impulses are rejected so clicks
-     * near the cue ball do not create accidental shots.
-     *
-     * @param player cue-ball owner
-     * @param velocity impulse-like velocity to assign
-     * @return {@code true} when the shot was accepted
-     */
+    // Attempts to shoot the selected player's cue ball.
     public synchronized boolean shoot(Player player, V2d velocity) {
         if (!canShoot(player) || velocity.abs() < MIN_SHOT_SPEED) {
             return false;
         }
         board.kick(player, velocity);
-        updateRunningStatus();
+        refreshStatusFromBoard();
         return true;
     }
 
-    /**
-     * Advances the game and physics state by the elapsed time.
-     *
-     * <p>The method also consumes scoring events collected by the board,
-     * detects cue-ball losses, detects completion after all small balls are
-     * pocketed, and records timing metrics.
-     *
-     * @param dtMillis elapsed time in milliseconds
-     */
+    // Advances the logical game state and the underlying board.
     public synchronized void step(long dtMillis) {
         if (dtMillis < 0) {
             throw new IllegalArgumentException("dtMillis must be >= 0");
@@ -174,45 +102,39 @@ public class GameModel {
 
         long start = System.nanoTime();
         board.updateState(dtMillis);
-        totalStepNanos += System.nanoTime() - start;
-        elapsedMillis += dtMillis;
-        simulatedSteps++;
+        accumulatedStepNanos += System.nanoTime() - start;
 
+        // Track simulated time separately from wall-clock time.
+        simulatedElapsedMillis += dtMillis;
+        stepCount++;
+
+        // Consume score events after the physics step has settled.
         humanScore += board.consumePendingScoredSmallBalls(Player.HUMAN);
         botScore += board.consumePendingScoredSmallBalls(Player.BOT);
 
+        // Cue-ball pocketing ends the match immediately.
         if (board.isPlayerBallPocketed()) {
-            finish(Player.BOT, GameOverReason.HUMAN_CUE_BALL_POCKETED);
+            finishGame(Player.BOT, GameOverReason.HUMAN_CUE_BALL_POCKETED);
             return;
         }
         if (board.isBotBallPocketed()) {
-            finish(Player.HUMAN, GameOverReason.BOT_CUE_BALL_POCKETED);
+            finishGame(Player.HUMAN, GameOverReason.BOT_CUE_BALL_POCKETED);
             return;
         }
+        // If all small balls are gone, the winner is decided by score.
         if (board.getBalls().isEmpty()) {
-            finishByScore();
+            finishGameByScore();
             return;
         }
-        updateRunningStatus();
+        refreshStatusFromBoard();
     }
 
-    /**
-     * Exposes the owned board for rendering and benchmarks.
-     *
-     * <p>Callers must keep model mutation through this game facade unless they
-     * are implementing low-level physics tests.
-     *
-     * @return owned mutable board
-     */
+    // Exposes the owned board for rendering and physics tests.
     public synchronized Board board() {
         return board;
     }
 
-    /**
-     * Creates an immutable snapshot of the current game state.
-     *
-     * @return immutable snapshot of scores, lifecycle state, readiness, and metrics
-     */
+    // Creates an immutable snapshot of the current game state.
     public synchronized GameSnapshot snapshot() {
         return new GameSnapshot(
                 humanScore,
@@ -222,23 +144,24 @@ public class GameModel {
                 gameOverReason,
                 canHumanShoot(),
                 canBotShoot(),
-                elapsedMillis,
-                simulatedSteps,
+                simulatedElapsedMillis,
+                stepCount,
                 averageStepMillis());
     }
 
     private boolean canShoot(Player player) {
+        // The countdown has priority over every other shooting rule.
         if (isCountdownActive()) {
             return false;
         }
         return status != GameStatus.FINISHED && board.canKick(player);
     }
 
-    private void updateRunningStatus() {
+    private void refreshStatusFromBoard() {
         status = board.areBallsMoving() ? GameStatus.BALLS_MOVING : GameStatus.RUNNING_STILL;
     }
 
-    private V2d chooseBotShot() {
+    private V2d computeBotShot() {
         var botBall = board.getBotBall();
         var balls = board.getBalls();
         if (botBall == null || balls.isEmpty()) {
@@ -248,60 +171,45 @@ public class GameModel {
         return target.sub(botBall.pos()).getNormalized().mul(BOT_SHOT_SPEED);
     }
 
-    private void finish(Player winner, GameOverReason reason) {
+    private void finishGame(Player winner, GameOverReason reason) {
         this.winner = winner;
         this.gameOverReason = reason;
         status = GameStatus.FINISHED;
     }
 
-    private void finishByScore() {
+    private void finishGameByScore() {
         if (humanScore > botScore) {
-            finish(Player.HUMAN, GameOverReason.SMALL_BALLS_CLEARED);
+            finishGame(Player.HUMAN, GameOverReason.SMALL_BALLS_CLEARED);
         } else if (botScore > humanScore) {
-            finish(Player.BOT, GameOverReason.SMALL_BALLS_CLEARED);
+            finishGame(Player.BOT, GameOverReason.SMALL_BALLS_CLEARED);
         } else {
-            finish(null, GameOverReason.SMALL_BALLS_CLEARED);
+            finishGame(null, GameOverReason.SMALL_BALLS_CLEARED);
         }
     }
 
     private double averageStepMillis() {
-        if (simulatedSteps == 0) {
+        if (stepCount == 0) {
             return 0.0;
         }
-        return totalStepNanos / 1_000_000.0 / simulatedSteps;
+        return accumulatedStepNanos / 1_000_000.0 / stepCount;
     }
 
-    /**
-     * Startup countdown configuration for a game instance.
-     *
-     * @param enabled whether shots are blocked at startup
-     * @param durationMillis countdown duration in milliseconds
-     */
+    // Startup countdown policy for a game instance.
     public record StartupCountdown(boolean enabled, long durationMillis) {
 
-        /**
-         * Validates the countdown configuration.
-         */
+        // Validates the countdown configuration.
         public StartupCountdown {
             if (durationMillis < 0) {
                 throw new IllegalArgumentException("durationMillis must be >= 0");
             }
         }
 
-        /**
-         * Creates the default gameplay countdown.
-         *
-         * @return enabled three-second startup countdown
-         */
+        // Creates the default enabled countdown.
         public static StartupCountdown enabledDefault() {
             return new StartupCountdown(true, DEFAULT_COUNTDOWN_MILLIS);
         }
 
-        /**
-         * Creates a disabled startup countdown.
-         *
-         * @return disabled startup countdown
-         */
+        // Creates a disabled countdown.
         public static StartupCountdown disabled() {
             return new StartupCountdown(false, 0);
         }

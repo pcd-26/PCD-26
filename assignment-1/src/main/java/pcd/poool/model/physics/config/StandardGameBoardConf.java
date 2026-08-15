@@ -8,12 +8,7 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 
-/**
- * Small playable board configuration for the sequential game baseline.
- *
- * <p>The layout keeps the number of balls low enough for quick manual games
- * while still exercising collisions, bot shots, scoring, and end-game rules.
- */
+/** Small playable board configuration for the sequential game baseline. */
 public class StandardGameBoardConf implements BoardConf {
 
     private static final Boundary BOARD_BOUNDARY = new Boundary(-1.5, -1.0, 1.5, 1.0);

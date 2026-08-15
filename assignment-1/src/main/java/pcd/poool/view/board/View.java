@@ -7,66 +7,32 @@ import javax.swing.SwingUtilities;
 import pcd.poool.model.common.math.V2d;
 
 /**
- * Swing view facade used by game launchers.
+ * Small Swing facade used by the launchers.
  *
- * <p>The facade creates the frame on the Swing EDT and exposes a small render
- * method so simulation loops do not manipulate the frame directly.
+ * <p>Its job is only to create the frame on the EDT and expose a tiny
+ * lifecycle API to the runtime. The actual drawing and input handling stay in
+ * {@link ViewFrame} and the mutable state stays in {@link ViewModel}.
  */
 public class View {
 
 	private ViewFrame frame;
 	private ViewModel viewModel;
-	
-	/**
-	 * Creates a passive view without input callbacks.
-	 *
-	 * @param model shared view model
-	 * @param w window width in pixels
-	 * @param h window height in pixels
-	 */
+
 	public View(ViewModel model, int w, int h) {
 		this.viewModel = model;
 		displayFrame(model, w, h, null, null, null, null);
 	}
 
-	/**
-	 * Creates a view with shot input support.
-	 *
-	 * @param model shared view model
-	 * @param w window width in pixels
-	 * @param h window height in pixels
-	 * @param shotHandler callback receiving shot velocity requests
-	 */
 	public View(ViewModel model, int w, int h, Consumer<V2d> shotHandler) {
 		this.viewModel = model;
 		displayFrame(model, w, h, shotHandler, null, null, null);
 	}
 
-	/**
-	 * Creates a view with shot and restart input support.
-	 *
-	 * @param model shared view model
-	 * @param w window width in pixels
-	 * @param h window height in pixels
-	 * @param shotHandler callback receiving shot velocity requests
-	 * @param restartHandler callback invoked when restart is requested
-	 */
 	public View(ViewModel model, int w, int h, Consumer<V2d> shotHandler, Runnable restartHandler) {
 		this.viewModel = model;
 		displayFrame(model, w, h, shotHandler, restartHandler, null, null);
 	}
 
-	/**
-	 * Creates a full interactive view.
-	 *
-	 * @param model shared view model
-	 * @param w window width in pixels
-	 * @param h window height in pixels
-	 * @param shotHandler callback receiving shot velocity requests
-	 * @param restartHandler callback invoked when restart is requested
-	 * @param humanAimingStartHandler callback used to authorize human aiming
-	 * @param humanAimingStopHandler callback invoked when human aiming ends
-	 */
 	public View(
 			ViewModel model,
 			int w,
@@ -79,14 +45,15 @@ public class View {
 		displayFrame(model, w, h, shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
 	}
 
-	private void displayFrame(
-			ViewModel model,
-			int w,
-			int h,
-			Consumer<V2d> shotHandler,
-			Runnable restartHandler,
-			BooleanSupplier humanAimingStartHandler,
-			Runnable humanAimingStopHandler) {
+    private void displayFrame(
+            ViewModel model,
+            int w,
+            int h,
+            Consumer<V2d> shotHandler,
+            Runnable restartHandler,
+            BooleanSupplier humanAimingStartHandler,
+            Runnable humanAimingStopHandler) {
+		// Create the Swing window on the EDT.
 		if (SwingUtilities.isEventDispatchThread()) {
 			createAndShowFrame(model, w, h, shotHandler, restartHandler, humanAimingStartHandler, humanAimingStopHandler);
 			return;
@@ -108,14 +75,15 @@ public class View {
 		}
 	}
 
-	private void createAndShowFrame(
-			ViewModel model,
-			int w,
-			int h,
-			Consumer<V2d> shotHandler,
-			Runnable restartHandler,
-			BooleanSupplier humanAimingStartHandler,
-			Runnable humanAimingStopHandler) {
+    private void createAndShowFrame(
+            ViewModel model,
+            int w,
+            int h,
+            Consumer<V2d> shotHandler,
+            Runnable restartHandler,
+            BooleanSupplier humanAimingStartHandler,
+            Runnable humanAimingStopHandler) {
+		// The frame reads only from ViewModel.
 		frame = new ViewFrame(
 				model,
 				w,
@@ -123,29 +91,19 @@ public class View {
 				shotHandler,
 				restartHandler,
 				humanAimingStartHandler,
-				humanAimingStopHandler);	
+				humanAimingStopHandler);
 		frame.setVisible(true);
 	}
-		
-	/**
-	 * Requests rendering of the current view model.
-	 */
+
     public void render() {
-        frame.render();
+		// Render from the runtime thread, not the EDT.
+		frame.render();
     }
 
-    /**
-     * Disposes the Swing window created by this view.
-     */
-    public void close() {
-        frame.close();
-    }
-	
-	/**
-	 * Gets the model rendered by this view.
-	 *
-	 * @return shared view model rendered by this view
-	 */
+	public void close() {
+		frame.close();
+	}
+
 	public ViewModel getViewModel() {
 		return viewModel;
 	}

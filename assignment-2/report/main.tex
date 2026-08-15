@@ -1,31 +1,47 @@
 \documentclass[11pt,a4paper]{article}
 
-\title{Report PCD 2026}
-\author{}
-\date{\today}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{array}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\toprule}{\hline}
+\newcommand{\midrule}{\hline}
+\newcommand{\bottomrule}{\hline}
+
+% Helper macro to convert month numbers into English text
+\newcommand{\englishmonthname}[1]{%
+    \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
+}
+
+% UK format: DD Month YYYY (e.g., 5 August 2026)
+\newcommand{\todayFullUK}{%
+    \number\day\ \englishmonthname{\number\month} \number\year%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+
+\title{Assignment 2 -- FSStatLib}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
 
 \begin{document}
 
-\maketitle
+\input{parts/front/TitlePage}
 
-\section{Introduction}
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\input{parts/front/Disclaimer}
+\pagenumbering{arabic}
 
-% Write the assignment report here.
-
-\section{Analysis}
-
-% Add the problem analysis, focusing on concurrent aspects.
-
-\section{Design}
-
-% Describe the adopted strategy and implementation choices.
-
-\section{Validation}
-
-% Summarize the tests and validation results.
-
-\section{Conclusions}
-
-% Add final remarks.
+\input{parts/front/Introduction}
+\input{parts/chapters/ProblemAnalysis}
+\input{parts/chapters/Design}
+\input{parts/chapters/Validation}
+\input{parts/back/HowToRun}
+\input{parts/back/Conclusions}
 
 \end{document}

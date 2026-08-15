@@ -1,16 +1,12 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.core;
 
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import pcd.poool.benchmark.config.BenchmarkConfig;
 
-/**
- * Shared infrastructure for benchmark timing and aggregation.
- *
- * <p>The runner keeps raw measurements and summary statistics separate so the
- * benchmark can export both the per-run evidence and the aggregate view.
- */
+/** Shared infrastructure for benchmark timing and aggregation. */
 public final class BenchmarkRunner {
 
     public static final double NANOS_PER_MILLISECOND = 1_000_000.0;
@@ -19,43 +15,23 @@ public final class BenchmarkRunner {
     private BenchmarkRunner() {
     }
 
-    /**
-     * Benchmark workload executed inside a timed run.
-     */
+    /** Workload executed inside a timed run. */
     @FunctionalInterface
     public interface BenchmarkWorkload {
 
-        /**
-         * Executes the benchmark payload and returns the resulting checksum.
-         *
-         * @return checksum or state hash produced by the workload
-         * @throws Exception if the workload fails
-         */
+        /** Executes the benchmark payload and returns its checksum. */
         long run() throws Exception;
     }
 
-    /**
-     * Benchmark workload executed inside a timed run and returning both a
-     * checksum and optional instrumentation.
-     */
+    /** Workload that also returns optional instrumentation. */
     @FunctionalInterface
     public interface BenchmarkExecutionWorkload {
 
-        /**
-         * Executes the benchmark payload.
-         *
-         * @return execution result and optional instrumentation
-         * @throws Exception if the workload fails
-         */
+        /** Executes the benchmark payload. */
         BenchmarkExecution run() throws Exception;
     }
 
-    /**
-     * Result returned by an execution workload.
-     *
-     * @param checksum checksum or state hash produced by the workload
-     * @param instrumentation optional synchronization metrics for the run
-     */
+    /** Result returned by an execution workload. */
     public record BenchmarkExecution(
             long checksum,
             BenchmarkInstrumentation instrumentation,
@@ -74,15 +50,7 @@ public final class BenchmarkRunner {
         }
     }
 
-    /**
-     * Measures one benchmark run.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param completedSteps number of simulation steps completed by the run
-     * @param workload timed workload
-     * @return raw run result
-     */
+    /** Measures one benchmark run. */
     public static BenchmarkRunResult time(
             int runIndex,
             boolean warmup,
@@ -92,15 +60,7 @@ public final class BenchmarkRunner {
                 () -> new BenchmarkExecution(workload.run(), BenchmarkInstrumentation.zero()));
     }
 
-    /**
-     * Measures one benchmark run and captures optional instrumentation.
-     *
-     * @param runIndex 1-based run index
-     * @param warmup whether the run belongs to the warmup phase
-     * @param completedSteps number of simulation steps completed by the run
-     * @param workload timed workload
-     * @return raw run result
-     */
+    /** Measures one benchmark run and captures optional instrumentation. */
     public static BenchmarkRunResult time(
             int runIndex,
             boolean warmup,
@@ -127,13 +87,7 @@ public final class BenchmarkRunner {
         }
     }
 
-    /**
-     * Executes the warmup and measured runs described by a configuration.
-     *
-     * @param config benchmark configuration
-     * @param workload benchmark workload
-     * @return raw results for every run, including warmup runs
-     */
+    /** Executes the warmup and measured runs described by a configuration. */
     public static List<BenchmarkRunResult> execute(BenchmarkConfig config, BenchmarkWorkload workload) {
         var results = new ArrayList<BenchmarkRunResult>(config.warmupRuns() + config.measuredRuns());
         int runIndex = 1;
@@ -146,24 +100,12 @@ public final class BenchmarkRunner {
         return List.copyOf(results);
     }
 
-    /**
-     * Executes and summarizes a benchmark session.
-     *
-     * @param config benchmark configuration
-     * @param workload benchmark workload
-     * @return aggregate summary excluding warmup samples
-     */
+    /** Executes and summarizes a benchmark session. */
     public static BenchmarkSummary run(BenchmarkConfig config, BenchmarkWorkload workload) {
         return summarize(config, execute(config, workload));
     }
 
-    /**
-     * Builds a summary from raw benchmark results.
-     *
-     * @param config benchmark configuration used for the session
-     * @param results raw results from warmup and measured runs
-     * @return aggregate summary
-     */
+    /** Builds a summary from raw benchmark results. */
     public static BenchmarkSummary summarize(BenchmarkConfig config, List<BenchmarkRunResult> results) {
         int totalRuns = results.size();
         int warmupRuns = 0;
@@ -242,13 +184,7 @@ public final class BenchmarkRunner {
                 checksum != null && checksumStable);
     }
 
-    /**
-     * Computes throughput in completed steps per second.
-     *
-     * @param completedSteps number of completed simulation steps
-     * @param elapsedNanos elapsed time in nanoseconds
-     * @return completed steps divided by elapsed seconds
-     */
+    /** Computes throughput in completed steps per second. */
     public static double throughput(int completedSteps, long elapsedNanos) {
         if (elapsedNanos <= 0L) {
             return 0.0;

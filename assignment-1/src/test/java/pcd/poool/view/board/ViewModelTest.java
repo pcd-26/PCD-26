@@ -14,9 +14,6 @@ import pcd.poool.model.physics.common.Hole;
 
 class ViewModelTest {
 
-    /**
-     * Verifies that the ViewModel properly stores the owning player associated with a shot preview.
-     */
     @Test
     void shotPreviewStoresOwningPlayerForRendering() {
         var model = new ViewModel();
@@ -26,10 +23,6 @@ class ViewModelTest {
         assertEquals(Player.BOT, model.getShotPreview(Player.BOT).player());
     }
 
-    /**
-     * Verifies that shot previews for multiple players (Human and Bot) are kept independent
-     * and clearing one player's preview does not affect the other.
-     */
     @Test
     void shotPreviewsAreIndependentByPlayer() {
         var model = new ViewModel();
@@ -43,10 +36,6 @@ class ViewModelTest {
         assertEquals(1, model.getShotPreviews().size());
     }
 
-    /**
-     * Verifies that the ViewModel's update method copies all snapshot data (balls, holes, scores)
-     * correctly for rendering on the Swing thread.
-     */
     @Test
     void updateCopiesImmutableThreadedSnapshotsForRendering() {
         var model = new ViewModel();

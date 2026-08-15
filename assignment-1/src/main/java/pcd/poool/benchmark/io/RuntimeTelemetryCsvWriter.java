@@ -1,10 +1,11 @@
-package pcd.poool.benchmark;
+package pcd.poool.benchmark.io;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import pcd.poool.benchmark.core.RuntimeTelemetry;
 
 /**
  * Writes runtime telemetry snapshots to CSV.

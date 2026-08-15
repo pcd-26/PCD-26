@@ -54,6 +54,7 @@ The `assignment-01`folder in the repo includes two sketches that could be used a
 ### The deliverable
 
 The deliverable must be a zipped folder `Assignment-01`, to be submitted on the course web site, including:  
+- `pom.xml` with the Maven build configuration
 - `src` directory with sources
 - `doc` directory with the report in PDF (`report.pdf`). 
 
