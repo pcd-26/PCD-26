@@ -35,6 +35,19 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
 
     private record SirenStateObserved(SirenActor.StateSnapshot snapshot) implements Command {}
 
+    private record DemoActors(
+        ActorRef<KeypadActor.Command> keypad,
+        ActorRef<SensorActor.Command> perimeterSensor,
+        ActorRef<SensorActor.Command> livingRoomSensor,
+        ActorRef<ControlUnitActor.Command> controlUnit,
+        ActorRef<SirenActor.Command> siren
+    ) {}
+
+    private record StateAdapters(
+        ActorRef<ControlUnitActor.StateSnapshot> controlUnit,
+        ActorRef<SirenActor.StateSnapshot> siren
+    ) {}
+
     private enum DemoStep {
         START,
         AFTER_PIN,
@@ -51,13 +64,8 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
     }
 
     private final TimerScheduler<Command> timers;
-    private final ActorRef<KeypadActor.Command> keypad;
-    private final ActorRef<SensorActor.Command> perimeterSensor;
-    private final ActorRef<SensorActor.Command> livingRoomSensor;
-    private final ActorRef<ControlUnitActor.Command> controlUnit;
-    private final ActorRef<SirenActor.Command> siren;
-    private final ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter;
-    private final ActorRef<SirenActor.StateSnapshot> sirenStateAdapter;
+    private final DemoActors actors;
+    private final StateAdapters adapters;
     private final Duration exitDelay;
     private final Duration entryDelay;
 
@@ -70,71 +78,53 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         Objects.requireNonNull(alarmConfiguration, "alarmConfiguration");
 
         return Behaviors.setup(context -> Behaviors.withTimers(timers -> {
-            ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter =
-                context.messageAdapter(ControlUnitActor.StateSnapshot.class, ControlStateObserved::new);
-            ActorRef<SirenActor.StateSnapshot> sirenStateAdapter =
-                context.messageAdapter(SirenActor.StateSnapshot.class, SirenStateObserved::new);
-
-            ActorRef<SirenActor.Command> siren = context.spawn(SirenActor.create(), "siren");
-            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
-                ControlUnitActor.create(
-                    alarmConfiguration.correctPin(),
-                    alarmConfiguration.exitDelay(),
-                    alarmConfiguration.entryDelay(),
-                    siren
-                ),
-                "control-unit"
-            );
-            ActorRef<KeypadActor.Command> keypad = context.spawn(KeypadActor.create(controlUnit), "keypad");
-            ActorRef<SensorActor.Command> perimeterSensor = context.spawn(
-                SensorActor.create("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnit),
-                "front-door-sensor"
-            );
-            ActorRef<SensorActor.Command> livingRoomSensor = context.spawn(
-                SensorActor.create("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA, controlUnit),
-                "living-room-sensor"
-            );
-
-            return new DemoScenarioActor(
-                context,
-                timers,
-                keypad,
-                perimeterSensor,
-                livingRoomSensor,
-                controlUnit,
-                siren,
-                controlStateAdapter,
-                sirenStateAdapter,
-                alarmConfiguration.exitDelay(),
-                alarmConfiguration.entryDelay()
-            );
+            StateAdapters adapters = createAdapters(context);
+            DemoActors actors = createActors(context, alarmConfiguration);
+            return new DemoScenarioActor(context, timers, actors, adapters, alarmConfiguration);
         }));
     }
 
     private DemoScenarioActor(
         ActorContext<Command> context,
         TimerScheduler<Command> timers,
-        ActorRef<KeypadActor.Command> keypad,
-        ActorRef<SensorActor.Command> perimeterSensor,
-        ActorRef<SensorActor.Command> livingRoomSensor,
-        ActorRef<ControlUnitActor.Command> controlUnit,
-        ActorRef<SirenActor.Command> siren,
-        ActorRef<ControlUnitActor.StateSnapshot> controlStateAdapter,
-        ActorRef<SirenActor.StateSnapshot> sirenStateAdapter,
-        Duration exitDelay,
-        Duration entryDelay
+        DemoActors actors,
+        StateAdapters adapters,
+        AlarmConfiguration alarmConfiguration
     ) {
         super(context);
         this.timers = timers;
-        this.keypad = keypad;
-        this.perimeterSensor = perimeterSensor;
-        this.livingRoomSensor = livingRoomSensor;
-        this.controlUnit = controlUnit;
-        this.siren = siren;
-        this.controlStateAdapter = controlStateAdapter;
-        this.sirenStateAdapter = sirenStateAdapter;
-        this.exitDelay = exitDelay;
-        this.entryDelay = entryDelay;
+        this.actors = actors;
+        this.adapters = adapters;
+        this.exitDelay = alarmConfiguration.exitDelay();
+        this.entryDelay = alarmConfiguration.entryDelay();
+    }
+
+    private static StateAdapters createAdapters(ActorContext<Command> context) {
+        return new StateAdapters(
+            context.messageAdapter(ControlUnitActor.StateSnapshot.class, ControlStateObserved::new),
+            context.messageAdapter(SirenActor.StateSnapshot.class, SirenStateObserved::new)
+        );
+    }
+
+    private static DemoActors createActors(ActorContext<Command> context, AlarmConfiguration alarmConfiguration) {
+        ActorRef<SirenActor.Command> siren = context.spawn(SirenActor.create(), "siren");
+        ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
+            ControlUnitActor.create(
+                alarmConfiguration.correctPin(),
+                alarmConfiguration.exitDelay(),
+                alarmConfiguration.entryDelay(),
+                siren
+            ),
+            "control-unit"
+        );
+
+        return new DemoActors(
+            context.spawn(KeypadActor.create(controlUnit), "keypad"),
+            context.spawn(SensorActor.create("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER, controlUnit), "front-door-sensor"),
+            context.spawn(SensorActor.create("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA, controlUnit), "living-room-sensor"),
+            controlUnit,
+            siren
+        );
     }
 
     @Override
@@ -151,11 +141,12 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
     private Behavior<Command> onStart(Start command) {
         getContext().getLog().info("Demo step 1: system starts in DISARMED");
         queryControlState("initial state");
+
         getContext().getLog().info("Demo step 2: correct PIN is submitted through KeypadActor");
         pressPin("1234");
         queryControlState("after correct PIN submission");
-        currentStep = DemoStep.AFTER_PIN;
-        timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+
+        goTo(DemoStep.AFTER_PIN, STEP_GAP);
         return this;
     }
 
@@ -164,77 +155,70 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         switch (currentStep) {
             case AFTER_PIN -> {
                 getContext().getLog().info("Demo step 4: sensor event during EXIT_DELAY is ignored");
-                perimeterSensor.tell(new SensorActor.Activate());
+                actors.perimeterSensor().tell(new SensorActor.Activate());
                 queryControlState("after sensor activation during EXIT_DELAY");
-                currentStep = DemoStep.AFTER_EXIT_DELAY;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), exitDelay.plus(STEP_GAP));
+                goTo(DemoStep.AFTER_EXIT_DELAY, exitDelay.plus(STEP_GAP));
             }
             case AFTER_EXIT_DELAY -> {
                 getContext().getLog().info("Demo step 5: system automatically enters ARMED");
                 queryControlState("after exit-delay expiration");
+
                 getContext().getLog().info("Demo step 6: a sensor is activated");
-                perimeterSensor.tell(new SensorActor.Activate());
+                actors.perimeterSensor().tell(new SensorActor.Activate());
                 queryControlState("after armed sensor activation");
-                currentStep = DemoStep.AFTER_SENSOR_IN_ARMED;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+                goTo(DemoStep.AFTER_SENSOR_IN_ARMED, STEP_GAP);
             }
             case AFTER_SENSOR_IN_ARMED -> {
                 getContext().getLog().info("Demo step 7: system enters ENTRY_DELAY");
                 queryControlState("during entry delay");
+
                 getContext().getLog().info("Demo step 8: entry delay expires");
-                currentStep = DemoStep.AFTER_ENTRY_DELAY;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), entryDelay.plus(STEP_GAP));
+                goTo(DemoStep.AFTER_ENTRY_DELAY, entryDelay.plus(STEP_GAP));
             }
             case AFTER_ENTRY_DELAY -> {
                 getContext().getLog().info("Demo step 9: system enters ALARM and activates the siren");
                 getContext().getLog().info("Demo step 10: correct PIN is submitted");
                 pressPin("1234");
-                currentStep = DemoStep.AFTER_DISARM;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+                goTo(DemoStep.AFTER_DISARM, STEP_GAP);
             }
             case AFTER_DISARM -> {
                 queryControlState("after disarm");
                 querySirenState("after disarm");
+
                 getContext().getLog().info("Demo step 11: system returns to DISARMED and the siren deactivates");
                 getContext().getLog().info("Demo step 12: night mode partial arming is configured for PERIMETER and GROUND_FLOOR");
-                keypad.tell(new KeypadActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
+                actors.keypad().tell(new KeypadActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
                 pressPin("1234");
                 queryControlState("after night-mode PIN submission");
-                currentStep = DemoStep.NIGHT_MODE_CONFIGURED;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), exitDelay.plus(STEP_GAP));
+                goTo(DemoStep.NIGHT_MODE_CONFIGURED, exitDelay.plus(STEP_GAP));
             }
             case NIGHT_MODE_CONFIGURED -> {
                 getContext().getLog().info("Demo step 13: system automatically enters ARMED in night mode");
                 queryControlState("after night-mode exit delay");
-                currentStep = DemoStep.NIGHT_MODE_ARMED;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+                goTo(DemoStep.NIGHT_MODE_ARMED, STEP_GAP);
             }
             case NIGHT_MODE_ARMED -> {
                 getContext().getLog().info("Demo step 14: a sensor in an inactive zone is ignored");
-                livingRoomSensor.tell(new SensorActor.Activate());
+                actors.livingRoomSensor().tell(new SensorActor.Activate());
                 queryControlState("after inactive-zone sensor activation");
-                currentStep = DemoStep.NIGHT_MODE_EXIT_DELAY;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+                goTo(DemoStep.NIGHT_MODE_EXIT_DELAY, STEP_GAP);
             }
             case NIGHT_MODE_EXIT_DELAY -> {
                 getContext().getLog().info("Demo step 15: a sensor in an active zone enters ENTRY_DELAY");
-                perimeterSensor.tell(new SensorActor.Activate());
+                actors.perimeterSensor().tell(new SensorActor.Activate());
                 queryControlState("after active-zone sensor activation");
-                currentStep = DemoStep.NIGHT_MODE_ENTRY_DELAY;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+                goTo(DemoStep.NIGHT_MODE_ENTRY_DELAY, STEP_GAP);
             }
             case NIGHT_MODE_ENTRY_DELAY -> {
                 getContext().getLog().info("Demo step 16: correct PIN returns the system to DISARMED");
                 queryControlState("during night-mode entry delay");
                 pressPin("1234");
-                currentStep = DemoStep.NIGHT_MODE_DISARMED;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), STEP_GAP);
+                goTo(DemoStep.NIGHT_MODE_DISARMED, STEP_GAP);
             }
             case NIGHT_MODE_DISARMED -> {
                 queryControlState("after night-mode disarm");
                 getContext().getLog().info("Demo step 17: night mode ends and the system is disarmed again");
-                currentStep = DemoStep.STOPPING;
-                timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), FINAL_GRACE);
+                goTo(DemoStep.STOPPING, FINAL_GRACE);
             }
             case STOPPING -> {
                 getContext().getLog().info("Demo complete: stopping the actor system");
@@ -246,6 +230,11 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         }
 
         return this;
+    }
+
+    private void goTo(DemoStep nextStep, Duration delay) {
+        currentStep = nextStep;
+        timers.startSingleTimer(NEXT_STEP_TIMER, new Advance(), delay);
     }
 
     private Behavior<Command> onControlStateObserved(ControlStateObserved observed) {
@@ -268,18 +257,18 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
 
     private void queryControlState(String label) {
         pendingControlStateLabel = label;
-        controlUnit.tell(new ControlUnitActor.QueryState(controlStateAdapter));
+        actors.controlUnit().tell(new ControlUnitActor.QueryState(adapters.controlUnit()));
     }
 
     private void querySirenState(String label) {
         pendingSirenStateLabel = label;
-        siren.tell(new SirenActor.QueryState(sirenStateAdapter));
+        actors.siren().tell(new SirenActor.QueryState(adapters.siren()));
     }
 
     private void pressPin(String pin) {
         for (char digit : pin.toCharArray()) {
-            keypad.tell(new KeypadActor.PressKey(digit));
+            actors.keypad().tell(new KeypadActor.PressKey(digit));
         }
-        keypad.tell(new KeypadActor.PressKey('#'));
+        actors.keypad().tell(new KeypadActor.PressKey('#'));
     }
 }
