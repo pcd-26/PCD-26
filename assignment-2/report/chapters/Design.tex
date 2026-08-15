@@ -4,8 +4,7 @@
 \subsection{Overview}
 
 The design keeps the three implementations \textbf{intentionally separate}.
-This follows the assignment requirement: each version should highlight its own
-programming discipline instead of sharing a common traversal engine.
+This follows the assignment requirement: each version should highlight its own programming discipline instead of sharing a common traversal engine.
 
 \begin{itemize}[leftmargin=*]
   \item \textbf{Virtual threads}: imperative recursion and one task per
@@ -16,14 +15,12 @@ programming discipline instead of sharing a common traversal engine.
   system operations.
 \end{itemize}
 
-The CLI and GUI can select the implementation at runtime. The public result is
-always the same \textbf{\texttt{FSReport}} model, while the scheduling and
-traversal strategy change underneath.
+The CLI and GUI can select the implementation at runtime.
+The public result is always the same \textbf{\texttt{FSReport}} model, while the scheduling and traversal strategy change underneath.
 
 \subsection{Library API}
 
-The asynchronous operation \textbf{\texttt{getFSReport}} is exposed by the
-three implementation classes:
+The asynchronous operation \textbf{\texttt{getFSReport}} is exposed by the three implementation classes:
 
 \begin{itemize}[leftmargin=*]
   \item \texttt{EventLoopFSStat.getFSReport(...)} starts a Vert.x scan and
@@ -34,11 +31,9 @@ three implementation classes:
   scan and returns an \texttt{FSReportJob} cancellation handle.
 \end{itemize}
 
-The imperative versions use an \textbf{\texttt{FSReportListener}} for progress,
-completion, and errors. The reactive version uses the standard RxJava signals:
-\textbf{\texttt{onNext}}, \textbf{\texttt{onComplete}}, and
-\textbf{\texttt{onError}}. In all cases, the logical result is the same: a
-sequence of progress reports and a final filesystem statistics report.
+The imperative versions use an \textbf{\texttt{FSReportListener}} for progress, completion, and errors.
+The reactive version uses the standard RxJava signals: \textbf{\texttt{onNext}}, \textbf{\texttt{onComplete}}, and\textbf{\texttt{onError}}.
+In all cases, the logical result is the same: a sequence of progress reports and a final filesystem statistics report.
 
 \begin{table}[h]
 \centering
@@ -57,10 +52,8 @@ Event-Loop & Shared asynchronous state guarded by atomics and a visited-set & Ve
 
 \subsection{Virtual Threads Strategy}
 
-The Virtual Threads implementation keeps the code close to a normal recursive
-filesystem walk. Every subdirectory is submitted as a separate virtual-thread
-task, so many blocking filesystem operations can coexist without requiring a
-large pool of platform threads.
+The Virtual Threads implementation keeps the code close to a normal recursive filesystem walk.
+Every subdirectory is submitted as a separate virtual-thread task, so many blocking filesystem operations can coexist without requiring a large pool of platform threads.
 
 The strategy is based on:
 
@@ -76,15 +69,12 @@ The strategy is based on:
   snapshots.
 \end{itemize}
 
-This version is the most direct one to read: the control flow remains
-imperative, while virtual threads make the blocking filesystem calls cheap to
-schedule.
+This version is the most direct one to read: the control flow remains imperative, while virtual threads make the blocking filesystem calls cheap to schedule.
 
 \subsection{Reactive Strategy}
 
-The Reactive version represents the traversal as a stream. The directory walk
-emits regular files through an \texttt{Observable<File>}; the Rx pipeline then
-turns that stream into report snapshots.
+The Reactive version represents the traversal as a stream.
+The directory walk emits regular files through an \texttt{Observable<File>}; the Rx pipeline then turns that stream into report snapshots.
 
 The strategy is based on:
 
@@ -101,15 +91,12 @@ The strategy is based on:
 \end{itemize}
 
 The directory walk is deliberately sequential inside the observable generator.
-The goal is to keep the reactive control flow explicit instead of turning this
-version into another task-based implementation.
+The goal is to keep the reactive control flow explicit instead of turning this version into another task-based implementation.
 
 \subsection{Event-Loop Strategy}
 
-The Event-Loop version uses Vert.x callbacks and asynchronous filesystem
-operations. The event loop receives completion events from directory reads,
-file-property reads, timers, and blocking validations delegated with
-\texttt{executeBlocking}.
+The Event-Loop version uses Vert.x callbacks and asynchronous filesystem operations.
+The event loop receives completion events from directory reads, file-property reads, timers, and blocking validations delegated with \texttt{executeBlocking}.
 
 The strategy is based on:
 
@@ -124,14 +111,11 @@ The strategy is based on:
   \item \textbf{safety}: an atomic closed flag prevents closing Vert.x twice.
 \end{itemize}
 
-This version has the most coordination code, but it best expresses the
-event-loop rule: callbacks continue the computation, and the event loop is not
-blocked by filesystem work.
+This version has the most coordination code, but it best expresses the event-loop rule: callbacks continue the computation, and the event loop is not blocked by filesystem work.
 
 \subsection{Progress, Cancellation, and Interfaces}
 
-The three implementations expose the same user-visible behaviour, but
-cancellation is implemented differently:
+The three implementations expose the same user-visible behavior, but cancellation is implemented differently:
 
 \begin{itemize}[leftmargin=*]
   \item \textbf{Virtual threads}: set a cancellation flag, interrupt the
@@ -145,11 +129,9 @@ cancellation is implemented differently:
   the Vert.x instance when pending callbacks have drained.
 \end{itemize}
 
-Progress is deliberately throttled to about one report every 100 ms. This keeps
-the CLI readable and avoids flooding the Swing Event Dispatch Thread.
+Progress is deliberately throttled to about one report every 100ms.
+This keeps the CLI readable and avoids flooding the Swing Event Dispatch Thread.
 
-The \textbf{CLI} accepts the directory, \texttt{MaxFS}, \texttt{NB}, an
-optional size unit, and an optional paradigm selector
-(\texttt{vt}, \texttt{rx}, or \texttt{loop}). The \textbf{GUI} exposes the same
-parameters and adds start/cancel controls. GUI updates are marshalled back onto
-the Swing EDT with \texttt{SwingUtilities.invokeLater}.
+The \textbf{CLI} accepts the directory, \texttt{MaxFS}, \texttt{NB}, an optional size unit, and an optional paradigm selector (\texttt{vt}, \texttt{rx}, or \texttt{loop}).
+The \textbf{GUI} exposes the same parameters and adds start/cancel controls.
+GUI updates are marshaled back onto the Swing EDT with \texttt{SwingUtilities.invokeLater}.
