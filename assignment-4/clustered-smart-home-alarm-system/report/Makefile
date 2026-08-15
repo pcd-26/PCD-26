@@ -17,9 +17,7 @@ endif
 .DEFAULT_GOAL := all
 .PHONY: all clean
 
-all: $(PDF)
-
-$(PDF): $(SOURCE)
+all:
 >pdflatex $(PDFLATEX_FLAGS) $(SOURCE)
 >pdflatex $(PDFLATEX_FLAGS) $(SOURCE)
 >$(REMOVE_TEMP)
