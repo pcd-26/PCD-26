@@ -66,6 +66,7 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
     private final TimerScheduler<Command> timers;
     private final DemoActors actors;
     private final StateAdapters adapters;
+    private final String correctPin;
     private final Duration exitDelay;
     private final Duration entryDelay;
 
@@ -95,6 +96,7 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         this.timers = timers;
         this.actors = actors;
         this.adapters = adapters;
+        this.correctPin = alarmConfiguration.correctPin();
         this.exitDelay = alarmConfiguration.exitDelay();
         this.entryDelay = alarmConfiguration.entryDelay();
     }
@@ -142,9 +144,9 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
         getContext().getLog().info("Demo step 1: system starts in DISARMED");
         queryControlState("initial state");
 
-        getContext().getLog().info("Demo step 2: correct PIN is submitted through KeypadActor");
-        pressPin("1234");
-        queryControlState("after correct PIN submission");
+        getContext().getLog().info("Demo step 2: full arming is requested with the correct PIN");
+        actors.keypad().tell(new KeypadActor.RequestFullArming(correctPin));
+        queryControlState("after full-arming request");
 
         goTo(DemoStep.AFTER_PIN, STEP_GAP);
         return this;
@@ -178,7 +180,7 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
             case AFTER_ENTRY_DELAY -> {
                 getContext().getLog().info("Demo step 9: system enters ALARM and activates the siren");
                 getContext().getLog().info("Demo step 10: correct PIN is submitted");
-                pressPin("1234");
+                pressPin(correctPin);
                 goTo(DemoStep.AFTER_DISARM, STEP_GAP);
             }
             case AFTER_DISARM -> {
@@ -186,10 +188,9 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
                 querySirenState("after disarm");
 
                 getContext().getLog().info("Demo step 11: system returns to DISARMED and the siren deactivates");
-                getContext().getLog().info("Demo step 12: night mode partial arming is configured for PERIMETER and GROUND_FLOOR");
-                actors.keypad().tell(new KeypadActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
-                pressPin("1234");
-                queryControlState("after night-mode PIN submission");
+                getContext().getLog().info("Demo step 12: night mode partial arming is requested with the correct PIN");
+                actors.keypad().tell(new KeypadActor.RequestPartialArming(correctPin, Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
+                queryControlState("after night-mode arming request");
                 goTo(DemoStep.NIGHT_MODE_CONFIGURED, exitDelay.plus(STEP_GAP));
             }
             case NIGHT_MODE_CONFIGURED -> {
@@ -212,7 +213,7 @@ public final class DemoScenarioActor extends AbstractBehavior<DemoScenarioActor.
             case NIGHT_MODE_ENTRY_DELAY -> {
                 getContext().getLog().info("Demo step 16: correct PIN returns the system to DISARMED");
                 queryControlState("during night-mode entry delay");
-                pressPin("1234");
+                pressPin(correctPin);
                 goTo(DemoStep.NIGHT_MODE_DISARMED, STEP_GAP);
             }
             case NIGHT_MODE_DISARMED -> {

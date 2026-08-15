@@ -31,21 +31,26 @@ public final class ControlUnitActor {
         }
     }
 
-    public record SensorActivated(SensorInfo sensorInfo) implements Command {
-        public SensorActivated {
-            Objects.requireNonNull(sensorInfo, "sensorInfo");
+    public record RequestFullArming(String pin) implements Command {
+        public RequestFullArming {
+            Objects.requireNonNull(pin, "pin");
         }
     }
 
-    public record ArmAll() implements Command {}
-
-    public record ArmPartial(Set<Zone> activeZones) implements Command {
-        public ArmPartial {
+    public record RequestPartialArming(String pin, Set<Zone> activeZones) implements Command {
+        public RequestPartialArming {
+            Objects.requireNonNull(pin, "pin");
             Objects.requireNonNull(activeZones, "activeZones");
             if (activeZones.isEmpty()) {
                 throw new IllegalArgumentException("activeZones cannot be empty");
             }
             activeZones = Set.copyOf(activeZones);
+        }
+    }
+
+    public record SensorActivated(SensorInfo sensorInfo) implements Command {
+        public SensorActivated {
+            Objects.requireNonNull(sensorInfo, "sensorInfo");
         }
     }
 
@@ -82,7 +87,7 @@ public final class ControlUnitActor {
 
         return Behaviors.setup(context -> Behaviors.withTimers(timers -> {
             var alarm = new AlarmRuntime(context, timers, correctPin, exitDelay, entryDelay, siren);
-            return disarmed(alarm, ALL_ZONES);
+            return disarmed(alarm);
         }));
     }
 
@@ -133,25 +138,30 @@ public final class ControlUnitActor {
         }
     }
 
-    // DISARMED: sensors are ignored; a correct PIN starts the exit delay.
-    private static Behavior<Command> disarmed(AlarmRuntime alarm, Set<Zone> zonesForNextArming) {
+    // DISARMED: sensors are ignored; a valid arming request starts the exit delay.
+    private static Behavior<Command> disarmed(AlarmRuntime alarm) {
         return Behaviors.receive(Command.class)
-            .onMessage(ArmAll.class, message -> {
-                alarm.context().getLog().info("Configuring full arming");
-                return disarmed(alarm, ALL_ZONES);
-            })
-            .onMessage(ArmPartial.class, message -> {
-                alarm.context().getLog().info("Configuring partial arming for zones {}", message.activeZones());
-                return disarmed(alarm, message.activeZones());
-            })
-            .onMessage(PinSubmitted.class, message -> {
-                if (alarm.accepts(message)) {
-                    alarm.context().getLog().info("Transition DISARMED -> EXIT_DELAY");
+            .onMessage(RequestFullArming.class, message -> {
+                if (alarm.correctPin().equals(message.pin())) {
+                    alarm.context().getLog().info("Transition DISARMED -> EXIT_DELAY with all zones active");
                     alarm.startExitDelay();
-                    return exitDelay(alarm, zonesForNextArming);
+                    return exitDelay(alarm, ALL_ZONES);
                 }
 
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.DISARMED);
+            })
+            .onMessage(RequestPartialArming.class, message -> {
+                if (alarm.correctPin().equals(message.pin())) {
+                    alarm.context().getLog().info("Transition DISARMED -> EXIT_DELAY with zones {} active", message.activeZones());
+                    alarm.startExitDelay();
+                    return exitDelay(alarm, message.activeZones());
+                }
+
+                return stayInSameStateAfterWrongPin(alarm, AlarmState.DISARMED);
+            })
+            .onMessage(PinSubmitted.class, message -> {
+                alarm.context().getLog().info("PIN submitted while DISARMED, but arming mode is required");
+                return Behaviors.same();
             })
             .onMessage(SensorActivated.class, message ->
                 ignoreSensorBecauseStateIsInactive(alarm, AlarmState.DISARMED, message.sensorInfo()))
@@ -169,7 +179,7 @@ public final class ControlUnitActor {
                     alarm.cancelExitDelay();
                     alarm.context().getLog().info("Transition EXIT_DELAY -> DISARMED");
                     alarm.deactivateSiren();
-                    return disarmed(alarm, ALL_ZONES);
+                    return disarmed(alarm);
                 }
 
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.EXIT_DELAY);
@@ -194,7 +204,7 @@ public final class ControlUnitActor {
                     alarm.cancelEntryDelay();
                     alarm.context().getLog().info("Transition ARMED -> DISARMED");
                     alarm.deactivateSiren();
-                    return disarmed(alarm, ALL_ZONES);
+                    return disarmed(alarm);
                 }
 
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.ARMED);
@@ -229,7 +239,7 @@ public final class ControlUnitActor {
                     alarm.cancelEntryDelay();
                     alarm.context().getLog().info("Transition ENTRY_DELAY -> DISARMED");
                     alarm.deactivateSiren();
-                    return disarmed(alarm, ALL_ZONES);
+                    return disarmed(alarm);
                 }
 
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.ENTRY_DELAY);
@@ -254,7 +264,7 @@ public final class ControlUnitActor {
                 if (alarm.accepts(message)) {
                     alarm.context().getLog().info("Transition ALARM -> DISARMED");
                     alarm.deactivateSiren();
-                    return disarmed(alarm, ALL_ZONES);
+                    return disarmed(alarm);
                 }
 
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.ALARM);

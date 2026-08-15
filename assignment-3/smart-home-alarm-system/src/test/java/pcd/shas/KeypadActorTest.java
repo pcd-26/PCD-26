@@ -54,23 +54,24 @@ class KeypadActorTest {
     }
 
     @Test
-    void fullArmingRequestIsForwardedToControlUnit() {
+    void fullArmingRequestIsForwardedToControlUnitWithPin() {
         TestProbe<ControlUnitActor.Command> controlUnitProbe = testKit.createTestProbe(ControlUnitActor.Command.class);
         var keypad = testKit.spawn(KeypadActor.create(controlUnitProbe.getRef()));
 
-        keypad.tell(new KeypadActor.ArmAll());
+        keypad.tell(new KeypadActor.RequestFullArming("1234"));
 
-        controlUnitProbe.expectMessage(new ControlUnitActor.ArmAll());
+        controlUnitProbe.expectMessage(new ControlUnitActor.RequestFullArming("1234"));
     }
 
     @Test
-    void partialArmingRequestIsForwardedToControlUnit() {
+    void partialArmingRequestIsForwardedToControlUnitWithPinAndZones() {
         TestProbe<ControlUnitActor.Command> controlUnitProbe = testKit.createTestProbe(ControlUnitActor.Command.class);
         var keypad = testKit.spawn(KeypadActor.create(controlUnitProbe.getRef()));
 
-        keypad.tell(new KeypadActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
+        keypad.tell(new KeypadActor.RequestPartialArming("1234", Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
 
-        ControlUnitActor.ArmPartial message = (ControlUnitActor.ArmPartial) controlUnitProbe.receiveMessage();
+        ControlUnitActor.RequestPartialArming message = (ControlUnitActor.RequestPartialArming) controlUnitProbe.receiveMessage();
+        assertEquals("1234", message.pin());
         assertEquals(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR), message.activeZones());
     }
 }

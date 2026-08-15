@@ -24,10 +24,15 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         }
     }
 
-    public record ArmAll() implements Command {}
+    public record RequestFullArming(String pin) implements Command {
+        public RequestFullArming {
+            Objects.requireNonNull(pin, "pin");
+        }
+    }
 
-    public record ArmPartial(Set<Zone> activeZones) implements Command {
-        public ArmPartial {
+    public record RequestPartialArming(String pin, Set<Zone> activeZones) implements Command {
+        public RequestPartialArming {
+            Objects.requireNonNull(pin, "pin");
             Objects.requireNonNull(activeZones, "activeZones");
             if (activeZones.isEmpty()) {
                 throw new IllegalArgumentException("activeZones cannot be empty");
@@ -55,8 +60,8 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         return newReceiveBuilder()
             .onMessage(PressKey.class, this::onKeyPressed)
             .onMessage(SubmitPin.class, this::onPinSubmittedDirectly)
-            .onMessage(ArmAll.class, this::onFullArmingRequested)
-            .onMessage(ArmPartial.class, this::onPartialArmingRequested)
+            .onMessage(RequestFullArming.class, this::onFullArmingRequested)
+            .onMessage(RequestPartialArming.class, this::onPartialArmingRequested)
             .build();
     }
 
@@ -87,15 +92,19 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         return this;
     }
 
-    private Behavior<Command> onFullArmingRequested(ArmAll command) {
-        getContext().getLog().info("Keypad forwarding full-arming request");
-        controlUnit.tell(new ControlUnitActor.ArmAll());
+    private Behavior<Command> onFullArmingRequested(RequestFullArming command) {
+        getContext().getLog().info("Keypad forwarding full-arming request with pin length={}", command.pin().length());
+        controlUnit.tell(new ControlUnitActor.RequestFullArming(command.pin()));
         return this;
     }
 
-    private Behavior<Command> onPartialArmingRequested(ArmPartial command) {
-        getContext().getLog().info("Keypad forwarding partial-arming request for zones {}", command.activeZones());
-        controlUnit.tell(new ControlUnitActor.ArmPartial(command.activeZones()));
+    private Behavior<Command> onPartialArmingRequested(RequestPartialArming command) {
+        getContext().getLog().info(
+            "Keypad forwarding partial-arming request for zones {} with pin length={}",
+            command.activeZones(),
+            command.pin().length()
+        );
+        controlUnit.tell(new ControlUnitActor.RequestPartialArming(command.pin(), command.activeZones()));
         return this;
     }
 
