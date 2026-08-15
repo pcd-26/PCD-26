@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class ControlUnitActor {
 
@@ -155,7 +156,10 @@ public final class ControlUnitActor {
             .onMessage(RequestFullArming.class, message -> {
                 if (alarm.correctPin().equals(message.pin())) {
                     // Correct PIN: start the exit phase with every zone enabled.
-                    alarm.context().getLog().info("Transition DISARMED -> EXIT_DELAY with all zones active");
+                    alarm.context().getLog().info(
+                        "[ALARM] Full arming accepted. State: DISARMED -> EXIT_DELAY. Active zones: {}",
+                        formatZones(ALL_ZONES)
+                    );
                     alarm.startExitDelay();
                     return exitDelay(alarm, ALL_ZONES);
                 }
@@ -166,7 +170,10 @@ public final class ControlUnitActor {
             .onMessage(RequestPartialArming.class, message -> {
                 if (alarm.correctPin().equals(message.pin())) {
                     // Correct PIN: start the exit phase, but only for the selected zones.
-                    alarm.context().getLog().info("Transition DISARMED -> EXIT_DELAY with zones {} active", message.activeZones());
+                    alarm.context().getLog().info(
+                        "[ALARM] Partial arming accepted. State: DISARMED -> EXIT_DELAY. Active zones: {}",
+                        formatZones(message.activeZones())
+                    );
                     alarm.startExitDelay();
                     return exitDelay(alarm, message.activeZones());
                 }
@@ -176,7 +183,9 @@ public final class ControlUnitActor {
             // Handles a plain PIN submission while no arming mode was chosen.
             .onMessage(PinSubmitted.class, message -> {
                 // A PIN alone cannot arm the system: full or partial mode is required.
-                alarm.context().getLog().info("PIN submitted while DISARMED, but arming mode is required");
+                alarm.context().getLog().info(
+                    "[ALARM] PIN received while DISARMED: no state change. To arm, use 'arm full PIN' or 'arm partial PIN ZONE'."
+                );
                 return Behaviors.same();
             })
             // Handles sensor events while the system is inactive.
@@ -199,7 +208,7 @@ public final class ControlUnitActor {
                 if (alarm.accepts(message)) {
                     // During exit delay, the correct PIN cancels arming and returns to disarmed.
                     alarm.cancelExitDelay();
-                    alarm.context().getLog().info("Transition EXIT_DELAY -> DISARMED");
+                    alarm.context().getLog().info("[ALARM] Arming cancelled by correct PIN. State: EXIT_DELAY -> DISARMED.");
                     alarm.deactivateSiren();
                     return disarmed(alarm);
                 }
@@ -213,7 +222,10 @@ public final class ControlUnitActor {
             .onMessage(ExitDelayTimeout.class, message -> {
                 // Once the exit timer expires, sensors in active zones become relevant.
                 alarm.cancelExitDelay();
-                alarm.context().getLog().info("Transition EXIT_DELAY -> ARMED");
+                alarm.context().getLog().info(
+                    "[ALARM] Exit delay expired. State: EXIT_DELAY -> ARMED. Active zones: {}",
+                    formatZones(zonesBeingArmed)
+                );
                 return armed(alarm, zonesBeingArmed);
             })
             // Ignores stale entry-delay timeout messages.
@@ -231,7 +243,7 @@ public final class ControlUnitActor {
                 if (alarm.accepts(message)) {
                     // The correct PIN can disarm directly, even before any sensor fires.
                     alarm.cancelEntryDelay();
-                    alarm.context().getLog().info("Transition ARMED -> DISARMED");
+                    alarm.context().getLog().info("[ALARM] System disarmed by correct PIN. State: ARMED -> DISARMED.");
                     alarm.deactivateSiren();
                     return disarmed(alarm);
                 }
@@ -245,7 +257,7 @@ public final class ControlUnitActor {
                 if (armedZones.contains(sensor.zone())) {
                     // Sensor in an active zone: start entry delay instead of the siren.
                     alarm.context().getLog().info(
-                        "Transition ARMED -> ENTRY_DELAY due to sensor activation: sensor={}, type={}, zone={}",
+                        "[ALARM] Intrusion detected in active zone. State: ARMED -> ENTRY_DELAY. Sensor={}, type={}, zone={}.",
                         sensor.id(),
                         sensor.type(),
                         sensor.zone()
@@ -274,7 +286,7 @@ public final class ControlUnitActor {
                 if (alarm.accepts(message)) {
                     // The user entered the PIN in time: cancel the entry countdown.
                     alarm.cancelEntryDelay();
-                    alarm.context().getLog().info("Transition ENTRY_DELAY -> DISARMED");
+                    alarm.context().getLog().info("[ALARM] Correct PIN entered before timeout. State: ENTRY_DELAY -> DISARMED.");
                     alarm.deactivateSiren();
                     return disarmed(alarm);
                 }
@@ -288,7 +300,7 @@ public final class ControlUnitActor {
             .onMessage(EntryDelayTimeout.class, message -> {
                 // No valid PIN arrived in time: enter the emergency state.
                 alarm.cancelEntryDelay();
-                alarm.context().getLog().info("Transition ENTRY_DELAY -> ALARM");
+                alarm.context().getLog().info("[ALARM] Entry delay expired without a valid PIN. State: ENTRY_DELAY -> ALARM.");
                 alarm.activateSiren();
                 return alarmTriggered(alarm, armedZones);
             })
@@ -306,7 +318,7 @@ public final class ControlUnitActor {
             .onMessage(PinSubmitted.class, message -> {
                 if (alarm.accepts(message)) {
                     // In alarm, the only valid exit is the correct PIN, which stops the siren.
-                    alarm.context().getLog().info("Transition ALARM -> DISARMED");
+                    alarm.context().getLog().info("[ALARM] Correct PIN received. Siren stopped. State: ALARM -> DISARMED.");
                     alarm.deactivateSiren();
                     return disarmed(alarm);
                 }
@@ -334,7 +346,10 @@ public final class ControlUnitActor {
     }
 
     private static Behavior<Command> stayInSameStateAfterWrongPin(AlarmRuntime alarm, AlarmState state) {
-        alarm.context().getLog().info("Ignoring PIN submission while {} is active", state);
+        alarm.context().getLog().info(
+            "[ALARM] Wrong PIN rejected while state is {}. State unchanged.",
+            state
+        );
         return Behaviors.same();
     }
 
@@ -344,7 +359,7 @@ public final class ControlUnitActor {
         SensorInfo sensor
     ) {
         alarm.context().getLog().info(
-            "Ignoring sensor activation while {} is active: sensor={}, type={}, zone={}",
+            "[ALARM] Sensor event logged, but it does not change the state {}. Sensor={}, type={}, zone={}.",
             state,
             sensor.id(),
             sensor.type(),
@@ -355,7 +370,7 @@ public final class ControlUnitActor {
 
     private static Behavior<Command> ignoreSensorBecauseZoneIsNotArmed(AlarmRuntime alarm, SensorInfo sensor) {
         alarm.context().getLog().info(
-            "Ignoring sensor activation while ARMED because zone {} is inactive: sensor={}, type={}",
+            "[ALARM] Sensor event ignored because its zone is not armed. Zone={}, sensor={}, type={}.",
             sensor.zone(),
             sensor.id(),
             sensor.type()
@@ -368,5 +383,12 @@ public final class ControlUnitActor {
         if (correctPin.isBlank()) {
             throw new IllegalArgumentException("correctPin cannot be blank");
         }
+    }
+
+    private static String formatZones(Set<Zone> zones) {
+        return zones.stream()
+            .sorted()
+            .map(Zone::name)
+            .collect(Collectors.joining(", ", "[", "]"));
     }
 }

@@ -64,7 +64,9 @@ public final class Main {
                 }
                 system.tell(new RootActor.RequestPartialArming(parts[0], parseZones(parts[1])));
             } catch (IllegalArgumentException exception) {
-                System.out.println("Invalid arming request. Use: arm partial <PIN> PERIMETER GROUND_FLOOR");
+                System.out.println("[CLI] Invalid partial arming request.");
+                System.out.println("[CLI] Use: arm partial <PIN> PERIMETER GROUND_FLOOR");
+                System.out.println("[CLI] Available zones: PERIMETER, GROUND_FLOOR, LIVING_AREA, SLEEPING_AREA");
             }
             return true;
         }
@@ -94,7 +96,8 @@ public final class Main {
             return true;
         }
 
-        System.out.println("Unknown command. Type 'help' for the command list.");
+        System.out.println("[CLI] Unknown command: " + command);
+        System.out.println("[CLI] Type 'help' for the command list.");
         return true;
     }
 
@@ -117,6 +120,7 @@ public final class Main {
     private static void printHelp() {
         System.out.println("""
             Smart Home Alarm System CLI
+            Type a command and press ENTER. Replace <PIN> with the configured PIN.
 
             Commands:
               arm full <PIN>

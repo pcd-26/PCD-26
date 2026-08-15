@@ -185,12 +185,12 @@ public final class RootActor extends AbstractBehavior<RootActor.Command> {
     }
 
     private Behavior<Command> onControlStateObserved(ControlStateObserved observed) {
-        System.out.println("Alarm state: " + observed.snapshot().state());
+        System.out.println("[STATUS] Alarm state: " + observed.snapshot().state());
         return this;
     }
 
     private Behavior<Command> onSirenStateObserved(SirenStateObserved observed) {
-        System.out.println("Siren: " + (observed.snapshot().active() ? "ACTIVE" : "INACTIVE"));
+        System.out.println("[STATUS] Siren: " + (observed.snapshot().active() ? "ACTIVE" : "INACTIVE"));
         return this;
     }
 

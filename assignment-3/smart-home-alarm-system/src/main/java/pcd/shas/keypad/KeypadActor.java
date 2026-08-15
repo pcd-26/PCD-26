@@ -11,6 +11,7 @@ import pcd.shas.controlunit.ControlUnitActor;
 
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
 
@@ -99,21 +100,21 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
 
     // Direct submissions are useful for tests and scripted scenarios.
     private Behavior<Command> onPinSubmittedDirectly(SubmitPin command) {
-        getContext().getLog().info("Keypad submitting PIN event for pin length={}", command.pin().length());
+        getContext().getLog().info("[KEYPAD] PIN submitted. Length={}.", command.pin().length());
         controlUnit.tell(new ControlUnitActor.PinSubmitted(command.pin()));
         return this;
     }
 
     private Behavior<Command> onFullArmingRequested(RequestFullArming command) {
-        getContext().getLog().info("Keypad forwarding full-arming request with pin length={}", command.pin().length());
+        getContext().getLog().info("[KEYPAD] Full arming requested. PIN length={}.", command.pin().length());
         controlUnit.tell(new ControlUnitActor.RequestFullArming(command.pin()));
         return this;
     }
 
     private Behavior<Command> onPartialArmingRequested(RequestPartialArming command) {
         getContext().getLog().info(
-            "Keypad forwarding partial-arming request for zones {} with pin length={}",
-            command.activeZones(),
+            "[KEYPAD] Partial arming requested. Zones={}, PIN length={}.",
+            formatZones(command.activeZones()),
             command.pin().length()
         );
         controlUnit.tell(new ControlUnitActor.RequestPartialArming(command.pin(), command.activeZones()));
@@ -128,8 +129,15 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         }
 
         String pin = typedPin.toString();
-        getContext().getLog().info("Keypad submitting buffered PIN event for pin length={}", pin.length());
+        getContext().getLog().info("[KEYPAD] Buffered PIN submitted. Length={}.", pin.length());
         controlUnit.tell(new ControlUnitActor.PinSubmitted(pin));
         typedPin.setLength(0);
+    }
+
+    private static String formatZones(Set<Zone> zones) {
+        return zones.stream()
+            .sorted()
+            .map(Zone::name)
+            .collect(Collectors.joining(", ", "[", "]"));
     }
 }

@@ -41,7 +41,7 @@ public final class SirenActor implements AlertDevice {
         return Behaviors.receive(Command.class)
             // Handles siren activation while it is currently silent.
             .onMessage(Activate.class, message -> {
-                context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
+                context.getLog().info("[SIREN] Activated.");
                 return active(context);
             })
             // Handles duplicate deactivation while already silent.
@@ -60,7 +60,7 @@ public final class SirenActor implements AlertDevice {
             .onMessage(Activate.class, message -> Behaviors.same())
             // Handles siren deactivation while it is currently active.
             .onMessage(Deactivate.class, message -> {
-                context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
+                context.getLog().info("[SIREN] Deactivated.");
                 return silent(context);
             })
             // Handles status queries while the siren is active.

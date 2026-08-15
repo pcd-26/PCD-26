@@ -70,7 +70,7 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
     private Behavior<Command> onActivated(Activate command) {
         SensorEvent event = new SensorEvent(new SensorInfo(sensorId, sensorType, installedZone), Instant.now());
         getContext().getLog().info(
-            "Sensor activated: id={}, type={}, zone={}, timestamp={}",
+            "[SENSOR] Event detected. Sensor={}, type={}, zone={}, timestamp={}.",
             event.info().id(),
             event.info().type(),
             event.info().zone(),
