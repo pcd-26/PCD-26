@@ -27,7 +27,7 @@ JSON.
 
 ## Actor Responsibilities
 
-- Control unit: starts in `RECOVERY`, accepts PIN submissions and sensor
+- Control unit: starts in `STARTUP_RECOVERY`, accepts PIN submissions and sensor
   activations, manages exit-delay and entry-delay timers, and updates sirens.
 - Keypad: stores local keystrokes, builds PINs, and forwards PIN, full-arming,
   and partial-arming requests to the discovered control unit.
@@ -36,13 +36,6 @@ JSON.
 - Siren: accepts activate/deactivate commands and exposes its state for tests.
 
 The control unit keeps the same timer-driven state machine as the previous
-assignment, with `RECOVERY` added for restart safety.
-
-## Cluster Topology
-
-The project expects at least three independently configurable nodes:
-
-1. control-unit node
 2. keypad node
 3. sensor node
 
@@ -64,7 +57,7 @@ used to run separate cluster nodes.
 
 Important configuration entries:
 
-- `shas.correctPin`: PIN required to leave `RECOVERY`, arm, or disarm the system;
+- `shas.correctPin`: PIN required to leave `STARTUP_RECOVERY`, arm, or disarm the system;
 - `shas.exitDelay`: delay between arming and the `ARMED` state;
 - `shas.entryDelay`: delay between intrusion detection and the `ALARM` state;
 - `pekko.actor.provider`: set to `cluster`;
@@ -142,7 +135,7 @@ The test suite covers:
 - the control-unit state machine;
 - keypad and sensor message delivery;
 - clustered discovery and remote message serialization;
-- recreation of the control unit in `RECOVERY`.
+- recreation of the control unit in `STARTUP_RECOVERY`.
 
 ## Assumptions and Limitations
 

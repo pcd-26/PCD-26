@@ -111,7 +111,7 @@ public final class ControlUnitActor {
 
             return Behaviors.withTimers(timers -> {
                 var alarm = new AlarmRuntime(context, timers, correctPin, exitDelay, entryDelay, Set.of());
-                return recovery(alarm);
+                return startupRecovery(alarm);
             });
         });
     }
@@ -174,32 +174,32 @@ public final class ControlUnitActor {
 
     // State behaviors
 
-    // RECOVERY: after a restart, the control unit cannot assume armed or disarmed state.
-    private static Behavior<Command> recovery(AlarmRuntime alarm) {
+    // STARTUP_RECOVERY: at startup or after a restart, the control unit cannot assume armed or disarmed state.
+    private static Behavior<Command> startupRecovery(AlarmRuntime alarm) {
         return Behaviors.receive(Command.class)
-            .onMessage(SirensUpdated.class, message -> recovery(alarm.withSirens(message.sirens())))
+            .onMessage(SirensUpdated.class, message -> startupRecovery(alarm.withSirens(message.sirens())))
             .onMessage(PinSubmitted.class, message -> {
                 if (alarm.correctPin().equals(message.pin())) {
-                    alarm.context().getLog().info("[ALARM] Recovery completed by correct PIN. State: RECOVERY -> DISARMED.");
+                    alarm.context().getLog().info("[ALARM] Startup/Recovery completed by correct PIN. State: STARTUP_RECOVERY -> DISARMED.");
                     alarm.deactivateSiren();
                     return disarmed(alarm);
                 }
 
-                return stayInSameStateAfterWrongPin(alarm, AlarmState.RECOVERY);
+                return stayInSameStateAfterWrongPin(alarm, AlarmState.STARTUP_RECOVERY);
             })
             .onMessage(RequestFullArming.class, message -> {
-                alarm.context().getLog().info("[ALARM] Full arming ignored while state is RECOVERY.");
+                alarm.context().getLog().info("[ALARM] Full arming ignored while state is STARTUP_RECOVERY.");
                 return Behaviors.same();
             })
             .onMessage(RequestPartialArming.class, message -> {
-                alarm.context().getLog().info("[ALARM] Partial arming ignored while state is RECOVERY.");
+                alarm.context().getLog().info("[ALARM] Partial arming ignored while state is STARTUP_RECOVERY.");
                 return Behaviors.same();
             })
             .onMessage(SensorActivated.class, message ->
-                ignoreSensorWithoutStateChange(alarm, AlarmState.RECOVERY, message.sensorInfo()))
+                ignoreSensorWithoutStateChange(alarm, AlarmState.STARTUP_RECOVERY, message.sensorInfo()))
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
-            .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.RECOVERY))
+            .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.STARTUP_RECOVERY))
             .build();
     }
 

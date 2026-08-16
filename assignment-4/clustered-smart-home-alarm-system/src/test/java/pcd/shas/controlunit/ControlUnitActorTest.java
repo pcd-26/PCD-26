@@ -37,33 +37,33 @@ public class ControlUnitActorTest {
     }
 
     @Test
-    public void initialStateIsRecovery() throws Exception {
+    public void initialStateIsStartupRecovery() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
-        assertState(cu, AlarmState.RECOVERY);
+        assertState(cu, AlarmState.STARTUP_RECOVERY);
     }
 
     @Test
-    public void sensorEventsAreIgnoredInRecovery() throws Exception {
+    public void sensorEventsAreIgnoredInStartupRecovery() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
 
         cu.tell(new ControlUnitActor.SensorActivated(
                 new SensorInfo("m1", SensorType.MOTION, Zone.LIVING_AREA)
         ));
 
-        assertState(cu, AlarmState.RECOVERY);
+        assertState(cu, AlarmState.STARTUP_RECOVERY);
     }
 
     @Test
-    public void wrongPinDoesNotLeaveRecovery() throws Exception {
+    public void wrongPinDoesNotLeaveStartupRecovery() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
 
         cu.tell(new ControlUnitActor.PinSubmitted("0000"));
 
-        assertState(cu, AlarmState.RECOVERY);
+        assertState(cu, AlarmState.STARTUP_RECOVERY);
     }
 
     @Test
-    public void correctPinMovesRecoveryToDisarmed() throws Exception {
+    public void correctPinMovesStartupRecoveryToDisarmed() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
 
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));

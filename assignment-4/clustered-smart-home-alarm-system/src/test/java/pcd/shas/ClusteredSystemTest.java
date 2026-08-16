@@ -61,7 +61,7 @@ public class ClusteredSystemTest {
         sensorSystem = ActorSystem.create(SensorActor.create("door-1", SensorType.DOOR_WINDOW, Zone.PERIMETER), SYSTEM_NAME, sensorConfig);
 
         awaitClusterSize(3);
-        awaitState(cuSystem, AlarmState.RECOVERY);
+        awaitState(cuSystem, AlarmState.STARTUP_RECOVERY);
     }
 
     @AfterEach
@@ -104,7 +104,7 @@ public class ClusteredSystemTest {
         roundTrip(serialization, new ControlUnitActor.SensorActivated(
                 new pcd.shas.common.SensorInfo("motion-1", SensorType.MOTION, Zone.LIVING_AREA)
         ));
-        roundTrip(serialization, new ControlUnitActor.StateSnapshot(AlarmState.RECOVERY));
+        roundTrip(serialization, new ControlUnitActor.StateSnapshot(AlarmState.STARTUP_RECOVERY));
         roundTrip(serialization, new KeypadActor.PressKey('#'));
         roundTrip(serialization, new KeypadActor.RequestFullArming("1234"));
         roundTrip(serialization, new KeypadActor.RequestPartialArming("1234", java.util.Set.of(Zone.PERIMETER)));
@@ -112,7 +112,7 @@ public class ClusteredSystemTest {
     }
 
     @Test
-    public void remoteControlUnitRecreationReturnsToRecovery() throws Exception {
+    public void remoteControlUnitRecreationReturnsToStartupRecovery() throws Exception {
         eventuallySubmitPin("1234", AlarmState.DISARMED);
 
         cuSystem.tell(new ControlUnitActor.RequestFullArming("1234"));
@@ -124,7 +124,7 @@ public class ClusteredSystemTest {
 
         Config controlConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2561, SEED_NODES);
         cuSystem = ActorSystem.create(controlUnitNodeBehavior(), SYSTEM_NAME, controlConfig);
-        awaitState(cuSystem, AlarmState.RECOVERY, Duration.ofSeconds(15));
+        awaitState(cuSystem, AlarmState.STARTUP_RECOVERY, Duration.ofSeconds(15));
     }
 
     private void eventuallySubmitPin(String pin, AlarmState expectedState) throws Exception {

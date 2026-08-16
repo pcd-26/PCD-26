@@ -6,5 +6,5 @@ public enum AlarmState {
     ARMED,
     ENTRY_DELAY,
     ALARM,
-    RECOVERY
+    STARTUP_RECOVERY
 }
