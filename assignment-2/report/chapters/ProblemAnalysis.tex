@@ -9,53 +9,38 @@
   \item \textbf{\texttt{NB}}: the number of regular size bands.
 \end{itemize}
 
-As a sequential computation, the problem consists of visiting each file,
-reading its size, updating the total count, and incrementing the corresponding
-histogram band.
-The relevant part for this assignment is doing the same work
-\textbf{asynchronously}, while still supporting \textbf{progress updates} and
-\textbf{cancellation}.
+As a sequential computation, the problem consists of visiting each file, reading its size, updating the total count, and incrementing the corresponding histogram band.
+The relevant part for this assignment is doing the same work \textbf{asynchronously}, while still supporting \textbf{progress updates} and \textbf{cancellation}.
 
 \subsection{Filesystem Traversal}
 
-The input directory may contain a large and irregular tree. A scanner must
-therefore handle:
+The input directory may contain a large and irregular tree.
+A scanner must therefore handle:
 
 \begin{itemize}
-  \item \textbf{recursion}: nested subdirectories must be visited;
-  \item \textbf{scale}: the tree may contain many small files or many
-  subdirectories;
-  \item \textbf{robustness}: on real filesystems, entries may change while the
-  scan is running, so transient access errors should not crash the program;
-  \item \textbf{invalid or special entries}: invalid paths, unreadable
-  directories, symbolic links, and special files must not crash or hang the
-  program;
-  \item \textbf{cycles}: repeated logical directories, for example through
-  symbolic links, must not cause infinite traversal.
+  \item \textbf{Recursion}: nested subdirectories must be visited;
+  \item \textbf{Scale}: the tree may contain many small files or many subdirectories;
+  \item \textbf{Robustness}: on real filesystems, entries may change while the scan is running, so transient access errors should not crash the program;
+  \item \textbf{Invalid or special entries}: invalid paths, unreadable directories, symbolic links, and special files must not crash or hang the program;
+  \item \textbf{Cycles}: repeated logical directories, for example through symbolic links, must not cause infinite traversal.
 \end{itemize}
 
-The scan is mainly \textbf{I/O-bound}. The expensive part is not the arithmetic
-needed to compute a band index, but the number of filesystem operations needed
-to list directories and inspect files. This makes responsiveness more important
-than raw CPU throughput.
+The scan is mainly \textbf{I/O-bound}.
+The expensive part is not the arithmetic needed to compute a band index, but the number of filesystem operations needed to list directories and inspect files.
+This makes responsiveness more important than raw CPU throughput.
 
 \subsection{Concurrency Requirements}
 
-The asynchronous API must \textbf{return immediately} instead of waiting for
-the whole directory tree to be processed. At the same time, the implementation
-must coordinate work that may still be in progress. In particular, it must
-define:
+The asynchronous API must \textbf{return immediately} instead of waiting for the whole directory tree to be processed.
+At the same time, the implementation must coordinate work that may still be in progress.
+In particular, it must define:
 
 \begin{itemize}
-  \item \textbf{scheduling}: how new directory work is started;
-  \item \textbf{state ownership}: where partial counters are stored and
-  updated;
-  \item \textbf{completion detection}: how the implementation detects that no
-  work is left;
-  \item \textbf{progress reporting}: how updates are produced without flooding
-  the CLI or GUI;
-  \item \textbf{cancellation}: what happens when cancellation is requested
-  while work is already in flight.
+  \item \textbf{Scheduling}: how new directory work is started;
+  \item \textbf{State ownership}: where partial counters are stored and updated;
+  \item \textbf{Completion detection}: how the implementation detects that no work is left;
+  \item \textbf{Progress reporting}: how updates are produced without flooding the CLI or GUI;
+  \item \textbf{Cancellation}: what happens when cancellation is requested while work is already in flight.
 \end{itemize}
 
 These requirements are solved differently in the three versions:
@@ -71,35 +56,25 @@ These requirements are solved differently in the three versions:
 The report contains two logical results:
 
 \begin{itemize}
-  \item \textbf{total file count}: the number of regular files found under
-  \texttt{D}, including recursively visited subdirectories;
+  \item \textbf{total file count}: the number of regular files found under \texttt{D}, including recursively visited subdirectories;
   \item \textbf{file-size histogram}: an array of \texttt{NB + 1} counters.
 \end{itemize}
 
-The first \texttt{NB} counters represent the bands obtained by splitting
-\texttt{[0, MaxFS]}. The last counter is the \textbf{overflow band} and counts
-files larger than \texttt{MaxFS}. Boundary values are handled
-deterministically: a file exactly equal to \texttt{MaxFS} belongs to the
-\textbf{last regular band}, while a file larger than \texttt{MaxFS} belongs to
-the \textbf{overflow band}.
+The first \texttt{NB} counters represent the bands obtained by splitting \texttt{[0, MaxFS]}.
+The last counter is the \textbf{overflow band} and counts files larger than \texttt{MaxFS}.
+Boundary values are handled deterministically: a file exactly equal to \texttt{MaxFS} belongs to the \textbf{last regular band}, while a file larger than \texttt{MaxFS} belongs to the \textbf{overflow band}.
 
-The implementation counts \textbf{regular files} and skips non-regular
-filesystem entries. This avoids treating directories, devices, or unsupported
-links as ordinary files.
+The implementation counts \textbf{regular files} and skips non-regular filesystem entries.
+This avoids treating directories, devices, or unsupported links as ordinary files.
 
 \subsection{Correctness Properties}
 
-The expected behaviour can be summarized through these properties:
+The expected behavior can be summarized through these properties:
 
 \begin{itemize}
-  \item \textbf{Safety}: every counted file contributes to exactly one size
-  band;
-  \item \textbf{Completeness}: on a stable directory tree, every reachable
-  regular file is counted once;
-  \item \textbf{Consistency}: the three implementations produce the same report
-  on the same stable directory tree;
-  \item \textbf{Responsiveness}: progress updates and GUI interactions are not
-  blocked by the traversal;
-  \item \textbf{Termination}: completion, errors, and cancellation leave the CLI
-  or GUI in a well-defined state.
+  \item \textbf{Safety}: every counted file contributes to exactly one size band;
+  \item \textbf{Completeness}: on a stable directory tree, every reachable regular file is counted once;
+  \item \textbf{Consistency}: the three implementations produce the same report on the same stable directory tree;
+  \item \textbf{Responsiveness}: progress updates and GUI interactions are not blocked by the traversal;
+  \item \textbf{Termination}: completion, errors, and cancellation leave the CLI or GUI in a well-defined state.
 \end{itemize}
