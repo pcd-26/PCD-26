@@ -83,7 +83,7 @@ public class ClusteredSystemTest {
     public void controlUnitKeypadAndSensorRunOnDistinctNodesAndDiscoverEachOther() throws Exception {
         eventuallySubmitPin("1234", AlarmState.DISARMED);
 
-        keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
+        keypadSystem.tell(new KeypadActor.RequestFullArming("1234"));
         awaitState(cuSystem, AlarmState.EXIT_DELAY);
         awaitState(cuSystem, AlarmState.ARMED);
 
@@ -99,11 +99,15 @@ public class ClusteredSystemTest {
         Serialization serialization = SerializationExtension.get(cuSystem);
 
         roundTrip(serialization, new ControlUnitActor.PinSubmitted("1234"));
+        roundTrip(serialization, new ControlUnitActor.RequestFullArming("1234"));
+        roundTrip(serialization, new ControlUnitActor.RequestPartialArming("1234", java.util.Set.of(Zone.PERIMETER)));
         roundTrip(serialization, new ControlUnitActor.SensorActivated(
                 new pcd.shas.common.SensorInfo("motion-1", SensorType.MOTION, Zone.LIVING_AREA)
         ));
         roundTrip(serialization, new ControlUnitActor.StateSnapshot(AlarmState.RECOVERY));
         roundTrip(serialization, new KeypadActor.PressKey('#'));
+        roundTrip(serialization, new KeypadActor.RequestFullArming("1234"));
+        roundTrip(serialization, new KeypadActor.RequestPartialArming("1234", java.util.Set.of(Zone.PERIMETER)));
         roundTrip(serialization, new SensorActor.Activate());
     }
 
@@ -111,7 +115,7 @@ public class ClusteredSystemTest {
     public void remoteControlUnitRecreationReturnsToRecovery() throws Exception {
         eventuallySubmitPin("1234", AlarmState.DISARMED);
 
-        cuSystem.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cuSystem.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cuSystem, AlarmState.EXIT_DELAY);
         awaitState(cuSystem, AlarmState.ARMED);
 

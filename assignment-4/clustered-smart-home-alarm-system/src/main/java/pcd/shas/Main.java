@@ -21,6 +21,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -125,8 +127,7 @@ public final class Main {
             Thread.sleep(1000);
             LOGGER.info("[DEMO] After correct PIN: {}", queryControlUnitState(controlUnitSystem));
 
-            controlUnitSystem.tell(new ControlUnitActor.ArmAll());
-            keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
+            keypadSystem.tell(new KeypadActor.RequestFullArming("1234"));
             Thread.sleep(500);
             LOGGER.info("[DEMO] After arming request: {}", queryControlUnitState(controlUnitSystem));
 
@@ -213,7 +214,7 @@ public final class Main {
             config
         );
         LOGGER.info("Keypad node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
-        LOGGER.info("Type digits and press Enter to submit. Type 'exit' to stop the node.");
+        LOGGER.info("Use 'arm full <PIN>', 'arm partial <PIN> ZONE...', or 'pin <PIN>'. Type 'exit' to stop the node.");
         startKeypadConsoleInputReader(system);
     }
 
@@ -344,6 +345,26 @@ public final class Main {
                         system.terminate();
                         break;
                     }
+                    if (line.startsWith("arm full ")) {
+                        system.tell(new KeypadActor.RequestFullArming(line.substring("arm full ".length()).trim()));
+                        continue;
+                    }
+                    if (line.startsWith("arm partial ")) {
+                        try {
+                            String[] parts = line.substring("arm partial ".length()).trim().split("\\s+", 2);
+                            if (parts.length < 2) {
+                                throw new IllegalArgumentException("PIN and at least one zone are required");
+                            }
+                            system.tell(new KeypadActor.RequestPartialArming(parts[0], parseZones(parts[1])));
+                        } catch (IllegalArgumentException exception) {
+                            LOGGER.warn("Invalid partial arming request. Use: arm partial <PIN> PERIMETER GROUND_FLOOR");
+                        }
+                        continue;
+                    }
+                    if (line.startsWith("pin ")) {
+                        system.tell(new KeypadActor.SubmitPin(line.substring("pin ".length()).trim()));
+                        continue;
+                    }
                     for (char c : line.toCharArray()) {
                         system.tell(new KeypadActor.PressKey(c));
                     }
@@ -353,6 +374,28 @@ public final class Main {
                 // Ignore console shutdown failures.
             }
         }).start();
+    }
+
+    /**
+     * Parses a whitespace/comma separated zone list for partial arming.
+     *
+     * @param input raw zone list
+     * @return immutable set of zones
+     */
+    private static Set<pcd.shas.common.Zone> parseZones(String input) {
+        String normalizedInput = input.toUpperCase(Locale.ROOT)
+            .replace('-', '_')
+            .replace(',', ' ')
+            .trim();
+
+        if (normalizedInput.isEmpty()) {
+            throw new IllegalArgumentException("At least one zone is required");
+        }
+
+        return Set.of(normalizedInput.split("\\s+"))
+            .stream()
+            .map(pcd.shas.common.Zone::valueOf)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     /**

@@ -59,6 +59,11 @@ The important points are:
 - `src/main/java/pcd/shas/sensor`
 - `src/main/java/pcd/shas/siren`
 
+The code intentionally keeps local SHAS artifacts such as `RootActor`,
+`DemoMain`, `SensorEvent`, `AlertDevice`, and direct actor-construction
+overloads. The clustered path adds discovery and node startup on top of that
+instead of replacing the previous assignment structure wholesale.
+
 ### 4.3 Tests
 
 - `src/test/java/pcd/shas`
@@ -77,7 +82,7 @@ system status changes.
 What to keep in mind:
 
 - it starts in a safe recovery state after recreation;
-- it handles PIN submissions and sensor activations through typed messages;
+- it handles PIN submissions, arming requests, and sensor activations through typed messages;
 - it uses timers for arming and entry delays;
 - it ignores or logs sensor events until a correct PIN restores a valid mode.
 
@@ -89,7 +94,8 @@ What to keep in mind:
 
 - it should not own alarm state;
 - it should not call control-unit internals directly;
-- it should remain a thin actor that translates local input into messages.
+- it should remain a thin actor that translates local input into PIN,
+  full-arming, or partial-arming messages.
 
 ### 5.3 Sensors
 

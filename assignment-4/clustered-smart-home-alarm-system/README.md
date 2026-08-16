@@ -8,7 +8,7 @@ as a small Apache Pekko Typed cluster.
 The runtime is split into three roles:
 
 - `control-unit`: owns the alarm state machine and siren control;
-- `keypad`: collects local PIN input and forwards PIN submissions;
+- `keypad`: collects local input and forwards PIN or arming requests;
 - `sensor`: represents one distributed sensor and forwards activations.
 
 Actors communicate only through immutable typed messages. Remote messages use
@@ -29,14 +29,14 @@ JSON.
 
 - Control unit: starts in `RECOVERY`, accepts PIN submissions and sensor
   activations, manages exit-delay and entry-delay timers, and updates sirens.
-- Keypad: stores local keystrokes, builds PINs, and submits them to all
-  discovered control units.
+- Keypad: stores local keystrokes, builds PINs, and forwards PIN, full-arming,
+  and partial-arming requests to the discovered control unit.
 - Sensor: owns a stable `sensorId`, a `SensorType`, and a `Zone`; forwards
   activations to the control unit as `SensorInfo`.
 - Siren: accepts activate/deactivate commands and exposes its state for tests.
 
-The control unit uses a generation counter together with typed timers so stale
-timeout messages from previous states are ignored safely.
+The control unit keeps the same timer-driven state machine as the previous
+assignment, with `RECOVERY` added for restart safety.
 
 ## Cluster Topology
 
@@ -50,6 +50,11 @@ Discovery uses the Pekko receptionist, so the keypad and sensor do not need
 hard-coded `ActorRef`s for the control unit. The local demo starts the same
 three roles on localhost using ports `2551`, `2552`, and `2553`.
 
+The module also keeps the local `RootActor` and `DemoMain` shape from the
+previous assignment. Those entry points are useful for comparing the alarm
+logic with SHAS, while the distributed `Main`/`NodeStartup` path is the one
+used to run separate cluster nodes.
+
 ## Configuration Files
 
 - `src/main/resources/application.conf`: Pekko Cluster, serialization bindings,
@@ -59,7 +64,7 @@ three roles on localhost using ports `2551`, `2552`, and `2553`.
 
 Important configuration entries:
 
-- `shas.correctPin`: PIN required to leave `RECOVERY` or disarm the system;
+- `shas.correctPin`: PIN required to leave `RECOVERY`, arm, or disarm the system;
 - `shas.exitDelay`: delay between arming and the `ARMED` state;
 - `shas.entryDelay`: delay between intrusion detection and the `ALARM` state;
 - `pekko.actor.provider`: set to `cluster`;

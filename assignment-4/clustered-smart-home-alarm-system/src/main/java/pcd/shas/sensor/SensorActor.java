@@ -13,72 +13,63 @@ import pcd.shas.common.SensorType;
 import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
 
-import java.util.HashSet;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
-/**
- * Cluster-aware sensor actor.
- *
- * <p>The sensor owns its immutable identity metadata and the currently
- * discovered control units. It accepts activation commands, emits
- * {@link ControlUnitActor.SensorActivated} messages, and discovers control
- * units through the receptionist rather than hard-coded actor references.</p>
- */
 public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
-    /**
-     * Root protocol for the sensor.
-     */
+    // Protocol
+
     public interface Command extends MySerializable {}
 
-    /**
-     * Simulates a physical activation of the sensor.
-     */
     public record Activate() implements Command {}
 
-    /**
-     * Internal receptionist update carrying the currently discovered control
-     * unit actor references.
-     *
-     * @param controlUnits discovered control units
-     */
     private record ControlUnitsUpdated(Set<ActorRef<ControlUnitActor.Command>> controlUnits) implements Command {}
+
+    // Sensor setup
 
     private final String sensorId;
     private final SensorType sensorType;
-    private final Zone zone;
-    private final Set<ActorRef<ControlUnitActor.Command>> controlUnits = new HashSet<>();
+    private final Zone installedZone;
+    private Optional<ActorRef<ControlUnitActor.Command>> controlUnit = Optional.empty();
 
-    /**
-     * Creates a reusable sensor actor.
-     *
-     * @param sensorId unique sensor identifier
-     * @param sensorType sensor type
-     * @param zone installation zone
-     * @return the sensor behavior
-     */
+    // Creation
+
+    // Creates a reusable actor for both motion and door/window sensors.
     public static Behavior<Command> create(
         String sensorId,
         SensorType sensorType,
-        Zone zone
+        Zone installedZone
     ) {
-        validate(sensorId, sensorType, zone);
-        return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, zone));
+        validateSensorSetup(sensorId, sensorType, installedZone);
+        return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, installedZone));
+    }
+
+    // Creates a reusable actor for both motion and door/window sensors.
+    public static Behavior<Command> create(
+        String sensorId,
+        SensorType sensorType,
+        Zone installedZone,
+        ActorRef<ControlUnitActor.Command> controlUnit
+    ) {
+        validateSensorSetup(sensorId, sensorType, installedZone, controlUnit);
+        return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, installedZone, controlUnit));
     }
 
     private SensorActor(
         ActorContext<Command> context,
         String sensorId,
         SensorType sensorType,
-        Zone zone
+        Zone installedZone
     ) {
         super(context);
         this.sensorId = sensorId;
         this.sensorType = sensorType;
-        this.zone = zone;
+        this.installedZone = installedZone;
 
-        // Subscribe to control unit updates from receptionist
         ActorRef<Receptionist.Listing> listingAdapter = context.messageAdapter(
             Receptionist.Listing.class,
             listing -> new ControlUnitsUpdated(listing.getServiceInstances(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY))
@@ -88,72 +79,79 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         );
     }
 
-    /**
-     * Returns the sensor command handlers.
-     *
-     * @return the Receive builder for sensor commands
-     */
+    private SensorActor(
+        ActorContext<Command> context,
+        String sensorId,
+        SensorType sensorType,
+        Zone installedZone,
+        ActorRef<ControlUnitActor.Command> controlUnit
+    ) {
+        super(context);
+        this.sensorId = sensorId;
+        this.sensorType = sensorType;
+        this.installedZone = installedZone;
+        this.controlUnit = Optional.of(controlUnit);
+    }
+
+    // Message handlers
+
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
             .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
-            .onMessage(Activate.class, this::onActivate)
+            // Handles one sensor activation event.
+            .onMessage(Activate.class, this::onActivated)
             .build();
     }
 
-    /**
-     * Handles dynamic updates from the receptionist containing active control unit references.
-     *
-     * @param command update containing the set of discovered control unit actors
-     * @return updated behavior
-     */
     private Behavior<Command> onControlUnitsUpdated(ControlUnitsUpdated command) {
-        getContext().getLog().info("Sensor {} discovered control units: {}", sensorId, command.controlUnits());
-        this.controlUnits.clear();
-        this.controlUnits.addAll(command.controlUnits());
+        controlUnit = command.controlUnits().stream()
+            .max(Comparator.comparing(ref -> ref.path().toString()));
         return this;
     }
 
-    /**
-     * Handles sensor activation events, broadcasting a {@link ControlUnitActor.SensorActivated}
-     * message containing metadata to all discovered control units.
-     *
-     * @param command activation command
-     * @return updated behavior
-     */
-    private Behavior<Command> onActivate(Activate command) {
+    // A physical activation becomes a timestamped event and then a message to the central unit.
+    private Behavior<Command> onActivated(Activate command) {
+        SensorEvent event = new SensorEvent(new SensorInfo(sensorId, sensorType, installedZone), Instant.now());
         getContext().getLog().info(
-            "Sensor activated: id={}, type={}, zone={}",
-            sensorId,
-            sensorType,
-            zone
+            "[SENSOR] Event detected. Sensor={}, type={}, zone={}, timestamp={}.",
+            event.info().id(),
+            event.info().type(),
+            event.info().zone(),
+            event.timestamp()
         );
 
-        if (controlUnits.isEmpty()) {
-            getContext().getLog().warn("No control unit found in cluster to send sensor activation event");
+        if (controlUnit.isEmpty()) {
+            getContext().getLog().warn("[SENSOR] No control unit found in the cluster.");
             return this;
         }
 
-        SensorInfo info = new SensorInfo(sensorId, sensorType, zone);
-        for (ActorRef<ControlUnitActor.Command> cu : controlUnits) {
-            cu.tell(new ControlUnitActor.SensorActivated(info));
-        }
+        controlUnit.get().tell(new ControlUnitActor.SensorActivated(event.info()));
         return this;
     }
 
-    /**
-     * Validates sensor construction parameters.
-     *
-     * @param sensorId unique sensor ID
-     * @param sensorType sensor type
-     * @param zone installation zone
-     */
-    private static void validate(String sensorId, SensorType sensorType, Zone zone) {
+    // Helpers
+
+    private static void validateSensorSetup(
+        String sensorId,
+        SensorType sensorType,
+        Zone installedZone
+    ) {
         Objects.requireNonNull(sensorId, "sensorId");
         Objects.requireNonNull(sensorType, "sensorType");
-        Objects.requireNonNull(zone, "zone");
+        Objects.requireNonNull(installedZone, "installedZone");
         if (sensorId.isBlank()) {
             throw new IllegalArgumentException("sensorId cannot be blank");
         }
+    }
+
+    private static void validateSensorSetup(
+        String sensorId,
+        SensorType sensorType,
+        Zone installedZone,
+        ActorRef<ControlUnitActor.Command> controlUnit
+    ) {
+        validateSensorSetup(sensorId, sensorType, installedZone);
+        Objects.requireNonNull(controlUnit, "controlUnit");
     }
 }

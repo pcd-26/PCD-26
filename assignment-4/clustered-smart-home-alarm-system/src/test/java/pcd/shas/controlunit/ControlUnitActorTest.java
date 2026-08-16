@@ -90,16 +90,27 @@ public class ControlUnitActorTest {
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(cu, AlarmState.DISARMED);
 
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
 
         assertState(cu, AlarmState.EXIT_DELAY);
+    }
+
+    @Test
+    public void plainPinDoesNotArmWhileDisarmed() throws Exception {
+        ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
+        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        assertState(cu, AlarmState.DISARMED);
+
+        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+
+        assertState(cu, AlarmState.DISARMED);
     }
 
     @Test
     public void exitDelayExpirationMovesToArmed() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
 
         awaitState(cu, AlarmState.ARMED);
     }
@@ -108,7 +119,7 @@ public class ControlUnitActorTest {
     public void motionActivationWhileArmedStartsEntryDelay() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.ARMED);
 
         cu.tell(new ControlUnitActor.SensorActivated(
@@ -122,7 +133,7 @@ public class ControlUnitActorTest {
     public void doorWindowActivationWhileArmedStartsEntryDelay() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.ARMED);
 
         cu.tell(new ControlUnitActor.SensorActivated(
@@ -136,7 +147,7 @@ public class ControlUnitActorTest {
     public void correctPinDuringEntryDelayMovesToDisarmed() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.ARMED);
         cu.tell(new ControlUnitActor.SensorActivated(
                 new SensorInfo("door-1", SensorType.DOOR_WINDOW, Zone.PERIMETER)
@@ -153,7 +164,7 @@ public class ControlUnitActorTest {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
         ActorRef<SirenActor.Command> siren = testKit.spawn(SirenActor.create());
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.ARMED);
         cu.tell(new ControlUnitActor.SensorActivated(
                 new SensorInfo("door-1", SensorType.DOOR_WINDOW, Zone.PERIMETER)
@@ -169,7 +180,7 @@ public class ControlUnitActorTest {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
         ActorRef<SirenActor.Command> siren = testKit.spawn(SirenActor.create());
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.ARMED);
         cu.tell(new ControlUnitActor.SensorActivated(
                 new SensorInfo("door-1", SensorType.DOOR_WINDOW, Zone.PERIMETER)
@@ -187,12 +198,12 @@ public class ControlUnitActorTest {
     public void staleExitDelayTimeoutIsIgnoredAfterStateChanges() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit(SHORT_DELAY, SHORT_DELAY);
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.ARMED);
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(cu, AlarmState.DISARMED);
 
-        cu.tell(new ControlUnitActor.ExitDelayTimeout(2));
+        cu.tell(new ControlUnitActor.ExitDelayTimeout());
 
         assertState(cu, AlarmState.DISARMED);
     }
@@ -201,7 +212,7 @@ public class ControlUnitActorTest {
     public void staleEntryDelayTimeoutIsIgnoredAfterDisarming() throws Exception {
         ActorRef<ControlUnitActor.Command> cu = spawnControlUnit(SHORT_DELAY, SHORT_DELAY);
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.ARMED);
         cu.tell(new ControlUnitActor.SensorActivated(
                 new SensorInfo("door-1", SensorType.DOOR_WINDOW, Zone.PERIMETER)
@@ -210,7 +221,7 @@ public class ControlUnitActorTest {
         cu.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(cu, AlarmState.DISARMED);
 
-        cu.tell(new ControlUnitActor.EntryDelayTimeout(2));
+        cu.tell(new ControlUnitActor.EntryDelayTimeout());
 
         assertState(cu, AlarmState.DISARMED);
     }
@@ -224,10 +235,24 @@ public class ControlUnitActorTest {
         cu.tell(new ControlUnitActor.PinSubmitted("0000"));
         assertState(cu, AlarmState.DISARMED);
 
-        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestFullArming("1234"));
         awaitState(cu, AlarmState.EXIT_DELAY);
         cu.tell(new ControlUnitActor.PinSubmitted("0000"));
         assertState(cu, AlarmState.EXIT_DELAY);
+    }
+
+    @Test
+    public void partialArmingIgnoresSensorsFromInactiveZones() throws Exception {
+        ActorRef<ControlUnitActor.Command> cu = spawnControlUnit();
+        cu.tell(new ControlUnitActor.PinSubmitted("1234"));
+        cu.tell(new ControlUnitActor.RequestPartialArming("1234", java.util.Set.of(Zone.PERIMETER)));
+        awaitState(cu, AlarmState.ARMED);
+
+        cu.tell(new ControlUnitActor.SensorActivated(
+                new SensorInfo("m1", SensorType.MOTION, Zone.LIVING_AREA)
+        ));
+
+        assertState(cu, AlarmState.ARMED);
     }
 
     private ActorRef<ControlUnitActor.Command> spawnControlUnit() {
