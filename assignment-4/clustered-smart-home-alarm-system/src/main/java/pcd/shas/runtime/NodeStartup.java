@@ -71,7 +71,7 @@ public final class NodeStartup {
         // Defaults keep the local three-node setup easy to launch.
         String host = flags.getOrDefault("--host", DEFAULT_HOST);
         int port = parsePort(flags.get("--port"), role);
-        List<String> seedNodes = resolveSeedNodes(flags.get("--seed-nodes"), host, port);
+        List<String> seedNodes = normalizeSeedNodes(flags.get("--seed-nodes"), host, port);
 
         // Sensor nodes need identity metadata for the distributed events.
         return switch (role) {
@@ -94,8 +94,8 @@ public final class NodeStartup {
         Objects.requireNonNull(seedNodes, "seedNodes");
 
         // Pekko expects full seed-node URIs in the final config.
-        List<String> resolvedSeedNodes = resolveSeedNodes(seedNodes, host, port);
-        return ConfigFactory.parseString(buildClusterConfigText(systemName, host, port, resolvedSeedNodes))
+        List<String> normalizedSeedNodes = normalizeSeedNodes(seedNodes, host, port);
+        return ConfigFactory.parseString(buildClusterConfigText(systemName, host, port, normalizedSeedNodes))
             .withFallback(ConfigFactory.load());
     }
 
@@ -178,7 +178,7 @@ public final class NodeStartup {
     }
 
     // Resolves raw seed-node text, using the local node as fallback.
-    private static List<String> resolveSeedNodes(String rawSeedNodes, String host, int port) {
+    private static List<String> normalizeSeedNodes(String rawSeedNodes, String host, int port) {
         List<String> seedNodes = parseSeedNodes(rawSeedNodes);
         if (!seedNodes.isEmpty()) {
             return seedNodes;
@@ -186,8 +186,8 @@ public final class NodeStartup {
         return List.of(host + ":" + port);
     }
 
-    // Resolves an already parsed seed-node list.
-    private static List<String> resolveSeedNodes(List<String> seedNodes, String host, int port) {
+    // Normalizes an already parsed seed-node list.
+    private static List<String> normalizeSeedNodes(List<String> seedNodes, String host, int port) {
         if (!seedNodes.isEmpty()) {
             return List.copyOf(seedNodes);
         }
