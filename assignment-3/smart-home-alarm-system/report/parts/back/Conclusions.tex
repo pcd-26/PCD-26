@@ -1,0 +1,12 @@
+\section{Conclusions}
+
+The final architecture satisfies the assignment requirements with an \textbf{actor-based} design.
+The control unit owns the state machine and serializes every transition, while keypad, sensors, root, and siren remain
+actors with distinct responsibilities.
+
+The use of Pekko typed behaviors makes the state model explicit: changing alarm state means returning a new behavior.
+Timed transitions are implemented as timeout messages, so they remain part of the same message-passing model instead of
+introducing shared variables or blocking waits.
+
+The result is deterministic at the state-machine level and aligned with the concurrency model requested by the
+assignment.

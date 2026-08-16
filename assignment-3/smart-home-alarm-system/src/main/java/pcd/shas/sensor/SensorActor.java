@@ -14,78 +14,63 @@ import pcd.shas.controlunit.ControlUnitActor;
 import java.time.Instant;
 import java.util.Objects;
 
-/**
- * Typed reusable sensor actor that forwards activations to the control unit.
- */
 public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
 
-    /**
-     * Root protocol for the sensor.
-     */
+    // Protocol
+
     public interface Command {}
 
-    /**
-     * Simulates a physical activation of the sensor.
-     */
     public record Activate() implements Command {}
+
+    // Sensor setup
 
     private final String sensorId;
     private final SensorType sensorType;
-    private final Zone zone;
+    private final Zone installedZone;
     private final ActorRef<ControlUnitActor.Command> controlUnit;
 
-    /**
-     * Creates a reusable sensor actor.
-     *
-     * @param sensorId unique sensor identifier
-     * @param sensorType sensor type
-     * @param zone installation zone
-     * @param controlUnit control unit actor
-     * @return the sensor behavior
-     * @throws NullPointerException if any argument is null
-     * @throws IllegalArgumentException if {@code sensorId} is blank
-     */
+    // Creation
+
+    // Creates a reusable actor for both motion and door/window sensors.
     public static Behavior<Command> create(
         String sensorId,
         SensorType sensorType,
-        Zone zone,
+        Zone installedZone,
         ActorRef<ControlUnitActor.Command> controlUnit
     ) {
-        validate(sensorId, sensorType, zone, controlUnit);
-        return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, zone, controlUnit));
+        validateSensorSetup(sensorId, sensorType, installedZone, controlUnit);
+        return Behaviors.setup(context -> new SensorActor(context, sensorId, sensorType, installedZone, controlUnit));
     }
 
     private SensorActor(
         ActorContext<Command> context,
         String sensorId,
         SensorType sensorType,
-        Zone zone,
+        Zone installedZone,
         ActorRef<ControlUnitActor.Command> controlUnit
     ) {
         super(context);
         this.sensorId = sensorId;
         this.sensorType = sensorType;
-        this.zone = zone;
+        this.installedZone = installedZone;
         this.controlUnit = controlUnit;
     }
+
+    // Message handlers
 
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
-            .onMessage(Activate.class, this::onActivate)
+            // Handles one sensor activation event.
+            .onMessage(Activate.class, this::onActivated)
             .build();
     }
 
-    /**
-     * Handles physical activation commands, creating a timestamped {@link SensorEvent} and forwarding info to control unit.
-     *
-     * @param command activation command
-     * @return behavior instance
-     */
-    private Behavior<Command> onActivate(Activate command) {
-        SensorEvent event = new SensorEvent(new SensorInfo(sensorId, sensorType, zone), Instant.now());
+    // A physical activation becomes a timestamped event and then a message to the central unit.
+    private Behavior<Command> onActivated(Activate command) {
+        SensorEvent event = new SensorEvent(new SensorInfo(sensorId, sensorType, installedZone), Instant.now());
         getContext().getLog().info(
-            "Sensor activated: id={}, type={}, zone={}, timestamp={}",
+            "[SENSOR] Event detected. Sensor={}, type={}, zone={}, timestamp={}.",
             event.info().id(),
             event.info().type(),
             event.info().zone(),
@@ -95,16 +80,17 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
         return this;
     }
 
-    /**
-     * Validates constructor arguments for non-null and non-blank values.
-     *
-     * @throws NullPointerException if any argument is null
-     * @throws IllegalArgumentException if {@code sensorId} is blank
-     */
-    private static void validate(String sensorId, SensorType sensorType, Zone zone, ActorRef<ControlUnitActor.Command> controlUnit) {
+    // Helpers
+
+    private static void validateSensorSetup(
+        String sensorId,
+        SensorType sensorType,
+        Zone installedZone,
+        ActorRef<ControlUnitActor.Command> controlUnit
+    ) {
         Objects.requireNonNull(sensorId, "sensorId");
         Objects.requireNonNull(sensorType, "sensorType");
-        Objects.requireNonNull(zone, "zone");
+        Objects.requireNonNull(installedZone, "installedZone");
         Objects.requireNonNull(controlUnit, "controlUnit");
         if (sensorId.isBlank()) {
             throw new IllegalArgumentException("sensorId cannot be blank");

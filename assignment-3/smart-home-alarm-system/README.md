@@ -10,11 +10,12 @@ This project is the initial Apache Pekko Typed setup for assignment 3.
 
 The source tree now defines the smart-home alarm domain model plus typed
 peripheral actors under `pcd.shas`: the control unit, keypad, sensor, and
-siren. The keypad and sensor actors only forward messages, while the control
-unit owns the state machine, the active-zone set, and the configurable timers.
-The bootstrap entry point now runs a short scripted demo that exercises the
-complete alarm flow and a partial-arming night mode before shutting the system
-down cleanly.
+siren. The keypad forwards PIN submissions and arming-mode requests, while the
+sensor actor only forwards intrusion events. The control unit owns the state
+machine, the active-zone set, and the configurable timers.
+The default entry point starts a small CLI simulator. A separate demo entry
+point runs the complete scripted flow and a partial-arming night mode before
+shutting the system down cleanly.
 
 ## Configuration
 
@@ -28,9 +29,8 @@ The current keys are:
 Tests can override these values with in-memory Typesafe Config instances
 without changing the production file.
 
-The runnable demo uses a short override for the control-unit timers so the full
-scenario completes quickly while still reading the baseline configuration
-through the standard mechanism.
+`Main` uses these values as-is. `DemoMain` keeps the same PIN but uses short
+in-memory delays so the scripted scenario completes quickly.
 
 ## Zone Control
 
@@ -48,10 +48,30 @@ mvn compile
 mvn test
 ```
 
-To run the current bootstrap entry point:
+If your environment cannot reach Maven Central directly, the repository ships
+with a Maven settings mirror used by the CI workflow and the helper scripts.
+From this module, you can invoke Maven with:
+
+```bash
+mvn -s ../../.mvn/settings.xml test
+```
+
+To run the interactive CLI:
 
 ```bash
 mvn exec:java
+```
+
+In the CLI, arming is requested with `arm full <PIN>` or
+`arm partial <PIN> ...`. When the system is already armed, in entry delay, or
+in alarm, `pin <PIN>` disarms the system or silences the siren.
+Sensor events can be simulated with `front door`, `ground floor`,
+`living room`, and `bedroom`, covering all configured zones.
+
+To run the scripted demo:
+
+```bash
+mvn exec:java -Dexec.mainClass=pcd.shas.DemoMain
 ```
 
 ## Project Files
