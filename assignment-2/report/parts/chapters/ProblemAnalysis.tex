@@ -9,8 +9,9 @@
   \item \textbf{\texttt{NB}}: the number of regular size bands.
 \end{itemize}
 
-As a sequential computation, the problem is simple: visit each file, read its
-size, update the total count, and increment the corresponding histogram band.
+As a sequential computation, the problem consists of visiting each file,
+reading its size, updating the total count, and incrementing the corresponding
+histogram band.
 The relevant part for this assignment is doing the same work
 \textbf{asynchronously}, while still supporting \textbf{progress updates} and
 \textbf{cancellation}.

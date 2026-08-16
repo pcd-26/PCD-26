@@ -1,0 +1,19 @@
+\section{How to Run}
+
+From the \texttt{assignment-3/smart-home-alarm-system} directory:
+
+\begin{itemize}
+  \item Build: \texttt{mvn compile}
+  \item Test: \texttt{mvn test}
+  \item CLI: \texttt{mvn exec:java}
+  \item Demo: \texttt{mvn exec:java} with main class \texttt{pcd.shas.DemoMain}
+\end{itemize}
+
+The interactive CLI accepts commands such as \texttt{arm full PIN}, \texttt{arm partial PIN PERIMETER GROUND\_FLOOR},
+\texttt{pin PIN}, \texttt{front door}, \texttt{ground floor}, \texttt{living room}, \texttt{bedroom},
+\texttt{status}, and \texttt{quit}.
+The default configuration uses an exit delay and an entry delay of five seconds.
+
+The demo scenario uses the same actor graph with shorter delays.
+It exercises full arming, entry delay, alarm activation, PIN-based disarming, partial arming, and ignored inactive-zone
+sensors.

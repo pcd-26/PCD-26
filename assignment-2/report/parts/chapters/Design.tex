@@ -47,8 +47,8 @@ sequence of progress reports and a final filesystem statistics report.
 \toprule
 \textbf{Approach} & \textbf{State ownership} & \textbf{Scheduling model} & \textbf{Main trade-off} \\
 \midrule
-Virtual Threads & Shared counters with lock-free atomics and a task counter & Recursive task submission on a virtual-thread executor & Simple imperative code, but many tasks for very large trees \\
-Reactive & Immutable accumulator passed through the stream & Sequential observable generation with sampled updates & Clean functional model, but no parallel directory walk \\
+Virtual Threads & Shared counters with lock-free atomics and a task counter & Recursive task submission on a virtual-thread executor & Blocking filesystem calls delegated to virtual-thread tasks \\
+Reactive & Immutable accumulator passed through the stream & Sequential observable generation with sampled updates & Stream composition without parallel directory walk \\
 Event-Loop & Shared asynchronous state guarded by atomics and a visited-set & Vert.x callbacks with asynchronous I/O and periodic updates & Non-blocking design, but more coordination overhead \\
 \bottomrule
 \end{tabular}
@@ -57,10 +57,10 @@ Event-Loop & Shared asynchronous state guarded by atomics and a visited-set & Ve
 
 \subsection{Virtual Threads Strategy}
 
-The Virtual Threads implementation keeps the code close to a normal recursive
-filesystem walk. Every subdirectory is submitted as a separate virtual-thread
-task, so many blocking filesystem operations can coexist without requiring a
-large pool of platform threads.
+The Virtual Threads implementation uses a recursive filesystem walk. Every
+subdirectory is submitted as a separate virtual-thread task, so many blocking
+filesystem operations can coexist without requiring a large pool of platform
+threads.
 
 The strategy is based on:
 
@@ -76,9 +76,8 @@ The strategy is based on:
   snapshots.
 \end{itemize}
 
-This version is the most direct one to read: the control flow remains
-imperative, while virtual threads make the blocking filesystem calls cheap to
-schedule.
+The control flow remains imperative, while virtual threads allow many blocking
+filesystem calls to be scheduled concurrently.
 
 \subsection{Reactive Strategy}
 
@@ -145,8 +144,8 @@ cancellation is implemented differently:
   the Vert.x instance when pending callbacks have drained.
 \end{itemize}
 
-Progress is deliberately throttled to about one report every 100 ms. This keeps
-the CLI readable and avoids flooding the Swing Event Dispatch Thread.
+Progress is deliberately throttled to about one report every 100 ms. This
+limits CLI output and avoids flooding the Swing Event Dispatch Thread.
 
 The \textbf{CLI} accepts the directory, \texttt{MaxFS}, \texttt{NB}, an
 optional size unit, and an optional paradigm selector

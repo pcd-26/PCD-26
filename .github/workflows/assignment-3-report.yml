@@ -36,16 +36,17 @@ jobs:
       - name: Build and test Smart Home Alarm System (Java)
         working-directory: assignment-3/smart-home-alarm-system
         env:
+          MAVEN_SETTINGS: ${{ github.workspace }}/.mvn/settings.xml
           TEST_SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.test_selector || '' }}
         run: |
           if [ -n "$TEST_SELECTOR" ]; then
-            mvn -B clean test -Dtest="$TEST_SELECTOR"
+            mvn -B -s "$MAVEN_SETTINGS" clean test -Dtest="$TEST_SELECTOR"
           else
-            mvn -B clean test
+            mvn -B -s "$MAVEN_SETTINGS" clean test
           fi
 
-  test-hotc:
-    name: Test assignment-03 Heads-or-Tails Championship
+  test-oeg:
+    name: Test assignment-03 Odds and Evens Game
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -58,8 +59,8 @@ jobs:
         with:
           go-version: "1.22"
 
-      - name: Build and test Heads-or-Tails Championship (Go)
-        working-directory: assignment-3/heads-or-tails-championship/src
+      - name: Build and test Odds and Evens Game (Go)
+        working-directory: assignment-3/odds-and-evens-game/src
         run: go test -v ./...
 
   package:
@@ -67,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - test-shas
-      - test-hotc
+      - test-oeg
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 25
     permissions:
@@ -98,8 +99,8 @@ jobs:
         working-directory: assignment-3/smart-home-alarm-system/report
         run: make
 
-      - name: Build Heads-or-Tails Championship report
-        working-directory: assignment-3/heads-or-tails-championship/report
+      - name: Build Odds and Evens Game report
+        working-directory: assignment-3/odds-and-evens-game/report
         run: make
 
       - name: Prepare delivery metadata
@@ -116,14 +117,14 @@ jobs:
 
           rm -rf package "$DELIVERY_ZIP"
           mkdir -p package/Assignment-03/smart-home-alarm-system/doc
-          mkdir -p package/Assignment-03/heads-or-tails-championship/doc
+          mkdir -p package/Assignment-03/odds-and-evens-game/doc
 
           cp assignment-3/smart-home-alarm-system/pom.xml package/Assignment-03/smart-home-alarm-system/pom.xml
           cp -R assignment-3/smart-home-alarm-system/src package/Assignment-03/smart-home-alarm-system/src
           cp assignment-3/smart-home-alarm-system/report/report.pdf package/Assignment-03/smart-home-alarm-system/doc/report.pdf
 
-          cp -R assignment-3/heads-or-tails-championship/src package/Assignment-03/heads-or-tails-championship/src
-          cp assignment-3/heads-or-tails-championship/report/report.pdf package/Assignment-03/heads-or-tails-championship/doc/report.pdf
+          cp -R assignment-3/odds-and-evens-game/src package/Assignment-03/odds-and-evens-game/src
+          cp assignment-3/odds-and-evens-game/report/report.pdf package/Assignment-03/odds-and-evens-game/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-03)
 
@@ -136,12 +137,13 @@ jobs:
 
           unzip -l "$DELIVERY_ZIP"
           test -f package/Assignment-03/smart-home-alarm-system/doc/report.pdf
-          test -f package/Assignment-03/heads-or-tails-championship/doc/report.pdf
+          test -f package/Assignment-03/odds-and-evens-game/doc/report.pdf
           test -f package/Assignment-03/smart-home-alarm-system/pom.xml
           test -d package/Assignment-03/smart-home-alarm-system/src/main
           test -d package/Assignment-03/smart-home-alarm-system/src/test
-          test -f package/Assignment-03/heads-or-tails-championship/src/main.go
-          test -f package/Assignment-03/heads-or-tails-championship/src/go.mod
+          test -f package/Assignment-03/odds-and-evens-game/src/main.go
+          test -f package/Assignment-03/odds-and-evens-game/src/go.mod
+          test -d package/Assignment-03/odds-and-evens-game/src/tests
           test ! -e package/Assignment-03/doc
           test ! -e package/Assignment-03/report
           test ! -e package/Assignment-03/docs
