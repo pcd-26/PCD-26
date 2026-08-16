@@ -1,7 +1,6 @@
 package pcd.shas;
 
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.Behavior;
@@ -20,7 +19,6 @@ import pcd.shas.siren.SirenActor;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.Duration;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
@@ -29,22 +27,13 @@ public final class Main {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
     private static final String SYSTEM_NAME = "shas-cluster";
-    private static final String LOCAL_HOST = "127.0.0.1";
-    private static final int CONTROL_UNIT_PORT = 2551;
-    private static final int KEYPAD_PORT = 2552;
-    private static final int SENSOR_PORT = 2553;
-    private static final List<String> LOCAL_SEED_NODES = List.of(
-        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, CONTROL_UNIT_PORT),
-        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, KEYPAD_PORT),
-        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, SENSOR_PORT)
-    );
 
     private Main() {}   // Utility class
 
-    // Starts the requested clustered role, or the local three-node demo.
+    // Starts one clustered node with its interactive CLI.
     public static void main(String[] args) {
         if (args.length == 0 || "demo".equalsIgnoreCase(args[0])) {
-            runLocalDemo();
+            printUsage();
             return;
         }
 
@@ -53,106 +42,7 @@ public final class Main {
             runNode(launchArguments);
         } catch (IllegalArgumentException e) {
             LOGGER.error("Invalid startup arguments: {}", e.getMessage());
-        }
-    }
-
-    // Runs a local cluster demo with control unit, keypad, and sensor nodes.
-    private static void runLocalDemo() {
-        LOGGER.info("Starting local three-node SHAS demo...");
-
-        // Build one config per node, each with its own cluster port.
-        Config baseConfig = ConfigFactory.load();
-        Config controlUnitConfig = NodeStartup.buildClusterConfig(
-            SYSTEM_NAME,
-            LOCAL_HOST,
-            CONTROL_UNIT_PORT,
-            LOCAL_SEED_NODES
-        ).withFallback(baseConfig);
-        Config keypadConfig = NodeStartup.buildClusterConfig(
-            SYSTEM_NAME,
-            LOCAL_HOST,
-            KEYPAD_PORT,
-            LOCAL_SEED_NODES
-        ).withFallback(baseConfig);
-        Config sensorConfig = NodeStartup.buildClusterConfig(
-            SYSTEM_NAME,
-            LOCAL_HOST,
-            SENSOR_PORT,
-            LOCAL_SEED_NODES
-        ).withFallback(baseConfig);
-        AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(controlUnitConfig);
-
-        ActorSystem<ControlUnitActor.Command> controlUnitSystem = ActorSystem.create(
-            createControlUnitNodeBehavior(alarmConfiguration),
-            SYSTEM_NAME,
-            controlUnitConfig
-        );
-        ActorSystem<KeypadActor.Command> keypadSystem = ActorSystem.create(
-            KeypadActor.create(),
-            SYSTEM_NAME,
-            keypadConfig
-        );
-        ActorSystem<SensorActor.Command> sensorSystem = ActorSystem.create(
-            createSensorsNodeBehavior(),
-            SYSTEM_NAME,
-            sensorConfig
-        );
-        ActorSystem<ControlUnitActor.Command> restartedControlUnitSystem = null;
-
-        try {
-            // Give the receptionist and membership protocol time to converge.
-            LOGGER.info("Waiting for cluster formation...");
-            Thread.sleep(3000);
-
-            // First recover from the safe startup state.
-            LOGGER.info("[DEMO] Initial state: {}", queryControlUnitState(controlUnitSystem));
-            keypadSystem.tell(new KeypadActor.SubmitPin("9999"));
-            Thread.sleep(500);
-            LOGGER.info("[DEMO] After wrong PIN: {}", queryControlUnitState(controlUnitSystem));
-
-            sensorSystem.tell(new SensorActor.Activate());
-            Thread.sleep(500);
-
-            keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
-            Thread.sleep(1000);
-            LOGGER.info("[DEMO] After correct PIN: {}", queryControlUnitState(controlUnitSystem));
-
-            keypadSystem.tell(new KeypadActor.RequestFullArming("1234"));
-            Thread.sleep(500);
-            LOGGER.info("[DEMO] After arming request: {}", queryControlUnitState(controlUnitSystem));
-
-            // Let the exit timer expire, then restart the control-unit node.
-            Thread.sleep(5500);
-            LOGGER.info("[DEMO] After exit delay: {}", queryControlUnitState(controlUnitSystem));
-
-            controlUnitSystem.terminate();
-            controlUnitSystem.getWhenTerminated().toCompletableFuture().join();
-
-            restartedControlUnitSystem = ActorSystem.create(
-                createControlUnitNodeBehavior(alarmConfiguration),
-                SYSTEM_NAME,
-                controlUnitConfig
-            );
-            Thread.sleep(3000);
-
-            // After restart, sensors are ignored until the correct PIN is entered.
-            LOGGER.info("[DEMO] Restarted state: {}", queryControlUnitState(restartedControlUnitSystem));
-            sensorSystem.tell(new SensorActor.Activate());
-            Thread.sleep(500);
-
-            keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
-            Thread.sleep(1000);
-            LOGGER.info("[DEMO] Final restarted state: {}", queryControlUnitState(restartedControlUnitSystem));
-        } catch (Exception e) {
-            LOGGER.error("Demo failed with exception", e);
-        } finally {
-            LOGGER.info("Shutting down demo systems...");
-            keypadSystem.terminate();
-            sensorSystem.terminate();
-            controlUnitSystem.terminate();
-            if (restartedControlUnitSystem != null) {
-                restartedControlUnitSystem.terminate();
-            }
+            printUsage();
         }
     }
 
@@ -180,9 +70,14 @@ public final class Main {
             SYSTEM_NAME,
             config
         );
-        LOGGER.info("Control unit node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
-        waitEnter();
-        system.terminate();
+        LOGGER.info(
+            "Control unit node running on {}:{}",
+            config.getString("pekko.remote.artery.canonical.hostname"),
+            config.getInt("pekko.remote.artery.canonical.port")
+        );
+        LOGGER.info("Commands: status, help, exit.");
+        startControlUnitConsoleInputReader(system);
+        waitForTermination(system);
     }
 
     // Runs a keypad node and reads commands from the console.
@@ -192,9 +87,14 @@ public final class Main {
             SYSTEM_NAME,
             config
         );
-        LOGGER.info("Keypad node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
-        LOGGER.info("Use 'arm full <PIN>', 'arm partial <PIN> ZONE...', or 'pin <PIN>'. Type 'exit' to stop the node.");
+        LOGGER.info(
+            "Keypad node running on {}:{}",
+            config.getString("pekko.remote.artery.canonical.hostname"),
+            config.getInt("pekko.remote.artery.canonical.port")
+        );
+        LOGGER.info("Commands: arm full <PIN>, arm partial <PIN> ZONE..., pin <PIN>, raw digits, exit.");
         startKeypadConsoleInputReader(system);
+        waitForTermination(system);
     }
 
     // Runs a sensor node using the sensor metadata from CLI arguments.
@@ -216,8 +116,9 @@ public final class Main {
             launchArguments.sensorType(),
             launchArguments.zone()
         );
-        LOGGER.info("Press Enter to trigger the sensor. Type 'exit' to stop the node.");
+        LOGGER.info("Press ENTER to trigger the sensor. Type 'exit' to stop the node.");
         startSensorConsoleInputReader(system);
+        waitForTermination(system);
     }
 
     // Queries the control unit state through ask.
@@ -259,36 +160,31 @@ public final class Main {
         });
     }
 
-    // Creates the local demo sensor node with two child sensors.
-    private static Behavior<SensorActor.Command> createSensorsNodeBehavior() {
-        return Behaviors.setup(context -> {
-            ActorRef<SensorActor.Command> doorSensor = context.spawn(
-                SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, pcd.shas.common.Zone.PERIMETER),
-                "front-door-sensor"
-            );
-            ActorRef<SensorActor.Command> motionSensor = context.spawn(
-                SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, pcd.shas.common.Zone.LIVING_AREA),
-                "living-room-sensor"
-            );
-
-            return Behaviors.receive(SensorActor.Command.class)
-                .onMessage(SensorActor.Activate.class, message -> {
-                    // One demo trigger activates both simulated sensors.
-                    doorSensor.tell(message);
-                    motionSensor.tell(message);
-                    return Behaviors.same();
-                })
-                .build();
-        });
-    }
-
-    // Blocks until ENTER so long-running nodes stay alive.
-    private static void waitEnter() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
-            reader.readLine();
-        } catch (Exception ignored) {
-            // Ignore shutdown input failures.
-        }
+    // Starts console input for a control-unit node.
+    private static void startControlUnitConsoleInputReader(ActorSystem<ControlUnitActor.Command> system) {
+        new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String command = line.trim();
+                    if (command.equalsIgnoreCase("exit")) {
+                        system.terminate();
+                        break;
+                    }
+                    if (command.equalsIgnoreCase("status")) {
+                        LOGGER.info("Alarm state: {}", queryControlUnitState(system));
+                        continue;
+                    }
+                    if (command.equalsIgnoreCase("help")) {
+                        LOGGER.info("Commands: status, help, exit.");
+                        continue;
+                    }
+                    LOGGER.warn("Unknown control-unit command: {}", command);
+                }
+            } catch (Exception ignored) {
+                // Ignore console shutdown failures.
+            }
+        }, "control-unit-console").start();
     }
 
     // Starts console input for a keypad node.
@@ -331,7 +227,7 @@ public final class Main {
             } catch (Exception ignored) {
                 // Ignore console shutdown failures.
             }
-        }).start();
+        }, "keypad-console").start();
     }
 
     // Parses the zone list used by partial arming commands.
@@ -367,6 +263,26 @@ public final class Main {
             } catch (Exception ignored) {
                 // Ignore console shutdown failures.
             }
-        }).start();
+        }, "sensor-console").start();
+    }
+
+    // Waits until the actor system completes its coordinated shutdown.
+    private static void waitForTermination(ActorSystem<?> system) {
+        system.getWhenTerminated().toCompletableFuture().join();
+    }
+
+    // Prints the node-oriented command-line contract.
+    private static void printUsage() {
+        System.out.println("""
+            Clustered Smart Home Alarm System
+
+            Start one interactive clustered node:
+              control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+              keypad       --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+              sensor       --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+
+            Run the distributed process demo through pcd.shas.DemoMain or:
+              run-cshas demo
+            """);
     }
 }

@@ -60,9 +60,11 @@ The important points are:
 - `src/main/java/pcd/shas/siren`
 
 The code intentionally keeps local SHAS artifacts such as `RootActor`,
-`DemoMain`, `SensorEvent`, `AlertDevice`, and direct actor-construction
-overloads. The clustered path adds discovery and node startup on top of that
-instead of replacing the previous assignment structure wholesale.
+`SensorEvent`, `AlertDevice`, and direct actor-construction overloads. The
+clustered path adds discovery and node startup on top of that instead of
+replacing the previous assignment structure wholesale. `Main` launches one
+interactive cluster node, while `DemoMain` orchestrates a visible distributed
+demo by starting separate node processes.
 
 ### 4.3 Tests
 

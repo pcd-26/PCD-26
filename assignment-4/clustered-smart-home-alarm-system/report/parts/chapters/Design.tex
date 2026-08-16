@@ -11,10 +11,10 @@ The implementation uses typed actors and receptionist-based discovery.
 
 The non-distributed shape of the previous assignment is preserved wherever it
 does not conflict with clustering. The project still contains the local
-\texttt{RootActor}, \texttt{DemoMain}, timestamped \texttt{SensorEvent}, and
-\texttt{AlertDevice} abstraction. The cluster-specific additions are limited
-to node startup, receptionist discovery, serialization markers, and recovery
-after control-unit recreation.
+\texttt{RootActor}, timestamped \texttt{SensorEvent}, and \texttt{AlertDevice}
+abstraction. The cluster-specific additions are limited to node startup,
+receptionist discovery, serialization markers, a process-based
+\texttt{DemoMain}, and recovery after control-unit recreation.
 
 The control unit starts in \texttt{RECOVERY} after creation or restart. Only a
 correct PIN can move it back to \texttt{DISARMED}. Until then, arming commands

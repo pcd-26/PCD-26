@@ -17,7 +17,7 @@ JSON.
 
 ## Package Organization
 
-- `pcd.shas`: command-line entry point and application configuration loader;
+- `pcd.shas`: node entry point, distributed demo entry point, and application configuration loader;
 - `pcd.shas.common`: shared value objects, enums, and serialization marker;
 - `pcd.shas.controlunit`: clustered control-unit actor and state machine;
 - `pcd.shas.keypad`: keypad actor and local PIN input protocol;
@@ -40,13 +40,14 @@ The control unit keeps the same timer-driven state machine as the previous
 3. sensor node
 
 Discovery uses the Pekko receptionist, so the keypad and sensor do not need
-hard-coded `ActorRef`s for the control unit. The local demo starts the same
-three roles on localhost using ports `2551`, `2552`, and `2553`.
+hard-coded `ActorRef`s for the control unit. The process demo starts the same
+three roles as separate localhost processes using ports `2551`, `2552`, and
+`2553`.
 
-The module also keeps the local `RootActor` and `DemoMain` shape from the
-previous assignment. Those entry points are useful for comparing the alarm
-logic with SHAS, while the distributed `Main`/`NodeStartup` path is the one
-used to run separate cluster nodes.
+`Main` is the interactive entry point for one cluster node. `DemoMain` is the
+distributed demo entry point: it starts separate `Main` processes, sends
+commands to their CLIs, and prints prefixed node output so the message flow can
+be inspected from one terminal.
 
 ## Configuration Files
 
@@ -105,7 +106,7 @@ PowerShell:
 .\run-cshas.ps1 sensor --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
 ```
 
-### Local three-node demo
+### Distributed three-process demo
 
 ```bash
 ./run-cshas.sh demo
@@ -141,7 +142,7 @@ The test suite covers:
 
 - The distributed setup assumes three local ports by default: `2551`, `2552`,
   and `2553`.
-- The local demo is intended for quick inspection and uses fixed localhost
+- The process demo is intended for quick inspection and uses fixed localhost
   ports.
 - The control unit is intentionally stateless across recreation; no persistence
   layer is used.
