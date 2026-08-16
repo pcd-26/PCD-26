@@ -7,70 +7,46 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 
 import java.util.Objects;
 
-/**
- * Typed siren actor for the alarm system, implementing the AlertDevice abstraction.
- */
 public final class SirenActor implements AlertDevice {
 
-    private SirenActor() {} // Utility class
+    private SirenActor() {}
 
-    /**
-     * Root protocol for the siren, extending generic alert device commands.
-     */
+    // Protocol
+
     public interface Command extends AlertDevice.Command {}
 
-    /**
-     * Turns the siren on.
-     */
     public record Activate() implements Command {}
 
-    /**
-     * Turns the siren off.
-     */
     public record Deactivate() implements Command {}
 
-    /**
-     * Query for the current siren state.
-     *
-     * @param replyTo actor that should receive the state snapshot
-     */
     public record QueryState(ActorRef<StateSnapshot> replyTo) implements Command {
-        /**
-         * Compact constructor validating that replyTo actor reference is non-null.
-         *
-         * @throws NullPointerException if {@code replyTo} is null
-         */
         public QueryState {
             Objects.requireNonNull(replyTo, "replyTo");
         }
     }
 
-    /**
-     * Snapshot of the current siren state.
-     *
-     * @param active whether the siren is currently on
-     */
     public record StateSnapshot(boolean active) {}
 
-    /**
-     * Creates the typed siren behavior.
-     *
-     * @return the siren behavior
-     */
+    // Creation
+
+    // Starts the siren actor in its silent state.
     public static Behavior<Command> create() {
         return Behaviors.setup(SirenActor::silent);
     }
 
-    /**
-     * Behavior handling commands when the siren is in silent (off) state.
-     */
+    // Behaviors
+
+    // Silent and active are separate behaviors, so duplicate commands are naturally idempotent.
     private static Behavior<Command> silent(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
+            // Handles siren activation while it is currently silent.
             .onMessage(Activate.class, message -> {
-                context.getLog().info("Transition SIREN_OFF -> SIREN_ON");
+                context.getLog().info("[SIREN] Activated.");
                 return active(context);
             })
+            // Handles duplicate deactivation while already silent.
             .onMessage(Deactivate.class, message -> Behaviors.same())
+            // Handles status queries while the siren is silent.
             .onMessage(QueryState.class, message -> {
                 message.replyTo().tell(new StateSnapshot(false));
                 return Behaviors.same();
@@ -78,16 +54,16 @@ public final class SirenActor implements AlertDevice {
             .build();
     }
 
-    /**
-     * Behavior handling commands when the siren is in active (sounding) state.
-     */
     private static Behavior<Command> active(ActorContext<Command> context) {
         return Behaviors.receive(Command.class)
+            // Handles duplicate activation while already active.
             .onMessage(Activate.class, message -> Behaviors.same())
+            // Handles siren deactivation while it is currently active.
             .onMessage(Deactivate.class, message -> {
-                context.getLog().info("Transition SIREN_ON -> SIREN_OFF");
+                context.getLog().info("[SIREN] Deactivated.");
                 return silent(context);
             })
+            // Handles status queries while the siren is active.
             .onMessage(QueryState.class, message -> {
                 message.replyTo().tell(new StateSnapshot(true));
                 return Behaviors.same();

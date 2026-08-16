@@ -39,22 +39,22 @@ class ControlUnitActorStateMachineTest {
     }
 
     @Test
-    void correctPinInDisarmedEntersExitDelay() {
+    void fullArmingRequestWithCorrectPinEntersExitDelay() {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
 
         assertState(controlUnit, AlarmState.EXIT_DELAY);
         sirenProbe.expectNoMessage();
     }
 
     @Test
-    void incorrectPinInDisarmedChangesNothing() {
+    void armingRequestWithIncorrectPinChangesNothing() {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("0000"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("0000"));
 
         assertState(controlUnit, AlarmState.DISARMED);
         sirenProbe.expectNoMessage();
@@ -76,7 +76,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
 
         assertState(controlUnit, AlarmState.EXIT_DELAY);
@@ -88,7 +88,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
 
         assertState(controlUnit, AlarmState.ARMED);
@@ -100,7 +100,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
 
@@ -113,7 +113,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
 
@@ -126,7 +126,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
@@ -140,7 +140,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         controlUnit.tell(new ControlUnitActor.EntryDelayTimeout());
@@ -154,7 +154,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("back_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
@@ -168,7 +168,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         controlUnit.tell(new ControlUnitActor.EntryDelayTimeout());
@@ -184,7 +184,7 @@ class ControlUnitActorStateMachineTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
         controlUnit.tell(new ControlUnitActor.EntryDelayTimeout());
@@ -203,7 +203,7 @@ class ControlUnitActorStateMachineTest {
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         assertState(controlUnit, AlarmState.DISARMED);
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
         assertState(controlUnit, AlarmState.DISARMED);
         sirenProbe.expectMessage(new SirenActor.Deactivate());

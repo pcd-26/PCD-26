@@ -35,7 +35,7 @@ class ControlUnitZoneArmingTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         assertState(controlUnit, AlarmState.ARMED);
 
@@ -50,8 +50,7 @@ class ControlUnitZoneArmingTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestPartialArming("1234", Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         assertState(controlUnit, AlarmState.ARMED);
 
@@ -66,8 +65,7 @@ class ControlUnitZoneArmingTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.ArmPartial(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestPartialArming("1234", Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR)));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("front_door", SensorType.DOOR_WINDOW, Zone.PERIMETER)));
 
@@ -80,8 +78,7 @@ class ControlUnitZoneArmingTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.ArmPartial(Set.of(Zone.PERIMETER)));
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestPartialArming("1234", Set.of(Zone.PERIMETER)));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA)));
 
@@ -94,8 +91,7 @@ class ControlUnitZoneArmingTest {
         var sirenProbe = testKit.createTestProbe(SirenActor.Command.class);
         var controlUnit = testKit.spawn(ControlUnitActor.create("1234", Duration.ofSeconds(1), Duration.ofSeconds(1), sirenProbe.getRef()));
 
-        controlUnit.tell(new ControlUnitActor.ArmPartial(Set.of(Zone.PERIMETER)));
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestPartialArming("1234", Set.of(Zone.PERIMETER)));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         controlUnit.tell(new ControlUnitActor.SensorActivated(new SensorInfo("living_room_motion", SensorType.MOTION, Zone.LIVING_AREA)));
         assertState(controlUnit, AlarmState.ARMED);
@@ -104,7 +100,7 @@ class ControlUnitZoneArmingTest {
         assertState(controlUnit, AlarmState.DISARMED);
         sirenProbe.expectMessage(new SirenActor.Deactivate());
 
-        controlUnit.tell(new ControlUnitActor.PinSubmitted("1234"));
+        controlUnit.tell(new ControlUnitActor.RequestFullArming("1234"));
         controlUnit.tell(new ControlUnitActor.ExitDelayTimeout());
         assertState(controlUnit, AlarmState.ARMED);
 

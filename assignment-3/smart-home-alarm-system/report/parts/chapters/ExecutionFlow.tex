@@ -1,0 +1,47 @@
+\section{Execution Flow}
+
+The system can be used through two entry points.
+\texttt{Main} starts an interactive CLI using the normal configuration from \texttt{application.conf}.
+\texttt{DemoMain} starts the same actor graph with shorter delays and sends a fixed sequence of messages that exercise
+the main state-machine transitions.
+
+The normal full-arming flow is:
+\begin{enumerate}
+    \item the user sends \texttt{arm full PIN} through the CLI;
+    \item the root actor forwards the request to the keypad actor;
+    \item the keypad actor forwards the arming request to the control unit;
+    \item if the PIN is correct, the control unit enters \textit{EXIT\_DELAY};
+    \item when the exit timer expires, the control unit enters \textit{ARMED};
+    \item a sensor activation in an active zone starts \textit{ENTRY\_DELAY};
+    \item if the entry timer expires before a valid PIN, the control unit enters \textit{ALARM};
+    \item submitting the correct PIN stops the siren and returns to \textit{DISARMED}.
+\end{enumerate}
+
+The partial-arming flow is the same, except that the arming request includes a selected set of zones.
+For instance, night mode can arm \texttt{PERIMETER} and \texttt{GROUND\_FLOOR} while leaving
+\texttt{LIVING\_AREA} and \texttt{SLEEPING\_AREA} inactive.
+In that case living-room or bedroom motion events are received and logged, but they do not start the entry delay.
+
+\medskip
+
+\noindent\textbf{CLI-to-actor routing in \texttt{RootActor}}
+\begin{lstlisting}[style=reportcode]
+private Behavior<Command> onRequestPartialArming(RequestPartialArming command) {
+    keypad.tell(new KeypadActor.RequestPartialArming(command.pin(), command.zones()));
+    return this;
+}
+
+private Behavior<Command> onActivateFrontDoor(ActivateFrontDoor command) {
+    frontDoorSensor.tell(new SensorActor.Activate());
+    return this;
+}
+\end{lstlisting}
+
+The CLI exposes one simulated sensor for each configured zone: front door for \texttt{PERIMETER}, ground-floor window for
+\texttt{GROUND\_FLOOR}, living-room motion for \texttt{LIVING\_AREA}, and bedroom motion for
+\texttt{SLEEPING\_AREA}.
+
+The root actor does not wait synchronously for replies.
+When the CLI asks for status, the root actor sends query messages to the control unit and the siren.
+Their replies come back later as normal messages through Pekko message adapters.
+This keeps read-only operations inside the same asynchronous message-passing model.

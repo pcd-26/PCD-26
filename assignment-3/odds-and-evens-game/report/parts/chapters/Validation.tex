@@ -1,0 +1,33 @@
+\section{Correctness and Validation}
+
+The implementation satisfies a small set of \textbf{invariants}:
+\begin{itemize}
+    \item every \textbf{match} produces exactly one result message;
+    \item every match has exactly one \textbf{winner};
+    \item every \textbf{round} consumes an even number of players;
+    \item every round halves the player count;
+    \item the \textbf{championship} stops when one player remains;
+    \item result ordering is stable even when \textbf{goroutines} complete out of order;
+    \item invalid toss functions and invalid players are reported as \textbf{errors} instead of producing undefined behavior.
+\end{itemize}
+
+The \textbf{round barrier} is the key safety property.
+Because the coordinator waits for exactly one outcome per match, the next round cannot start before the current round
+is complete.
+Because outcomes are stored by match index, the bracket order remains stable independently of scheduling.
+
+Error handling is also explicit.
+If the toss function is `nil`, or if it returns an invalid side, the error is propagated after all workers have been
+accounted for.
+This keeps the failure path well defined and prevents the coordinator from advancing with incomplete information.
+
+The \textbf{test suite} covers player validation, coin-side parsing, single-match behavior, round execution, full championship
+progression, and CLI input parsing.
+Tests covering \textbf{concurrency} verify that matches in the same round start independently, that the coordinator waits for
+every result, that result ordering is stable, and that invalid toss functions do not deadlock the round.
+The CLI tests also check the formatted championship output for an eight-player tournament.
+The championship tests additionally check the one-player case, the progression of winners across rounds, and the exact
+number of rounds and matches produced by the bracket.
+
+This gives coverage for both the functional specification and the concurrency properties required by the assignment
+statement, including the absence of \textbf{shared-memory coordination} in the tournament logic.
