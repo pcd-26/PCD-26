@@ -1,10 +1,14 @@
 package pcd.shas.controlunit;
 
 import org.apache.pekko.actor.typed.ActorRef;
+import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.TimerScheduler;
+import org.apache.pekko.cluster.typed.ClusterSingleton;
+import org.apache.pekko.cluster.typed.ClusterSingletonSettings;
+import org.apache.pekko.cluster.typed.SingletonActor;
 import org.apache.pekko.actor.typed.receptionist.Receptionist;
 import org.apache.pekko.actor.typed.receptionist.ServiceKey;
 import pcd.shas.common.AlarmState;
@@ -20,6 +24,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class ControlUnitActor {
+
+    public static final String CLUSTER_SINGLETON_NAME = "control-unit";
+    public static final String CLUSTER_ROLE = "control-unit";
 
     public static final ServiceKey<Command> CONTROL_UNIT_SERVICE_KEY =
         ServiceKey.create(Command.class, "control-unit-service");
@@ -114,6 +121,22 @@ public final class ControlUnitActor {
                 return startupRecovery(alarm);
             });
         });
+    }
+
+    // Starts or reaches the single alarm control entity for the whole cluster.
+    public static ActorRef<Command> initSingleton(
+        ActorSystem<?> system,
+        String correctPin,
+        Duration exitDelay,
+        Duration entryDelay
+    ) {
+        Objects.requireNonNull(system, "system");
+
+        ClusterSingletonSettings settings = ClusterSingletonSettings.create(system).withRole(CLUSTER_ROLE);
+        SingletonActor<Command> singleton = SingletonActor
+            .of(create(correctPin, exitDelay, entryDelay), CLUSTER_SINGLETON_NAME)
+            .withSettings(settings);
+        return ClusterSingleton.get(system).init(singleton);
     }
 
     // Runtime context

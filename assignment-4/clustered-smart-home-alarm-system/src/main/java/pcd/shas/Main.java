@@ -52,7 +52,8 @@ public final class Main {
             SYSTEM_NAME,
             launchArguments.host(),
             launchArguments.port(),
-            launchArguments.seedNodes()
+            launchArguments.seedNodes(),
+            launchArguments.role()
         );
         AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(nodeConfig);
 
@@ -142,13 +143,11 @@ public final class Main {
         return Behaviors.setup(context -> {
             // The siren stays local to the control-unit node and is discovered by service key.
             context.spawn(SirenActor.create(), "siren");
-            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
-                ControlUnitActor.create(
-                    alarmConfiguration.correctPin(),
-                    alarmConfiguration.exitDelay(),
-                    alarmConfiguration.entryDelay()
-                ),
-                "control-unit"
+            ActorRef<ControlUnitActor.Command> controlUnit = ControlUnitActor.initSingleton(
+                context.getSystem(),
+                alarmConfiguration.correctPin(),
+                alarmConfiguration.exitDelay(),
+                alarmConfiguration.entryDelay()
             );
             // The ActorSystem itself forwards external commands to the child control unit.
             return Behaviors.receive(ControlUnitActor.Command.class)

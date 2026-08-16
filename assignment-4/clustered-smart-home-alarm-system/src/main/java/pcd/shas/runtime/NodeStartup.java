@@ -90,12 +90,18 @@ public final class NodeStartup {
 
     // Builds the Pekko Cluster configuration for a single node.
     public static Config buildClusterConfig(String systemName, String host, int port, List<String> seedNodes) {
+        return buildClusterConfig(systemName, host, port, seedNodes, Role.CONTROL_UNIT);
+    }
+
+    // Builds the Pekko Cluster configuration for a single node with its cluster role.
+    public static Config buildClusterConfig(String systemName, String host, int port, List<String> seedNodes, Role role) {
         validateSystemIdentity(systemName, host, port);
         Objects.requireNonNull(seedNodes, "seedNodes");
+        Objects.requireNonNull(role, "role");
 
         // Pekko expects full seed-node URIs in the final config.
         List<String> normalizedSeedNodes = normalizeSeedNodes(seedNodes, host, port);
-        return ConfigFactory.parseString(buildClusterConfigText(systemName, host, port, normalizedSeedNodes))
+        return ConfigFactory.parseString(buildClusterConfigText(systemName, host, port, normalizedSeedNodes, role))
             .withFallback(ConfigFactory.load());
     }
 
@@ -228,15 +234,21 @@ public final class NodeStartup {
     }
 
     // Builds the small config overlay for this node.
-    private static String buildClusterConfigText(String systemName, String host, int port, List<String> seedNodes) {
+    private static String buildClusterConfigText(String systemName, String host, int port, List<String> seedNodes, Role role) {
         String seedNodeList = seedNodes.stream()
             .map(seedNode -> "\"" + toSeedNodeUri(systemName, seedNode) + "\"")
             .collect(Collectors.joining(", "));
+        String clusterRole = switch (role) {
+            case CONTROL_UNIT -> "control-unit";
+            case KEYPAD -> "keypad";
+            case SENSOR -> "sensor";
+        };
         return """
             pekko.remote.artery.canonical.hostname = "%s"
             pekko.remote.artery.canonical.port = %d
             pekko.cluster.seed-nodes = [%s]
-            """.formatted(host, port, seedNodeList);
+            pekko.cluster.roles = ["%s"]
+            """.formatted(host, port, seedNodeList, clusterRole);
     }
 
     // Parses a sensor type from CLI text.

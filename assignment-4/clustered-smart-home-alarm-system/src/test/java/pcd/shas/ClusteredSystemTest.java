@@ -52,9 +52,9 @@ public class ClusteredSystemTest {
 
     @BeforeEach
     public void startCluster() throws Exception {
-        Config controlConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2561, SEED_NODES);
-        Config keypadConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2562, SEED_NODES);
-        Config sensorConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2563, SEED_NODES);
+        Config controlConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2561, SEED_NODES, NodeStartup.Role.CONTROL_UNIT);
+        Config keypadConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2562, SEED_NODES, NodeStartup.Role.KEYPAD);
+        Config sensorConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2563, SEED_NODES, NodeStartup.Role.SENSOR);
 
         cuSystem = ActorSystem.create(controlUnitNodeBehavior(), SYSTEM_NAME, controlConfig);
         keypadSystem = ActorSystem.create(KeypadActor.create(), SYSTEM_NAME, keypadConfig);
@@ -122,7 +122,7 @@ public class ClusteredSystemTest {
         cuSystem.terminate();
         cuSystem.getWhenTerminated().toCompletableFuture().get(2, TimeUnit.SECONDS);
 
-        Config controlConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2561, SEED_NODES);
+        Config controlConfig = NodeStartup.buildClusterConfig(SYSTEM_NAME, HOST, 2561, SEED_NODES, NodeStartup.Role.CONTROL_UNIT);
         cuSystem = ActorSystem.create(controlUnitNodeBehavior(), SYSTEM_NAME, controlConfig);
         awaitState(cuSystem, AlarmState.STARTUP_RECOVERY, Duration.ofSeconds(15));
     }
@@ -152,9 +152,11 @@ public class ClusteredSystemTest {
     private Behavior<ControlUnitActor.Command> controlUnitNodeBehavior() {
         return Behaviors.setup(context -> {
             context.spawn(SirenActor.create(), "siren");
-            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
-                    ControlUnitActor.create("1234", Duration.ofMillis(80), Duration.ofMillis(80)),
-                    "control-unit"
+            ActorRef<ControlUnitActor.Command> controlUnit = ControlUnitActor.initSingleton(
+                    context.getSystem(),
+                    "1234",
+                    Duration.ofMillis(80),
+                    Duration.ofMillis(80)
             );
             return Behaviors.receive(ControlUnitActor.Command.class)
                     .onMessage(ControlUnitActor.Command.class, message -> {
@@ -173,9 +175,13 @@ public class ClusteredSystemTest {
         long deadline = System.nanoTime() + timeout.toNanos();
         AlarmState current = null;
         while (System.nanoTime() < deadline) {
-            current = queryState(system);
-            if (current == expected) {
-                return;
+            try {
+                current = queryState(system);
+                if (current == expected) {
+                    return;
+                }
+            } catch (Exception ignored) {
+                // After singleton relocation or recreation, the proxy may need a short time to re-identify it.
             }
             TimeUnit.MILLISECONDS.sleep(20);
         }

@@ -65,7 +65,8 @@ public class NodeStartupTest {
                 "shas-cluster",
                 "127.0.0.1",
                 2601,
-                List.of("127.0.0.1:2601", "127.0.0.1:2602", "127.0.0.1:2603")
+                List.of("127.0.0.1:2601", "127.0.0.1:2602", "127.0.0.1:2603"),
+                NodeStartup.Role.CONTROL_UNIT
         );
 
         assertEquals("127.0.0.1", config.getString("pekko.remote.artery.canonical.hostname"));
@@ -78,6 +79,7 @@ public class NodeStartupTest {
                 ),
                 config.getStringList("pekko.cluster.seed-nodes")
         );
+        assertEquals(List.of("control-unit"), config.getStringList("pekko.cluster.roles"));
     }
 
     @Test
