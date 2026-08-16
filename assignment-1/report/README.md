@@ -2,8 +2,8 @@
 
 This directory contains the LaTeX source for the report.
 
-The report is organized under `parts/front`, `parts/chapters`, and
-`parts/back`.
+The report is organized under `front`, `chapters`, and
+`back`.
 
 When opened in VS Code, saving `main.tex` triggers an automatic build and
 cleans the temporary LaTeX files after a successful run, leaving only
