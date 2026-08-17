@@ -1,15 +1,30 @@
 \clearpage
 \section{Validation}
 
-The test suite covers the required behavior.
+The validation strategy combines focused unit tests with one end-to-end RMI
+integration test.
 \begin{itemize}
-    \item \texttt{GameStatusTest} checks the state helpers used by the game model.
-    \item \texttt{GameImplTest} covers move validation, game results, snapshots, and concurrency.
-    \item \texttt{LobbyImplTest} covers create/join behavior, duplicate rooms, pruning, and concurrent lobby calls.
-    \item \texttt{DtttRmiIntegrationTest} exercises the full registry-server-client path with real RMI stubs.
+    \item \texttt{GameStatusTest} checks the state helpers used by the game
+    model.
+    \item \texttt{GameImplTest} covers move validation, game results,
+    snapshots, abandonment, callback behavior, and concurrent operations on one
+    match.
+    \item \texttt{LobbyImplTest} covers room creation, join behavior,
+    duplicate names, waiting-room listing, pruning, and concurrent lobby
+    requests.
+    \item \texttt{DtttRmiIntegrationTest} exercises the full
+    registry-server-client path with real RMI stubs.
 \end{itemize}
 
-The suite covers both rule correctness and distributed behavior. The unit
-tests check the game logic in isolation, while the integration test confirms
-that the registry, server, and client callback path work together exactly as a
-remote system should.
+This coverage is important because the project has two different correctness
+dimensions. The first is rule correctness: only legal moves are accepted, turns
+alternate correctly, and terminal states are detected exactly once. The second
+is distributed correctness: the right remote object must be discovered, the
+right game instance must receive the move, and clients must observe state
+changes through callbacks rather than through stale local data.
+
+The integration test validates the full execution path used in the real system:
+registry lookup, server binding, room creation, room join, and callback-driven
+state propagation. Together with the unit tests, it provides confidence that
+the implementation is not only locally correct, but also correct as a
+distributed RMI application.

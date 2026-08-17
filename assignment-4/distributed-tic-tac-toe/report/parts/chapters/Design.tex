@@ -1,19 +1,39 @@
 \clearpage
 \section{Design}
 
-The solution uses a standard RMI split.
+The implementation follows a standard Java RMI decomposition.
 \begin{itemize}
-    \item The registry only hosts the lookup service.
-    \item The lobby is the matchmaking entry point and creates remote game objects.
-    \item Each game instance owns one match, validates all moves, and keeps turn order and status consistent.
-    \item Clients export callback objects and receive immutable \texttt{BoardState} snapshots.
+    \item The registry only provides name-based lookup for remote services.
+    \item The lobby is the matchmaking entry point and creates remote game
+    objects.
+    \item Each game instance owns one match, validates all moves, and keeps
+    turn order and status consistent.
+    \item Clients export callback objects and receive immutable
+    \texttt{BoardState} snapshots.
 \end{itemize}
 
-The implementation keeps the code small by giving each class one
-responsibility. \texttt{LobbyImpl} manages room lifecycle, \texttt{GameImpl}
-manages game rules, and \texttt{GameControllerImpl} bridges remote callbacks
-to the local UI or CLI. Finished matches are pruned after they reach a
-terminal state.
+\subsection{Remote architecture}
+
+The server publishes one \texttt{LobbyImpl} instance in the RMI registry under
+a configurable binding name. A client first resolves that lobby and then uses
+it to create or join a named room. The lobby returns a remote \texttt{Game}
+stub bound to exactly one server-side \texttt{GameImpl} instance, so every move
+is naturally routed to the correct match without any additional lookup at move
+time.
+
+The implementation keeps the responsibilities explicit. \texttt{LobbyImpl}
+manages room creation, join requests, waiting-room enumeration, and pruning of
+terminal matches. \texttt{GameImpl} owns the board, current turn, player
+identities, terminal conditions, and callback delivery. On the client side,
+\texttt{GameControllerImpl} isolates RMI concerns from the GUI and CLI and
+forwards remote events to a local listener abstraction.
+
+\subsection{State ownership and concurrency}
+
+Each match is server-centric. The mutable board never leaves
+\texttt{GameImpl}; clients only receive \texttt{BoardState} records. This
+removes aliasing problems and guarantees that every move is validated by the
+same authoritative component before becoming visible to the players.
 
 The game model is intentionally snapshot-based. Clients receive immutable
 \texttt{BoardState} objects, so remote updates never leak mutable server
@@ -21,10 +41,23 @@ internals. This makes the callback protocol easier to reason about and also
 simplifies testing, because a received board can be compared directly without
 worrying about later mutations.
 
-\subsection{Trade-offs}
+Concurrency is split at two levels. The lobby protects the room namespace and
+the room map, while each \texttt{GameImpl} protects only its own match state.
+This design allows independent games to progress concurrently and limits
+contention to the smallest meaningful scope. Callback execution is dispatched
+outside the synchronized state transition so a slow or failed client cannot
+block the internal match monitor.
 
-The implementation uses a clear server-centric design. It does not try
-to introduce persistence or matchmaking policies beyond the assignment scope,
-and it keeps the remote protocol small. The concurrency boundaries remain on
-the server side, where game state, turn validation, and terminal conditions
-are enforced.
+\subsection{Lifecycle and trade-offs}
+
+The lifecycle is straightforward: the registry starts first, the server binds
+the lobby, the client resolves the lobby, one client creates a room, another
+joins it, and the game proceeds until win, draw, or abandonment. Finished rooms
+are removed from the lobby during subsequent accesses, which keeps memory usage
+bounded without adding extra background coordination.
+
+The implementation intentionally avoids persistence, distributed replication,
+and advanced matchmaking policies because they are outside the assignment
+scope. The chosen design focuses on correctness, small remote interfaces, and
+clear concurrency boundaries, which are the most relevant goals for this
+exercise.

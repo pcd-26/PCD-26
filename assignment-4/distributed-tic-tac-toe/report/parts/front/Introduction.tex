@@ -1,12 +1,20 @@
 \clearpage
 \section{Introduction}
 
-The assignment requires a distributed Tic-Tac-Toe game in which a player can
-create a named match and another player can join it later. The implementation
-must use Java RMI and follow distributed object computing and concurrent
-programming principles.
+This project implements the second part of Assignment 4: a distributed
+Tic-Tac-Toe application in which one player creates a named room and another
+player joins it later. The required communication mechanism is Java RMI, so
+the final system must expose remote objects, support network transparency, and
+remain correct under concurrent access.
 
-The core challenge is not the game board itself, which is small, but the
-coordination around it. Once the match is exposed remotely, the server must
-protect the board, the turn order, and the lifecycle of the game against
-concurrent access and client failures.
+Although Tic-Tac-Toe is a very small game from the algorithmic point of view,
+the distributed version introduces a clear systems problem. The application
+must coordinate remote discovery, room creation, per-match state ownership,
+turn validation, and client notifications while keeping the protocol small and
+predictable.
+
+The adopted solution uses one registry process, one server process, and one or
+more client processes. The server owns the authoritative state of every active
+match; clients only invoke remote operations and render immutable snapshots.
+This keeps the distributed boundaries explicit and places the concurrency
+control exactly where the shared mutable state lives.

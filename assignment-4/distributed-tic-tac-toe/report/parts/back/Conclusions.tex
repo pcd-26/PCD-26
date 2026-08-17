@@ -1,6 +1,15 @@
 \clearpage
 \section{Conclusions}
 
-The project satisfies the distributed-game requirements with a clean
-server-centric design. One authoritative state owner, immutable snapshots, and
-explicit remote callbacks are enough to keep the system simple and robust.
+The project satisfies the assignment requirements with a compact but complete
+distributed architecture. A player can create a named room, another player can
+join it later, and all interactions are coordinated through Java RMI remote
+objects.
+
+The final design remains small because it places each responsibility in one
+well-defined component: registry for discovery, lobby for matchmaking, game for
+authoritative match state, and client callback for asynchronous notifications.
+This separation, together with immutable snapshots and per-match
+synchronization, provides a robust solution that is easy to validate and well
+aligned with the distributed object computing and concurrent programming goals
+of the course.

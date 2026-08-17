@@ -1,15 +1,31 @@
 \clearpage
 \section{Problem Analysis}
 
-The distributed setting introduces three main concerns.
+The distributed requirements can be decomposed into three main concerns.
 \begin{itemize}
-    \item The server must own the authoritative match state so that clients never race on shared mutable data.
-    \item Lobby operations and game operations can happen concurrently, so create/join/move requests must be synchronized at the right granularity.
-    \item Client notifications must be asynchronous, because remote callbacks can block or fail independently of the game logic.
+    \item The server must own the authoritative match state so that clients
+    never race on shared mutable data and cannot bypass rule validation.
+    \item Lobby operations and game operations can happen concurrently, so
+    create/join/move requests must be synchronized at the right granularity.
+    \item Client notifications must be asynchronous, because remote callbacks
+    can block or fail independently of the game logic.
 \end{itemize}
 
-That means the lobby and each game need different synchronization strategies.
-The lobby is responsible for naming and matchmaking, while each game is
-responsible for turn correctness and match termination. Keeping those scopes
-separate avoids a single coarse lock around the whole server and makes
-concurrent matches independent from one another.
+The first requirement rules out any peer-to-peer ownership of the board. If
+clients kept live mutable state, the server would no longer be the single point
+of truth and move validation would become harder to reason about. The project
+therefore uses a server-centric model in which each match is represented by one
+remote game object.
+
+The second requirement suggests separating concerns between matchmaking and
+gameplay. The lobby is responsible for room names, room lookup, and room
+lifecycle; each game instance is responsible for turn alternation, board
+updates, win/draw detection, and abandonment. This separation avoids one coarse
+global lock around the whole application and allows different matches to
+proceed independently.
+
+The third requirement concerns responsiveness and failure isolation. A remote
+callback must never hold the critical section that protects game state, because
+the client may be slow, unreachable, or already terminated. The callback path
+must therefore be decoupled from state mutation, and clients must receive
+immutable snapshots rather than references to live server objects.
