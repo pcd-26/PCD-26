@@ -1,16 +1,21 @@
 \clearpage
 \section{Problem Analysis}
 
-The problem is a distributed mutual exclusion protocol with failure recovery.
+The problem can be decomposed into four main requirements.
 \begin{itemize}
     \item At most one process may enter the critical section at a time.
-    \item The middleware must tolerate crashes without leaving the section permanently locked.
-    \item Bootstrap must be safe, so token creation cannot happen twice.
-    \item Different critical-section names must remain independent.
+    \item The middleware must hide coordination details from the client code.
+    \item A crash of the current owner must not leave the section permanently locked.
+    \item Initialization must be safe even when multiple processes start concurrently.
 \end{itemize}
 
-The subtle part is that safety must survive failures. If the holder crashes,
-the system should not stay blocked forever, and if bootstrap is interrupted,
-the next process should be able to recover the queue without manual cleanup.
-That is why the design relies on broker semantics instead of keeping a second
-local copy of state.
+The first requirement is the classical mutual-exclusion constraint, but the
+other three are what make the exercise genuinely distributed. If the current
+owner crashes, the system must not depend on that process to release the
+critical section. Likewise, if two processes start at nearly the same time,
+they must not both conclude that the first token still needs to be created.
+
+This immediately suggests that the broker, not the client process, should be
+the \textbf{single source of truth}. The middleware therefore relies on broker
+queues, consumer ownership, and requeue semantics instead of maintaining a
+second local copy of the distributed state.

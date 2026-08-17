@@ -118,10 +118,10 @@ public class DistributedCriticalSection implements AutoCloseable {
         tokenCreationGuardChannel.confirmSelect();
         bootstrapHook.beforeTokenPublish();
         tokenCreationGuardChannel.basicPublish(
-                "",
-                criticalSectionTokenQueueName,
-                MessageProperties.PERSISTENT_TEXT_PLAIN,
-                EMPTY_BODY);
+                "", // default exchange
+                criticalSectionTokenQueueName, // destination queue that stores the shared token
+                MessageProperties.PERSISTENT_TEXT_PLAIN, // durable message metadata
+                EMPTY_BODY); // token payload
         try {
             if (!tokenCreationGuardChannel.waitForConfirms(TOKEN_BOOTSTRAP_CONFIRM_TIMEOUT_MILLIS)) {
                 throw new IOException("Failed to confirm token bootstrap for critical section '" + csName + "'");
@@ -170,10 +170,10 @@ public class DistributedCriticalSection implements AutoCloseable {
         String criticalSectionTokenQueueName = criticalSectionTokenQueueManager.criticalSectionTokenQueue();
         // Keep the consumer registered while holding the token so bootstrap can observe ownership.
         criticalSectionTokenConsumerTag = criticalSectionTokenChannel.basicConsume(
-                criticalSectionTokenQueueName,
-                false,
-                criticalSectionTokenDeliveryCallback,
-                tag -> { });
+                criticalSectionTokenQueueName, // queue that stores the shared token
+                false, // manual ack mode: the token stays unacknowledged while the CS is held
+                criticalSectionTokenDeliveryCallback, // callback invoked when RabbitMQ delivers the token
+                tag -> { }); // callback invoked if RabbitMQ cancels this consumer
 
         boolean acquired = false;
         try {
@@ -231,7 +231,10 @@ public class DistributedCriticalSection implements AutoCloseable {
             // Stop appearing as an active owner before returning the token to the queue.
             cancelCriticalSectionTokenConsumerQuietly();
             // Requeue the unacknowledged delivery instead of publishing a new token.
-            criticalSectionTokenChannel.basicNack(currentCriticalSectionTokenDeliveryTag, false, true);
+            criticalSectionTokenChannel.basicNack(
+                    currentCriticalSectionTokenDeliveryTag, // delivery tag of the token currently held
+                    false, // reject only this delivery
+                    true); // requeue the token so another process can receive it
         });
 
         currentCriticalSectionTokenDeliveryTag = null;

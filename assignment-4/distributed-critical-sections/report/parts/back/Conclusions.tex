@@ -1,8 +1,14 @@
 \clearpage
 \section{Conclusions}
 
-The middleware is small but complete: RabbitMQ provides the shared state, the
-token queue enforces mutual exclusion, and the bootstrap lock prevents
-inconsistent initialization. The result is a clean distributed protocol that
-matches the assignment requirements without introducing unnecessary
-complexity.
+The middleware satisfies the assignment goals through three main mechanisms:
+\textbf{broker-managed shared state}, \textbf{token-based mutual exclusion},
+and \textbf{crash recovery through message requeueing}. Responsibility is split
+across well-defined components: the token queue represents ownership, the
+guard queue protects token creation, and RabbitMQ provides the delivery and
+recovery semantics used by the protocol.
+
+The resulting architecture supports concurrent startup, mutual exclusion, and
+owner failure recovery without requiring direct process-to-process
+coordination. This makes the implementation aligned with the message-oriented
+middleware model required by the exercise.

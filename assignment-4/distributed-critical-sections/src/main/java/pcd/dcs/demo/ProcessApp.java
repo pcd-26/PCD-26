@@ -17,6 +17,11 @@ public class ProcessApp {
     private static final Logger logger = LoggerFactory.getLogger(ProcessApp.class);
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final String SHARED_LOG_FILE = "dcs_shared.log";
+    private static final int ITERATIONS = 5;
+    private static final int MIN_CRITICAL_SECTION_MILLIS = 5000;
+    private static final int CRITICAL_SECTION_JITTER_MILLIS = 2000;
+    private static final int MIN_PAUSE_BETWEEN_REQUESTS_MILLIS = 500;
+    private static final int PAUSE_BETWEEN_REQUESTS_JITTER_MILLIS = 1000;
 
     // Run a demo client that repeatedly enters and exits the shared critical section.
     public static void main(String[] args) {
@@ -30,10 +35,10 @@ public class ProcessApp {
         try (DistributedCriticalSection dcs = new DistributedCriticalSection(host, port, "demo-cs")) {
             Random random = new Random();
 
-            for (int i = 1; i <= 5; i++) {
+            for (int i = 1; i <= ITERATIONS; i++) {
                 String waitTime = LocalTime.now().format(TIME_FORMATTER);
-                System.out.printf("[%s] [%s] (Iteration %d/5) Requesting entry to critical section...\n",
-                        waitTime, processId, i);
+                System.out.printf("[%s] [%s] (Iteration %d/%d) Requesting entry to critical section...\n",
+                        waitTime, processId, i, ITERATIONS);
 
                 // Wait until this process consumes the shared token.
                 dcs.enter();
@@ -46,7 +51,7 @@ public class ProcessApp {
 
                 // Simulate protected work while holding the token.
                 try {
-                    Thread.sleep(1500 + random.nextInt(1000));
+                    Thread.sleep(MIN_CRITICAL_SECTION_MILLIS + random.nextInt(CRITICAL_SECTION_JITTER_MILLIS));
                 } catch (InterruptedException e) {
                     logger.warn("[{}] Interrupted during critical section work", processId, e);
                     Thread.currentThread().interrupt();
@@ -60,7 +65,8 @@ public class ProcessApp {
                 dcs.exit();
 
                 // Pause outside the critical section before the next request.
-                long sleepTime = 500 + random.nextInt(1500);
+                long sleepTime =
+                        MIN_PAUSE_BETWEEN_REQUESTS_MILLIS + random.nextInt(PAUSE_BETWEEN_REQUESTS_JITTER_MILLIS);
                 Thread.sleep(sleepTime);
             }
 

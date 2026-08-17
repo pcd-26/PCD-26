@@ -1,13 +1,17 @@
 \clearpage
 \section{Introduction}
 
-The optional assignment asks for a simple middleware that provides distributed
-critical sections to independent processes. The key requirement is that a
-process must use the middleware without needing to know anything about the
-other participants, and the implementation must rely on a message-oriented
-middleware such as RabbitMQ.
+This project implements the optional distributed critical-sections middleware
+required by Assignment 4. The goal is to offer a \textbf{small reusable API}
+through which independent processes can request access to a shared critical
+section without knowing anything about the other participants.
 
-The problem is a good fit for message passing because the coordination concern
-is very small but very strict: at any time exactly one process may hold the
-critical section. The middleware therefore needs a shared broker-managed
-token, not shared memory or direct process-to-process coordination.
+The implementation is built on top of \textbf{RabbitMQ} as the required
+message-oriented middleware. This is a natural fit for the problem because the
+shared coordination state can be reduced to one broker-managed token rather
+than explicit peer-to-peer communication or shared memory.
+
+The distributed setting introduces two relevant concerns:
+\textbf{safe bootstrap} and \textbf{failure recovery}. The middleware must
+guarantee mutual exclusion, avoid duplicate token creation, and remain
+recoverable when a process crashes while holding the critical section.

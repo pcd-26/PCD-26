@@ -50,7 +50,12 @@ class BrokerBootstrapLock {
             try {
                 try {
                     // The exclusive queue declaration succeeds for one process at a time.
-                    tokenCreationGuardChannel.queueDeclare(tokenCreationGuardQueue, false, true, false, null);
+                    tokenCreationGuardChannel.queueDeclare(
+                            tokenCreationGuardQueue, // queue used only to signal temporary lock ownership
+                            false, // non-durable: it does not need to survive broker restarts
+                            true, // exclusive: only one connection can own it at a time
+                            false, // not auto-delete: this code deletes it explicitly on release
+                            null); // no extra broker arguments
                 } catch (IOException lockFailure) {
                     if (System.nanoTime() >= deadlineNanos) {
                         throw new IOException(

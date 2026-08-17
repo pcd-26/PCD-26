@@ -20,7 +20,12 @@ record TokenQueueManager(String criticalSectionTokenQueue) {
     // Create the token queue with the expected broker constraints.
     Channel declareQueue(Channel channel) throws IOException {
         try {
-            channel.queueDeclare(criticalSectionTokenQueue, true, false, false, tokenQueueArguments());
+            channel.queueDeclare(
+                    criticalSectionTokenQueue, // broker queue that stores the shared token
+                    true, // durable queue
+                    false, // not exclusive
+                    false, // not auto-delete
+                    tokenQueueArguments()); // enforce the single-token invariant
             return channel;
         } catch (IOException e) {
             if (isPreconditionFailed(e)) {

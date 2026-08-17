@@ -1,31 +1,34 @@
 \clearpage
 \section{Design}
 
-The implementation uses a token-queue protocol on RabbitMQ.
-\begin{itemize}
-    \item Each critical section uses its own durable token queue.
-    \item The queue contains exactly one persistent token when the section is available.
-    \item \texttt{enter()} consumes the token with manual acknowledgments and blocks until it is delivered.
-    \item \texttt{exit()} cancels the local consumer and requeues the same delivery with \texttt{basicNack(..., requeue = true)}.
-    \item A temporary exclusive bootstrap-lock queue serializes initialization and keeps the protocol recoverable.
-\end{itemize}
+The middleware follows a \textbf{token-based design}. Each logical critical
+section is associated with one durable RabbitMQ queue, named
+\texttt{cs\_token\_<csName>}. When the critical section is free, that queue
+contains exactly one persistent token message. When a process enters the
+section, it consumes that token with manual acknowledgements and keeps the
+delivery unacknowledged for the whole duration of the critical section.
 
-This design exposes a small public API: \texttt{enter()},
-\texttt{exit()}, and \texttt{close()}. Recovery is broker-driven, so if a
-process crashes while holding the token, RabbitMQ requeues the unacknowledged
-delivery automatically.
+The public API exposes three operations: \texttt{enter()}, \texttt{exit()}, and
+\texttt{close()}. Client code does not interact directly with queues,
+consumers, acknowledgements, or failure recovery; these concerns are managed by
+the middleware implementation.
 
-The bootstrap lock is important because it removes the only race that could
-otherwise create duplicate tokens. Once the token exists, the queue itself
-becomes the single source of truth:
-the presence of the token means the section is free, and the absence of the
-token means somebody owns it.
+\subsection{Bootstrap and ownership}
 
-\subsection{Trade-offs}
+The only delicate phase is token creation. To prevent concurrent starters from
+creating duplicate tokens, the middleware uses a second temporary exclusive
+queue, \texttt{cs\_token\_creation\_guard\_<csName>}. This queue is not the
+critical section itself; it is only a broker-side guard that serializes the
+decision ``does the first token need to be created?''
 
-The middleware deliberately solves one problem well instead of becoming a
-generic coordination framework. It models one critical section as one token
-queue, which keeps the API tiny and the reasoning straightforward. The
-trade-off is that the broker is part of the availability story, but that is
-acceptable here because the assignment explicitly asks for a MOM-based
-solution.
+Once bootstrap is complete, the token queue becomes the only relevant shared
+state. If the token is present in the queue, the section is free. If the token
+has been delivered and is still unacknowledged, some process owns the section.
+
+\subsection{Failure recovery}
+
+The recovery strategy is broker-driven. If the current owner crashes or loses
+its channel before calling \texttt{exit()}, RabbitMQ automatically requeues the
+unacknowledged token. The middleware therefore avoids a second recovery
+protocol: crash tolerance is obtained by aligning the critical-section protocol
+with standard RabbitMQ delivery semantics.
