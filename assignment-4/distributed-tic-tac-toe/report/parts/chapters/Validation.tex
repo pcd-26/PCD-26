@@ -1,8 +1,8 @@
 \clearpage
 \section{Validation}
 
-The validation strategy combines focused unit tests with one end-to-end RMI
-integration test.
+The validation strategy combines \textbf{focused unit tests} with one
+\textbf{end-to-end RMI integration test}.
 \begin{itemize}
     \item \texttt{GameStatusTest} checks the state helpers used by the game
     model.
@@ -16,15 +16,15 @@ integration test.
     registry-server-client path with real RMI stubs.
 \end{itemize}
 
-This coverage is important because the project has two different correctness
-dimensions. The first is rule correctness: only legal moves are accepted, turns
-alternate correctly, and terminal states are detected exactly once. The second
-is distributed correctness: the right remote object must be discovered, the
-right game instance must receive the move, and clients must observe state
-changes through callbacks rather than through stale local data.
+This coverage is important because the project has \textbf{two different
+correctness dimensions}. The first is rule correctness: only legal moves are
+accepted, turns alternate correctly, and terminal states are detected exactly
+once. The second is distributed correctness: the right remote object must be
+discovered, the right game instance must receive the move, and clients must
+observe state changes through callbacks rather than through stale local data.
 
-The integration test validates the full execution path used in the real system:
-registry lookup, server binding, room creation, room join, and callback-driven
-state propagation. Together with the unit tests, it provides confidence that
-the implementation is not only locally correct, but also correct as a
-distributed RMI application.
+The integration test validates the \textbf{full execution path} used in the
+real system: registry lookup, server binding, room creation, room join, and
+callback-driven state propagation. Together with the unit tests, it provides
+confidence that the implementation is not only locally correct, but also
+correct as a distributed RMI application.

@@ -1,15 +1,16 @@
 \clearpage
 \section{Conclusions}
 
-The project satisfies the assignment requirements with a compact but complete
-distributed architecture. A player can create a named room, another player can
-join it later, and all interactions are coordinated through Java RMI remote
-objects.
+The project satisfies the assignment requirements with a \textbf{compact but
+complete} distributed architecture. A player can create a named room, another
+player can join it later, and all interactions are coordinated through Java RMI
+remote objects.
 
 The final design remains small because it places each responsibility in one
-well-defined component: registry for discovery, lobby for matchmaking, game for
-authoritative match state, and client callback for asynchronous notifications.
-This separation, together with immutable snapshots and per-match
-synchronization, provides a robust solution that is easy to validate and well
+\textbf{well-defined component}: \textbf{registry} for discovery,
+\textbf{lobby} for matchmaking, \textbf{game} for authoritative match state,
+and \textbf{client callback} for asynchronous notifications. This separation,
+together with \textbf{immutable snapshots} and \textbf{per-match
+synchronization}, provides a robust solution that is easy to validate and well
 aligned with the distributed object computing and concurrent programming goals
 of the course.
