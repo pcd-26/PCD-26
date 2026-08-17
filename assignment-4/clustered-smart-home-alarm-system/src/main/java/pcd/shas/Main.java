@@ -67,7 +67,23 @@ public final class Main {
     // Runs a control-unit node with its local siren actor.
     private static void runControlUnitNode(Config config, AlarmConfiguration alarmConfiguration) {
         ActorSystem<ControlUnitActor.Command> system = ActorSystem.create(
-            createControlUnitNodeBehavior(alarmConfiguration),
+            Behaviors.setup(context -> {
+                // The siren stays local to the control-unit node and is discovered by service key.
+                context.spawn(SirenActor.create(), "siren");
+                ActorRef<ControlUnitActor.Command> controlUnit = ControlUnitActor.initSingleton(
+                    context.getSystem(),
+                    alarmConfiguration.correctPin(),
+                    alarmConfiguration.exitDelay(),
+                    alarmConfiguration.entryDelay()
+                );
+                // The ActorSystem itself forwards external commands to the child control unit.
+                return Behaviors.receive(ControlUnitActor.Command.class)
+                    .onMessage(ControlUnitActor.Command.class, message -> {
+                        controlUnit.tell(message);
+                        return Behaviors.same();
+                    })
+                    .build();
+            }),
             SYSTEM_NAME,
             config
         );
@@ -136,27 +152,6 @@ public final class Main {
             LOGGER.error("Failed to query state", e);
             return null;
         }
-    }
-
-    // Creates the root behavior for a control-unit node.
-    private static Behavior<ControlUnitActor.Command> createControlUnitNodeBehavior(AlarmConfiguration alarmConfiguration) {
-        return Behaviors.setup(context -> {
-            // The siren stays local to the control-unit node and is discovered by service key.
-            context.spawn(SirenActor.create(), "siren");
-            ActorRef<ControlUnitActor.Command> controlUnit = ControlUnitActor.initSingleton(
-                context.getSystem(),
-                alarmConfiguration.correctPin(),
-                alarmConfiguration.exitDelay(),
-                alarmConfiguration.entryDelay()
-            );
-            // The ActorSystem itself forwards external commands to the child control unit.
-            return Behaviors.receive(ControlUnitActor.Command.class)
-                .onMessage(ControlUnitActor.Command.class, message -> {
-                    controlUnit.tell(message);
-                    return Behaviors.same();
-                })
-                .build();
-        });
     }
 
     // Starts console input for a control-unit node.
