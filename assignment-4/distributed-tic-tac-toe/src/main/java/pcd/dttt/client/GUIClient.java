@@ -425,8 +425,11 @@ public class GUIClient extends JFrame implements GameEventListener {
     private JButton createStyledButton(String text, Color baseColor) {
         JButton btn = new JButton(text);
         btn.setBackground(baseColor);
-        btn.setForeground(Color.WHITE);
-        
+        btn.setForeground(getReadableButtonTextColor(baseColor));
+        btn.setOpaque(true);
+        btn.setContentAreaFilled(true);
+        btn.setBorderPainted(false);
+
         btn.setFocusPainted(false);
         btn.setFont(new Font("SansSerif", Font.BOLD, 15));
         btn.setBorder(BorderFactory.createCompoundBorder(
@@ -450,6 +453,14 @@ public class GUIClient extends JFrame implements GameEventListener {
             }
         });
         return btn;
+    }
+
+    // Chooses a readable foreground color for a button background.
+    private Color getReadableButtonTextColor(Color backgroundColor) {
+        double luminance = (0.2126 * backgroundColor.getRed()
+            + 0.7152 * backgroundColor.getGreen()
+            + 0.0722 * backgroundColor.getBlue()) / 255.0;
+        return luminance < 0.45 ? Color.WHITE : COLOR_BG;
     }
 
     // Computes a darker hover color.

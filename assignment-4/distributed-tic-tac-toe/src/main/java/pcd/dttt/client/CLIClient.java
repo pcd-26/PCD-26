@@ -206,12 +206,23 @@ public class CLIClient implements GameEventListener {
                         int selectedRow = Integer.parseInt(coordinateTokens[0]);
                         int selectedColumn = Integer.parseInt(coordinateTokens[1]);
                         gameController.makeMove(selectedRow, selectedColumn);
+
+                        // Wait for the server callback so the next loop iteration
+                        // observes the updated board instead of the stale snapshot.
+                        synchronized (boardStateLock) {
+                            while (latestBoardState == currentBoardSnapshot) {
+                                boardStateLock.wait();
+                            }
+                        }
                     } catch (NumberFormatException exception) {
                         System.out.println("Invalid input. Use integers between 0 and 2.");
                     } catch (NotYourTurnException exception) {
                         System.out.println("Wait for your turn!");
                     } catch (InvalidMoveException exception) {
                         System.out.println("Invalid move: " + exception.getMessage());
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        return;
                     } catch (Exception exception) {
                         System.out.println("Error during move submission: " + exception.getMessage());
                     }
