@@ -12,7 +12,7 @@ make
 Without `make`, the equivalent command is:
 
 ```bash
-pdflatex -interaction=nonstopmode -halt-on-error -jobname=report main.tex
+pdflatex -interaction=nonstopmode -halt-on-error -jobname=report Ass3OddsAndEvensGame.tex
 ```
 
 The expected output is `report.pdf` in this directory.

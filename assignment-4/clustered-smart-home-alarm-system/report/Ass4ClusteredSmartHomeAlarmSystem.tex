@@ -1,0 +1,33 @@
+\documentclass[11pt,a4paper]{article}
+
+\input{../../../scripts/Setup}
+
+% Inject project-specific syntax highlighting
+\lstset{
+  style=codestyle,
+  emph={controlUnit,sensor,keypad,siren,cluster,receptionist,recovery,pin,node},
+  morekeywords=[2]{ActorRef,Behavior,Behaviors,ActorSystem,ServiceKey,Receptionist,Duration,List,Optional,Serializable,ControlUnitActor,SensorActor,KeypadActor,SirenActor,SensorInfo},
+}
+
+\title{Assignment 4 -- Clustered Smart Home Alarm System}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUS}
+
+\begin{document}
+
+  \input{front/TitlePage}
+
+  \pagenumbering{roman}
+  \tableofcontents
+  \newpage
+  \pagenumbering{arabic}
+
+  \input{front/Introduction}
+  \input{chapters/ProblemAnalysis}
+  \input{chapters/Design}
+  \input{chapters/Implementation}
+  \input{chapters/VerificationAndTesting}
+  \input{back/Conclusions}
+  \input{back/HowToRun}
+
+\end{document}
