@@ -6,8 +6,13 @@ the distributed mechanisms required by assignment 4: \textbf{cluster startup},
 \textbf{remote discovery}, \textbf{singleton state ownership}, and \textbf{safe
 recovery after recreation}.
 
-The implementation remains intentionally compact. The most important clustered
-concepts are visible in a small set of delivered files, and each one has a
-clear responsibility. This makes the project suitable both as a correct
-solution to the assignment and as a concise example of how to move a local
-typed-actor system to a Pekko Cluster architecture.
+The resulting system runs on multiple cluster nodes without changing the alarm
+rules of the non-clustered version. Sensors, keypad, and control logic may run
+on different nodes, but communication remains message-based and the alarm state
+is still owned by one logical control entity.
+
+The main architectural trade-off is explicit: the project does not introduce
+persistence or replicated alarm state. If the control unit is recreated, the
+previous in-memory state is lost and the system returns to
+\texttt{STARTUP\_RECOVERY}. This behavior matches the specification and keeps the
+design aligned with the actual assignment scope.
