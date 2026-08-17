@@ -74,7 +74,7 @@ class TokenQueueManagerTest {
         try (Channel ch = connection.createChannel()) {
             Map<String, Object> args = new HashMap<>();
             args.put("x-max-length", 500);
-            ch.queueDeclare(manager.queueName(), true, false, false, args);
+            ch.queueDeclare(manager.tokenCirculationQueueName(), true, false, false, args);
         }
 
         // TokenQueueManager should detect 406 PRECONDITION_FAILED and fail without deleting the queue.
@@ -84,7 +84,7 @@ class TokenQueueManagerTest {
                     "Inequivalent broker arguments should fail fast");
 
             try (Channel inspectChannel = connection.createChannel()) {
-                AMQP.Queue.DeclareOk state = inspectChannel.queueDeclarePassive(manager.queueName());
+                AMQP.Queue.DeclareOk state = inspectChannel.queueDeclarePassive(manager.tokenCirculationQueueName());
                 assertEquals(0, state.getMessageCount(), "Existing queue should remain intact after fail-fast");
             }
         } finally {
