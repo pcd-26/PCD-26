@@ -11,8 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 // Middleware for distributed mutual exclusion backed by a RabbitMQ token queue.
@@ -20,6 +20,7 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(DistributedCriticalSection.class);
     private static final byte[] EMPTY_BODY = new byte[0];
+    private static final int TOKEN_BOOTSTRAP_CONFIRM_TIMEOUT_MILLIS = 2000;
 
     // Test hook executed only during the bootstrap publish path.
     @FunctionalInterface
@@ -29,14 +30,14 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     private final Connection connection;
     private final String csName;
-    private final TokenQueueManager tokenCirculationQueueManager;
-    private final BrokerBootstrapLock tokenBootstrapGuard;
+    private final TokenQueueManager criticalSectionTokenQueueManager;
+    private final BrokerBootstrapLock tokenCreationGuard;
     private final boolean ownConnection;
     private final BootstrapHook bootstrapHook;
 
-    private Channel channel;
-    private String consumerTag;
-    private Long currentDeliveryTag;
+    private Channel criticalSectionTokenChannel;
+    private String criticalSectionTokenConsumerTag;
+    private Long currentCriticalSectionTokenDeliveryTag;
 
     // Reuse an existing broker connection owned by the caller.
     public DistributedCriticalSection(Connection connection, String csName) throws IOException, InterruptedException {
@@ -70,12 +71,12 @@ public class DistributedCriticalSection implements AutoCloseable {
     ) throws IOException, InterruptedException {
         this.connection = requireConnection(connection);
         this.csName = requireCriticalSectionName(csName);
-        this.tokenCirculationQueueManager = new TokenQueueManager(this.csName);
-        this.tokenBootstrapGuard = new BrokerBootstrapLock(this.csName);
+        this.criticalSectionTokenQueueManager = new TokenQueueManager(this.csName);
+        this.tokenCreationGuard = new BrokerBootstrapLock(this.csName);
         this.ownConnection = ownConnection;
         this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
-        this.channel = this.connection.createChannel();
-        this.channel.basicQos(1);
+        this.criticalSectionTokenChannel = this.connection.createChannel();
+        this.criticalSectionTokenChannel.basicQos(1);
         initializeToken();
     }
 
@@ -83,51 +84,50 @@ public class DistributedCriticalSection implements AutoCloseable {
     private void initializeToken() throws IOException, InterruptedException {
         synchronized (this) {
             // Ensure the token queue exists before inspecting or populating it.
-            this.channel = tokenCirculationQueueManager.declareQueue(this.channel);
+            this.criticalSectionTokenChannel =
+                    criticalSectionTokenQueueManager.declareQueue(this.criticalSectionTokenChannel);
 
             // Serialize bootstrap so two processes cannot create the first token concurrently.
-            tokenBootstrapGuard.withLock(connection, tokenBootstrapGuardChannel -> {
-                String tokenCirculationQueueName = tokenCirculationQueueManager.tokenCirculationQueueName();
+            tokenCreationGuard.withLock(connection, tokenCreationGuardChannel -> {
+                String criticalSectionTokenQueueName = criticalSectionTokenQueueManager.criticalSectionTokenQueue();
 
                 // Read the current queue state without changing broker data.
-                AMQP.Queue.DeclareOk tokenCirculationQueueState =
-                        tokenBootstrapGuardChannel.queueDeclarePassive(tokenCirculationQueueName);
+                AMQP.Queue.DeclareOk criticalSectionTokenQueueState =
+                        tokenCreationGuardChannel.queueDeclarePassive(criticalSectionTokenQueueName);
 
                 // Bootstrap only when no token is queued and no consumer is registered.
-                if (tokenCirculationQueueState.getMessageCount() == 0
-                        && tokenCirculationQueueState.getConsumerCount() == 0) {
-                    // Require broker confirmation before considering the first token created.
-                    tokenBootstrapGuardChannel.confirmSelect();
-
-                    // Run the optional test hook just before the first publish.
-                    bootstrapHook.beforeTokenPublish();
-
-                    // Publish the initial token into the token circulation queue while holding the bootstrap guard.
-                    tokenBootstrapGuardChannel.basicPublish(
-                            "",
-                            tokenCirculationQueueName,
-                            MessageProperties.PERSISTENT_TEXT_PLAIN,
-                            EMPTY_BODY);
-                    try {
-                        // Wait for broker confirmation so a failed bootstrap can be retried safely.
-                        if (!tokenBootstrapGuardChannel.waitForConfirms(2000)) {
-                            throw new IOException("Failed to confirm token bootstrap for critical section '" + csName + "'");
-                        }
-                    } catch (TimeoutException e) {
-                        throw new IOException("Timed out waiting for token bootstrap confirm for critical section '" + csName + "'", e);
-                    }
-
-                    // The shared critical section now has its initial token.
+                if (criticalSectionTokenQueueState.getMessageCount() == 0
+                        && criticalSectionTokenQueueState.getConsumerCount() == 0) {
+                    publishInitialToken(tokenCreationGuardChannel, criticalSectionTokenQueueName);
                     logger.info("Initialized critical section token for '{}'", csName);
                 } else {
                     // Skip bootstrap because the token already exists or is already owned.
                     logger.debug(
                             "Critical section token for '{}' already initialized (messages={}, consumers={})",
                             csName,
-                            tokenCirculationQueueState.getMessageCount(),
-                            tokenCirculationQueueState.getConsumerCount());
+                            criticalSectionTokenQueueState.getMessageCount(),
+                            criticalSectionTokenQueueState.getConsumerCount());
                 }
             });
+        }
+    }
+
+    // Publish the first token only after RabbitMQ confirms the broker accepted it.
+    private void publishInitialToken(Channel tokenCreationGuardChannel, String criticalSectionTokenQueueName)
+            throws IOException, InterruptedException {
+        tokenCreationGuardChannel.confirmSelect();
+        bootstrapHook.beforeTokenPublish();
+        tokenCreationGuardChannel.basicPublish(
+                "",
+                criticalSectionTokenQueueName,
+                MessageProperties.PERSISTENT_TEXT_PLAIN,
+                EMPTY_BODY);
+        try {
+            if (!tokenCreationGuardChannel.waitForConfirms(TOKEN_BOOTSTRAP_CONFIRM_TIMEOUT_MILLIS)) {
+                throw new IOException("Failed to confirm token bootstrap for critical section '" + csName + "'");
+            }
+        } catch (TimeoutException e) {
+            throw new IOException("Timed out waiting for token bootstrap confirm for critical section '" + csName + "'", e);
         }
     }
 
@@ -157,92 +157,111 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     // Block until this instance consumes the shared token.
     public synchronized void enter() throws IOException, InterruptedException {
-        if (currentDeliveryTag != null) {
+        if (currentCriticalSectionTokenDeliveryTag != null) {
             throw new IllegalStateException("Process is already in critical section '" + csName + "'");
         }
 
         logger.debug("Attempting to enter critical section '{}'", csName);
 
-        BlockingQueue<Delivery> deliveryQueue = new ArrayBlockingQueue<>(1);
-        DeliverCallback deliverCallback = (tag, delivery) -> {
-            // At most one token delivery is expected for each acquisition attempt.
-            if (!deliveryQueue.offer(delivery)) {
-                logger.warn("Delivery queue capacity exceeded; token message dropped for '{}'", csName);
-            }
-        };
+        CompletableFuture<Delivery> criticalSectionTokenDeliveryFuture = new CompletableFuture<>();
+        DeliverCallback criticalSectionTokenDeliveryCallback =
+                (tag, delivery) -> criticalSectionTokenDeliveryFuture.complete(delivery);
 
-        String tokenCirculationQueueName = tokenCirculationQueueManager.tokenCirculationQueueName();
+        String criticalSectionTokenQueueName = criticalSectionTokenQueueManager.criticalSectionTokenQueue();
         // Keep the consumer registered while holding the token so bootstrap can observe ownership.
-        consumerTag = channel.basicConsume(tokenCirculationQueueName, false, deliverCallback, tag -> { });
+        criticalSectionTokenConsumerTag = criticalSectionTokenChannel.basicConsume(
+                criticalSectionTokenQueueName,
+                false,
+                criticalSectionTokenDeliveryCallback,
+                tag -> { });
 
         boolean acquired = false;
         try {
             // Wait until RabbitMQ delivers the token to this process.
-            Delivery delivery = deliveryQueue.take();
-            currentDeliveryTag = delivery.getEnvelope().getDeliveryTag();
+            Delivery criticalSectionTokenDelivery = waitForTokenDelivery(criticalSectionTokenDeliveryFuture);
+            currentCriticalSectionTokenDeliveryTag = criticalSectionTokenDelivery.getEnvelope().getDeliveryTag();
             acquired = true;
             logger.debug("Successfully entered critical section '{}'", csName);
         } catch (InterruptedException e) {
             // If interrupted after delivery, immediately requeue the token.
-            Delivery delivery = deliveryQueue.poll();
-            if (delivery != null) {
-                try {
-                    channel.basicReject(delivery.getEnvelope().getDeliveryTag(), true);
-                } catch (IOException ioex) {
-                    logger.error("Failed to reject token on interrupt", ioex);
-                }
+            if (criticalSectionTokenDeliveryFuture.isDone()
+                    && !criticalSectionTokenDeliveryFuture.isCompletedExceptionally()) {
+                rejectDeliveredTokenQuietly(criticalSectionTokenDeliveryFuture);
             }
             throw e;
         } finally {
             if (!acquired) {
-                cancelConsumerQuietly();
+                cancelCriticalSectionTokenConsumerQuietly();
             }
+        }
+    }
+
+    // Wait synchronously for the asynchronous RabbitMQ delivery callback.
+    private Delivery waitForTokenDelivery(CompletableFuture<Delivery> criticalSectionTokenDeliveryFuture)
+            throws InterruptedException, IOException {
+        try {
+            return criticalSectionTokenDeliveryFuture.get();
+        } catch (ExecutionException e) {
+            throw new IOException("Failed while waiting for the token delivery", e.getCause());
+        }
+    }
+
+    // Requeue the delivered token if interruption happens after RabbitMQ already sent it.
+    private void rejectDeliveredTokenQuietly(CompletableFuture<Delivery> criticalSectionTokenDeliveryFuture) {
+        Delivery criticalSectionTokenDelivery = criticalSectionTokenDeliveryFuture.getNow(null);
+        if (criticalSectionTokenDelivery == null) {
+            return;
+        }
+        try {
+            criticalSectionTokenChannel.basicReject(criticalSectionTokenDelivery.getEnvelope().getDeliveryTag(), true);
+        } catch (IOException e) {
+            logger.error("Failed to reject token on interrupt", e);
         }
     }
 
     // Release the token and make the critical section available again.
     public synchronized void exit() throws IOException, InterruptedException {
-        if (currentDeliveryTag == null) {
+        if (currentCriticalSectionTokenDeliveryTag == null) {
             throw new IllegalStateException("Process is not in critical section '" + csName + "'");
         }
 
         logger.debug("Exiting critical section '{}'", csName);
 
-        tokenBootstrapGuard.withLock(connection, tokenBootstrapGuardChannel -> {
+        tokenCreationGuard.withLock(connection, tokenCreationGuardChannel -> {
             // Stop appearing as an active owner before returning the token to the queue.
-            cancelConsumerQuietly();
+            cancelCriticalSectionTokenConsumerQuietly();
             // Requeue the unacknowledged delivery instead of publishing a new token.
-            channel.basicNack(currentDeliveryTag, false, true);
+            criticalSectionTokenChannel.basicNack(currentCriticalSectionTokenDeliveryTag, false, true);
         });
 
-        currentDeliveryTag = null;
+        currentCriticalSectionTokenDeliveryTag = null;
         logger.debug("Successfully exited critical section '{}'", csName);
     }
 
     // Cancel the local consumer without turning cleanup problems into API failures.
-    private void cancelConsumerQuietly() {
-        if (consumerTag == null) {
+    private void cancelCriticalSectionTokenConsumerQuietly() {
+        if (criticalSectionTokenConsumerTag == null) {
             return;
         }
         try {
-            if (channel != null && channel.isOpen()) {
-                channel.basicCancel(consumerTag);
+            if (criticalSectionTokenChannel != null && criticalSectionTokenChannel.isOpen()) {
+                criticalSectionTokenChannel.basicCancel(criticalSectionTokenConsumerTag);
             }
         } catch (IOException e) {
             logger.error("Failed to cancel consumer for '{}'", csName, e);
         } finally {
-            consumerTag = null;
+            criticalSectionTokenConsumerTag = null;
         }
     }
 
     // Close local broker resources; RabbitMQ requeues any unacknowledged token on channel shutdown.
     @Override
     public void close() {
-        cancelConsumerQuietly();
+        cancelCriticalSectionTokenConsumerQuietly();
 
-        if (channel != null && channel.isOpen()) {
+        if (criticalSectionTokenChannel != null && criticalSectionTokenChannel.isOpen()) {
             try {
-                channel.close();
+                criticalSectionTokenChannel.close();
             } catch (IOException | TimeoutException e) {
                 logger.error("Failed to close channel", e);
             }

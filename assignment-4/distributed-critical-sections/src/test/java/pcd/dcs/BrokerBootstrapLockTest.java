@@ -55,8 +55,8 @@ class BrokerBootstrapLockTest {
 
         lock.withLock(connection, lockChannel -> {
             executed.set(true);
-            AMQP.Queue.DeclareOk declareOk = lockChannel.queueDeclarePassive("cs_token_bootstrap_guard_" + csName);
-            assertEquals("cs_token_bootstrap_guard_" + csName, declareOk.getQueue(), "Lock queue name must match");
+            AMQP.Queue.DeclareOk declareOk = lockChannel.queueDeclarePassive("cs_token_creation_guard_" + csName);
+            assertEquals("cs_token_creation_guard_" + csName, declareOk.getQueue(), "Lock queue name must match");
         });
 
         assertTrue(executed.get(), "Action should have executed under lock");
@@ -64,7 +64,7 @@ class BrokerBootstrapLockTest {
         // Verify the lock queue was auto-deleted after withLock completed
         Channel inspectChannel = connection.createChannel();
         try {
-            inspectChannel.queueDeclarePassive("cs_token_bootstrap_guard_" + csName);
+            inspectChannel.queueDeclarePassive("cs_token_creation_guard_" + csName);
             fail("Lock queue should have been deleted");
         } catch (IOException e) {
             String msg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
@@ -81,7 +81,7 @@ class BrokerBootstrapLockTest {
     @DisplayName("Lock acquisition times out if lock queue is held by another connection")
     void lockTimesOutWhenAlreadyHeld() throws Exception {
         String csName = "lock-timeout-" + UUID.randomUUID();
-        String lockQueueName = "cs_token_bootstrap_guard_" + csName;
+        String lockQueueName = "cs_token_creation_guard_" + csName;
 
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(HOST);

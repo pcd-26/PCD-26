@@ -306,7 +306,7 @@ class DistributedCriticalSectionTest {
     }
 
     private String tokenQueueName(String csName) {
-        return "cs_token_circulation_" + csName;
+        return "cs_token_" + csName;
     }
 
     private Connection newConnection() throws Exception {
