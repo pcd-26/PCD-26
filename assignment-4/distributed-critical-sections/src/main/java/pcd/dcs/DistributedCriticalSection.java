@@ -102,7 +102,7 @@ public class DistributedCriticalSection implements AutoCloseable {
                     // Run the optional test hook just before the first publish.
                     bootstrapHook.beforeTokenPublish();
 
-                    // Publish one persistent empty message as the initial token.
+                    // Publish the initial token into the token circulation queue while holding the bootstrap guard.
                     tokenBootstrapGuardChannel.basicPublish(
                             "",
                             tokenCirculationQueueName,
