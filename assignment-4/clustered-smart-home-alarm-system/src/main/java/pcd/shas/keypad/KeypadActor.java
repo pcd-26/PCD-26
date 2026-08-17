@@ -90,6 +90,7 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
+            // Handles updates about which control units are currently visible in the cluster.
             .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
             // Handles one physical keypad key press.
             .onMessage(PressKey.class, this::onKeyPressed)
@@ -102,6 +103,7 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
             .build();
     }
 
+    // Keeps one stable control-unit reference among the ones currently discovered.
     private Behavior<Command> onControlUnitsUpdated(ControlUnitsUpdated command) {
         controlUnit = command.controlUnits().stream()
             .max(Comparator.comparing(ref -> ref.path().toString()));
@@ -141,6 +143,7 @@ public final class KeypadActor extends AbstractBehavior<KeypadActor.Command> {
         return this;
     }
 
+    // Direct partial arming requests are useful for tests and scripted scenarios.
     private Behavior<Command> onPartialArmingRequested(RequestPartialArming command) {
         getContext().getLog().info(
             "[KEYPAD] Partial arming requested. Zones={}, PIN length={}.",

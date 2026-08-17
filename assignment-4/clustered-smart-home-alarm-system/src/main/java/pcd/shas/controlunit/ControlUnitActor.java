@@ -121,6 +121,7 @@ public final class ControlUnitActor {
             // Ask Pekko to notify this actor whenever sirens appear or disappear.
             context.getSystem().receptionist().tell(Receptionist.subscribe(SirenActor.SIREN_SERVICE_KEY, sirenAdapter));
 
+            // The timers are used to implement the exit and entry delays.
             return Behaviors.withTimers(timers -> {
                 // Build the runtime state shared by all alarm states.
                 var alarm = new AlarmRuntime(context, timers, correctPin, exitDelay, entryDelay, Set.of());
@@ -214,7 +215,9 @@ public final class ControlUnitActor {
     // STARTUP_RECOVERY: at startup or after a restart, the control unit cannot assume armed or disarmed state.
     private static Behavior<Command> startupRecovery(AlarmRuntime alarm) {
         return Behaviors.receive(Command.class)
+            // Handles receptionist updates about which sirens are currently available.
             .onMessage(SirensUpdated.class, message -> startupRecovery(alarm.withSirens(message.sirens())))
+            // Handles a PIN submitted while the control unit is recovering.
             .onMessage(PinSubmitted.class, message -> {
                 if (alarm.correctPin().equals(message.pin())) {
                     alarm.context().getLog().info("[ALARM] Startup/Recovery completed by correct PIN. State: STARTUP_RECOVERY -> DISARMED.");
@@ -224,18 +227,24 @@ public final class ControlUnitActor {
 
                 return stayInSameStateAfterWrongPin(alarm, AlarmState.STARTUP_RECOVERY);
             })
+            // Handles a full arming request while recovery is still in progress.
             .onMessage(RequestFullArming.class, message -> {
                 alarm.context().getLog().info("[ALARM] Full arming ignored while state is STARTUP_RECOVERY.");
                 return Behaviors.same();
             })
+            // Handles a partial arming request while recovery is still in progress.
             .onMessage(RequestPartialArming.class, message -> {
                 alarm.context().getLog().info("[ALARM] Partial arming ignored while state is STARTUP_RECOVERY.");
                 return Behaviors.same();
             })
+            // Handles sensor events while the control unit is still recovering.
             .onMessage(SensorActivated.class, message ->
                 ignoreSensorWithoutStateChange(alarm, AlarmState.STARTUP_RECOVERY, message.sensorInfo()))
+            // Ignores stale exit-delay timeout messages.
             .onMessage(ExitDelayTimeout.class, message -> Behaviors.same())
+            // Ignores stale entry-delay timeout messages.
             .onMessage(EntryDelayTimeout.class, message -> Behaviors.same())
+            // Handles status queries while the control unit is recovering.
             .onMessage(QueryState.class, message -> replyWithState(message.replyTo(), AlarmState.STARTUP_RECOVERY))
             .build();
     }
@@ -243,6 +252,7 @@ public final class ControlUnitActor {
     // DISARMED: sensors are ignored; a valid arming request starts the exit delay.
     private static Behavior<Command> disarmed(AlarmRuntime alarm) {
         return Behaviors.receive(Command.class)
+            // Handles receptionist updates about which sirens are currently available.
             .onMessage(SirensUpdated.class, message -> disarmed(alarm.withSirens(message.sirens())))
             // Handles a full arming request from the keypad.
             .onMessage(RequestFullArming.class, message -> {
@@ -295,6 +305,7 @@ public final class ControlUnitActor {
     // EXIT_DELAY: occupants can leave; sensors still do not count as intrusions.
     private static Behavior<Command> exitDelay(AlarmRuntime alarm, Set<Zone> zonesBeingArmed) {
         return Behaviors.receive(Command.class)
+            // Handles receptionist updates about which sirens are currently available.
             .onMessage(SirensUpdated.class, message -> exitDelay(alarm.withSirens(message.sirens()), zonesBeingArmed))
             // Handles a PIN submitted before the exit delay expires.
             .onMessage(PinSubmitted.class, message -> {
@@ -331,6 +342,7 @@ public final class ControlUnitActor {
     // ARMED: only sensors in active zones can start the entry-delay countdown.
     private static Behavior<Command> armed(AlarmRuntime alarm, Set<Zone> armedZones) {
         return Behaviors.receive(Command.class)
+            // Handles receptionist updates about which sirens are currently available.
             .onMessage(SirensUpdated.class, message -> armed(alarm.withSirens(message.sirens()), armedZones))
             // Handles a PIN submitted while the system is fully armed.
             .onMessage(PinSubmitted.class, message -> {
@@ -375,6 +387,7 @@ public final class ControlUnitActor {
     // ENTRY_DELAY: the user has a short window to disarm before the alarm starts.
     private static Behavior<Command> entryDelay(AlarmRuntime alarm, Set<Zone> armedZones) {
         return Behaviors.receive(Command.class)
+            // Handles receptionist updates about which sirens are currently available.
             .onMessage(SirensUpdated.class, message -> entryDelay(alarm.withSirens(message.sirens()), armedZones))
             // Handles a PIN submitted before the entry delay expires.
             .onMessage(PinSubmitted.class, message -> {
@@ -409,6 +422,7 @@ public final class ControlUnitActor {
     // ALARM: the siren stays active until the correct PIN is submitted.
     private static Behavior<Command> alarmTriggered(AlarmRuntime alarm, Set<Zone> armedZones) {
         return Behaviors.receive(Command.class)
+            // Handles receptionist updates about which sirens are currently available.
             .onMessage(SirensUpdated.class, message -> alarmTriggered(alarm.withSirens(message.sirens()), armedZones))
             // Handles PIN submissions while the siren is active.
             .onMessage(PinSubmitted.class, message -> {

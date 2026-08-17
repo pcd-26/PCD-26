@@ -98,12 +98,14 @@ public final class SensorActor extends AbstractBehavior<SensorActor.Command> {
     @Override
     public Receive<Command> createReceive() {
         return newReceiveBuilder()
+            // Handles updates about which control units are currently visible in the cluster.
             .onMessage(ControlUnitsUpdated.class, this::onControlUnitsUpdated)
             // Handles one sensor activation event.
             .onMessage(Activate.class, this::onActivated)
             .build();
     }
 
+    // Keeps one stable control-unit reference among the ones currently discovered.
     private Behavior<Command> onControlUnitsUpdated(ControlUnitsUpdated command) {
         controlUnit = command.controlUnits().stream()
             .max(Comparator.comparing(ref -> ref.path().toString()));
