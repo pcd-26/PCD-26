@@ -1,8 +1,13 @@
 \clearpage
 \section{Conclusions}
 
-The project keeps the alarm semantics from the previous assignment, but makes
-the deployment distributed and failure-aware. The design is intentionally
-small: typed messages, a single state owner, dynamic discovery, and safe
-recovery are enough to satisfy the assignment while keeping the code easy to
-reason about.
+The final project preserves the \textbf{alarm semantics} of assignment 3 and adds
+the distributed mechanisms required by assignment 4: \textbf{cluster startup},
+\textbf{remote discovery}, \textbf{singleton state ownership}, and \textbf{safe
+recovery after recreation}.
+
+The implementation remains intentionally compact. The most important clustered
+concepts are visible in a small set of delivered files, and each one has a
+clear responsibility. This makes the project suitable both as a correct
+solution to the assignment and as a concise example of how to move a local
+typed-actor system to a Pekko Cluster architecture.

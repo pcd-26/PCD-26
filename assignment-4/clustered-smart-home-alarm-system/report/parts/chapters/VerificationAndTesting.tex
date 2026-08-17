@@ -22,11 +22,11 @@ The automated suite verifies the properties that matter most for this
 assignment:
 
 \begin{itemize}
-    \item one logical owner for the alarm state;
-    \item message-based interaction between distributed roles;
-    \item preservation of the original alarm semantics;
-    \item safe loss of state after control-unit recreation;
-    \item serializability of remotely exchanged messages.
+    \item \textbf{preservation} of the state transitions already tested in assignment 3;
+    \item \textbf{three-node clustered startup} with distinct control-unit, keypad, and sensor roles;
+    \item \textbf{message-only communication} between distributed actors;
+    \item \textbf{safe recovery} after control-unit recreation;
+    \item \textbf{serialization} of remote messages and snapshots.
 \end{itemize}
 
 In other words, the tests are centered on \textbf{behavioral correctness}, not on

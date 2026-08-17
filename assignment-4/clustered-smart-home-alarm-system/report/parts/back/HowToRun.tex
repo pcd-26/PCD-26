@@ -3,7 +3,9 @@
 
 The delivery requires \textbf{JDK 21} and \textbf{Maven}. After extracting the
 final archive, enter the \texttt{clustered-smart-home-alarm-system} directory,
-which contains the module \texttt{pom.xml}.
+which contains the delivered module \texttt{pom.xml}. The execution examples
+below use only the delivered \textbf{Java entry points}:
+\texttt{pcd.shas.Main} and \texttt{pcd.shas.DemoMain}.
 
 \textbf{Build and run all tests}
 \begin{lstlisting}[style=terminalstyle]
@@ -59,3 +61,11 @@ The expected state evolution is:
 \texttt{EXIT\_DELAY} $\rightarrow$ \texttt{ARMED} $\rightarrow$
 \texttt{ENTRY\_DELAY} $\rightarrow$ \texttt{DISARMED}
 \end{center}
+
+This scenario demonstrates the clustered requirements directly:
+\begin{itemize}
+    \item \textbf{three distinct nodes} are active;
+    \item \textbf{keypad} and \textbf{sensor} communicate with a remote control unit;
+    \item the control unit remains the \textbf{single state owner};
+    \item the same alarm timing rules of assignment 3 are preserved.
+\end{itemize}

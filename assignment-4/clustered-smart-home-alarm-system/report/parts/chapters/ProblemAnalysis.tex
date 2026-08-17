@@ -1,17 +1,27 @@
 \clearpage
 \section{Problem Analysis}
 
-The main concurrency issues are ownership of the alarm state, asynchronous
-sensor input, and failure recovery.
+Compared to \textbf{assignment 3}, the main problem is no longer the local actor
+graph, but the fact that the same logic must now work across \textbf{multiple
+cluster nodes}.
+
+The critical points are the following:
 \begin{itemize}
-    \item The control unit is the single authority for the alarm state machine.
-    \item Sensors and keypads are independent actors that communicate only through messages.
-    \item The control unit must ignore sensor events while recovering, because a restart loses the previous in-memory state.
-    \item Timing rules still matter, so arming and intrusion delays must remain deterministic.
+    \item The \textbf{alarm state} must still have a \textbf{single owner}. If multiple control units changed state independently, the system would become inconsistent.
+    \item \textbf{Sensors} and \textbf{keypads} must remain simple distributed actors. They generate commands or events, but they do not own the alarm state.
+    \item \textbf{Timing constraints} from assignment 3 must remain valid even when messages cross node boundaries.
+    \item A recreated control unit loses its previous in-memory state, so the system needs an explicit \textbf{safe recovery mode}.
 \end{itemize}
 
-This setup creates a classic distributed-systems problem: the system must stay
-responsive even when actors live on different nodes, but it must also avoid
-unsafe assumptions after failures. The recovery state is therefore not an
-implementation accident. It is the safe default that prevents the restarted
-node from acting as if it knew the previous alarm condition.
+This makes the clustered assignment a problem of \textbf{state ownership},
+\textbf{discovery}, and \textbf{failure semantics}. The new distributed code must
+therefore answer three questions clearly:
+\begin{itemize}
+    \item which actor owns the alarm state;
+    \item how remote actors find that owner;
+    \item what happens when that owner is recreated.
+\end{itemize}
+
+The solution adopted in the final project is to keep the \textbf{Control Unit}
+as the only authority, expose it as a \textbf{cluster singleton}, and force it
+to restart in \texttt{STARTUP\_RECOVERY} after recreation.

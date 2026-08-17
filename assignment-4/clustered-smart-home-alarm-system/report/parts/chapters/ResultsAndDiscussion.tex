@@ -11,9 +11,17 @@ Cluster nodes without changing its domain rules. Sensors, keypad, and control
 logic can run on different JVMs, yet they still interact only through typed
 actor messages.
 
-The most relevant design outcome is that the \textbf{alarm state remains centralized}
-even in the clustered version. This avoids the inconsistency that would arise
-if multiple independent control units were active at the same time.
+The most relevant design outcome is that the \textbf{alarm state remains
+centralized} even in the clustered version. This avoids the inconsistency that
+would arise if multiple independent control units were active at the same
+time.
+
+From a comparison point of view, the clustered project can be summarized as:
+\begin{itemize}
+    \item \textbf{same alarm logic} as assignment 3;
+    \item \textbf{different startup and communication model};
+    \item \textbf{additional recovery state} required by distributed execution.
+\end{itemize}
 
 \subsection{Discussion of trade-offs}
 
@@ -28,8 +36,9 @@ From a \textbf{didactic point of view}, this trade-off is reasonable. The code s
 \begin{itemize}
     \item cluster formation through seed nodes;
     \item role-based node startup;
-    \item remote service discovery;
+    \item remote service discovery through the receptionist;
     \item message serialization;
+    \item singleton-based state ownership;
     \item failure-aware recovery.
 \end{itemize}
 
