@@ -6,7 +6,7 @@ gameplay state, and some reusable monitor utilities.
 ## Purpose
 
 The `model` package is the core of the project. It contains the data types and
-behaviors that define what the game means independently from the chosen runtime
+behaviors that define what the game means independently of the chosen runtime
 strategy.
 
 The main design split is:

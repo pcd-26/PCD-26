@@ -1,0 +1,24 @@
+\clearpage
+\section{Conclusions}
+
+The project implements sequential, platform-thread, and task-based execution without duplicating game rules.
+The concurrent versions share the game loop, command protocol, and phased physics algorithm.
+They differ only in work scheduling: persistent workers or tasks submitted to a fixed executor.
+
+All three versions are fully playable.
+The simulation advances correctly, accepts keyboard and mouse shots, controls the bot, updates scores, detects the end of the game, and supports restarting without relaunching the application.
+
+The design preserves a single-writer ownership rule.
+The controller owns mutable game state; workers process disjoint ranges or private accumulators.
+Phase barriers separate parallel computation from deterministic accumulation and snapshot publication.
+This keeps input and rendering responsive without exposing the model to concurrent mutation.
+
+Measurements confirm a \textbf{real but sublinear speedup}.
+With 2500 balls and 16 workers, the threaded engine reaches $2.342\times$ and the task-based engine $2.109\times$. 
+Worker scaling peaks at 8 workers, with $2.347\times$ and $2.123\times$ respectively.
+Beyond this point, sequential phases, barriers, memory traffic, and oversubscription outweigh additional parallelism.
+
+The evidence is complementary.
+JUnit validates game and physics behavior; JPF explores the bounded synchronization protocols; benchmarks quantify performance on the complete implementation.
+The main limitation is that model checking does not cover numerical physics or arbitrary workloads.
+The results support the central design choice: parallelize independent physics work while keeping global state transitions explicit and deterministic.
