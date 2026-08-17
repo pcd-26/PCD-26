@@ -8,25 +8,25 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-// Declare and validate the single-message queue that stores the shared token.
-record TokenQueueManager(String queueName) {
-    private static final String TOKEN_QUEUE_PREFIX = "cs_token_";
+// Declare and validate the single-message queue where the shared token circulates.
+record TokenQueueManager(String tokenCirculationQueueName) {
+    private static final String TOKEN_CIRCULATION_QUEUE_PREFIX = "cs_token_circulation_";
 
     // Prefix the logical critical-section name with the broker queue namespace.
     TokenQueueManager(String queueName) {
-        this.queueName = TOKEN_QUEUE_PREFIX + queueName;
+        this.tokenCirculationQueueName = TOKEN_CIRCULATION_QUEUE_PREFIX + queueName;
     }
 
     // Create the token queue with the expected broker constraints.
     Channel declareQueue(Channel channel) throws IOException {
         try {
-            channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
+            channel.queueDeclare(tokenCirculationQueueName, true, false, false, tokenQueueArguments());
             return channel;
         } catch (IOException e) {
             if (isPreconditionFailed(e)) {
                 // Stop immediately if the broker already hosts an incompatible queue.
                 throw new IOException(
-                        "Queue '" + queueName + "' already exists with incompatible broker arguments. "
+                        "Queue '" + tokenCirculationQueueName + "' already exists with incompatible broker arguments. "
                                 + "Please clean up the queue manually before restarting the node.",
                         e);
             }

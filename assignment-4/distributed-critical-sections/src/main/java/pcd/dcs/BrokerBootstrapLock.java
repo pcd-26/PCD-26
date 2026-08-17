@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-// Broker-side mutex used to serialize bootstrap and release transitions.
+// Broker-side mutex used to guard token bootstrap and release transitions.
 class BrokerBootstrapLock {
 
     private static final Logger logger = LoggerFactory.getLogger(BrokerBootstrapLock.class);
@@ -22,7 +22,7 @@ class BrokerBootstrapLock {
         void run(Channel lockChannel) throws IOException, InterruptedException;
     }
 
-    private final String bootstrapLockQueue;
+    private final String tokenBootstrapGuardQueue;
     private final long timeoutMillis;
     private final long retryDelayMillis;
 
@@ -31,7 +31,7 @@ class BrokerBootstrapLock {
     }
 
     BrokerBootstrapLock(String csName, long timeoutMillis, long retryDelayMillis) {
-        this.bootstrapLockQueue = "cs_bootstrap_lock_" + csName;
+        this.tokenBootstrapGuardQueue = "cs_token_bootstrap_guard_" + csName;
         this.timeoutMillis = timeoutMillis;
         this.retryDelayMillis = retryDelayMillis;
     }
@@ -43,18 +43,18 @@ class BrokerBootstrapLock {
         while (true) {
             // Preserve interruption semantics while waiting for the broker lock.
             if (Thread.currentThread().isInterrupted()) {
-                throw new InterruptedException("Interrupted while acquiring bootstrap lock for '" + bootstrapLockQueue + "'");
+                throw new InterruptedException("Interrupted while acquiring bootstrap lock for '" + tokenBootstrapGuardQueue + "'");
             }
 
             Channel lockChannel = connection.createChannel();
             try {
                 try {
                     // The exclusive queue declaration succeeds for one process at a time.
-                    lockChannel.queueDeclare(bootstrapLockQueue, false, true, false, null);
+                    lockChannel.queueDeclare(tokenBootstrapGuardQueue, false, true, false, null);
                 } catch (IOException lockFailure) {
                     if (System.nanoTime() >= deadlineNanos) {
                         throw new IOException(
-                                "Timed out acquiring bootstrap lock for '" + bootstrapLockQueue + "'",
+                                "Timed out acquiring bootstrap lock for '" + tokenBootstrapGuardQueue + "'",
                                 lockFailure);
                     }
                     // Another process still owns the lock; wait and retry.
@@ -68,9 +68,9 @@ class BrokerBootstrapLock {
                 } finally {
                     try {
                         // Explicitly delete the lock queue instead of waiting for connection teardown.
-                        lockChannel.queueDelete(bootstrapLockQueue);
+                        lockChannel.queueDelete(tokenBootstrapGuardQueue);
                     } catch (IOException cleanupFailure) {
-                        logger.warn("Failed to delete bootstrap lock queue '{}'", bootstrapLockQueue, cleanupFailure);
+                        logger.warn("Failed to delete bootstrap lock queue '{}'", tokenBootstrapGuardQueue, cleanupFailure);
                     }
                 }
                 return;
@@ -81,7 +81,7 @@ class BrokerBootstrapLock {
                         lockChannel.close();
                     }
                 } catch (IOException | TimeoutException cleanupFailure) {
-                    logger.warn("Failed to close bootstrap lock channel for '{}'", bootstrapLockQueue, cleanupFailure);
+                    logger.warn("Failed to close bootstrap lock channel for '{}'", tokenBootstrapGuardQueue, cleanupFailure);
                 }
             }
         }

@@ -29,8 +29,8 @@ public class DistributedCriticalSection implements AutoCloseable {
 
     private final Connection connection;
     private final String csName;
-    private final TokenQueueManager tokenQueueManager;
-    private final BrokerBootstrapLock bootstrapLock;
+    private final TokenQueueManager tokenCirculationQueueManager;
+    private final BrokerBootstrapLock tokenBootstrapGuard;
     private final boolean ownConnection;
     private final BootstrapHook bootstrapHook;
 
@@ -70,8 +70,8 @@ public class DistributedCriticalSection implements AutoCloseable {
     ) throws IOException, InterruptedException {
         this.connection = requireConnection(connection);
         this.csName = requireCriticalSectionName(csName);
-        this.tokenQueueManager = new TokenQueueManager(this.csName);
-        this.bootstrapLock = new BrokerBootstrapLock(this.csName);
+        this.tokenCirculationQueueManager = new TokenQueueManager(this.csName);
+        this.tokenBootstrapGuard = new BrokerBootstrapLock(this.csName);
         this.ownConnection = ownConnection;
         this.bootstrapHook = bootstrapHook == null ? () -> { } : bootstrapHook;
         this.channel = this.connection.createChannel();
@@ -82,27 +82,39 @@ public class DistributedCriticalSection implements AutoCloseable {
     // Seed the shared token only when the critical section is still uninitialized.
     private void initializeToken() throws IOException, InterruptedException {
         synchronized (this) {
-            // Ensure the token queue exists with the expected broker arguments.
-            this.channel = tokenQueueManager.declareQueue(this.channel);
+            // Ensure the token queue exists before inspecting or populating it.
+            this.channel = tokenCirculationQueueManager.declareQueue(this.channel);
 
-            bootstrapLock.withLock(connection, lockChannel -> {
-                String queueName = tokenQueueManager.queueName();
+            // Serialize bootstrap so two processes cannot create the first token concurrently.
+            tokenBootstrapGuard.withLock(connection, lockChannel -> {
+                String queueName = tokenCirculationQueueManager.tokenCirculationQueueName();
+
+                // Read the current queue state without changing broker data.
                 AMQP.Queue.DeclareOk state = lockChannel.queueDeclarePassive(queueName);
+
+                // Bootstrap only when no token is queued and no consumer is registered.
                 if (state.getMessageCount() == 0 && state.getConsumerCount() == 0) {
-                    // Publish the first token only if nobody owns it and none is queued.
+                    // Require broker confirmation before considering the first token created.
                     lockChannel.confirmSelect();
+
+                    // Run the optional test hook just before the first publish.
                     bootstrapHook.beforeTokenPublish();
+
+                    // Publish one persistent empty message as the initial token.
                     lockChannel.basicPublish("", queueName, MessageProperties.PERSISTENT_TEXT_PLAIN, EMPTY_BODY);
                     try {
+                        // Wait for broker confirmation so a failed bootstrap can be retried safely.
                         if (!lockChannel.waitForConfirms(2000)) {
                             throw new IOException("Failed to confirm token bootstrap for critical section '" + csName + "'");
                         }
                     } catch (TimeoutException e) {
                         throw new IOException("Timed out waiting for token bootstrap confirm for critical section '" + csName + "'", e);
                     }
+
+                    // The shared critical section now has its initial token.
                     logger.info("Initialized critical section token for '{}'", csName);
                 } else {
-                    // Another process already initialized or currently holds the token.
+                    // Skip bootstrap because the token already exists or is already owned.
                     logger.debug(
                             "Critical section token for '{}' already initialized (messages={}, consumers={})",
                             csName,
@@ -153,7 +165,7 @@ public class DistributedCriticalSection implements AutoCloseable {
             }
         };
 
-        String queueName = tokenQueueManager.queueName();
+        String queueName = tokenCirculationQueueManager.tokenCirculationQueueName();
         // Keep the consumer registered while holding the token so bootstrap can observe ownership.
         consumerTag = channel.basicConsume(queueName, false, deliverCallback, tag -> { });
 
@@ -190,7 +202,7 @@ public class DistributedCriticalSection implements AutoCloseable {
 
         logger.debug("Exiting critical section '{}'", csName);
 
-        bootstrapLock.withLock(connection, lockChannel -> {
+        tokenBootstrapGuard.withLock(connection, lockChannel -> {
             // Stop appearing as an active owner before returning the token to the queue.
             cancelConsumerQuietly();
             // Requeue the unacknowledged delivery instead of publishing a new token.
