@@ -48,6 +48,7 @@ public final class Main {
 
     // Launches one clustered node from parsed command-line arguments.
     private static void runNode(NodeArguments launchArguments) {
+        // Build the Pekko config for exactly one node: network identity, seed nodes, and cluster role.
         Config nodeConfig = NodeStartup.buildClusterConfig(
             SYSTEM_NAME,
             launchArguments.host(),
@@ -68,15 +69,16 @@ public final class Main {
     private static void runControlUnitNode(Config config, AlarmConfiguration alarmConfiguration) {
         ActorSystem<ControlUnitActor.Command> system = ActorSystem.create(
             Behaviors.setup(context -> {
-                // The siren stays local to the control-unit node and is discovered by service key.
+                // This node always hosts its own siren actor.
                 context.spawn(SirenActor.create(), "siren");
+                // This node asks Pekko for the single control unit of the whole cluster.
                 ActorRef<ControlUnitActor.Command> controlUnit = ControlUnitActor.initSingleton(
                     context.getSystem(),
                     alarmConfiguration.correctPin(),
                     alarmConfiguration.exitDelay(),
                     alarmConfiguration.entryDelay()
                 );
-                // The ActorSystem itself forwards external commands to the child control unit.
+                // The node root does not implement alarm logic itself: it only forwards commands to the singleton.
                 return Behaviors.receive(ControlUnitActor.Command.class)
                     .onMessage(ControlUnitActor.Command.class, message -> {
                         controlUnit.tell(message);
@@ -100,6 +102,7 @@ public final class Main {
     // Runs a keypad node and reads commands from the console.
     private static void runKeypadNode(Config config) {
         ActorSystem<KeypadActor.Command> system = ActorSystem.create(
+            // This node only hosts the keypad actor; the control unit is discovered remotely.
             KeypadActor.create(),
             SYSTEM_NAME,
             config
@@ -117,6 +120,7 @@ public final class Main {
     // Runs a sensor node using the sensor metadata from CLI arguments.
     private static void runSensorNode(Config config, NodeArguments launchArguments) {
         ActorSystem<SensorActor.Command> system = ActorSystem.create(
+            // This node only hosts one sensor actor; the control unit is discovered remotely.
             SensorActor.create(
                 launchArguments.sensorId(),
                 launchArguments.sensorType(),
@@ -141,6 +145,7 @@ public final class Main {
     // Queries the control unit state through ask.
     private static AlarmState queryControlUnitState(ActorSystem<ControlUnitActor.Command> system) {
         try {
+            // "ask" means: send a request message and wait for exactly one reply message.
             CompletionStage<ControlUnitActor.StateSnapshot> stateSnapshotStage = AskPattern.ask(
                 system,
                 replyTo -> new ControlUnitActor.QueryState(replyTo),

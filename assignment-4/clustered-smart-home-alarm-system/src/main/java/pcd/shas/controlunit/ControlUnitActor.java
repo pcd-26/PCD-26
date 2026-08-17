@@ -109,15 +109,22 @@ public final class ControlUnitActor {
         Objects.requireNonNull(entryDelay, "entryDelay");
 
         return Behaviors.setup(context -> {
+            // Publish this actor as "the control unit" so keypad and sensors can discover it.
             context.getSystem().receptionist().tell(Receptionist.register(CONTROL_UNIT_SERVICE_KEY, context.getSelf()));
+
+            // Create an adapter that turns receptionist updates into normal actor messages.
             ActorRef<Receptionist.Listing> sirenAdapter = context.messageAdapter(
                 Receptionist.Listing.class,
                 listing -> new SirensUpdated(listing.getServiceInstances(SirenActor.SIREN_SERVICE_KEY))
             );
+
+            // Ask Pekko to notify this actor whenever sirens appear or disappear.
             context.getSystem().receptionist().tell(Receptionist.subscribe(SirenActor.SIREN_SERVICE_KEY, sirenAdapter));
 
             return Behaviors.withTimers(timers -> {
+                // Build the runtime state shared by all alarm states.
                 var alarm = new AlarmRuntime(context, timers, correctPin, exitDelay, entryDelay, Set.of());
+                // The control unit always starts in safe recovery mode after creation.
                 return startupRecovery(alarm);
             });
         });
@@ -136,14 +143,13 @@ public final class ControlUnitActor {
         // Restrict the singleton to nodes that have the control-unit cluster role.
         ClusterSingletonSettings settings = ClusterSingletonSettings.create(system).withRole(CLUSTER_ROLE);
 
-        // Describe the singleton actor: how to create it, which cluster-wide name it has,
-        // and which singleton settings Pekko must use to place it in the cluster.
+        // Describe which actor must be unique in the cluster and how Pekko can create it.
         SingletonActor<Command> singleton = SingletonActor
             .of(create(correctPin, exitDelay, entryDelay), CLUSTER_SINGLETON_NAME)
             .withSettings(settings);
 
-        // Start the singleton if this cluster does not have it yet, or return a reference
-        // to the already existing singleton proxy if another eligible node is already hosting it.
+        // If the singleton is not running yet, Pekko starts it on one eligible node.
+        // If it already exists elsewhere, Pekko gives us a reference to that same logical actor.
         return ClusterSingleton.get(system).init(singleton);
     }
 

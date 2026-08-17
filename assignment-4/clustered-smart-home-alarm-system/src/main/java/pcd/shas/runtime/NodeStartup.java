@@ -64,16 +64,16 @@ public final class NodeStartup {
             throw new IllegalArgumentException("missing node role");
         }
 
-        // Split the role from the remaining --flag value pairs.
+        // First decide which kind of node we want to start.
         Role role = parseRole(args[0]);
         Map<String, String> flags = parseFlags(Arrays.copyOfRange(args, 1, args.length));
 
-        // Defaults keep the local three-node setup easy to launch.
+        // If the user omits host, port, or seed nodes, use simple defaults for a local demo.
         String host = flags.getOrDefault("--host", DEFAULT_HOST);
         int port = parsePort(flags.get("--port"), role);
         List<String> seedNodes = normalizeSeedNodes(flags.get("--seed-nodes"), host, port);
 
-        // Sensor nodes need identity metadata for the distributed events.
+        // Sensor nodes need extra metadata because they represent a real distributed device.
         return switch (role) {
             case CONTROL_UNIT, KEYPAD -> new NodeArguments(role, host, port, seedNodes, null, null, null);
             case SENSOR -> new NodeArguments(
@@ -99,7 +99,7 @@ public final class NodeStartup {
         Objects.requireNonNull(seedNodes, "seedNodes");
         Objects.requireNonNull(role, "role");
 
-        // Pekko expects full seed-node URIs in the final config.
+        // Pekko wants seed nodes as full URIs, not plain host:port strings.
         List<String> normalizedSeedNodes = normalizeSeedNodes(seedNodes, host, port);
         return ConfigFactory.parseString(buildClusterConfigText(systemName, host, port, normalizedSeedNodes, role))
             .withFallback(ConfigFactory.load());
@@ -119,7 +119,7 @@ public final class NodeStartup {
         return "pekko://%s@%s:%d".formatted(systemName, host, port);
     }
 
-    // Parses the role name accepted by the run scripts.
+    // Parses the role name accepted by the CLI.
     private static Role parseRole(String rawRole) {
         Objects.requireNonNull(rawRole, "rawRole");
         return switch (rawRole.toLowerCase(Locale.ROOT)) {
@@ -238,6 +238,7 @@ public final class NodeStartup {
         String seedNodeList = seedNodes.stream()
             .map(seedNode -> "\"" + toSeedNodeUri(systemName, seedNode) + "\"")
             .collect(Collectors.joining(", "));
+        // The role tells Pekko what this node is allowed to host inside the cluster.
         String clusterRole = switch (role) {
             case CONTROL_UNIT -> "control-unit";
             case KEYPAD -> "keypad";
