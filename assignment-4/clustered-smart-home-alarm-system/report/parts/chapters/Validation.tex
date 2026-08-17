@@ -1,0 +1,61 @@
+\clearpage
+\section{Validation}
+
+The implementation is covered by unit and integration tests.
+\begin{itemize}
+    \item \texttt{ControlUnitActorTest} checks the state machine, arming modes, timing behavior, and recovery rules.
+    \item \texttt{SensorActorTest} and \texttt{KeypadActorTest} check receptionist discovery and message delivery.
+    \item \texttt{ClusteredSystemTest} verifies three-node cluster formation, sensor handling, and restart recovery.
+    \item \texttt{NodeStartupTest} checks the startup parser and cluster seed-node generation.
+\end{itemize}
+
+The tests are useful not only because they confirm correctness, but because
+they document the intended distributed behavior. In particular, they lock in
+the three-node setup, the recovery semantics, and the fact that the control
+unit never assumes a dangerous default after a restart.
+
+\subsection{Manual Multi-Node Execution Example}
+
+The system can also be validated manually by starting three separate cluster
+nodes on localhost and then driving one distributed scenario end-to-end.
+
+\paragraph{Startup commands}
+Open three terminals in the module directory and run:
+\begin{verbatim}
+./run-cshas.sh control-unit --host 127.0.0.1 --port 2551 \
+  --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+
+./run-cshas.sh keypad --host 127.0.0.1 --port 2552 \
+  --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+
+./run-cshas.sh sensor --host 127.0.0.1 --port 2553 \
+  --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER \
+  --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+\end{verbatim}
+
+On Windows PowerShell, the same scenario can be started with
+\texttt{.\textbackslash run-cshas.ps1} and the same arguments.
+
+\paragraph{Interactive scenario}
+After the three nodes join the cluster, the following commands are sufficient
+to observe the main distributed transitions:
+\begin{enumerate}
+    \item On the control-unit terminal, type \texttt{status}. The expected state is \texttt{STARTUP\_RECOVERY}.
+    \item On the keypad terminal, type \texttt{pin 1234}. This leaves the safe recovery mode.
+    \item On the control-unit terminal, type \texttt{status}. The expected state is now \texttt{DISARMED}.
+    \item On the keypad terminal, type \texttt{arm full 1234}. This starts the exit delay.
+    \item On the control-unit terminal, type \texttt{status}. The expected state is \texttt{EXIT\_DELAY}, and shortly after that it becomes \texttt{ARMED}.
+    \item On the sensor terminal, press ENTER. This simulates a distributed sensor activation.
+    \item On the control-unit terminal, type \texttt{status}. The expected state is \texttt{ENTRY\_DELAY}.
+    \item On the keypad terminal, type \texttt{pin 1234} before the entry timeout expires.
+    \item On the control-unit terminal, type \texttt{status}. The expected state returns to \texttt{DISARMED}.
+\end{enumerate}
+
+\paragraph{Expected observations}
+This experiment shows that:
+\begin{itemize}
+    \item the cluster is formed by three separate node processes;
+    \item keypad and sensor nodes discover the control unit remotely;
+    \item arming and disarming commands travel across nodes only through actor messages;
+    \item a remote sensor activation changes the control-unit state machine exactly as in the non-clustered assignment.
+\end{itemize}

@@ -1,0 +1,58 @@
+\clearpage
+\section{How to Run}
+
+From the \texttt{assignment-4/clustered-smart-home-alarm-system} directory:
+
+\begin{itemize}
+  \item Build: \texttt{mvn compile}
+  \item Test: \texttt{mvn test}
+  \item Distributed demo: \texttt{mvn exec:java} with main class \texttt{pcd.shas.DemoMain}
+  \item Cluster node: \texttt{mvn exec:java} with main class \texttt{pcd.shas.Main}
+\end{itemize}
+
+The clustered entry point \texttt{pcd.shas.Main} starts one node at a time.
+The accepted roles are \texttt{control-unit}, \texttt{keypad}, and
+\texttt{sensor}. A sensor node also requires \texttt{sensor-id},
+\texttt{sensor-type}, and \texttt{zone}.
+
+\textbf{Distributed demo}
+\begin{lstlisting}[style=terminalstyle]
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.DemoMain"
+\end{lstlisting}
+
+\textbf{Control-unit node}
+\begin{lstlisting}[style=terminalstyle]
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+\end{lstlisting}
+
+\textbf{Keypad node}
+\begin{lstlisting}[style=terminalstyle]
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=keypad --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+\end{lstlisting}
+
+\textbf{Sensor node}
+\begin{lstlisting}[style=terminalstyle]
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=sensor --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+\end{lstlisting}
+
+The control-unit CLI accepts \texttt{status}, \texttt{help}, and \texttt{exit}.
+The keypad CLI accepts \texttt{pin PIN}, \texttt{arm full PIN},
+\texttt{arm partial PIN ZONE...}, raw digit input, and \texttt{exit}. The
+sensor CLI triggers one activation on ENTER and stops on \texttt{exit}.
+
+\textbf{Example commands after startup}
+
+\begin{itemize}
+  \item Control-unit node: \texttt{status}, \texttt{help}, \texttt{exit}
+  \item Keypad node: \texttt{pin 1234}, \texttt{arm full 1234},
+  \texttt{arm partial 1234 PERIMETER GROUND\_FLOOR}, \texttt{1234},
+  \texttt{exit}
+  \item Sensor node: press ENTER to trigger one activation, then \texttt{exit}
+\end{itemize}
+
+To observe a minimal three-node execution, start one control-unit node, one
+keypad node, and one sensor node with the commands above. Then submit a
+correct PIN from the keypad, arm the system, wait for the exit delay to
+expire, and trigger the sensor from its CLI. The expected state evolution is
+\texttt{STARTUP\_RECOVERY $\rightarrow$ DISARMED $\rightarrow$ EXIT\_DELAY
+$\rightarrow$ ARMED $\rightarrow$ ENTRY\_DELAY $\rightarrow$ DISARMED}.

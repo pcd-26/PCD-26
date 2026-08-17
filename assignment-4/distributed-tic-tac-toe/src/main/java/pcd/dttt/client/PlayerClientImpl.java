@@ -6,59 +6,34 @@ import java.rmi.server.UnicastRemoteObject;
 import pcd.dttt.common.BoardState;
 import pcd.dttt.common.PlayerClient;
 
-/**
- * Implementation of the PlayerClient remote callback interface.
- * Receives remote calls from the server and forwards them to a local listener.
- */
+// Forwards remote callbacks to a local listener.
 public class PlayerClientImpl extends UnicastRemoteObject implements PlayerClient {
     @Serial
     private static final long serialVersionUID = 1L;
     
-    /** The local listener interface to receive callbacks forwarded from the server. */
-    private final GameEventListener listener;
+    private final GameEventListener localEventListener;
 
-    /**
-     * Constructs a PlayerClient callback object.
-     * Must be exported (done automatically via extending UnicastRemoteObject).
-     *
-     * @param listener the local listener to receive callbacks
-     * @throws RemoteException if an RMI error occurs during export
-     */
-    public PlayerClientImpl(GameEventListener listener) throws RemoteException {
-        super(0); // Export on anonymous port
-        this.listener = listener;
+    // Exports the callback object on creation.
+    public PlayerClientImpl(GameEventListener localEventListener) throws RemoteException {
+        super(0);
+        this.localEventListener = localEventListener;
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param initialState the initial board state snapshot when the game starts
-     * @throws RemoteException if a remote communication error occurs
-     */
+    // Forwards the game-start event locally.
     @Override
     public void gameStarted(BoardState initialState) throws RemoteException {
-        listener.onGameStarted(initialState);
+        localEventListener.onGameStarted(initialState);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param newState the updated board state snapshot
-     * @throws RemoteException if a remote communication error occurs
-     */
+    // Forwards the board-update event locally.
     @Override
-    public void gameUpdated(BoardState newState) throws RemoteException {
-        listener.onGameUpdated(newState);
+    public void gameUpdated(BoardState updatedState) throws RemoteException {
+        localEventListener.onGameUpdated(updatedState);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param opponentName the nickname of the opponent who left
-     * @throws RemoteException if a remote communication error occurs
-     */
+    // Forwards the opponent-left event locally.
     @Override
     public void opponentLeft(String opponentName) throws RemoteException {
-        listener.onOpponentLeft(opponentName);
+        localEventListener.onOpponentLeft(opponentName);
     }
 }

@@ -1,0 +1,17 @@
+\clearpage
+\section{Introduction}
+
+This project implements the optional distributed critical-sections middleware
+required by Assignment 4. The goal is to offer a \textbf{small reusable API}
+through which independent processes can request access to a shared critical
+section without knowing anything about the other participants.
+
+The implementation is built on top of \textbf{RabbitMQ} as the required
+message-oriented middleware. This is a natural fit for the problem because the
+shared coordination state can be reduced to one broker-managed token rather
+than explicit peer-to-peer communication or shared memory.
+
+The distributed setting introduces two relevant concerns:
+\textbf{safe bootstrap} and \textbf{failure recovery}. The middleware must
+guarantee mutual exclusion, avoid duplicate token creation, and remain
+recoverable when a process crashes while holding the critical section.

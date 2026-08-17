@@ -5,30 +5,16 @@ import com.typesafe.config.Config;
 import java.time.Duration;
 import java.util.Objects;
 
-/**
- * Immutable application configuration for the clustered smart home alarm.
- *
- * <p>The values are loaded from {@code application.conf} and kept outside the
- * actor logic so tests can inject shorter timings without changing the
- * production defaults.</p>
- *
- * @param correctPin the configured alarm PIN
- * @param exitDelay the exit-delay duration
- * @param entryDelay the entry-delay duration
- */
+// Immutable alarm settings loaded from application.conf.
 public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration entryDelay) {
 
     private static final String ROOT_PATH = "shas";
 
-    /**
-     * Loads the alarm configuration from the {@code shas} config subtree.
-     *
-     * @param config the loaded application config
-     * @return the parsed alarm configuration
-     */
+    // Loads the alarm configuration from the shas config subtree.
     public static AlarmConfiguration from(Config config) {
         Objects.requireNonNull(config, "config");
 
+        // Keep actor logic independent from configuration parsing.
         Config shasConfig = config.getConfig(ROOT_PATH);
         return new AlarmConfiguration(
                 shasConfig.getString("correctPin"),
@@ -43,6 +29,7 @@ public record AlarmConfiguration(String correctPin, Duration exitDelay, Duration
             throw new IllegalArgumentException("correctPin cannot be blank");
         }
 
+        // Timers must be real positive delays.
         requirePositiveDuration(exitDelay, "exitDelay");
         requirePositiveDuration(entryDelay, "entryDelay");
     }

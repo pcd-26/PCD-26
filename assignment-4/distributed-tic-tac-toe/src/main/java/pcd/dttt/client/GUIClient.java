@@ -12,105 +12,94 @@ import pcd.dttt.common.GameStatus;
 import pcd.dttt.common.exceptions.InvalidMoveException;
 import pcd.dttt.common.exceptions.NotYourTurnException;
 
-/**
- * Swing Graphical User Interface client for Distributed Tic-Tac-Toe.
- * Decoupled from direct RMI network references by communicating via the {@link GameController} abstraction.
- * Implements {@link GameEventListener} to receive state notifications and safely updates components on the EDT.
- */
+// Swing client for the distributed Tic-Tac-Toe game.
 public class GUIClient extends JFrame implements GameEventListener {
     @Serial
     private static final long serialVersionUID = 1L;
 
     // Sleek Dark Theme Color Palette
-    /** Background color for the frame and panels. */
+    // Main background color.
     private static final Color COLOR_BG = new Color(30, 30, 46);
-    /** Background color for secondary panels. */
+    // Secondary panel color.
     private static final Color COLOR_PANEL_BG = new Color(49, 50, 68);
-    /** Default button background color. */
+    // Default button color.
     private static final Color COLOR_BTN_BG = new Color(17, 17, 27);
-    /** Foreground color for default text labels. */
+    // Default text color.
     private static final Color COLOR_FG = new Color(205, 214, 244);
-    /** Status color representing success or positive state. */
+    // Positive status color.
     private static final Color COLOR_STATUS = new Color(166, 227, 161);
-    /** Warning color representing pending or waiting state. */
+    // Waiting status color.
     private static final Color COLOR_WARN = new Color(249, 226, 175);
 
     // High-Contrast Button Colors (harmonized with Catppuccin Mocha dark theme)
-    /** Primary button color (e.g. Connection setup actions). */
+    // Primary action color.
     private static final Color COLOR_BTN_PRIMARY = new Color(45, 79, 124);
-    /** Success button color (e.g. Join actions). */
+    // Join action color.
     private static final Color COLOR_BTN_SUCCESS = new Color(45, 94, 64);
-    /** Danger button color (e.g. Leave match actions). */
+    // Leave action color.
     private static final Color COLOR_BTN_DANGER = new Color(124, 53, 67);
-    /** Secondary action button color (e.g. Refresh lobby list). */
+    // Secondary action color.
     private static final Color COLOR_BTN_SECONDARY = new Color(69, 71, 90);
 
-    /** Color representation for 'X' mark. */
+    // Color used for X.
     private static final Color COLOR_X = new Color(255, 85, 120);
-    /** Color representation for 'O' mark. */
+    // Color used for O.
     private static final Color COLOR_O = new Color(85, 170, 255);
 
-    /** Card layout containing the application screens. */
+    // Manages screen switching.
     private final CardLayout cardLayout;
-    /** The main wrapper panel holding all cards. */
+    // Holds all screens.
     private final JPanel mainPanel;
 
     // Game Client Controller & State
-    /** The controller abstraction decoupling the UI from the network. */
+    // Connects the UI to the distributed backend.
     private final GameController controller;
-    /** Default host used to prefill the connection form. */
+    // Default host shown in the form.
     private final String defaultHost;
-    /** Default port used to prefill the connection form. */
+    // Default port shown in the form.
     private final int defaultPort;
-    /** Default service name used to prefill the connection form. */
+    // Default service name shown in the form.
     private final String defaultServiceName;
-    /** The player's assigned game mark ('X' or 'O'). Defaults to empty space. */
+    // Local player mark.
     private char myMark = ' '; // 'X' or 'O' or ' '
 
     // Connection Screen Components
-    /** Input field for server host address. */
+    // Host input field.
     private JTextField hostField;
-    /** Input field for server port number. */
+    // Port input field.
     private JTextField portField;
-    /** Input field for the lobby service binding name. */
+    // Service name input field.
     private JTextField serviceField;
-    /** Input field for player nickname. */
+    // Player name input field.
     private JTextField nameField;
-    /** Button to initiate connection to the server. */
+    // Connect button.
     private JButton connectBtn;
 
     // Lobby Screen Components
-    /** Input field for new game name creation. */
+    // New room name input field.
     private JTextField newGameField;
-    /** List component for displaying active game sessions. */
+    // Waiting rooms list.
     private JList<String> waitingGamesList;
-    /** Model for game sessions list. */
+    // Waiting rooms model.
     private DefaultListModel<String> listModel;
-    /** Button to create a new game session. */
+    // Create room button.
     private JButton createGameBtn;
-    /** Button to join an existing session. */
+    // Join room button.
     private JButton joinGameBtn;
-    /** Button to refresh the list of available games. */
+    // Refresh rooms button.
     private JButton refreshBtn;
-    /** Label for displaying lobby-related status messages. */
+    // Lobby status label.
     private JLabel lobbyStatusLbl;
 
     // Game Screen Components
-    /** 3x3 matrix of board buttons. */
+    // Board buttons.
     private JButton[][] boardButtons;
-    /** Label to show turn or game outcome status. */
+    // Match status label.
     private JLabel gameStatusLbl;
-    /** Label to display opponent info. */
+    // Opponent info label.
     private JLabel gameOpponentLbl;
 
-    /**
-     * Constructs a new GUI client frame.
-     *
-     * @param controller the game controller interface
-     * @param defaultHost the host used to prefill the connection form
-     * @param defaultPort the port used to prefill the connection form
-     * @param defaultServiceName the service name used to prefill the connection form
-     */
+    // Builds the main GUI frame.
     public GUIClient(GameController controller, String defaultHost, int defaultPort, String defaultServiceName) {
         super("Distributed Tic-Tac-Toe");
         this.controller = controller;
@@ -119,12 +108,12 @@ public class GUIClient extends JFrame implements GameEventListener {
         this.defaultServiceName = defaultServiceName;
         this.controller.registerEventListener(this);
         
-        // Window Setup
+        // Configure the main window.
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setSize(550, 650);
         setLocationRelativeTo(null);
 
-        // Window Closing Listener to disconnect cleanly
+        // Disconnect cleanly when the window closes.
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent windowEvent) {
@@ -136,7 +125,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         mainPanel = new JPanel(cardLayout);
         mainPanel.setBackground(COLOR_BG);
 
-        // Build screens
+        // Build and register every screen.
         mainPanel.add(buildConnectionScreen(), "CONNECTION");
         mainPanel.add(buildLobbyScreen(), "LOBBY");
         mainPanel.add(buildGameScreen(), "GAME");
@@ -145,9 +134,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         cardLayout.show(mainPanel, "CONNECTION");
     }
 
-    /**
-     * Cleans up RMI client stubs and exits the application.
-     */
+    // Disconnects and terminates the application.
     private void cleanupAndExit() {
         new Thread(() -> {
             controller.disconnect();
@@ -157,10 +144,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
     // --- Screen Builders ---
 
-    /**
-     * Builds the connection screen UI.
-     * @return Panel configured for connection inputs.
-     */
+    // Builds the connection screen.
     private JPanel buildConnectionScreen() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(COLOR_BG);
@@ -239,10 +223,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         return panel;
     }
 
-    /**
-     * Builds the lobby screen UI.
-     * @return Panel configured for lobby interaction.
-     */
+    // Builds the lobby screen.
     private JPanel buildLobbyScreen() {
         JPanel panel = createScreenPanel();
 
@@ -326,10 +307,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         return panel;
     }
 
-    /**
-     * Builds the main game screen UI.
-     * @return Panel configured for the game board.
-     */
+    // Builds the game screen.
     private JPanel buildGameScreen() {
         JPanel panel = createScreenPanel();
 
@@ -349,7 +327,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         panel.add(infoPanel, BorderLayout.NORTH);
 
         // Center Grid 3x3
-        /* Panel container for the tic-tac-toe grid. */
+        // Create the board container.
         JPanel boardPanel = new JPanel(new GridLayout(3, 3, 10, 10));
         boardPanel.setBackground(COLOR_PANEL_BG);
         boardPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -365,7 +343,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         panel.add(boardPanel, BorderLayout.CENTER);
 
         // Bottom - Leave button
-        /* Button to leave the current match. */
+        // Create the leave-match button.
         JButton leaveGameBtn = createStyledButton("Leave Match", COLOR_BTN_DANGER);
         leaveGameBtn.addActionListener(this::handleLeaveGame);
         panel.add(leaveGameBtn, BorderLayout.SOUTH);
@@ -375,10 +353,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
     // --- Helper UI Factory Methods ---
 
-    /**
-     * Factory method for creating a main screen container panel with padding.
-     * @return formatted border layout panel
-     */
+    // Creates the base panel used by each screen.
     private JPanel createScreenPanel() {
         JPanel panel = new JPanel(new BorderLayout(15, 15));
         panel.setBackground(COLOR_BG);
@@ -386,23 +361,14 @@ public class GUIClient extends JFrame implements GameEventListener {
         return panel;
     }
 
-    /**
-     * Factory method for creating a top header sub-panel with vertical grid layout.
-     * @return formatted header panel
-     */
+    // Creates the standard header panel.
     private JPanel createHeaderPanel() {
         JPanel panel = new JPanel(new GridLayout(2, 1, 5, 5));
         panel.setBackground(COLOR_BG);
         return panel;
     }
 
-    /**
-     * Factory method for creating a grid cell button on the game board with click handlers and hover effects.
-     *
-     * @param row grid row index
-     * @param col grid column index
-     * @return initialized grid cell button
-     */
+    // Creates one board cell button.
     private JButton createBoardCellButton(int row, int col) {
         JButton btn = new JButton("");
         btn.setBackground(COLOR_BTN_BG);
@@ -411,9 +377,9 @@ public class GUIClient extends JFrame implements GameEventListener {
         btn.setFocusPainted(false);
         btn.setBorder(new LineBorder(new Color(69, 71, 90), 2));
         btn.addActionListener(e -> handleBoardClick(row, col));
-        btn.setEnabled(false); // Disabled until match starts
+        btn.setEnabled(false);
 
-        // Highlight Empty Cell Hover Effects
+        // Highlight empty cells on hover.
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseEntered(java.awt.event.MouseEvent evt) {
@@ -433,11 +399,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         return btn;
     }
 
-    /**
-     * Factory method for styled labels.
-     * @param text label text
-     * @return formatted label
-     */
+    // Creates a styled label.
     private JLabel createLabel(String text) {
         JLabel lbl = new JLabel(text);
         lbl.setFont(new Font("SansSerif", Font.PLAIN, 15));
@@ -445,11 +407,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         return lbl;
     }
 
-    /**
-     * Factory method for styled text fields.
-     * @param text default text
-     * @return styled text field
-     */
+    // Creates a styled text field.
     private JTextField createTextField(String text) {
         JTextField tf = new JTextField(text);
         tf.setBackground(COLOR_BTN_BG);
@@ -463,17 +421,15 @@ public class GUIClient extends JFrame implements GameEventListener {
         return tf;
     }
 
-    /**
-     * Factory method for styled buttons.
-     * @param text button label
-     * @param baseColor base background color
-     * @return styled button
-     */
+    // Creates a styled button.
     private JButton createStyledButton(String text, Color baseColor) {
         JButton btn = new JButton(text);
         btn.setBackground(baseColor);
-        btn.setForeground(Color.WHITE); // Force crisp white text for maximum readability
-        
+        btn.setForeground(getReadableButtonTextColor(baseColor));
+        btn.setOpaque(true);
+        btn.setContentAreaFilled(true);
+        btn.setBorderPainted(false);
+
         btn.setFocusPainted(false);
         btn.setFont(new Font("SansSerif", Font.BOLD, 15));
         btn.setBorder(BorderFactory.createCompoundBorder(
@@ -481,10 +437,10 @@ public class GUIClient extends JFrame implements GameEventListener {
                 BorderFactory.createEmptyBorder(8, 15, 8, 15)
         ));
         
-        // Compute high-contrast hover color
+        // Precompute the hover color.
         Color hoverColor = getHoverColor(baseColor);
-        
-        // Subtle hover effects
+
+        // Apply hover effects.
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseEntered(java.awt.event.MouseEvent evt) {
@@ -499,13 +455,16 @@ public class GUIClient extends JFrame implements GameEventListener {
         return btn;
     }
 
-    /**
-     * Calculates a darkened hover color for buttons.
-     * @param color base color
-     * @return hover color
-     */
+    // Chooses a readable foreground color for a button background.
+    private Color getReadableButtonTextColor(Color backgroundColor) {
+        double luminance = (0.2126 * backgroundColor.getRed()
+            + 0.7152 * backgroundColor.getGreen()
+            + 0.0722 * backgroundColor.getBlue()) / 255.0;
+        return luminance < 0.45 ? Color.WHITE : COLOR_BG;
+    }
+
+    // Computes a darker hover color.
     private Color getHoverColor(Color color) {
-        // Blend 85% original color and 15% black for a clean, high-contrast dark hover state
         int r = (int)(color.getRed() * 0.85);
         int g = (int)(color.getGreen() * 0.85);
         int b = (int)(color.getBlue() * 0.85);
@@ -514,12 +473,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
     // --- Event Handlers ---
 
-    /**
-     * Action handler to establish RMI server connections.
-     * Launches matchmaking connection asynchronously on a worker thread to prevent EDT lockup.
-     *
-     * @param e the action event
-     */
+    // Connects to the lobby without blocking the EDT.
     private void handleConnect(ActionEvent e) {
         String host = hostField.getText().trim();
         String portStr = portField.getText().trim();
@@ -539,11 +493,13 @@ public class GUIClient extends JFrame implements GameEventListener {
             return;
         }
 
+        // Validate the port before starting the background connection.
         connectBtn.setEnabled(false);
         connectBtn.setText("Connecting...");
 
         new Thread(() -> {
             try {
+                // Perform the remote connection off the EDT.
                 controller.connect(host, port, serviceName, name);
                 SwingUtilities.invokeLater(() -> {
                     lobbyStatusLbl.setText("Connected as: " + controller.getPlayerName());
@@ -561,9 +517,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         }).start();
     }
 
-    /**
-     * Queries the controller for waiting rooms and updates the Swing list model asynchronously.
-     */
+    // Refreshes the list of waiting rooms.
     private void refreshWaitingGames() {
         refreshBtn.setEnabled(false);
         refreshBtn.setText("Refreshing...");
@@ -572,8 +526,8 @@ public class GUIClient extends JFrame implements GameEventListener {
                 List<String> gamesList = controller.getWaitingGames();
                 SwingUtilities.invokeLater(() -> {
                     listModel.clear();
-                    for (String g : gamesList) {
-                        listModel.addElement(g);
+                    for (String gameName : gamesList) {
+                        listModel.addElement(gameName);
                     }
                     refreshBtn.setEnabled(true);
                     refreshBtn.setText("Refresh Game List");
@@ -589,12 +543,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         }).start();
     }
 
-    /**
-     * Action handler to create a new game room.
-     * Requests game creation via a worker thread and transitions screen state.
-     *
-     * @param e the action event
-     */
+    // Creates a room without blocking the EDT.
     private void handleCreateGame(ActionEvent e) {
         String gameName = newGameField.getText().trim();
         if (gameName.isEmpty()) {
@@ -607,7 +556,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         new Thread(() -> {
             try {
-                myMark = 'X'; // Creator is X
+                myMark = 'X';
                 controller.createGame(gameName);
                 SwingUtilities.invokeLater(() -> {
                     setupGameUIForWait(gameName);
@@ -623,12 +572,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         }).start();
     }
 
-    /**
-     * Action handler to join the selected waiting room.
-     * Initiates joining flow on a worker thread.
-     *
-     * @param e the action event
-     */
+    // Joins the selected room without blocking the EDT.
     private void handleJoinGame(ActionEvent e) {
         String gameName = waitingGamesList.getSelectedValue();
         if (gameName == null) {
@@ -641,7 +585,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         new Thread(() -> {
             try {
-                myMark = 'O'; // Joiner is O
+                myMark = 'O';
                 controller.joinGame(gameName);
                 SwingUtilities.invokeLater(() -> {
                     setupGameUIForWait(gameName);
@@ -657,12 +601,7 @@ public class GUIClient extends JFrame implements GameEventListener {
         }).start();
     }
 
-    /**
-     * Action handler to leave the current active game.
-     * Signals leaving via a worker thread and transitions view back to the Lobby.
-     *
-     * @param e the action event
-     */
+    // Leaves the current room and returns to the lobby.
     private void handleLeaveGame(ActionEvent e) {
         new Thread(() -> {
             try {
@@ -681,15 +620,9 @@ public class GUIClient extends JFrame implements GameEventListener {
         }).start();
     }
 
-    /**
-     * Action handler triggered when clicking a grid cell.
-     * Submits the move coordinates asynchronously and updates UI status.
-     *
-     * @param r the grid row index
-     * @param c the grid column index
-     */
+    // Sends one move to the server.
     private void handleBoardClick(int r, int c) {
-        // Temporarily disable buttons to prevent double clicks during RMI roundtrip
+        // Prevent double clicks while the remote request is in flight.
         setBoardEnabled(false);
         
         new Thread(() -> {
@@ -707,11 +640,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
     // --- State & UI Updates ---
 
-    /**
-     * Prepares and resets the game screen components while waiting for an opponent.
-     *
-     * @param gameName the name of the game room
-     */
+    // Resets the game screen while waiting for the opponent.
     private void setupGameUIForWait(String gameName) {
         gameStatusLbl.setText("Waiting for opponent...");
         gameOpponentLbl.setText("Room: " + gameName + " | You are: " + myMark);
@@ -723,13 +652,9 @@ public class GUIClient extends JFrame implements GameEventListener {
         }
     }
 
-    /**
-     * Redraws the 3x3 board grid buttons and updates labels based on the new BoardState.
-     *
-     * @param state the updated board state
-     */
+    // Redraws the board and updates labels.
     private void updateBoardState(BoardState state) {
-        // Draw grid
+        // Redraw every board cell from the latest snapshot.
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
                 char mark = state.getMark(r, c);
@@ -745,6 +670,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         GameStatus status = state.status();
         if (status == GameStatus.ACTIVE) {
+            // Update labels and enable the board only on the local turn.
             String opponentName = myMark == 'X' ? state.playerO() : state.playerX();
             gameOpponentLbl.setText("Opponent: " + opponentName + " (" + (myMark == 'X' ? 'O' : 'X') + ") | You: " + controller.getPlayerName() + " (" + myMark + ")");
 
@@ -758,39 +684,29 @@ public class GUIClient extends JFrame implements GameEventListener {
                 setBoardEnabled(false);
             }
         } else {
-            // Terminal states
+            // Freeze the board and show the final result.
             setBoardEnabled(false);
             showEndGameDialog(state);
         }
     }
 
-    /**
-     * Configures the grid buttons' enabled/disabled states.
-     * Keeps occupied cells enabled to ensure color highlights remain high-contrast.
-     *
-     * @param enabled true if it is the local player's turn, false otherwise
-     */
+    // Enables only the cells that can still be played.
     private void setBoardEnabled(boolean enabled) {
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
                 JButton btn = boardButtons[r][c];
                 if (!btn.getText().isEmpty()) {
-                    // Always keep occupied cells enabled so the 'X' and 'O' markings
-                    // remain in high-contrast pink/blue rather than disabled gray!
+                    // Keep occupied cells visually strong.
                     btn.setEnabled(true);
                 } else {
-                    // Empty cells are only enabled when it's our turn
+                    // Empty cells depend on the local turn.
                     btn.setEnabled(enabled);
                 }
             }
         }
     }
 
-    /**
-     * Displays a dialog detailing the game outcome and resets components.
-     *
-     * @param state the final terminal board state
-     */
+    // Shows the final outcome and resets the UI.
     private void showEndGameDialog(BoardState state) {
         GameStatus status = state.status();
         String message;
@@ -819,7 +735,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         JOptionPane.showMessageDialog(this, message, title, JOptionPane.INFORMATION_MESSAGE);
 
-        // Reset and go back to Lobby
+        // Reset local state and return to the lobby.
         myMark = ' ';
         createGameBtn.setEnabled(true);
         joinGameBtn.setEnabled(true);
@@ -827,33 +743,19 @@ public class GUIClient extends JFrame implements GameEventListener {
         refreshWaitingGames();
     }
 
-    // --- GameEventListener RMI Callbacks (Thread Safety handled via SwingUtilities.invokeLater) ---
-
-    /**
-     * {@inheritDoc}
-     *
-     * @param initialState the initial board state snapshot when the game starts
-     */
+    // Applies the start event on the EDT.
     @Override
     public void onGameStarted(BoardState initialState) {
         SwingUtilities.invokeLater(() -> updateBoardState(initialState));
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param newState the updated board state snapshot
-     */
+    // Applies a board update on the EDT.
     @Override
     public void onGameUpdated(BoardState newState) {
         SwingUtilities.invokeLater(() -> updateBoardState(newState));
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param opponentName the nickname of the opponent who left
-     */
+    // Shows the opponent-left notification on the EDT.
     @Override
     public void onOpponentLeft(String opponentName) {
         SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(

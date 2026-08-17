@@ -3,47 +3,35 @@ package pcd.dcs;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ShutdownSignalException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Handles RabbitMQ queue declaration, passive queue inspection, and channel recovery
- * for token queues used in distributed critical sections.
- * <p>
- * Detects pre-existing queues declared with incompatible AMQP arguments (which trigger
- * RabbitMQ {@code 406 PRECONDITION_FAILED} errors) and performs automatic queue repair.
- * </p>
- */
-record TokenQueueManager(String queueName) {
+// Declare and validate the single-message queue that stores the critical-section token.
+record TokenQueueManager(String criticalSectionTokenQueue) {
+    private static final String CRITICAL_SECTION_TOKEN_QUEUE_PREFIX = "cs_token_";
 
-    private static final Logger logger = LoggerFactory.getLogger(TokenQueueManager.class);
-    private static final String TOKEN_QUEUE_PREFIX = "cs_token_";
-
-    TokenQueueManager(String queueName) {
-        this.queueName = TOKEN_QUEUE_PREFIX + queueName;
+    // Prefix the logical critical-section name with the broker queue namespace.
+    TokenQueueManager(String criticalSectionTokenQueue) {
+        this.criticalSectionTokenQueue = CRITICAL_SECTION_TOKEN_QUEUE_PREFIX + criticalSectionTokenQueue;
     }
 
-    /**
-     * Declares the token queue using the active channel.
-     * If the broker rejects the declaration because the queue already exists with incompatible
-     * arguments, the method fails fast rather than deleting broker state.
-     *
-     * @param channel the active channel to declare on
-     * @return the active, valid Channel after declaration
-     * @throws IOException if declaration fails for non-precondition errors or incompatible broker state
-     */
+    // Create the token queue with the expected broker constraints.
     Channel declareQueue(Channel channel) throws IOException {
         try {
-            channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
+            channel.queueDeclare(
+                    criticalSectionTokenQueue, // broker queue that stores the shared token
+                    true, // durable queue
+                    false, // not exclusive
+                    false, // not auto-delete
+                    tokenQueueArguments()); // enforce the single-token invariant
             return channel;
         } catch (IOException e) {
             if (isPreconditionFailed(e)) {
+                // Stop immediately if the broker already hosts an incompatible queue.
                 throw new IOException(
-                        "Queue '" + queueName + "' already exists with incompatible broker arguments. "
+                        "Queue '" + criticalSectionTokenQueue + "' already exists with incompatible broker arguments. "
                                 + "Please clean up the queue manually before restarting the node.",
                         e);
             }
@@ -51,11 +39,7 @@ record TokenQueueManager(String queueName) {
         }
     }
 
-    /**
-     * Returns the queue arguments used when declaring the token queue.
-     *
-     * @return queue arguments that constrain the token queue to a single message
-     */
+    // Enforce the invariant that at most one token can exist in the queue.
     private Map<String, Object> tokenQueueArguments() {
         Map<String, Object> args = new HashMap<>();
         args.put("x-max-length", 1);
@@ -63,13 +47,7 @@ record TokenQueueManager(String queueName) {
         return args;
     }
 
-    /**
-     * Inspects an exception hierarchy to determine whether it was caused by a RabbitMQ
-     * {@code 406 PRECONDITION_FAILED} channel shutdown.
-     *
-     * @param e the root IOException caught during channel operations
-     * @return {@code true} if the exception chain contains a 406 PRECONDITION_FAILED error
-     */
+    // Detect the RabbitMQ error used when queue arguments do not match an existing declaration.
     static boolean isPreconditionFailed(IOException e) {
         Throwable cause = e;
         while (cause != null) {

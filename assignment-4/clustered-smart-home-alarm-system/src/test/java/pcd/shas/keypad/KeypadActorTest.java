@@ -7,7 +7,10 @@ import org.apache.pekko.actor.typed.receptionist.Receptionist;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import pcd.shas.common.Zone;
 import pcd.shas.controlunit.ControlUnitActor;
+
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -34,6 +37,23 @@ public class KeypadActorTest {
     @Test
     public void submitPinIsForwardedToControlUnit() {
         assertForwardedPin(new KeypadActor.SubmitPin("1234"), "1234");
+    }
+
+    @Test
+    public void fullArmingRequestIsForwardedToControlUnit() {
+        ControlUnitActor.Command command = awaitForwardedSingleCommand(new KeypadActor.RequestFullArming("1234"));
+        ControlUnitActor.RequestFullArming request = assertInstanceOf(ControlUnitActor.RequestFullArming.class, command);
+        assertEquals("1234", request.pin());
+    }
+
+    @Test
+    public void partialArmingRequestIsForwardedToControlUnit() {
+        ControlUnitActor.Command command = awaitForwardedSingleCommand(
+                new KeypadActor.RequestPartialArming("1234", Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR))
+        );
+        ControlUnitActor.RequestPartialArming request = assertInstanceOf(ControlUnitActor.RequestPartialArming.class, command);
+        assertEquals("1234", request.pin());
+        assertEquals(Set.of(Zone.PERIMETER, Zone.GROUND_FLOOR), request.activeZones());
     }
 
     @Test
@@ -64,15 +84,19 @@ public class KeypadActorTest {
     }
 
     private void assertForwardedPin(KeypadActor.Command keypadCommand, String expectedPin) {
+        ControlUnitActor.Command command = awaitForwardedSingleCommand(keypadCommand);
+        ControlUnitActor.PinSubmitted pin = assertInstanceOf(ControlUnitActor.PinSubmitted.class, command);
+        assertEquals(expectedPin, pin.pin());
+    }
+
+    private ControlUnitActor.Command awaitForwardedSingleCommand(KeypadActor.Command keypadCommand) {
         TestProbe<ControlUnitActor.Command> probe = testKit.createTestProbe(ControlUnitActor.Command.class);
         testKit.system().receptionist().tell(
                 Receptionist.register(ControlUnitActor.CONTROL_UNIT_SERVICE_KEY, probe.getRef())
         );
 
         ActorRef<KeypadActor.Command> keypad = testKit.spawn(KeypadActor.create());
-        ControlUnitActor.Command command = awaitForwardedCommand(probe, keypad::tell, keypadCommand);
-        ControlUnitActor.PinSubmitted pin = assertInstanceOf(ControlUnitActor.PinSubmitted.class, command);
-        assertEquals(expectedPin, pin.pin());
+        return awaitForwardedCommand(probe, keypad::tell, keypadCommand);
     }
 
     @SafeVarargs
