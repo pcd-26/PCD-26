@@ -1,71 +1,55 @@
 \clearpage
 \section{How to Run}
 
-The delivery requires \textbf{JDK 21} and \textbf{Maven}. After extracting the
-final archive, enter the \texttt{clustered-smart-home-alarm-system} directory,
-which contains the delivered module \texttt{pom.xml}. The execution examples
-below use only the delivered \textbf{Java entry points}:
-\texttt{pcd.shas.Main} and \texttt{pcd.shas.DemoMain}.
+From the \texttt{assignment-4/clustered-smart-home-alarm-system} directory:
 
-\textbf{Build and run all tests}
-\begin{lstlisting}[style=terminalstyle]
-mvn --batch-mode --no-transfer-progress test
-\end{lstlisting}
-
-\textbf{Start the distributed demo entry point}
-\begin{lstlisting}[style=terminalstyle]
-mvn --batch-mode --no-transfer-progress compile exec:java ^
-  -Dexec.mainClass=pcd.shas.DemoMain
-\end{lstlisting}
-
-\textbf{Start a control-unit node}
-\begin{lstlisting}[style=terminalstyle]
-mvn --batch-mode --no-transfer-progress compile exec:java ^
-  -Dexec.mainClass=pcd.shas.Main ^
-  -Dexec.args="control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
-\end{lstlisting}
-
-\textbf{Start a keypad node}
-\begin{lstlisting}[style=terminalstyle]
-mvn --batch-mode --no-transfer-progress compile exec:java ^
-  -Dexec.mainClass=pcd.shas.Main ^
-  -Dexec.args="keypad --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
-\end{lstlisting}
-
-\textbf{Start a sensor node}
-\begin{lstlisting}[style=terminalstyle]
-mvn --batch-mode --no-transfer-progress compile exec:java ^
-  -Dexec.mainClass=pcd.shas.Main ^
-  -Dexec.args="sensor --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
-\end{lstlisting}
-
-\subsection*{Manual multi-node scenario}
-
-Open \textbf{three terminals} and start the three commands above. Then:
-
-\begin{enumerate}
-    \item on the control-unit terminal, type \texttt{status};
-    \item on the keypad terminal, type \texttt{pin 1234};
-    \item on the control-unit terminal, type \texttt{status};
-    \item on the keypad terminal, type \texttt{arm full 1234};
-    \item wait for the exit delay to expire;
-    \item on the sensor terminal, press ENTER;
-    \item on the control-unit terminal, type \texttt{status};
-    \item on the keypad terminal, type \texttt{pin 1234};
-    \item on the control-unit terminal, type \texttt{status} again.
-\end{enumerate}
-
-The expected state evolution is:
-\begin{center}
-\texttt{STARTUP\_RECOVERY} $\rightarrow$ \texttt{DISARMED} $\rightarrow$
-\texttt{EXIT\_DELAY} $\rightarrow$ \texttt{ARMED} $\rightarrow$
-\texttt{ENTRY\_DELAY} $\rightarrow$ \texttt{DISARMED}
-\end{center}
-
-This scenario demonstrates the clustered requirements directly:
 \begin{itemize}
-    \item \textbf{three distinct nodes} are active;
-    \item \textbf{keypad} and \textbf{sensor} communicate with a remote control unit;
-    \item the control unit remains the \textbf{single state owner};
-    \item the same alarm timing rules of assignment 3 are preserved.
+  \item Build: \texttt{mvn compile}
+  \item Test: \texttt{mvn test}
+  \item Distributed demo: \texttt{mvn exec:java} with main class \texttt{pcd.shas.DemoMain}
+  \item Cluster node: \texttt{mvn exec:java} with main class \texttt{pcd.shas.Main}
 \end{itemize}
+
+The clustered entry point \texttt{pcd.shas.Main} starts one node at a time.
+The accepted roles are \texttt{control-unit}, \texttt{keypad}, and
+\texttt{sensor}. A sensor node also requires \texttt{sensor-id},
+\texttt{sensor-type}, and \texttt{zone}.
+
+\textbf{Distributed demo}
+\begin{verbatim}
+mvn compile exec:java -Dexec.mainClass=pcd.shas.DemoMain
+\end{verbatim}
+
+\textbf{Control-unit node}
+\begin{verbatim}
+mvn compile exec:java -Dexec.mainClass=pcd.shas.Main ^
+  -Dexec.args="control-unit --host 127.0.0.1 --port 2551 --seed-nodes
+  127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+\end{verbatim}
+
+\textbf{Keypad node}
+\begin{verbatim}
+mvn compile exec:java -Dexec.mainClass=pcd.shas.Main ^
+  -Dexec.args="keypad --host 127.0.0.1 --port 2552 --seed-nodes
+  127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+\end{verbatim}
+
+\textbf{Sensor node}
+\begin{verbatim}
+mvn compile exec:java -Dexec.mainClass=pcd.shas.Main ^
+  -Dexec.args="sensor --host 127.0.0.1 --port 2553 --sensor-id front_door
+  --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes
+  127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+\end{verbatim}
+
+The control-unit CLI accepts \texttt{status}, \texttt{help}, and \texttt{exit}.
+The keypad CLI accepts \texttt{pin PIN}, \texttt{arm full PIN},
+\texttt{arm partial PIN ZONE...}, raw digit input, and \texttt{exit}. The
+sensor CLI triggers one activation on ENTER and stops on \texttt{exit}.
+
+To observe a minimal three-node execution, start one control-unit node, one
+keypad node, and one sensor node with the commands above. Then submit a
+correct PIN from the keypad, arm the system, wait for the exit delay to
+expire, and trigger the sensor from its CLI. The expected state evolution is
+\texttt{STARTUP\_RECOVERY $\rightarrow$ DISARMED $\rightarrow$ EXIT\_DELAY
+$\rightarrow$ ARMED $\rightarrow$ ENTRY\_DELAY $\rightarrow$ DISARMED}.
