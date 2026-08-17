@@ -10,14 +10,14 @@ The implementation uses a token-queue protocol on RabbitMQ.
     \item A temporary exclusive bootstrap-lock queue serializes initialization and keeps the protocol recoverable.
 \end{itemize}
 
-This design keeps the public API intentionally small: \texttt{enter()},
+This design exposes a small public API: \texttt{enter()},
 \texttt{exit()}, and \texttt{close()}. Recovery is broker-driven, so if a
 process crashes while holding the token, RabbitMQ requeues the unacknowledged
 delivery automatically.
 
 The bootstrap lock is important because it removes the only race that could
 otherwise create duplicate tokens. Once the token exists, the queue itself
-becomes the single source of truth. That keeps the protocol easy to explain:
+becomes the single source of truth:
 the presence of the token means the section is free, and the absence of the
 token means somebody owns it.
 

@@ -1,8 +1,7 @@
 \clearpage
 \section{Results and Discussion}
 
-The final system satisfies the \textbf{core goals} of the assignment while remaining
-small and easy to reason about.
+The final system satisfies the \textbf{core goals} of the assignment.
 
 \subsection{Observed outcome}
 
@@ -25,13 +24,13 @@ From a comparison point of view, the clustered project can be summarized as:
 
 \subsection{Discussion of trade-offs}
 
-The solution intentionally stops at the level required by the assignment.
+The solution stops at the level required by the assignment.
 There is no persistence layer, no replicated state, and no attempt to keep the
 alarm state after a crash. This is a deliberate limitation rather than a
 missing feature, because the specification explicitly allows state loss after
 recreation as long as the system returns to a safe recovery mode.
 
-From a \textbf{didactic point of view}, this trade-off is reasonable. The code shows:
+The implemented architecture shows:
 
 \begin{itemize}
     \item cluster formation through seed nodes;
@@ -43,5 +42,4 @@ From a \textbf{didactic point of view}, this trade-off is reasonable. The code s
 \end{itemize}
 
 At the same time, it avoids turning the assignment into a persistence or
-replication project, which would shift the focus away from the intended
-learning goals.
+replication project, which is outside the scope of the specification.

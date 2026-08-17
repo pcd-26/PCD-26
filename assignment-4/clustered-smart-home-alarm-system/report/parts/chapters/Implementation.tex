@@ -8,7 +8,9 @@ and what was added with respect to \textbf{assignment 3}.
 \subsection{Implementation map}
 
 \begin{center}
-\begin{tabular}{|>{\bfseries}p{3.2cm}|p{10.2cm}|}
+{
+\small
+\begin{tabular}{|>{\raggedright\arraybackslash\bfseries}p{3.5cm}|>{\raggedright\arraybackslash}p{8.8cm}|}
     \hline
     Package or class & Implementation responsibility \\
     \hline
@@ -18,25 +20,26 @@ and what was added with respect to \textbf{assignment 3}.
     \texttt{pcd.shas.DemoMain}
         & Demonstration entry point: starts separate node processes and drives a visible distributed execution scenario. \\
     \hline
-    \texttt{pcd.shas.runtime.NodeStartup}
+    \texttt{pcd.shas.runtime.}\newline\texttt{NodeStartup}
         & Bootstrap helper: parses startup arguments and builds the Pekko Cluster configuration for host, port, seed nodes, and cluster role. \\
     \hline
-    \texttt{pcd.shas.controlunit.ControlUnitActor}
+    \texttt{pcd.shas.controlunit.}\newline\texttt{ControlUnitActor}
         & Core distributed logic: alarm state machine, recovery behavior, receptionist integration, and cluster-singleton initialization. \\
     \hline
-    \texttt{pcd.shas.keypad.KeypadActor}
+    \texttt{pcd.shas.keypad.}\newline\texttt{KeypadActor}
         & Peripheral actor: collects user input, discovers the control unit, and forwards PIN or arming requests. \\
     \hline
-    \texttt{pcd.shas.sensor.SensorActor}
+    \texttt{pcd.shas.sensor.}\newline\texttt{SensorActor}
         & Peripheral actor: represents one distributed sensor with a stable \texttt{sensorId} and forwards activations as typed messages. \\
     \hline
-    \texttt{pcd.shas.siren.SirenActor}
+    \texttt{pcd.shas.siren.}\newline\texttt{SirenActor}
         & Peripheral actor: implements the siren state, registers itself for discovery, and reacts to activation or deactivation commands. \\
     \hline
     \texttt{pcd.shas.common}
         & Shared model: serializable messages, enums, and common data exchanged across cluster nodes. \\
     \hline
 \end{tabular}
+}
 \end{center}
 
 \subsection{What changed from assignment 3}
@@ -50,9 +53,6 @@ The main technical differences are concentrated in a small number of places:
     \item exchanged messages were made explicitly \textbf{serializable}.
 \end{itemize}
 
-The rest of the alarm logic was intentionally kept close to assignment 3, so
-that the distributed mechanisms stay easy to identify and explain.
-
 \subsection{Implementation structure}
 
 At implementation level, the delivered code is organized around four concerns:
@@ -63,11 +63,6 @@ At implementation level, the delivered code is organized around four concerns:
     \item \textbf{shared remote messages}, concentrated in \texttt{pcd.shas.common}.
 \end{itemize}
 
-This organization is important because it keeps the clustered additions
-\textbf{localized}. Most of the code reused from assignment 3 remains in the
-alarm-control logic, while most of the new code is concentrated in
-\textbf{startup}, \textbf{discovery}, and \textbf{recovery}.
-
 \subsection{Node startup and cluster roles}
 
 The entry point is \textbf{role-based}. \texttt{Main} accepts \texttt{control-unit},
@@ -77,7 +72,7 @@ small node description and then builds the final Pekko configuration overlay.
 
 This keeps the \textbf{distributed deployment explicit}: each started node joins the same
 cluster, but each one hosts only the actors needed for its assigned role.
-The adopted deployment rule is therefore simple and easy to verify:
+The adopted deployment rule is:
 \textbf{one node, one main role}.
 
 \subsection{Control unit as cluster singleton}
@@ -119,17 +114,11 @@ aligned with the failure-and-recovery requirement of the assignment.
 
 \subsection{Implementation summary}
 
-From an implementation point of view, the clustered transition is intentionally
-small but visible. The \textbf{domain logic} remains close to assignment 3,
-while the truly new code is concentrated in the places where distribution
-matters:
+The \textbf{domain logic} remains close to assignment 3, while the clustered
+changes are concentrated in the places where distribution matters:
 \begin{itemize}
     \item node bootstrap and cluster configuration;
     \item singleton-based control-unit startup;
     \item receptionist-based remote discovery;
     \item recovery after control-unit recreation.
 \end{itemize}
-
-This makes the final codebase easy to explain during an oral exam: most alarm
-rules are familiar from assignment 3, while the clustered behavior is exposed
-through a limited set of clear, well-separated implementation points.

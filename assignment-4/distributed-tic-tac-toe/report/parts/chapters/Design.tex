@@ -23,8 +23,8 @@ worrying about later mutations.
 
 \subsection{Trade-offs}
 
-The implementation favors a clear teaching-oriented design. It does not try
+The implementation uses a clear server-centric design. It does not try
 to introduce persistence or matchmaking policies beyond the assignment scope,
-and it keeps the remote protocol intentionally small. In return, the code
-stays easy to verify, the concurrency boundaries are obvious, and the project
-remains faithful to the course goals.
+and it keeps the remote protocol small. The concurrency boundaries remain on
+the server side, where game state, turn validation, and terminal conditions
+are enforced.
