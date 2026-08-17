@@ -66,6 +66,11 @@ public class GameImpl extends UnicastRemoteObject implements Game {
         notifyGameStarted(startingBoardState);
     }
 
+    // Keeps compatibility with existing tests and callers.
+    public void join(String joinerName, PlayerClient joinerClient) throws GameFullException {
+        joinSecondPlayer(joinerName, joinerClient);
+    }
+
     // Applies one validated move and broadcasts the new state.
     @Override
     public void makeMove(String playerName, int row, int col)
