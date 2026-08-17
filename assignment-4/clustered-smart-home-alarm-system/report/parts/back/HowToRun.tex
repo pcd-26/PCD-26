@@ -17,27 +17,27 @@ The accepted roles are \texttt{control-unit}, \texttt{keypad}, and
 
 \textbf{Distributed demo}
 \begin{verbatim}
-mvn compile exec:java -Dexec.mainClass=pcd.shas.DemoMain
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.DemoMain"
 \end{verbatim}
 
 \textbf{Control-unit node}
 \begin{verbatim}
-mvn compile exec:java -Dexec.mainClass=pcd.shas.Main ^
-  -Dexec.args="control-unit --host 127.0.0.1 --port 2551 --seed-nodes
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" ^
+  "-Dexec.args=control-unit --host 127.0.0.1 --port 2551 --seed-nodes
   127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
 \end{verbatim}
 
 \textbf{Keypad node}
 \begin{verbatim}
-mvn compile exec:java -Dexec.mainClass=pcd.shas.Main ^
-  -Dexec.args="keypad --host 127.0.0.1 --port 2552 --seed-nodes
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" ^
+  "-Dexec.args=keypad --host 127.0.0.1 --port 2552 --seed-nodes
   127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
 \end{verbatim}
 
 \textbf{Sensor node}
 \begin{verbatim}
-mvn compile exec:java -Dexec.mainClass=pcd.shas.Main ^
-  -Dexec.args="sensor --host 127.0.0.1 --port 2553 --sensor-id front_door
+mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" ^
+  "-Dexec.args=sensor --host 127.0.0.1 --port 2553 --sensor-id front_door
   --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes
   127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
 \end{verbatim}
