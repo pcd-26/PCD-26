@@ -15,36 +15,13 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeoutException;
 
-/**
- * A high-level middleware providing support for realizing distributed critical sections
- * (distributed mutual exclusion) among processes running in a distributed system.
- * <p>
- * This implementation uses RabbitMQ as a Message-Oriented Middleware (MOM).
- * Mutual exclusion is achieved by using a single persistent token message stored in a dedicated
- * RabbitMQ queue for the critical section. Only the process that successfully retrieves the token
- * message can enter the critical section.
- * </p>
- * <p>
- * The bootstrap protocol is crash-safe: a temporary exclusive queue on the broker serializes the
- * decision to seed the token, and the token is published only after a passive queue inspection shows
- * that no token message exists and no consumer is holding one.
- * </p>
- * <p>
- * The token is consumed with manual acknowledgment ({@code autoAck = false}). While a process holds
- * the critical section, its consumer stays registered so a passive bootstrap check can distinguish an
- * initialized system from a non-initialized one. If the process crashes or its connection to RabbitMQ
- * is closed, RabbitMQ automatically re-queues the unacknowledged token message.
- * </p>
- */
+// Middleware for distributed mutual exclusion backed by a RabbitMQ token queue.
 public class DistributedCriticalSection implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(DistributedCriticalSection.class);
     private static final byte[] EMPTY_BODY = new byte[0];
 
-    /**
-     * Test seam that runs only while the bootstrap lock is held and before the first token publish.
-     * Production code uses the no-op default.
-     */
+    // Test hook executed only during the bootstrap publish path.
     @FunctionalInterface
     interface BootstrapHook {
         void beforeTokenPublish() throws IOException, InterruptedException;
@@ -61,55 +38,30 @@ public class DistributedCriticalSection implements AutoCloseable {
     private String consumerTag;
     private Long currentDeliveryTag;
 
-    /**
-     * Creates a new distributed critical section instance using an existing RabbitMQ connection.
-     * The connection lifecycle will NOT be managed by this instance (it will not be closed on {@link #close()}).
-     *
-     * @param connection the active RabbitMQ connection to use
-     * @param csName     the name of the critical section
-     * @throws IOException          if a channel cannot be opened or initialization fails
-     * @throws InterruptedException if bootstrap lock acquisition is interrupted
-     */
+    // Reuse an existing broker connection owned by the caller.
     public DistributedCriticalSection(Connection connection, String csName) throws IOException, InterruptedException {
         this(connection, csName, () -> { });
     }
 
+    // Internal constructor variant used by tests.
     DistributedCriticalSection(Connection connection, String csName, BootstrapHook bootstrapHook)
             throws IOException, InterruptedException {
         this(connection, csName, false, bootstrapHook);
     }
 
-    /**
-     * Creates a new distributed critical section instance by establishing a new connection to RabbitMQ.
-     * The connection will be closed when this instance is closed.
-     *
-     * @param host   the RabbitMQ broker host
-     * @param port   the RabbitMQ broker port
-     * @param csName the name of the critical section
-     * @throws IOException          if a connection/channel cannot be opened or initialization fails
-     * @throws TimeoutException     if connection establishment times out
-     * @throws InterruptedException if bootstrap lock acquisition is interrupted
-     */
+    // Open and own a dedicated broker connection.
     public DistributedCriticalSection(String host, int port, String csName)
             throws IOException, TimeoutException, InterruptedException {
         this(host, port, csName, () -> { });
     }
 
+    // Internal constructor variant used by tests.
     DistributedCriticalSection(String host, int port, String csName, BootstrapHook bootstrapHook)
             throws IOException, TimeoutException, InterruptedException {
         this(openConnection(host, port), csName, true, bootstrapHook);
     }
 
-    /**
-     * Initializes the shared state for every constructor variant.
-     *
-     * @param connection active RabbitMQ connection
-     * @param csName critical section name
-     * @param ownConnection whether this instance owns the connection lifecycle
-     * @param bootstrapHook optional hook that runs before the first token publish
-     * @throws IOException if the channel cannot be opened or queue declaration fails
-     * @throws InterruptedException if bootstrap lock acquisition is interrupted
-     */
+    // Build the runtime state shared by all constructor variants.
     private DistributedCriticalSection(
             Connection connection,
             String csName,
@@ -127,17 +79,17 @@ public class DistributedCriticalSection implements AutoCloseable {
         initializeToken();
     }
 
-    /**
-     * Seeds the token queue exactly once, using a temporary broker lock to serialize bootstrap.
-     */
+    // Seed the shared token only when the critical section is still uninitialized.
     private void initializeToken() throws IOException, InterruptedException {
         synchronized (this) {
+            // Ensure the token queue exists with the expected broker arguments.
             this.channel = tokenQueueManager.declareQueue(this.channel);
 
             bootstrapLock.withLock(connection, lockChannel -> {
                 String queueName = tokenQueueManager.queueName();
                 AMQP.Queue.DeclareOk state = lockChannel.queueDeclarePassive(queueName);
                 if (state.getMessageCount() == 0 && state.getConsumerCount() == 0) {
+                    // Publish the first token only if nobody owns it and none is queued.
                     lockChannel.confirmSelect();
                     bootstrapHook.beforeTokenPublish();
                     lockChannel.basicPublish("", queueName, MessageProperties.PERSISTENT_TEXT_PLAIN, EMPTY_BODY);
@@ -150,6 +102,7 @@ public class DistributedCriticalSection implements AutoCloseable {
                     }
                     logger.info("Initialized critical section token for '{}'", csName);
                 } else {
+                    // Another process already initialized or currently holds the token.
                     logger.debug(
                             "Critical section token for '{}' already initialized (messages={}, consumers={})",
                             csName,
@@ -160,15 +113,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
     }
 
-    /**
-     * Opens a new RabbitMQ connection for a managed instance.
-     *
-     * @param host RabbitMQ host
-     * @param port RabbitMQ port
-     * @return the newly created connection
-     * @throws IOException if the connection cannot be opened
-     * @throws TimeoutException if connection establishment times out
-     */
+    // Open a fresh connection when this instance owns the broker lifecycle.
     private static Connection openConnection(String host, int port) throws IOException, TimeoutException {
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(host);
@@ -176,12 +121,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         return factory.newConnection();
     }
 
-    /**
-     * Validates that a connection reference is present.
-     *
-     * @param connection RabbitMQ connection to validate
-     * @return the validated connection
-     */
+    // Reject null connections early to keep failure local to construction.
     private static Connection requireConnection(Connection connection) {
         if (connection == null) {
             throw new IllegalArgumentException("Connection cannot be null");
@@ -189,12 +129,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         return connection;
     }
 
-    /**
-     * Validates the critical section name without changing its original form.
-     *
-     * @param csName critical section name
-     * @return the original critical section name
-     */
+    // Preserve the original critical-section name but reject empty identifiers.
     private static String requireCriticalSectionName(String csName) {
         if (csName == null || csName.trim().isEmpty()) {
             throw new IllegalArgumentException("Critical section name cannot be empty");
@@ -202,18 +137,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         return csName;
     }
 
-    /**
-     * Enters the critical section. This method blocks until the lock is acquired.
-     * <p>
-     * Acquisition is achieved by consuming the token message from the queue. The consumer remains
-     * registered while the critical section is held so the bootstrap logic can observe that the token
-     * already exists. The delivery is intentionally left unacknowledged until {@link #exit()}.
-     * </p>
-     *
-     * @throws IOException          if a communication error occurs
-     * @throws InterruptedException if the waiting thread is interrupted
-     * @throws IllegalStateException if the current instance is already in the critical section
-     */
+    // Block until this instance consumes the shared token.
     public synchronized void enter() throws IOException, InterruptedException {
         if (currentDeliveryTag != null) {
             throw new IllegalStateException("Process is already in critical section '" + csName + "'");
@@ -223,21 +147,25 @@ public class DistributedCriticalSection implements AutoCloseable {
 
         BlockingQueue<Delivery> deliveryQueue = new ArrayBlockingQueue<>(1);
         DeliverCallback deliverCallback = (tag, delivery) -> {
+            // At most one token delivery is expected for each acquisition attempt.
             if (!deliveryQueue.offer(delivery)) {
                 logger.warn("Delivery queue capacity exceeded; token message dropped for '{}'", csName);
             }
         };
 
         String queueName = tokenQueueManager.queueName();
+        // Keep the consumer registered while holding the token so bootstrap can observe ownership.
         consumerTag = channel.basicConsume(queueName, false, deliverCallback, tag -> { });
 
         boolean acquired = false;
         try {
+            // Wait until RabbitMQ delivers the token to this process.
             Delivery delivery = deliveryQueue.take();
             currentDeliveryTag = delivery.getEnvelope().getDeliveryTag();
             acquired = true;
             logger.debug("Successfully entered critical section '{}'", csName);
         } catch (InterruptedException e) {
+            // If interrupted after delivery, immediately requeue the token.
             Delivery delivery = deliveryQueue.poll();
             if (delivery != null) {
                 try {
@@ -254,19 +182,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
     }
 
-    /**
-     * Exits the critical section. This method releases the lock.
-     * <p>
-     * The temporary bootstrap lock is held while the local consumer is canceled and the token is
-     * re-queued, which prevents a concurrent bootstrapper from observing an intermediate state.
-     * The same delivery tag is re-queued on the broker and remains owned by this instance until the
-     * release succeeds.
-     * </p>
-     *
-     * @throws IOException          if a communication error occurs
-     * @throws InterruptedException if thread execution is interrupted during release transition
-     * @throws IllegalStateException if the process is not currently in the critical section
-     */
+    // Release the token and make the critical section available again.
     public synchronized void exit() throws IOException, InterruptedException {
         if (currentDeliveryTag == null) {
             throw new IllegalStateException("Process is not in critical section '" + csName + "'");
@@ -275,7 +191,9 @@ public class DistributedCriticalSection implements AutoCloseable {
         logger.debug("Exiting critical section '{}'", csName);
 
         bootstrapLock.withLock(connection, lockChannel -> {
+            // Stop appearing as an active owner before returning the token to the queue.
             cancelConsumerQuietly();
+            // Requeue the unacknowledged delivery instead of publishing a new token.
             channel.basicNack(currentDeliveryTag, false, true);
         });
 
@@ -283,9 +201,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         logger.debug("Successfully exited critical section '{}'", csName);
     }
 
-    /**
-     * Cancels the active RabbitMQ consumer quietly without propagating channel errors.
-     */
+    // Cancel the local consumer without turning cleanup problems into API failures.
     private void cancelConsumerQuietly() {
         if (consumerTag == null) {
             return;
@@ -301,11 +217,7 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
     }
 
-    /**
-     * Closes the channels and optionally the connection if it was created by this instance.
-     * If the critical section is currently held, the unacknowledged token is re-queued by RabbitMQ
-     * when the channel or connection closes.
-     */
+    // Close local broker resources; RabbitMQ requeues any unacknowledged token on channel shutdown.
     @Override
     public void close() {
         cancelConsumerQuietly();

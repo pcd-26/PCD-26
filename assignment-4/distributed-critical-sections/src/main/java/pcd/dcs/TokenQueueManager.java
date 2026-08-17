@@ -8,36 +8,23 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Handles RabbitMQ queue declaration, passive queue inspection, and channel recovery
- * for token queues used in distributed critical sections.
- * <p>
- * Detects pre-existing queues declared with incompatible AMQP arguments (which trigger
- * RabbitMQ {@code 406 PRECONDITION_FAILED} errors) and performs automatic queue repair.
- * </p>
- */
+// Declare and validate the single-message queue that stores the shared token.
 record TokenQueueManager(String queueName) {
     private static final String TOKEN_QUEUE_PREFIX = "cs_token_";
 
+    // Prefix the logical critical-section name with the broker queue namespace.
     TokenQueueManager(String queueName) {
         this.queueName = TOKEN_QUEUE_PREFIX + queueName;
     }
 
-    /**
-     * Declares the token queue using the active channel.
-     * If the broker rejects the declaration because the queue already exists with incompatible
-     * arguments, the method fails fast rather than deleting broker state.
-     *
-     * @param channel the active channel to declare on
-     * @return the active, valid Channel after declaration
-     * @throws IOException if declaration fails for non-precondition errors or incompatible broker state
-     */
+    // Create the token queue with the expected broker constraints.
     Channel declareQueue(Channel channel) throws IOException {
         try {
             channel.queueDeclare(queueName, true, false, false, tokenQueueArguments());
             return channel;
         } catch (IOException e) {
             if (isPreconditionFailed(e)) {
+                // Stop immediately if the broker already hosts an incompatible queue.
                 throw new IOException(
                         "Queue '" + queueName + "' already exists with incompatible broker arguments. "
                                 + "Please clean up the queue manually before restarting the node.",
@@ -47,11 +34,7 @@ record TokenQueueManager(String queueName) {
         }
     }
 
-    /**
-     * Returns the queue arguments used when declaring the token queue.
-     *
-     * @return queue arguments that constrain the token queue to a single message
-     */
+    // Enforce the invariant that at most one token can exist in the queue.
     private Map<String, Object> tokenQueueArguments() {
         Map<String, Object> args = new HashMap<>();
         args.put("x-max-length", 1);
@@ -59,13 +42,7 @@ record TokenQueueManager(String queueName) {
         return args;
     }
 
-    /**
-     * Inspects an exception hierarchy to determine whether it was caused by a RabbitMQ
-     * {@code 406 PRECONDITION_FAILED} channel shutdown.
-     *
-     * @param e the root IOException caught during channel operations
-     * @return {@code true} if the exception chain contains a 406 PRECONDITION_FAILED error
-     */
+    // Detect the RabbitMQ error used when queue arguments do not match an existing declaration.
     static boolean isPreconditionFailed(IOException e) {
         Throwable cause = e;
         while (cause != null) {

@@ -9,21 +9,14 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Manages temporary, exclusive broker-side lock queues to serialize critical operations
- * (such as bootstrap initialization and safe release transitions) across distributed processes.
- * <p>
- * The lock is materialized as an exclusive, auto-deleted queue {@code cs_bootstrap_lock_<csName>}.
- * Concurrent processes attempt to declare this queue. Exactly one process succeeds at a time;
- * others fail with an {@link IOException} and poll with a delay until the lock is released or the timeout expires.
- * </p>
- */
+// Broker-side mutex used to serialize bootstrap and release transitions.
 class BrokerBootstrapLock {
 
     private static final Logger logger = LoggerFactory.getLogger(BrokerBootstrapLock.class);
     private static final long DEFAULT_LOCK_RETRY_DELAY_MILLIS = 50L;
     private static final long DEFAULT_LOCK_TIMEOUT_MILLIS = 10_000L;
 
+    // Operation executed while the temporary lock queue is owned.
     @FunctionalInterface
     interface Action {
         void run(Channel lockChannel) throws IOException, InterruptedException;
@@ -43,21 +36,12 @@ class BrokerBootstrapLock {
         this.retryDelayMillis = retryDelayMillis;
     }
 
-    /**
-     * Executes the given action while holding the exclusive broker lock queue.
-     * <p>
-     * Polling is un-synchronized to avoid holding monitor locks during retry delay sleeps.
-     * </p>
-     *
-     * @param connection the active RabbitMQ connection
-     * @param action     the callback action to execute under lock ownership
-     * @throws IOException          if lock acquisition times out or action execution fails
-     * @throws InterruptedException if the waiting thread is interrupted during retry polling
-     */
+    // Retry until the temporary lock queue can be declared, then run the protected action.
     void withLock(Connection connection, Action action) throws IOException, InterruptedException {
         long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
 
         while (true) {
+            // Preserve interruption semantics while waiting for the broker lock.
             if (Thread.currentThread().isInterrupted()) {
                 throw new InterruptedException("Interrupted while acquiring bootstrap lock for '" + bootstrapLockQueue + "'");
             }
@@ -65,6 +49,7 @@ class BrokerBootstrapLock {
             Channel lockChannel = connection.createChannel();
             try {
                 try {
+                    // The exclusive queue declaration succeeds for one process at a time.
                     lockChannel.queueDeclare(bootstrapLockQueue, false, true, false, null);
                 } catch (IOException lockFailure) {
                     if (System.nanoTime() >= deadlineNanos) {
@@ -72,14 +57,17 @@ class BrokerBootstrapLock {
                                 "Timed out acquiring bootstrap lock for '" + bootstrapLockQueue + "'",
                                 lockFailure);
                     }
+                    // Another process still owns the lock; wait and retry.
                     TimeUnit.MILLISECONDS.sleep(retryDelayMillis);
                     continue;
                 }
 
                 try {
+                    // Run the critical transition while the queue guarantees exclusive ownership.
                     action.run(lockChannel);
                 } finally {
                     try {
+                        // Explicitly delete the lock queue instead of waiting for connection teardown.
                         lockChannel.queueDelete(bootstrapLockQueue);
                     } catch (IOException cleanupFailure) {
                         logger.warn("Failed to delete bootstrap lock queue '{}'", bootstrapLockQueue, cleanupFailure);
@@ -89,6 +77,7 @@ class BrokerBootstrapLock {
             } finally {
                 try {
                     if (lockChannel.isOpen()) {
+                        // Each acquisition attempt uses a short-lived channel.
                         lockChannel.close();
                     }
                 } catch (IOException | TimeoutException cleanupFailure) {
