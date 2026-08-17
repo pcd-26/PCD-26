@@ -64,7 +64,7 @@ Important configuration entries:
 - `pekko.actor.provider`: set to `cluster`;
 - `pekko.cluster.seed-nodes`: seed nodes used for cluster formation;
 - `pekko.remote.artery.canonical.hostname` and `.port`: node identity for each
-  JVM process;
+  started node process;
 - `pekko.actor.serialization-bindings`: enables JSON serialization for remote
   messages.
 

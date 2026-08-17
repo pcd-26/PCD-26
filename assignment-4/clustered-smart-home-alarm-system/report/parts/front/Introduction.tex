@@ -21,7 +21,7 @@ multiple eligible nodes exist in the cluster.
 
 The clustered version therefore focuses on three technical aspects:
 \begin{itemize}
-    \item \textbf{node startup}, because each JVM must join the same cluster with the correct role;
+    \item \textbf{node startup}, because each node instance must join the same cluster with the correct role;
     \item \textbf{remote discovery}, because peripheral actors must find the control unit dynamically;
     \item \textbf{safe recovery}, because a recreated control unit loses its in-memory state and must not assume a dangerous default.
 \end{itemize}

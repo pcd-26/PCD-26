@@ -6,7 +6,7 @@ Questa guida raccoglie l'analisi dettagliata del funzionamento del progetto **Cl
 
 ## 1. Architettura del Progetto
 
-Il progetto implementa un sistema di allarme distribuito basato su **Apache Pekko Typed (Java DSL)**. A differenza di un sistema su singola JVM, i componenti dell'impianto (centralina, tastierino, sensori e sirena) sono eseguiti come nodi autonomi all'interno di un cluster Pekko e comunicano esclusivamente mediante scambio di messaggi tipizzati asincroni.
+Il progetto implementa un sistema di allarme distribuito basato su **Apache Pekko Typed (Java DSL)**. A differenza di un sistema su singolo nodo locale, i componenti dell'impianto (centralina, tastierino, sensori e sirena) sono eseguiti come nodi autonomi all'interno di un cluster Pekko e comunicano esclusivamente mediante scambio di messaggi tipizzati asincroni.
 
 ### 1.1 I Ruoli dei Nodi nel Cluster
 
@@ -14,16 +14,16 @@ La topologia a runtime si articola su tre ruoli principali:
 
 ```mermaid
 graph TD
-    subgraph "Keypad Node (JVM :2552)"
+    subgraph "Keypad Node (:2552)"
         KP[KeypadActor]
     end
 
-    subgraph "Control Unit Node (JVM :2551)"
+    subgraph "Control Unit Node (:2551)"
         CU[ControlUnitActor]
         SR[SirenActor]
     end
 
-    subgraph "Sensor Node(s) (JVM :2553, ...)"
+    subgraph "Sensor Node(s) (:2553, ...)"
         SN[SensorActor]
     end
 
@@ -120,7 +120,7 @@ Apache Pekko è un framework per la costruzione di applicazioni concorrenti, dis
    - Gli attori comunicano solo inviandosi messaggi asincroni immutabili.
    - Ogni attore possiede una propria *mailbox* (coda di messaggi) che elabora in modo strettamente sequenziale (nessuna condivisione di memoria e nessun lock esplicito).
 2. **Location Transparency (Trasparenza di locazione)**:
-   - La sintassi per inviare un messaggio (`actorRef.tell(msg)`) è identica sia che il destinatario si trovi nello stesso thread, nella stessa JVM o su un'altra macchina raggiungibile in rete.
+   - La sintassi per inviare un messaggio (`actorRef.tell(msg)`) è identica sia che il destinatario si trovi nello stesso nodo, su un altro nodo del cluster o su un'altra macchina raggiungibile in rete.
 
 ### Concetti Fondamentali di Pekko Cluster:
 

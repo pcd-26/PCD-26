@@ -29,7 +29,7 @@ public final class DemoMain {
 
     private DemoMain() {}   // Utility class
 
-    // Starts separate JVM processes and drives a distributed alarm scenario.
+    // Starts separate node processes and drives a distributed alarm scenario.
     public static void main(String[] args) {
         List<NodeProcess> nodes = new ArrayList<>();
         try {

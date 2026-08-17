@@ -22,6 +22,6 @@ therefore answer three questions clearly:
     \item what happens when that owner is recreated.
 \end{itemize}
 
-The solution adopted in the final project is to keep the \textbf{Control Unit}
-as the only authority, expose it as a \textbf{cluster singleton}, and force it
-to restart in \texttt{STARTUP\_RECOVERY} after recreation.
+The implementation therefore needs a solution that guarantees \textbf{single
+state ownership}, \textbf{remote discovery}, and \textbf{safe recovery} after
+control-unit recreation.

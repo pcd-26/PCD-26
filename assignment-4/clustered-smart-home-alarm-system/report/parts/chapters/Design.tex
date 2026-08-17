@@ -2,19 +2,25 @@
 \section{Design}
 
 The design preserves the \textbf{domain structure} of assignment 3 and adds only
-the distributed mechanisms that are necessary for clustering.
+the distributed mechanisms that are necessary for clustering. The main goal is
+to keep the \textbf{alarm semantics unchanged} while making the runtime satisfy
+three distributed constraints: \textbf{multiple nodes}, \textbf{message-only
+communication}, and \textbf{safe recovery after control-unit recreation}.
 
 \subsection{Role-based node architecture}
 
-Each JVM starts exactly one \textbf{cluster role}:
+Each \textbf{cluster node} is started with exactly one role:
 \begin{itemize}
     \item \texttt{control-unit}
     \item \texttt{keypad}
     \item \texttt{sensor}
 \end{itemize}
 
-This is more explicit than a monolithic startup. The node role determines
-which local actor is started and how that node participates in the cluster.
+This is more explicit than a monolithic startup. The selected role determines
+the node's main responsibility and which role-specific actors are started locally.
+The chosen deployment rule is therefore \textbf{one node, one main role}. This
+is not a Pekko limitation, but a deliberate design choice that makes the
+distributed architecture easier to verify, demonstrate, and explain.
 
 \subsection{Single logical control unit}
 
@@ -24,11 +30,21 @@ spawned as an ordinary local actor, but exposed through a \textbf{cluster
 singleton}. This guarantees that, even if multiple control-unit nodes are
 started, only \textbf{one active control entity} manages the alarm state at a time.
 
+The solution adopted in the final project is therefore to keep the
+\textbf{Control Unit} as the only authority, expose it as a \textbf{cluster
+singleton}, and force it to restart in \texttt{STARTUP\_RECOVERY} after
+recreation.
+
+This choice is aligned with the domain model. The system does not replicate or
+merge alarm state across nodes, so allowing multiple active control units would
+create ambiguity. The singleton makes the ownership of the alarm state
+\textbf{explicit} and \textbf{cluster-wide}.
+
 \subsection{Discovery of distributed actors}
 
 In assignment 3 the actors could receive direct references during local
 construction. In assignment 4 this is no longer sufficient, because keypad and
-sensor nodes may run on different JVMs.
+sensor nodes may run on different cluster nodes.
 
 The adopted solution is \textbf{receptionist-based discovery}:
 \begin{itemize}
@@ -36,6 +52,10 @@ The adopted solution is \textbf{receptionist-based discovery}:
     \item keypads and sensors subscribe to that service and keep the discovered reference updated;
     \item sirens register themselves, and the control unit subscribes to the available siren instances.
 \end{itemize}
+
+This solution keeps the system \textbf{loosely coupled}. Peripheral actors do not
+need to know a concrete node address, and they do not need custom logic for
+which control-unit node is currently hosting the singleton.
 
 \subsection{Recovery semantics}
 
@@ -48,8 +68,10 @@ The main behavioral extension with respect to assignment 3 is the state
     \item accepts only a \textbf{correct PIN} to return to \texttt{DISARMED}.
 \end{itemize}
 
-This matches the specification exactly: state is intentionally \textbf{not
-persisted}, so recovery must be \textbf{safe} rather than optimistic.
+This matches the specification exactly. State is intentionally \textbf{not
+persisted}, so the recovery policy cannot reconstruct the previous condition.
+The correct design response is therefore \textbf{safe recovery}, not optimistic
+recovery.
 
 \subsection{Trade-offs}
 
@@ -64,3 +86,8 @@ show:
     \item message-only interaction;
     \item safe recovery after recreation.
 \end{itemize}
+
+In other words, the design intentionally concentrates on the concepts that are
+most relevant for this assignment: \textbf{where actors run}, \textbf{how they
+find each other}, \textbf{who owns the alarm state}, and \textbf{how the system
+behaves after failure}.

@@ -8,7 +8,7 @@ small and easy to reason about.
 
 The project successfully distributes the alarm system over multiple Pekko
 Cluster nodes without changing its domain rules. Sensors, keypad, and control
-logic can run on different JVMs, yet they still interact only through typed
+logic can run on different cluster nodes, yet they still interact only through typed
 actor messages.
 
 The most relevant design outcome is that the \textbf{alarm state remains
