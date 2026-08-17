@@ -1,7 +1,2 @@
-/**
- * Presentation and client controller components for Distributed Tic-Tac-Toe.
- *
- * <p>Includes GUI (Swing) and CLI interfaces, the {@link pcd.dttt.client.GameController} logic abstraction,
- * and the {@link pcd.dttt.client.PlayerClientImpl} RMI callback endpoint.</p>
- */
+// Client UI and controller components for the distributed game.
 package pcd.dttt.client;

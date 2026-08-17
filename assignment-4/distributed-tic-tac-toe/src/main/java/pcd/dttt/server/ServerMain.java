@@ -6,90 +6,81 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import pcd.dttt.common.Lobby;
 
-/**
- * Main entry point for starting the Tic-Tac-Toe RMI Server.
- */
+// Starts the RMI server and binds the lobby.
 public class ServerMain {
     private static final Logger LOGGER = Logger.getLogger(ServerMain.class.getName());
+    private static final String DEFAULT_REGISTRY_HOST = "localhost";
+    private static final int DEFAULT_REGISTRY_PORT = 1099;
 
-    /** Private constructor to prevent instantiation of utility class. */
+    // Prevents manual instantiation.
     private ServerMain() {}
 
-    /** The default RMI registry host. */
-    private static final String DEFAULT_REGISTRY_HOST = "localhost";
-
-    /** The default RMI registry port. */
-    private static final int DEFAULT_PORT = 1099;
-
-    /**
-     * Entry point to launch the RMI server.
-     * Connects to an existing registry, exports the Lobby remote object,
-     * and registers it under the configured binding name.
-     *
-     * @param args command-line arguments: [registryHost] [registryPort] [serviceName]
-     */
-    public static void main(String[] args) {
+    // Connects to the registry, exports the lobby, and keeps the server alive.
+    public static void main(String[] commandLineArgs) {
         String registryHost = DEFAULT_REGISTRY_HOST;
-        int registryPort = DEFAULT_PORT;
-        String serviceName = Lobby.DEFAULT_BINDING_NAME;
+        int registryPort = DEFAULT_REGISTRY_PORT;
+        String lobbyBindingName = Lobby.DEFAULT_BINDING_NAME;
 
-        int positionalIndex = 0;
-        for (String arg : args) {
-            if (!arg.startsWith("-")) {
-                if (positionalIndex == 0) {
-                    registryHost = arg;
-                } else if (positionalIndex == 1) {
+        int positionalArgumentIndex = 0;
+        for (String argument : commandLineArgs) {
+            if (!argument.startsWith("-")) {
+                if (positionalArgumentIndex == 0) {
+                    registryHost = argument;
+                } else if (positionalArgumentIndex == 1) {
                     try {
-                        registryPort = Integer.parseInt(arg);
-                    } catch (NumberFormatException e) {
-                        LOGGER.warning("Invalid registry port '" + arg + "', using default " + DEFAULT_PORT + ".");
+                        registryPort = Integer.parseInt(argument);
+                    } catch (NumberFormatException exception) {
+                        LOGGER.warning("Invalid registry port '" + argument
+                            + "', using default " + DEFAULT_REGISTRY_PORT + ".");
                     }
-                } else if (positionalIndex == 2) {
-                    serviceName = arg;
+                } else if (positionalArgumentIndex == 2) {
+                    lobbyBindingName = argument;
                 }
-                positionalIndex++;
+                positionalArgumentIndex++;
             }
         }
 
-        LobbyImpl lobby = null;
+        LobbyImpl lobbyService = null;
         try {
-            Registry registry = LocateRegistry.getRegistry(registryHost, registryPort);
+            Registry remoteRegistry = LocateRegistry.getRegistry(registryHost, registryPort);
 
+            // Create the remote lobby object managed by this server.
             System.out.println("Creating Lobby instance...");
-            lobby = new LobbyImpl();
+            lobbyService = new LobbyImpl();
 
-            System.out.println("Binding Lobby to registry as '" + serviceName + "'...");
-            registry.rebind(serviceName, lobby);
+            // Publish the lobby under the chosen binding name.
+            System.out.println("Binding Lobby to registry as '" + lobbyBindingName + "'...");
+            remoteRegistry.rebind(lobbyBindingName, lobbyService);
 
-            final Registry targetRegistry = registry;
-            final String boundServiceName = serviceName;
-            LobbyImpl activeLobby = lobby;
+            final Registry shutdownRegistry = remoteRegistry;
+            final String shutdownBindingName = lobbyBindingName;
+            LobbyImpl shutdownLobbyService = lobbyService;
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 try {
-                    targetRegistry.unbind(boundServiceName);
-                } catch (Exception e) {
+                    shutdownRegistry.unbind(shutdownBindingName);
+                } catch (Exception exception) {
                     // Ignore registry cleanup failures during shutdown.
                 }
-                activeLobby.close();
+                shutdownLobbyService.close();
             }));
 
             System.out.println("\n=============================================");
             System.out.println("  Tic-Tac-Toe RMI Server is running!");
             System.out.println("  Registry Host: " + registryHost);
             System.out.println("  Registry Port: " + registryPort);
-            System.out.println("  Bound name: " + serviceName);
+            System.out.println("  Bound name: " + lobbyBindingName);
             System.out.println("=============================================\n");
             System.out.println("Press Ctrl+C to terminate the server.");
 
-            // Keep main thread alive until process is interrupted
+            // Keep the server JVM alive until the process is interrupted.
             Thread.currentThread().join();
-        } catch (InterruptedException e) {
+        } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             LOGGER.info("Server main thread interrupted, shutting down.");
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Server failed to start due to exception", e);
-            if (lobby != null) {
-                lobby.close();
+        } catch (Exception exception) {
+            LOGGER.log(Level.SEVERE, "Server failed to start due to exception", exception);
+            if (lobbyService != null) {
+                lobbyService.close();
             }
             System.exit(1);
         }

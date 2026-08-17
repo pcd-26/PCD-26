@@ -7,46 +7,18 @@ import pcd.dttt.common.exceptions.GameAlreadyExistsException;
 import pcd.dttt.common.exceptions.GameFullException;
 import pcd.dttt.common.exceptions.GameNotFoundException;
 
-/**
- * RMI Remote interface representing the central lobby.
- * Bound in the RMI Registry under a known name.
- */
+// Remote entry point used to create, join, and list games.
 public interface Lobby extends Remote {
-    /** Default RMI binding name used by the distributed TTT service. */
     String DEFAULT_BINDING_NAME = "Lobby";
 
-    /**
-     * Creates a new game.
-     *
-     * @param gameName the unique name of the game
-     * @param playerName the name of the player creating the game
-     * @param client the player's client callback reference
-     * @return the Game remote reference
-     * @throws RemoteException if an RMI error occurs
-     * @throws GameAlreadyExistsException if a game with that name already exists
-     */
-    Game createGame(String gameName, String playerName, PlayerClient client) 
+    // Creates a new waiting game and returns its remote stub.
+    Game createGame(String gameName, String playerName, PlayerClient playerClient)
         throws RemoteException, GameAlreadyExistsException;
 
-    /**
-     * Joins an existing game.
-     *
-     * @param gameName the name of the game to join
-     * @param playerName the name of the player joining the game
-     * @param client the player's client callback reference
-     * @return the Game remote reference
-     * @throws RemoteException if an RMI error occurs
-     * @throws GameNotFoundException if the game does not exist
-     * @throws GameFullException if the game already has two players
-     */
-    Game joinGame(String gameName, String playerName, PlayerClient client) 
+    // Joins an existing waiting game and returns its remote stub.
+    Game joinGame(String gameName, String playerName, PlayerClient playerClient)
         throws RemoteException, GameNotFoundException, GameFullException;
 
-    /**
-     * Gets a list of names of games that are waiting for an opponent.
-     *
-     * @return a List of room names currently in WAITING status
-     * @throws RemoteException if an RMI communication error occurs
-     */
+    // Returns the names of games still waiting for a second player.
     List<String> getWaitingGames() throws RemoteException;
 }

@@ -7,109 +7,70 @@ import pcd.dttt.common.GameStatus;
 import pcd.dttt.common.exceptions.InvalidMoveException;
 import pcd.dttt.common.exceptions.NotYourTurnException;
 
-/**
- * Command Line Interface client for the Distributed Tic-Tac-Toe game.
- * Communicates with the server strictly via the {@link GameController} abstraction.
- */
+// Text client for the distributed Tic-Tac-Toe game.
 public class CLIClient implements GameEventListener {
-    /** The controller abstraction decoupling CLI from RMI. */
-    private final GameController controller;
+    private final GameController gameController;
+    private final String registryHost;
+    private final int registryPort;
+    private final String lobbyBindingName;
+    private final Scanner inputScanner;
+    private final Object boardStateLock = new Object();
 
-    /** The remote server host IP/name. */
-    private final String host;
+    private String localPlayerName;
+    private BoardState latestBoardState;
+    private boolean opponentLeft;
 
-    /** The remote server RMI port. */
-    private final int port;
-
-    /** The RMI binding name of the lobby service. */
-    private final String serviceName;
-
-    /** The scanner for user command-line input. */
-    private final Scanner scanner;
-
-    /** Lock for synchronizing game-related RMI callback events. */
-    private final Object gameLock = new Object();
-
-    /** Nickname of the local player. */
-    private String playerName;
-
-    /** Current board state snapshot. */
-    private BoardState currentBoardState;
-
-    /** Flag indicating if the opponent left or disconnected. */
-    private boolean opponentLeftFlag = false;
-
-    /**
-     * Constructs a new CLI client.
-     *
-     * @param controller the game controller abstraction
-     * @param host the remote server hostname
-     * @param port the remote server RMI port
-     * @param serviceName the RMI binding name used by the lobby service
-     */
-    public CLIClient(GameController controller, String host, int port, String serviceName) {
-        this.controller = controller;
-        this.host = host;
-        this.port = port;
-        this.serviceName = serviceName;
-        this.scanner = new Scanner(System.in);
+    // Prepares the CLI with its connection settings.
+    public CLIClient(GameController gameController, String registryHost, int registryPort, String lobbyBindingName) {
+        this.gameController = gameController;
+        this.registryHost = registryHost;
+        this.registryPort = registryPort;
+        this.lobbyBindingName = lobbyBindingName;
+        this.inputScanner = new Scanner(System.in);
     }
 
-    /**
-     * Launches the CLI client setup and main execution loops.
-     */
+    // Runs the connection phase and the main menu loop.
     public void start() {
         System.out.println("=== Welcome to Distributed Tic-Tac-Toe ===");
-        
-        // Get player name
-        while (playerName == null || playerName.isBlank()) {
+
+        while (localPlayerName == null || localPlayerName.isBlank()) {
             System.out.print("Enter your name: ");
-            playerName = scanner.nextLine().trim();
-            if (playerName.isBlank()) {
+            localPlayerName = inputScanner.nextLine().trim();
+            if (localPlayerName.isBlank()) {
                 System.out.println("Name cannot be empty!");
             }
         }
 
-        // Establish connection via controller
         try {
             System.out.println("Connecting to lobby...");
-            controller.connect(host, port, serviceName, playerName);
-            controller.registerEventListener(this);
-        } catch (Exception e) {
-            System.err.println("Connection failed: " + e.getMessage());
+            gameController.connect(registryHost, registryPort, lobbyBindingName, localPlayerName);
+            gameController.registerEventListener(this);
+        } catch (Exception exception) {
+            System.err.println("Connection failed: " + exception.getMessage());
             return;
         }
 
-        boolean exit = false;
-        while (!exit) {
+        boolean shouldExit = false;
+        while (!shouldExit) {
             showMainMenu();
             System.out.print("Choose an option: ");
-            String choice = scanner.nextLine().trim();
-            switch (choice) {
-                case "1":
-                    createNewGame();
-                    break;
-                case "2":
-                    joinExistingGame();
-                    break;
-                case "3":
-                    listWaitingGames();
-                    break;
-                case "4":
-                    exit = true;
+            String selectedOption = inputScanner.nextLine().trim();
+            switch (selectedOption) {
+                case "1" -> createGameFlow();
+                case "2" -> joinGameFlow();
+                case "3" -> printWaitingGames();
+                case "4" -> {
+                    shouldExit = true;
                     System.out.println("Goodbye!");
-                    break;
-                default:
-                    System.out.println("Invalid option. Please choose between 1 and 4.");
+                }
+                default -> System.out.println("Invalid option. Please choose between 1 and 4.");
             }
         }
-        
-        controller.disconnect();
+
+        gameController.disconnect();
     }
 
-    /**
-     * Prints the primary user actions to standard output.
-     */
+    // Prints the available menu actions.
     private void showMainMenu() {
         System.out.println("\n--- Main Menu ---");
         System.out.println("1. Create a new game");
@@ -118,91 +79,80 @@ public class CLIClient implements GameEventListener {
         System.out.println("4. Exit");
     }
 
-    /**
-     * Prompts the user for a game name, requests the controller to create a room,
-     * and runs the game loop once the room is created.
-     */
-    private void createNewGame() {
+    // Creates a room and enters the match loop.
+    private void createGameFlow() {
         System.out.print("Enter game name: ");
-        String gameName = scanner.nextLine().trim();
-        if (gameName.isBlank()) {
+        String requestedGameName = inputScanner.nextLine().trim();
+        if (requestedGameName.isBlank()) {
             System.out.println("Game name cannot be empty.");
             return;
         }
 
         try {
-            synchronized (gameLock) {
-                currentBoardState = null;
-                opponentLeftFlag = false;
+            // Reset local match state before asking the server to create the room.
+            synchronized (boardStateLock) {
+                latestBoardState = null;
+                opponentLeft = false;
             }
-            
-            controller.createGame(gameName);
-            System.out.println("Game '" + gameName + "' created successfully.");
-            playGameLoop();
 
-        } catch (Exception e) {
-            System.out.println("Error creating game: " + e.getMessage());
+            gameController.createGame(requestedGameName);
+            System.out.println("Game '" + requestedGameName + "' created successfully.");
+            runMatchLoop();
+        } catch (Exception exception) {
+            System.out.println("Error creating game: " + exception.getMessage());
         }
     }
 
-    /**
-     * Prompts the user for a game name, requests the controller to join it,
-     * and transitions to the game loop.
-     */
-    private void joinExistingGame() {
+    // Joins a room and enters the match loop.
+    private void joinGameFlow() {
         System.out.print("Enter game name to join: ");
-        String gameName = scanner.nextLine().trim();
-        if (gameName.isBlank()) {
+        String requestedGameName = inputScanner.nextLine().trim();
+        if (requestedGameName.isBlank()) {
             System.out.println("Game name cannot be empty.");
             return;
         }
 
         try {
-            synchronized (gameLock) {
-                currentBoardState = null;
-                opponentLeftFlag = false;
+            // Reset local match state before asking the server to join the room.
+            synchronized (boardStateLock) {
+                latestBoardState = null;
+                opponentLeft = false;
             }
 
-            controller.joinGame(gameName);
-            System.out.println("Joined game '" + gameName + "' successfully.");
-            playGameLoop();
-
-        } catch (Exception e) {
-            System.out.println("Error joining game: " + e.getMessage());
+            gameController.joinGame(requestedGameName);
+            System.out.println("Joined game '" + requestedGameName + "' successfully.");
+            runMatchLoop();
+        } catch (Exception exception) {
+            System.out.println("Error joining game: " + exception.getMessage());
         }
     }
 
-    /**
-     * Requests the list of waiting games from the controller and prints it.
-     */
-    private void listWaitingGames() {
+    // Prints the rooms that are still waiting for a second player.
+    private void printWaitingGames() {
         try {
-            List<String> waiting = controller.getWaitingGames();
-            if (waiting.isEmpty()) {
+            List<String> waitingGameNames = gameController.getWaitingGames();
+            if (waitingGameNames.isEmpty()) {
                 System.out.println("No games are currently waiting for players.");
             } else {
                 System.out.println("Games waiting for players:");
-                for (String gameName : waiting) {
-                    System.out.println("- " + gameName);
+                for (String waitingGameName : waitingGameNames) {
+                    System.out.println("- " + waitingGameName);
                 }
             }
-        } catch (Exception e) {
-            System.out.println("Error fetching game list: " + e.getMessage());
+        } catch (Exception exception) {
+            System.out.println("Error fetching game list: " + exception.getMessage());
         }
     }
 
-    /**
-     * Primary gameplay execution loop. Handles drawing the board, prompting for moves,
-     * communicating moves via the controller, and waiting on turn notifications.
-     */
-    private void playGameLoop() {
-        // Wait for the game to start if waiting
-        synchronized (gameLock) {
-            while (currentBoardState == null || currentBoardState.status() == GameStatus.WAITING) {
+    // Runs the match loop until the game ends or the player leaves.
+    private void runMatchLoop() {
+        // Wait until the server sends the initial playable state.
+        synchronized (boardStateLock) {
+            while (latestBoardState == null || latestBoardState.status() == GameStatus.WAITING) {
                 System.out.println("Waiting for an opponent to join...");
                 try {
-                    gameLock.wait();
-                } catch (InterruptedException e) {
+                    boardStateLock.wait();
+                } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
                     return;
                 }
@@ -214,67 +164,69 @@ public class CLIClient implements GameEventListener {
         System.out.println("=================================");
 
         while (true) {
-            BoardState state;
-            boolean leftFlag;
-            synchronized (gameLock) {
-                state = currentBoardState;
-                leftFlag = opponentLeftFlag;
+            BoardState currentBoardSnapshot;
+            boolean opponentHasLeft;
+            synchronized (boardStateLock) {
+                currentBoardSnapshot = latestBoardState;
+                opponentHasLeft = opponentLeft;
             }
 
-            if (state == null) {
+            if (currentBoardSnapshot == null) {
                 break;
             }
 
-            if (state.status() != GameStatus.ACTIVE) {
+            // Stop the loop once the server reports a terminal state.
+            if (currentBoardSnapshot.status() != GameStatus.ACTIVE) {
                 System.out.println("\nFinal Board:");
-                printBoard(state);
-                showGameEndResult(state, leftFlag);
+                printBoard(currentBoardSnapshot);
+                printMatchResult(currentBoardSnapshot, opponentHasLeft);
                 break;
             }
 
-            printBoard(state);
+            printBoard(currentBoardSnapshot);
 
-            if (state.turnOf().equals(playerName)) {
+            // The local player can submit a move only on their turn.
+            if (currentBoardSnapshot.turnOf().equals(localPlayerName)) {
                 System.out.println("It's your turn!");
                 System.out.print("Enter coordinates (row col, e.g. '0 1') or 'leave': ");
-                String input = scanner.nextLine().trim();
-                
-                if (input.equalsIgnoreCase("leave")) {
+                String userInput = inputScanner.nextLine().trim();
+
+                if (userInput.equalsIgnoreCase("leave")) {
                     try {
-                        controller.leaveGame();
-                    } catch (Exception e) {
-                        System.out.println("Error leaving game: " + e.getMessage());
+                        gameController.leaveGame();
+                    } catch (Exception exception) {
+                        System.out.println("Error leaving game: " + exception.getMessage());
                     }
                     break;
                 }
 
-                String[] tokens = input.split("\\s+");
-                if (tokens.length == 2) {
+                String[] coordinateTokens = userInput.split("\\s+");
+                if (coordinateTokens.length == 2) {
                     try {
-                        int r = Integer.parseInt(tokens[0]);
-                        int c = Integer.parseInt(tokens[1]);
-                        controller.makeMove(r, c);
-                    } catch (NumberFormatException e) {
+                        int selectedRow = Integer.parseInt(coordinateTokens[0]);
+                        int selectedColumn = Integer.parseInt(coordinateTokens[1]);
+                        gameController.makeMove(selectedRow, selectedColumn);
+                    } catch (NumberFormatException exception) {
                         System.out.println("Invalid input. Use integers between 0 and 2.");
-                    } catch (NotYourTurnException e) {
+                    } catch (NotYourTurnException exception) {
                         System.out.println("Wait for your turn!");
-                    } catch (InvalidMoveException e) {
-                        System.out.println("Invalid move: " + e.getMessage());
-                    } catch (Exception e) {
-                        System.out.println("Error during move submission: " + e.getMessage());
+                    } catch (InvalidMoveException exception) {
+                        System.out.println("Invalid move: " + exception.getMessage());
+                    } catch (Exception exception) {
+                        System.out.println("Error during move submission: " + exception.getMessage());
                     }
                 } else {
                     System.out.println("Please input exactly two numbers (row and col) or type 'leave'.");
                 }
             } else {
-                System.out.println("Waiting for opponent (" + state.turnOf() + ") to move...");
-                synchronized (gameLock) {
-                    while (currentBoardState != null && 
-                           currentBoardState.status() == GameStatus.ACTIVE &&
-                           !currentBoardState.turnOf().equals(playerName)) {
+                System.out.println("Waiting for opponent (" + currentBoardSnapshot.turnOf() + ") to move...");
+                synchronized (boardStateLock) {
+                    while (latestBoardState != null
+                        && latestBoardState.status() == GameStatus.ACTIVE
+                        && !latestBoardState.turnOf().equals(localPlayerName)) {
                         try {
-                            gameLock.wait();
-                        } catch (InterruptedException e) {
+                            boardStateLock.wait();
+                        } catch (InterruptedException exception) {
                             Thread.currentThread().interrupt();
                             return;
                         }
@@ -284,83 +236,60 @@ public class CLIClient implements GameEventListener {
         }
     }
 
-    /**
-     * Prints the board state visualization to stdout.
-     *
-     * @param state the board state to render
-     */
-    private void printBoard(BoardState state) {
-        System.out.println(state.toString());
+    // Prints one board snapshot.
+    private void printBoard(BoardState boardState) {
+        System.out.println(boardState);
     }
 
-    /**
-     * Evaluates the final board state and prints the corresponding result summary.
-     *
-     * @param state the final board state
-     * @param leftFlag true if the opponent left before completion
-     */
-    private void showGameEndResult(BoardState state, boolean leftFlag) {
-        GameStatus status = state.status();
+    // Prints the final outcome of the match.
+    private void printMatchResult(BoardState finalBoardState, boolean opponentHasLeft) {
+        GameStatus finalStatus = finalBoardState.status();
         System.out.println("=================================");
-        if (status == GameStatus.DRAW) {
+        if (finalStatus == GameStatus.DRAW) {
             System.out.println("Game over: It's a DRAW!");
-        } else if (status == GameStatus.ABANDONED) {
+        } else if (finalStatus == GameStatus.ABANDONED) {
             System.out.println("Game over: ABANDONED!");
-            if (leftFlag) {
+            if (opponentHasLeft) {
                 System.out.println("Your opponent left the game. You win by default!");
             } else {
                 System.out.println("The game was terminated.");
             }
         } else {
-            String winner = (status == GameStatus.WON_X) ? state.playerX() : state.playerO();
-            if (winner.equals(playerName)) {
+            String winnerName = finalStatus == GameStatus.WON_X ? finalBoardState.playerX() : finalBoardState.playerO();
+            if (winnerName.equals(localPlayerName)) {
                 System.out.println("Congratulations! YOU WON!");
             } else {
-                System.out.println("Game over. YOU LOST! Winner: " + winner);
+                System.out.println("Game over. YOU LOST! Winner: " + winnerName);
             }
         }
         System.out.println("=================================");
     }
 
-    // --- GameEventListener Callbacks ---
-
-    /**
-     * {@inheritDoc}
-     *
-     * @param initialState the initial board state snapshot when the game starts
-     */
+    // Stores the initial board state and wakes the waiting CLI thread.
     @Override
     public void onGameStarted(BoardState initialState) {
-        synchronized (gameLock) {
-            this.currentBoardState = initialState;
-            gameLock.notifyAll();
+        synchronized (boardStateLock) {
+            latestBoardState = initialState;
+            boardStateLock.notifyAll();
         }
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param newState the updated board state snapshot
-     */
+    // Stores a fresh board state and wakes the waiting CLI thread.
     @Override
-    public void onGameUpdated(BoardState newState) {
-        synchronized (gameLock) {
-            this.currentBoardState = newState;
-            gameLock.notifyAll();
+    public void onGameUpdated(BoardState updatedState) {
+        synchronized (boardStateLock) {
+            latestBoardState = updatedState;
+            boardStateLock.notifyAll();
         }
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @param opponentName the nickname of the opponent who left
-     */
+    // Marks the opponent as gone and wakes the waiting CLI thread.
     @Override
     public void onOpponentLeft(String opponentName) {
-        synchronized (gameLock) {
-            this.opponentLeftFlag = true;
+        synchronized (boardStateLock) {
+            opponentLeft = true;
             System.out.println("\n[System] Opponent '" + opponentName + "' left the game!");
-            gameLock.notifyAll();
+            boardStateLock.notifyAll();
         }
     }
 }
