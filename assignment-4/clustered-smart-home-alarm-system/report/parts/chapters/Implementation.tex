@@ -1,0 +1,79 @@
+\clearpage
+\section{Implementation}
+
+This chapter maps the design decisions to the final Java implementation. The
+goal is to show where \textbf{cluster startup}, \textbf{service discovery},
+and \textbf{alarm behavior} are actually realized in code.
+
+\subsection{Implementation map}
+
+\begin{center}
+\begin{tabular}{|>{\bfseries}p{3.2cm}|p{10.2cm}|}
+    \hline
+    Package or class & Implementation responsibility \\
+    \hline
+    \texttt{pcd.shas.Main}
+        & Starts one interactive node, parses the selected role, and wires the node-local actors. \\
+    \hline
+    \texttt{pcd.shas.runtime}
+        & Parses startup arguments and builds the Pekko Cluster configuration for host, port, seed nodes, and cluster role. \\
+    \hline
+    \texttt{pcd.shas.controlunit}
+        & Implements the control-unit state machine and exposes it as the single logical alarm authority in the cluster. \\
+    \hline
+    \texttt{pcd.shas.keypad}
+        & Collects user input and forwards PIN or arming requests to the discovered control unit. \\
+    \hline
+    \texttt{pcd.shas.sensor}
+        & Represents one distributed sensor and forwards activations as typed messages. \\
+    \hline
+    \texttt{pcd.shas.siren}
+        & Implements the local siren state and receives activation or deactivation commands. \\
+    \hline
+\end{tabular}
+\end{center}
+
+\subsection{Node startup and cluster roles}
+
+The entry point is \textbf{role-based}. \texttt{Main} accepts \texttt{control-unit},
+\texttt{keypad}, and \texttt{sensor} as startup roles and launches exactly one
+interactive node per JVM. \texttt{NodeStartup} converts CLI arguments into a
+small node description and then builds the final Pekko configuration overlay.
+
+This keeps the \textbf{distributed deployment explicit}: each JVM joins the same
+cluster, but each one hosts only the actors needed for its assigned role.
+
+\subsection{Control unit as cluster singleton}
+
+The alarm state must have a \textbf{single owner}. For this reason, the control unit is
+initialized as a Pekko \emph{cluster singleton}. Multiple nodes may have the
+\texttt{control-unit} cluster role, but only one active \texttt{ControlUnitActor}
+exists at a time.
+
+This choice fits the assignment better than allowing \textbf{multiple unrelated}
+control-unit instances, because the implementation does not replicate or merge
+state. If the hosting node fails, Pekko can recreate the singleton on another
+eligible node, and the recreated actor correctly returns to the recovery state.
+
+\subsection{Peripheral actors and discovery}
+
+Keypads and sensors do not hard-code an \texttt{ActorRef} to the control unit.
+Instead, they subscribe to the Pekko receptionist using the shared
+\texttt{CONTROL\_UNIT\_SERVICE\_KEY}. This keeps the deployment \textbf{decoupled} from
+specific node addresses.
+
+The siren uses the same pattern in the opposite direction: it is registered as
+a local service, and the control unit subscribes to siren updates so that it
+can activate or deactivate the available siren actor.
+
+\subsection{Recovery-oriented state machine}
+
+The cluster version preserves the same \textbf{alarm semantics} as assignment 3:
+\texttt{DISARMED}, \texttt{EXIT\_DELAY}, \texttt{ARMED},
+\texttt{ENTRY\_DELAY}, and \texttt{ALARM}. The only important extension is the
+safe startup state \texttt{STARTUP\_RECOVERY}.
+
+After creation or recreation, the control unit does not guess whether the
+system was previously armed or disarmed. It ignores or logs sensor events
+until a correct PIN is received. This \textbf{safe recovery behavior} is directly
+aligned with the failure-and-recovery requirement of the assignment.

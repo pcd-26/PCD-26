@@ -1,12 +1,14 @@
 \clearpage
 \section{Design}
 
-The implementation uses typed actors and receptionist-based discovery.
+The implementation uses typed actors, a cluster singleton for the control
+entity, and receptionist-based discovery for the peripheral roles.
 \begin{itemize}
-    \item The control unit registers itself and discovers sirens dynamically.
+    \item The control unit is modeled as a single logical cluster-wide entity, so at most one active instance owns the alarm state at any time.
+    \item The control unit still registers itself for discovery and discovers sirens dynamically.
     \item Keypads subscribe to control-unit updates and forward PIN submissions plus full or partial arming requests.
     \item Sensors keep a stable \texttt{sensorId} and send serializable \texttt{SensorInfo} messages.
-    \item The runtime startup helper builds the Pekko Cluster configuration for three supported nodes.
+    \item The runtime startup helper builds the Pekko Cluster configuration and assigns one cluster role to each node.
 \end{itemize}
 
 The non-distributed shape of the previous assignment is preserved wherever it
@@ -18,7 +20,9 @@ receptionist discovery, serialization markers, a process-based
 
 The control unit starts in \texttt{RECOVERY} after creation or restart. Only a
 correct PIN can move it back to \texttt{DISARMED}. Until then, arming commands
-and sensor activations are ignored or logged.
+and sensor activations are ignored or logged. This matches the assignment
+constraint that state is lost after recreation and must not be reconstructed
+optimistically.
 
 The design keeps the code small by separating responsibilities cleanly.
 Startup code builds the cluster configuration, actors implement the alarm
@@ -30,6 +34,8 @@ distributed deployment model required by the assignment.
 
 This solution prefers clarity over maximum generality. It supports the
 required distributed roles and recovery semantics, but it does not try to add
-persistence, replication, or more advanced cluster topologies. That choice
-keeps the code aligned with the assignment and avoids introducing complexity
-that would not improve the learning goals.
+persistence, replication, or more advanced cluster topologies. The use of a
+cluster singleton makes the control unit consistent with the domain model,
+while receptionist discovery keeps keypad and sensor nodes loosely coupled.
+That choice keeps the code aligned with the assignment and avoids introducing
+complexity that would not improve the learning goals.

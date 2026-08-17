@@ -1,0 +1,33 @@
+\clearpage
+\section{Verification and Testing}
+
+The implementation is checked through both \textbf{unit tests} and cluster-level
+integration tests.
+
+\subsection{Automated tests}
+
+\begin{itemize}
+    \item \texttt{ControlUnitActorTest} checks the state machine, full and partial arming, timers, siren control, and recovery rules.
+    \item \texttt{SensorActorTest} and \texttt{KeypadActorTest} check message forwarding and behavior when the control unit is temporarily unavailable.
+    \item \texttt{ClusteredSystemTest} verifies three-node cluster formation, remote message exchange, and recreation of the control unit in recovery mode.
+    \item \texttt{NodeStartupTest} validates CLI parsing and seed-node configuration generation.
+\end{itemize}
+
+These tests are useful not only because they confirm correctness, but because
+they document the expected \textbf{distributed behavior} of the final system.
+
+\subsection{What is actually verified}
+
+The automated suite verifies the properties that matter most for this
+assignment:
+
+\begin{itemize}
+    \item one logical owner for the alarm state;
+    \item message-based interaction between distributed roles;
+    \item preservation of the original alarm semantics;
+    \item safe loss of state after control-unit recreation;
+    \item serializability of remotely exchanged messages.
+\end{itemize}
+
+In other words, the tests are centered on \textbf{behavioral correctness}, not on
+advanced cluster features such as persistence, replication, or throughput.

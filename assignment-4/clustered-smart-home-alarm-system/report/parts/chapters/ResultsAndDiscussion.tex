@@ -1,0 +1,38 @@
+\clearpage
+\section{Results and Discussion}
+
+The final system satisfies the \textbf{core goals} of the assignment while remaining
+small and easy to reason about.
+
+\subsection{Observed outcome}
+
+The project successfully distributes the alarm system over multiple Pekko
+Cluster nodes without changing its domain rules. Sensors, keypad, and control
+logic can run on different JVMs, yet they still interact only through typed
+actor messages.
+
+The most relevant design outcome is that the \textbf{alarm state remains centralized}
+even in the clustered version. This avoids the inconsistency that would arise
+if multiple independent control units were active at the same time.
+
+\subsection{Discussion of trade-offs}
+
+The solution intentionally stops at the level required by the assignment.
+There is no persistence layer, no replicated state, and no attempt to keep the
+alarm state after a crash. This is a deliberate limitation rather than a
+missing feature, because the specification explicitly allows state loss after
+recreation as long as the system returns to a safe recovery mode.
+
+From a \textbf{didactic point of view}, this trade-off is reasonable. The code shows:
+
+\begin{itemize}
+    \item cluster formation through seed nodes;
+    \item role-based node startup;
+    \item remote service discovery;
+    \item message serialization;
+    \item failure-aware recovery.
+\end{itemize}
+
+At the same time, it avoids turning the assignment into a persistence or
+replication project, which would shift the focus away from the intended
+learning goals.

@@ -55,6 +55,20 @@
     captionpos=b
 }
 
+\lstdefinestyle{terminalstyle}{
+    basicstyle=\ttfamily\footnotesize,
+    frame=single,
+    rulecolor=\color{codeframe},
+    backgroundcolor=\color{codebg},
+    numbers=none,
+    breaklines=true,
+    breakatwhitespace=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    tabsize=2
+}
+
 \title{Assignment 4 -- Clustered Smart Home Alarm System}
 \author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
 \date{PCD a.y. 2025/2026 -- \todayFullUK}
@@ -71,7 +85,10 @@
 \input{parts/front/Introduction}
 \input{parts/chapters/ProblemAnalysis}
 \input{parts/chapters/Design}
-\input{parts/chapters/Validation}
+\input{parts/chapters/Implementation}
+\input{parts/chapters/VerificationAndTesting}
+\input{parts/chapters/ResultsAndDiscussion}
 \input{parts/back/Conclusions}
+\input{parts/back/HowToRun}
 
 \end{document}
