@@ -6,98 +6,76 @@ import java.util.logging.Logger;
 import javax.swing.UIManager;
 import pcd.dttt.common.Lobby;
 
-/**
- * Main entry point for the Tic-Tac-Toe client.
- * Decides whether to launch in GUI or CLI mode based on flags and headless state,
- * instantiating the GameController logic layer and injecting it into the UIs.
- */
+// Starts the GUI or CLI client depending on the environment.
 public class ClientMain {
-
     private static final Logger LOGGER = Logger.getLogger(ClientMain.class.getName());
 
-    /** Private constructor to prevent instantiation of utility class. */
+    // Prevents manual instantiation.
     private ClientMain() {}
 
-    /**
-     * Entry point for the Client application.
-     * Parses arguments to determine connection target and whether CLI mode is forced.
-     * Launches the GUI or CLI client accordingly.
-     *
-     * @param args command-line arguments: [host] [port] [serviceName] [--cli]
-     */
-    public static void main(String[] args) {
-        boolean forceCli = false;
-        String host = GameControllerImpl.DEFAULT_REGISTRY_HOST;
-        int port = GameControllerImpl.DEFAULT_REGISTRY_PORT;
-        String serviceName = Lobby.DEFAULT_BINDING_NAME;
+    // Parses startup arguments and selects the client mode.
+    public static void main(String[] commandLineArgs) {
+        boolean forceCliMode = false;
+        String registryHost = GameControllerImpl.DEFAULT_REGISTRY_HOST;
+        int registryPort = GameControllerImpl.DEFAULT_REGISTRY_PORT;
+        String lobbyBindingName = Lobby.DEFAULT_BINDING_NAME;
 
-        // Parse command line arguments
-        // Usage: client [host] [port] [serviceName] [--cli]
-        int positionalIndex = 0;
-        for (String arg : args) {
-            if (arg.equalsIgnoreCase("--cli")) {
-                forceCli = true;
-            } else if (!arg.startsWith("-")) {
-                if (positionalIndex == 0) {
-                    host = arg;
-                } else if (positionalIndex == 1) {
+        int positionalArgumentIndex = 0;
+        for (String argument : commandLineArgs) {
+            if (argument.equalsIgnoreCase("--cli")) {
+                forceCliMode = true;
+            } else if (!argument.startsWith("-")) {
+                if (positionalArgumentIndex == 0) {
+                    registryHost = argument;
+                } else if (positionalArgumentIndex == 1) {
                     try {
-                        port = Integer.parseInt(arg);
-                    } catch (NumberFormatException e) {
-                        System.err.println("Invalid port '" + arg + "', using default " + port + ".");
+                        registryPort = Integer.parseInt(argument);
+                    } catch (NumberFormatException exception) {
+                        System.err.println("Invalid port '" + argument + "', using default " + registryPort + ".");
                     }
-                } else if (positionalIndex == 2) {
-                    serviceName = arg;
+                } else if (positionalArgumentIndex == 2) {
+                    lobbyBindingName = argument;
                 }
-                positionalIndex++;
+                positionalArgumentIndex++;
             }
         }
 
-        boolean headless = GraphicsEnvironment.isHeadless();
+        boolean runningHeadless = GraphicsEnvironment.isHeadless();
 
-        if (forceCli || headless) {
-            if (headless && !forceCli) {
+        if (forceCliMode || runningHeadless) {
+            if (runningHeadless && !forceCliMode) {
                 System.out.println("Headless environment detected. Starting in CLI mode...");
             }
-            startCliMode(host, port, serviceName);
+            startCliMode(registryHost, registryPort, lobbyBindingName);
         } else {
-            startGuiMode(host, port, serviceName);
+            startGuiMode(registryHost, registryPort, lobbyBindingName);
         }
     }
 
-    /**
-     * Starts the Graphical User Interface client.
-     * Configures the system look and feel, constructs the GUI frame,
-     * and makes it visible on the Event Dispatch Thread (EDT).
-     */
-    private static void startGuiMode(String host, int port, String serviceName) {
+    // Starts the Swing client on the EDT.
+    private static void startGuiMode(String registryHost, int registryPort, String lobbyBindingName) {
         System.out.println("Launching Graphic User Interface...");
         javax.swing.SwingUtilities.invokeLater(() -> {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception e) {
-                // Fallback to default Swing Look & Feel
+            } catch (Exception exception) {
+                // Fall back to the default Swing look and feel.
             }
             GameController controller = new GameControllerImpl();
-            GUIClient gui = new GUIClient(controller, host, port, serviceName);
-            gui.setVisible(true);
+            GUIClient guiClient = new GUIClient(controller, registryHost, registryPort, lobbyBindingName);
+            guiClient.setVisible(true);
         });
     }
 
-    /**
-     * Starts the Command Line Interface client.
-     * Establishes connection parameters, initializes the CLI, and starts the scanner loop.
-     *
-     * @param host the remote server hostname
-     * @param port the remote server RMI port
-     */
-    private static void startCliMode(String host, int port, String serviceName) {
+    // Starts the text client.
+    private static void startCliMode(String registryHost, int registryPort, String lobbyBindingName) {
         try {
             GameController controller = new GameControllerImpl();
-            CLIClient cli = new CLIClient(controller, host, port, serviceName);
-            cli.start();
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "CLI mode launch failed for target RMI registry at " + host + ":" + port + " (" + serviceName + ")", e);
+            CLIClient cliClient = new CLIClient(controller, registryHost, registryPort, lobbyBindingName);
+            cliClient.start();
+        } catch (Exception exception) {
+            LOGGER.log(Level.SEVERE, "CLI mode launch failed for target RMI registry at "
+                + registryHost + ":" + registryPort + " (" + lobbyBindingName + ")", exception);
             System.exit(1);
         }
     }

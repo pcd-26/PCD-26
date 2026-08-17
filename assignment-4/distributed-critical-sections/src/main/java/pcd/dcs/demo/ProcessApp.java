@@ -11,30 +11,19 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Random;
 
-/**
- * A demo application representing a process participating in distributed critical sections.
- * Multiple instances of this application can be started concurrently to demonstrate
- * distributed mutual exclusion.
- * <p>
- * Each process will attempt to enter the critical section multiple times, perform some simulated
- * work (sleeping and appending to a shared log file), and then release the lock.
- * </p>
- */
+// Multi-iteration demo process that competes for the same distributed critical section.
 public class ProcessApp {
 
     private static final Logger logger = LoggerFactory.getLogger(ProcessApp.class);
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
     private static final String SHARED_LOG_FILE = "dcs_shared.log";
+    private static final int ITERATIONS = 5;
+    private static final int MIN_CRITICAL_SECTION_MILLIS = 5000;
+    private static final int CRITICAL_SECTION_JITTER_MILLIS = 2000;
+    private static final int MIN_PAUSE_BETWEEN_REQUESTS_MILLIS = 500;
+    private static final int PAUSE_BETWEEN_REQUESTS_JITTER_MILLIS = 1000;
 
-    /**
-     * Entry point for running a process application instance.
-     * <p>
-     * Connects to RabbitMQ, instantiates a {@link DistributedCriticalSection} named {@code "demo-cs"},
-     * and performs 5 iterations of acquiring the lock, logging access, simulating work, and releasing the lock.
-     * </p>
-     *
-     * @param args optional command line arguments: {@code [processId, host, port]}
-     */
+    // Run a demo client that repeatedly enters and exits the shared critical section.
     public static void main(String[] args) {
         String processId = args.length > 0 ? args[0] : "Process-" + new Random().nextInt(1000);
         String host = args.length > 1 ? args[1] : "localhost";
@@ -46,23 +35,23 @@ public class ProcessApp {
         try (DistributedCriticalSection dcs = new DistributedCriticalSection(host, port, "demo-cs")) {
             Random random = new Random();
 
-            for (int i = 1; i <= 5; i++) {
+            for (int i = 1; i <= ITERATIONS; i++) {
                 String waitTime = LocalTime.now().format(TIME_FORMATTER);
-                System.out.printf("[%s] [%s] (Iteration %d/5) Requesting entry to critical section...\n",
-                        waitTime, processId, i);
+                System.out.printf("[%s] [%s] (Iteration %d/%d) Requesting entry to critical section...\n",
+                        waitTime, processId, i, ITERATIONS);
 
-                // Acquire the lock
+                // Wait until this process consumes the shared token.
                 dcs.enter();
 
                 String enterTime = LocalTime.now().format(TIME_FORMATTER);
                 System.out.printf("[%s] [%s] ENTERED critical section.\n", enterTime, processId);
 
-                // Write to the shared log file to verify mutual exclusion
+                // Record the entry in a shared file so concurrent runs can be inspected later.
                 logToSharedFile(String.format("[%s] %s ENTER\n", enterTime, processId));
 
-                // Simulate critical section work
+                // Simulate protected work while holding the token.
                 try {
-                    Thread.sleep(1500 + random.nextInt(1000));
+                    Thread.sleep(MIN_CRITICAL_SECTION_MILLIS + random.nextInt(CRITICAL_SECTION_JITTER_MILLIS));
                 } catch (InterruptedException e) {
                     logger.warn("[{}] Interrupted during critical section work", processId, e);
                     Thread.currentThread().interrupt();
@@ -72,11 +61,12 @@ public class ProcessApp {
                 logToSharedFile(String.format("[%s] %s EXIT\n", exitTime, processId));
                 System.out.printf("[%s] [%s] Exiting critical section.\n", exitTime, processId);
 
-                // Release the lock
+                // Return the token to RabbitMQ so another process can enter.
                 dcs.exit();
 
-                // Wait a bit before requesting access again
-                long sleepTime = 500 + random.nextInt(1500);
+                // Pause outside the critical section before the next request.
+                long sleepTime =
+                        MIN_PAUSE_BETWEEN_REQUESTS_MILLIS + random.nextInt(PAUSE_BETWEEN_REQUESTS_JITTER_MILLIS);
                 Thread.sleep(sleepTime);
             }
 
@@ -88,12 +78,7 @@ public class ProcessApp {
         }
     }
 
-    /**
-     * Appends a log entry to the shared text file ({@value #SHARED_LOG_FILE}).
-     * Synchronized locally within the JVM to prevent concurrent file write interleaving within the same process.
-     *
-     * @param message log text to write
-     */
+    // Append a log line atomically inside the local JVM.
     private static synchronized void logToSharedFile(String message) {
         try (FileWriter fw = new FileWriter(SHARED_LOG_FILE, true);
              PrintWriter pw = new PrintWriter(fw)) {

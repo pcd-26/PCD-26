@@ -1,7 +1,6 @@
 package pcd.shas;
 
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.Behavior;
@@ -20,39 +19,21 @@ import pcd.shas.siren.SirenActor;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.Duration;
-import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
-/**
- * Command-line entry point for the clustered smart home alarm system.
- *
- * <p>The application supports one JVM per role for the distributed setup and a
- * local demo mode that launches three roles on {@code 127.0.0.1}.</p>
- */
 public final class Main {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
     private static final String SYSTEM_NAME = "shas-cluster";
-    private static final String LOCAL_HOST = "127.0.0.1";
-    private static final int CONTROL_UNIT_PORT = 2551;
-    private static final int KEYPAD_PORT = 2552;
-    private static final int SENSOR_PORT = 2553;
-    private static final List<String> LOCAL_SEED_NODES = List.of(
-        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, CONTROL_UNIT_PORT),
-        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, KEYPAD_PORT),
-        NodeStartup.toSeedNodeUri(SYSTEM_NAME, LOCAL_HOST, SENSOR_PORT)
-    );
 
     private Main() {}   // Utility class
 
-    /**
-     * Starts the requested node role or the local demo.
-     *
-     * @param args command-line arguments
-     */
+    // Starts one clustered node with its interactive CLI.
     public static void main(String[] args) {
         if (args.length == 0 || "demo".equalsIgnoreCase(args[0])) {
-            runLocalDemo();
+            printUsage();
             return;
         }
 
@@ -61,119 +42,19 @@ public final class Main {
             runNode(launchArguments);
         } catch (IllegalArgumentException e) {
             LOGGER.error("Invalid startup arguments: {}", e.getMessage());
+            printUsage();
         }
     }
 
-    /**
-     * Executes the local demo mode, spinning up ControlUnit, Keypad, and Sensor
-     * nodes in the same JVM to demonstrate state transitions and cluster recovery.
-     */
-    private static void runLocalDemo() {
-        LOGGER.info("Starting local three-node SHAS demo...");
-
-        Config baseConfig = ConfigFactory.load();
-        Config controlUnitConfig = NodeStartup.buildClusterConfig(
-            SYSTEM_NAME,
-            LOCAL_HOST,
-            CONTROL_UNIT_PORT,
-            LOCAL_SEED_NODES
-        ).withFallback(baseConfig);
-        Config keypadConfig = NodeStartup.buildClusterConfig(
-            SYSTEM_NAME,
-            LOCAL_HOST,
-            KEYPAD_PORT,
-            LOCAL_SEED_NODES
-        ).withFallback(baseConfig);
-        Config sensorConfig = NodeStartup.buildClusterConfig(
-            SYSTEM_NAME,
-            LOCAL_HOST,
-            SENSOR_PORT,
-            LOCAL_SEED_NODES
-        ).withFallback(baseConfig);
-        AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(controlUnitConfig);
-
-        ActorSystem<ControlUnitActor.Command> controlUnitSystem = ActorSystem.create(
-            createControlUnitNodeBehavior(alarmConfiguration),
-            SYSTEM_NAME,
-            controlUnitConfig
-        );
-        ActorSystem<KeypadActor.Command> keypadSystem = ActorSystem.create(
-            KeypadActor.create(),
-            SYSTEM_NAME,
-            keypadConfig
-        );
-        ActorSystem<SensorActor.Command> sensorSystem = ActorSystem.create(
-            createSensorsNodeBehavior(),
-            SYSTEM_NAME,
-            sensorConfig
-        );
-        ActorSystem<ControlUnitActor.Command> restartedControlUnitSystem = null;
-
-        try {
-            LOGGER.info("Waiting for cluster formation...");
-            Thread.sleep(3000);
-
-            LOGGER.info("[DEMO] Initial state: {}", queryControlUnitState(controlUnitSystem));
-            keypadSystem.tell(new KeypadActor.SubmitPin("9999"));
-            Thread.sleep(500);
-            LOGGER.info("[DEMO] After wrong PIN: {}", queryControlUnitState(controlUnitSystem));
-
-            sensorSystem.tell(new SensorActor.Activate());
-            Thread.sleep(500);
-
-            keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
-            Thread.sleep(1000);
-            LOGGER.info("[DEMO] After correct PIN: {}", queryControlUnitState(controlUnitSystem));
-
-            controlUnitSystem.tell(new ControlUnitActor.ArmAll());
-            keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
-            Thread.sleep(500);
-            LOGGER.info("[DEMO] After arming request: {}", queryControlUnitState(controlUnitSystem));
-
-            Thread.sleep(5500);
-            LOGGER.info("[DEMO] After exit delay: {}", queryControlUnitState(controlUnitSystem));
-
-            controlUnitSystem.terminate();
-            controlUnitSystem.getWhenTerminated().toCompletableFuture().join();
-
-            restartedControlUnitSystem = ActorSystem.create(
-                createControlUnitNodeBehavior(alarmConfiguration),
-                SYSTEM_NAME,
-                controlUnitConfig
-            );
-            Thread.sleep(3000);
-
-            LOGGER.info("[DEMO] Restarted state: {}", queryControlUnitState(restartedControlUnitSystem));
-            sensorSystem.tell(new SensorActor.Activate());
-            Thread.sleep(500);
-
-            keypadSystem.tell(new KeypadActor.SubmitPin("1234"));
-            Thread.sleep(1000);
-            LOGGER.info("[DEMO] Final restarted state: {}", queryControlUnitState(restartedControlUnitSystem));
-        } catch (Exception e) {
-            LOGGER.error("Demo failed with exception", e);
-        } finally {
-            LOGGER.info("Shutting down demo systems...");
-            keypadSystem.terminate();
-            sensorSystem.terminate();
-            controlUnitSystem.terminate();
-            if (restartedControlUnitSystem != null) {
-                restartedControlUnitSystem.terminate();
-            }
-        }
-    }
-
-    /**
-     * Launches a single node process according to parsed command-line arguments.
-     *
-     * @param launchArguments the parsed node role and network parameters
-     */
+    // Launches one clustered node from parsed command-line arguments.
     private static void runNode(NodeArguments launchArguments) {
+        // Build the Pekko config for exactly one node: network identity, seed nodes, and cluster role.
         Config nodeConfig = NodeStartup.buildClusterConfig(
             SYSTEM_NAME,
             launchArguments.host(),
             launchArguments.port(),
-            launchArguments.seedNodes()
+            launchArguments.seedNodes(),
+            launchArguments.role()
         );
         AlarmConfiguration alarmConfiguration = AlarmConfiguration.from(nodeConfig);
 
@@ -184,47 +65,62 @@ public final class Main {
         }
     }
 
-    /**
-     * Initializes and runs the Control Unit node and its local Siren actor.
-     *
-     * @param config application configuration for Pekko Cluster Artery binding
-     * @param alarmConfiguration loaded alarm timeouts and PIN configuration
-     */
+    // Runs a control-unit node with its local siren actor.
     private static void runControlUnitNode(Config config, AlarmConfiguration alarmConfiguration) {
         ActorSystem<ControlUnitActor.Command> system = ActorSystem.create(
-            createControlUnitNodeBehavior(alarmConfiguration),
+            Behaviors.setup(context -> {
+                // This node always hosts its own siren actor.
+                context.spawn(SirenActor.create(), "siren");
+                // This node asks Pekko for the single control unit of the whole cluster.
+                ActorRef<ControlUnitActor.Command> controlUnit = ControlUnitActor.initSingleton(
+                    context.getSystem(),
+                    alarmConfiguration.correctPin(),
+                    alarmConfiguration.exitDelay(),
+                    alarmConfiguration.entryDelay()
+                );
+                // The node root does not implement alarm logic itself: it only forwards commands to the singleton.
+                return Behaviors.receive(ControlUnitActor.Command.class)
+                    .onMessage(ControlUnitActor.Command.class, message -> {
+                        controlUnit.tell(message);
+                        return Behaviors.same();
+                    })
+                    .build();
+            }),
             SYSTEM_NAME,
             config
         );
-        LOGGER.info("Control unit node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
-        waitEnter();
-        system.terminate();
+        LOGGER.info(
+            "Control unit node running on {}:{}",
+            config.getString("pekko.remote.artery.canonical.hostname"),
+            config.getInt("pekko.remote.artery.canonical.port")
+        );
+        LOGGER.info("Commands: status, help, exit.");
+        startControlUnitConsoleInputReader(system);
+        waitForTermination(system);
     }
 
-    /**
-     * Initializes and runs a standalone Keypad node with console input parsing.
-     *
-     * @param config application configuration for Pekko Cluster Artery binding
-     */
+    // Runs a keypad node and reads commands from the console.
     private static void runKeypadNode(Config config) {
         ActorSystem<KeypadActor.Command> system = ActorSystem.create(
+            // This node only hosts the keypad actor; the control unit is discovered remotely.
             KeypadActor.create(),
             SYSTEM_NAME,
             config
         );
-        LOGGER.info("Keypad node running on {}:{}", config.getString("pekko.remote.artery.canonical.hostname"), config.getInt("pekko.remote.artery.canonical.port"));
-        LOGGER.info("Type digits and press Enter to submit. Type 'exit' to stop the node.");
+        LOGGER.info(
+            "Keypad node running on {}:{}",
+            config.getString("pekko.remote.artery.canonical.hostname"),
+            config.getInt("pekko.remote.artery.canonical.port")
+        );
+        LOGGER.info("Commands: arm full <PIN>, arm partial <PIN> ZONE..., pin <PIN>, raw digits, exit.");
         startKeypadConsoleInputReader(system);
+        waitForTermination(system);
     }
 
-    /**
-     * Initializes and runs a standalone Sensor node.
-     *
-     * @param config application configuration for Pekko Cluster Artery binding
-     * @param launchArguments metadata specifying sensor ID, type, and zone
-     */
+    // Runs a sensor node using the sensor metadata from CLI arguments.
     private static void runSensorNode(Config config, NodeArguments launchArguments) {
         ActorSystem<SensorActor.Command> system = ActorSystem.create(
+            // This node only hosts one sensor actor; the control unit is discovered remotely.
             SensorActor.create(
                 launchArguments.sensorId(),
                 launchArguments.sensorType(),
@@ -241,99 +137,57 @@ public final class Main {
             launchArguments.sensorType(),
             launchArguments.zone()
         );
-        LOGGER.info("Press Enter to trigger the sensor. Type 'exit' to stop the node.");
+        LOGGER.info("Press ENTER to trigger the sensor. Type 'exit' to stop the node.");
         startSensorConsoleInputReader(system);
+        waitForTermination(system);
     }
 
-    /**
-     * Asynchronously queries the control unit's current logical alarm state.
-     *
-     * @param system the ControlUnit ActorSystem instance
-     * @return current {@link AlarmState}, or {@code null} if query fails
-     */
+    // Queries the control unit state through ask.
     private static AlarmState queryControlUnitState(ActorSystem<ControlUnitActor.Command> system) {
         try {
-            CompletionStage<ControlUnitActor.StateSnapshot> stage = AskPattern.ask(
+            // "ask" means: send a request message and wait for exactly one reply message.
+            CompletionStage<ControlUnitActor.StateSnapshot> stateSnapshotStage = AskPattern.ask(
                 system,
-                ControlUnitActor.QueryState::new,
+                replyTo -> new ControlUnitActor.QueryState(replyTo),
                 Duration.ofSeconds(2),
                 system.scheduler()
             );
-            return stage.toCompletableFuture().get().state();
+            ControlUnitActor.StateSnapshot stateSnapshot = stateSnapshotStage.toCompletableFuture().get();
+            return stateSnapshot.state();
         } catch (Exception e) {
             LOGGER.error("Failed to query state", e);
             return null;
         }
     }
 
-    /**
-     * Creates the root behavior for a Control Unit node, spawning the Siren actor and ControlUnit actor.
-     *
-     * @param alarmConfiguration configured PIN and timing settings
-     * @return typed behavior forwarding commands to the ControlUnit actor
-     */
-    private static Behavior<ControlUnitActor.Command> createControlUnitNodeBehavior(AlarmConfiguration alarmConfiguration) {
-        return Behaviors.setup(context -> {
-            context.spawn(SirenActor.create(), "siren");
-            ActorRef<ControlUnitActor.Command> controlUnit = context.spawn(
-                ControlUnitActor.create(
-                    alarmConfiguration.correctPin(),
-                    alarmConfiguration.exitDelay(),
-                    alarmConfiguration.entryDelay()
-                ),
-                "control-unit"
-            );
-            return Behaviors.receive(ControlUnitActor.Command.class)
-                .onMessage(ControlUnitActor.Command.class, message -> {
-                    controlUnit.tell(message);
-                    return Behaviors.same();
-                })
-                .build();
-        });
+    // Starts console input for a control-unit node.
+    private static void startControlUnitConsoleInputReader(ActorSystem<ControlUnitActor.Command> system) {
+        new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String command = line.trim();
+                    if (command.equalsIgnoreCase("exit")) {
+                        system.terminate();
+                        break;
+                    }
+                    if (command.equalsIgnoreCase("status")) {
+                        LOGGER.info("Alarm state: {}", queryControlUnitState(system));
+                        continue;
+                    }
+                    if (command.equalsIgnoreCase("help")) {
+                        LOGGER.info("Commands: status, help, exit.");
+                        continue;
+                    }
+                    LOGGER.warn("Unknown control-unit command: {}", command);
+                }
+            } catch (Exception ignored) {
+                // Ignore console shutdown failures.
+            }
+        }, "control-unit-console").start();
     }
 
-    /**
-     * Creates a demo behavior managing multiple simulated sensors (door and motion).
-     *
-     * @return typed behavior routing activation messages to child sensors
-     */
-    private static Behavior<SensorActor.Command> createSensorsNodeBehavior() {
-        return Behaviors.setup(context -> {
-            ActorRef<SensorActor.Command> doorSensor = context.spawn(
-                SensorActor.create("front_door", pcd.shas.common.SensorType.DOOR_WINDOW, pcd.shas.common.Zone.PERIMETER),
-                "front-door-sensor"
-            );
-            ActorRef<SensorActor.Command> motionSensor = context.spawn(
-                SensorActor.create("living_room_motion", pcd.shas.common.SensorType.MOTION, pcd.shas.common.Zone.LIVING_AREA),
-                "living-room-sensor"
-            );
-
-            return Behaviors.receive(SensorActor.Command.class)
-                .onMessage(SensorActor.Activate.class, message -> {
-                    doorSensor.tell(message);
-                    motionSensor.tell(message);
-                    return Behaviors.same();
-                })
-                .build();
-        });
-    }
-
-    /**
-     * Blocks the main thread until the user presses Enter in standard input.
-     */
-    private static void waitEnter() {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
-            reader.readLine();
-        } catch (Exception ignored) {
-            // Ignore shutdown input failures.
-        }
-    }
-
-    /**
-     * Starts a daemon thread reading keypad entries from console input.
-     *
-     * @param system target Keypad ActorSystem
-     */
+    // Starts console input for a keypad node.
     private static void startKeypadConsoleInputReader(ActorSystem<KeypadActor.Command> system) {
         new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
@@ -344,6 +198,27 @@ public final class Main {
                         system.terminate();
                         break;
                     }
+                    // Keep the same commands used by the non-clustered CLI.
+                    if (line.startsWith("arm full ")) {
+                        system.tell(new KeypadActor.RequestFullArming(line.substring("arm full ".length()).trim()));
+                        continue;
+                    }
+                    if (line.startsWith("arm partial ")) {
+                        try {
+                            String[] parts = line.substring("arm partial ".length()).trim().split("\\s+", 2);
+                            if (parts.length < 2) {
+                                throw new IllegalArgumentException("PIN and at least one zone are required");
+                            }
+                            system.tell(new KeypadActor.RequestPartialArming(parts[0], parseZones(parts[1])));
+                        } catch (IllegalArgumentException exception) {
+                            LOGGER.warn("Invalid partial arming request. Use: arm partial <PIN> PERIMETER GROUND_FLOOR");
+                        }
+                        continue;
+                    }
+                    if (line.startsWith("pin ")) {
+                        system.tell(new KeypadActor.SubmitPin(line.substring("pin ".length()).trim()));
+                        continue;
+                    }
                     for (char c : line.toCharArray()) {
                         system.tell(new KeypadActor.PressKey(c));
                     }
@@ -352,14 +227,27 @@ public final class Main {
             } catch (Exception ignored) {
                 // Ignore console shutdown failures.
             }
-        }).start();
+        }, "keypad-console").start();
     }
 
-    /**
-     * Starts a daemon thread reading sensor activation triggers from console input.
-     *
-     * @param system target Sensor ActorSystem
-     */
+    // Parses the zone list used by partial arming commands.
+    private static Set<pcd.shas.common.Zone> parseZones(String input) {
+        String normalizedInput = input.toUpperCase(Locale.ROOT)
+            .replace('-', '_')
+            .replace(',', ' ')
+            .trim();
+
+        if (normalizedInput.isEmpty()) {
+            throw new IllegalArgumentException("At least one zone is required");
+        }
+
+        return Set.of(normalizedInput.split("\\s+"))
+            .stream()
+            .map(pcd.shas.common.Zone::valueOf)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    // Starts console input for a sensor node.
     private static void startSensorConsoleInputReader(ActorSystem<SensorActor.Command> system) {
         new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
@@ -375,6 +263,26 @@ public final class Main {
             } catch (Exception ignored) {
                 // Ignore console shutdown failures.
             }
-        }).start();
+        }, "sensor-console").start();
+    }
+
+    // Waits until the actor system completes its coordinated shutdown.
+    private static void waitForTermination(ActorSystem<?> system) {
+        system.getWhenTerminated().toCompletableFuture().join();
+    }
+
+    // Prints the node-oriented command-line contract.
+    private static void printUsage() {
+        System.out.println("""
+            Clustered Smart Home Alarm System
+
+            Start one interactive clustered node:
+              control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+              keypad       --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+              sensor       --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553
+
+            Run the distributed process demo through pcd.shas.DemoMain or:
+              run-cshas demo
+            """);
     }
 }

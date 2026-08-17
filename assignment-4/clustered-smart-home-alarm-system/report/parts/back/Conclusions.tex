@@ -1,0 +1,18 @@
+\clearpage
+\section{Conclusions}
+
+The final project preserves the \textbf{alarm semantics} of assignment 3 and adds
+the distributed mechanisms required by assignment 4: \textbf{cluster startup},
+\textbf{remote discovery}, \textbf{singleton state ownership}, and \textbf{safe
+recovery after recreation}.
+
+The resulting system runs on multiple cluster nodes without changing the alarm
+rules of the non-clustered version. Sensors, keypad, and control logic may run
+on different nodes, but communication remains message-based and the alarm state
+is still owned by one logical control entity.
+
+The main architectural trade-off is explicit: the project does not introduce
+persistence or replicated alarm state. If the control unit is recreated, the
+previous in-memory state is lost and the system returns to
+\texttt{STARTUP\_RECOVERY}. This behavior matches the specification and keeps the
+design aligned with the actual assignment scope.

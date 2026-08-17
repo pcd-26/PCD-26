@@ -1,0 +1,74 @@
+\clearpage
+\section{Design}
+
+The system is organized around three \textbf{RMI roles}: \textbf{registry},
+\textbf{server}, and \textbf{client}. The registry only provides name-based
+lookup for remote services. The server publishes the matchmaking entry point
+and hosts the authoritative state of the active matches. The client resolves
+the remote service, invokes game operations, and exports a callback object to
+receive updates.
+
+Internally, the server follows the structure \textbf{1 server, 1 lobby, and N
+games}. The lobby is the only component responsible for room creation and room
+lookup; it maps room names to server-side \texttt{GameImpl} instances. The
+value of \texttt{N} is dynamic: it increases when new rooms are created and it
+decreases when terminal matches are pruned. Each game instance therefore
+represents exactly one match, with its own board, players, turn state, and
+termination status.
+
+\subsection{Remote interaction model}
+
+The remote protocol is intentionally small. A client first resolves the lobby
+from the registry. It then uses that lobby to create or join a named room. The
+lobby returns a remote \texttt{Game} stub bound to the corresponding
+\texttt{GameImpl} instance, so subsequent moves are sent directly to the
+correct match without any extra lookup.
+
+This split keeps responsibilities explicit. \texttt{LobbyImpl} handles room
+creation, join requests, waiting-room enumeration, and room cleanup.
+\texttt{GameImpl} handles move validation, turn alternation, terminal
+conditions, and callback delivery. On the client side,
+\texttt{GameControllerImpl} isolates RMI details from the GUI and CLI and
+forwards remote events to a local listener abstraction.
+
+\subsection{State ownership and snapshots}
+
+The design is \textbf{server-centric}: mutable game state never leaves the
+server. Each \texttt{GameImpl} owns the live board and all mutable metadata,
+while clients only observe \texttt{BoardState} snapshots. This makes the
+server the \textbf{single point of truth} for move legality, turn correctness,
+and match termination.
+
+The snapshot model is also useful from a software-engineering perspective.
+Because \texttt{BoardState} is immutable, the callback protocol does not expose
+live mutable structures to remote clients. This removes aliasing problems,
+makes received states easier to compare in tests, and keeps the client-side
+logic independent from server internals.
+
+\subsection{Concurrency strategy}
+
+Concurrency is separated at two levels. The lobby protects the room namespace
+and the collection of active matches, while each \texttt{GameImpl} protects
+only its own match state. This avoids one coarse global lock around the whole
+server and allows independent games to progress concurrently.
+
+The callback path is deliberately kept outside the synchronized state
+transition. A remote callback may be slow or may fail entirely, so it must not
+hold the lock that protects the authoritative game state. For this reason, the
+server first applies the state transition, then produces an immutable snapshot,
+and only after that dispatches callbacks to the clients.
+
+\subsection{Lifecycle and scope}
+
+The runtime lifecycle is straightforward: the registry starts first, the
+server binds the lobby, the client resolves the lobby, one client creates a
+room, another joins it, and the game proceeds until win, draw, or abandonment.
+Finished rooms are later pruned by the lobby, so the number of active game
+instances tracks the actual set of live matches.
+
+The implementation intentionally avoids \textbf{persistence},
+\textbf{distributed replication}, and advanced matchmaking policies because
+they are outside the assignment scope. The chosen design focuses instead on
+\textbf{clear ownership of state}, \textbf{small remote interfaces}, and
+\textbf{well-defined concurrency boundaries}, which are the core goals of this
+exercise.

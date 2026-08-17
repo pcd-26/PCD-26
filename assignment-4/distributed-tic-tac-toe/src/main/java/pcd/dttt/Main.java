@@ -6,47 +6,36 @@ import pcd.dttt.client.ClientMain;
 import pcd.dttt.registry.RegistryMain;
 import pcd.dttt.server.ServerMain;
 
-/**
- * Unified entry point for the Distributed Tic-Tac-Toe application.
- * Routes execution to RegistryMain, ServerMain, or ClientMain.
- */
+// Routes the application to registry, server, or client mode.
 public class Main {
-    /** Private constructor to prevent instantiation of utility class. */
+    // Prevents manual instantiation.
     private Main() {}
-    /**
-     * Unified entry point. Delegates execution depending on the first argument.
-     *
-     * @param args command-line arguments. If the first argument is "registry", runs the RMI registry.
-     *             If the first argument is "server", runs the RMI server.
-     *             If the first argument is "client", runs the RMI client.
-     *             Otherwise, defaults to client mode and prints usage.
-     */
-    public static void main(String[] args) {
-        if (args.length == 0) {
+
+    // Dispatches execution based on the first CLI argument.
+    public static void main(String[] commandLineArgs) {
+        if (commandLineArgs.length == 0) {
             printUsage();
             System.out.println("No command specified. Defaulting to client mode...\n");
-            ClientMain.main(args);
+            ClientMain.main(commandLineArgs);
             return;
         }
 
-        String command = args[0].toLowerCase(Locale.ROOT);
-        String[] subArgs = Arrays.copyOfRange(args, 1, args.length);
+        String executionMode = commandLineArgs[0].toLowerCase(Locale.ROOT);
+        String[] delegatedArgs = Arrays.copyOfRange(commandLineArgs, 1, commandLineArgs.length);
 
-        switch (command) {
-            case "registry" -> RegistryMain.main(subArgs);
-            case "server" -> ServerMain.main(subArgs);
-            case "client" -> ClientMain.main(subArgs);
+        switch (executionMode) {
+            case "registry" -> RegistryMain.main(delegatedArgs);
+            case "server" -> ServerMain.main(delegatedArgs);
+            case "client" -> ClientMain.main(delegatedArgs);
             default -> {
                 printUsage();
-                System.out.println("Unrecognized command '" + args[0] + "'. Defaulting to client mode...\n");
-                ClientMain.main(args);
+                System.out.println("Unrecognized command '" + commandLineArgs[0] + "'. Defaulting to client mode...\n");
+                ClientMain.main(commandLineArgs);
             }
         }
     }
 
-    /**
-     * Prints CLI command usage information to standard output.
-     */
+    // Prints the supported startup commands.
     private static void printUsage() {
         System.out.println("Distributed Tic-Tac-Toe RMI Application");
         System.out.println("Usage:");

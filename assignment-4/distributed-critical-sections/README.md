@@ -32,7 +32,7 @@ docker compose -f docker-compose.rabbitmq.yml down
 
 The distributed critical section is implemented as a token-based mutual exclusion protocol:
 
-1. **Mutex Token Queue (`cs_token_<csName>`)**:
+1. **Critical-Section Token Queue (`cs_token_<csName>`)**:
    - The critical section is represented by a durable RabbitMQ queue containing exactly one persistent "token" message.
    - To acquire the lock, a process consumes the message from this queue (manual acknowledgment mode: `autoAck = false`).
    - Only one process can successfully receive the message at any time, enforcing mutual exclusion.
@@ -43,8 +43,8 @@ The distributed critical section is implemented as a token-based mutual exclusio
    - This ensures that if a process holding the lock crashes, the lock is automatically released without causing deadlock.
 
 3. **Crash-Safe Bootstrap**:
-   - Bootstrap is serialized with a temporary exclusive broker lock queue `cs_bootstrap_lock_<csName>`.
-   - While holding that lock, a process passively inspects `cs_token_<csName>`.
+   - Bootstrap is serialized with a temporary exclusive broker guard queue `cs_token_creation_guard_<csName>`.
+   - While holding that guard, a process passively inspects `cs_token_<csName>`.
    - The token is published only if the queue has no messages and no registered consumers.
    - This means a process holding the critical section cannot be mistaken for an uninitialized system, and a crash during bootstrap is recoverable by another process.
    - There is no persistent initialization marker, so no bootstrap artifact can outlive the token.
@@ -62,7 +62,7 @@ For each critical-section name `csName`, the middleware uses two broker queues:
   - non-exclusive
   - non-auto-delete
   - contains exactly one persistent token message when the critical section is idle
-- `cs_bootstrap_lock_<csName>`:
+- `cs_token_creation_guard_<csName>`:
   - non-durable
   - exclusive to the connection that created it
   - auto-deleted by the broker when the connection closes

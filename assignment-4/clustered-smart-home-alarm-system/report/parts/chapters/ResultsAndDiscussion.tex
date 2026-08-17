@@ -1,0 +1,45 @@
+\clearpage
+\section{Results and Discussion}
+
+The final system satisfies the \textbf{core goals} of the assignment.
+
+\subsection{Observed outcome}
+
+The project successfully distributes the alarm system over multiple Pekko
+Cluster nodes without changing its domain rules. Sensors, keypad, and control
+logic can run on different cluster nodes, yet they still interact only through typed
+actor messages.
+
+The most relevant design outcome is that the \textbf{alarm state remains
+centralized} even in the clustered version. This avoids the inconsistency that
+would arise if multiple independent control units were active at the same
+time.
+
+From a comparison point of view, the clustered project can be summarized as:
+\begin{itemize}
+    \item \textbf{same alarm logic} as assignment 3;
+    \item \textbf{different startup and communication model};
+    \item \textbf{additional recovery state} required by distributed execution.
+\end{itemize}
+
+\subsection{Discussion of trade-offs}
+
+The solution stops at the level required by the assignment.
+There is no persistence layer, no replicated state, and no attempt to keep the
+alarm state after a crash. This is a deliberate limitation rather than a
+missing feature, because the specification explicitly allows state loss after
+recreation as long as the system returns to a safe recovery mode.
+
+The implemented architecture shows:
+
+\begin{itemize}
+    \item cluster formation through seed nodes;
+    \item role-based node startup;
+    \item remote service discovery through the receptionist;
+    \item message serialization;
+    \item singleton-based state ownership;
+    \item failure-aware recovery.
+\end{itemize}
+
+At the same time, it avoids turning the assignment into a persistence or
+replication project, which is outside the scope of the specification.
