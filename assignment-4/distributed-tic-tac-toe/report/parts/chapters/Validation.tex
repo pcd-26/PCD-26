@@ -1,30 +1,38 @@
 \clearpage
 \section{Validation}
 
-The validation strategy combines \textbf{focused unit tests} with one
-\textbf{end-to-end RMI integration test}.
+The validation strategy combines \textbf{unit tests} and an
+\textbf{end-to-end RMI integration test} so that both local correctness and
+distributed behavior are covered.
+
 \begin{itemize}
-    \item \texttt{GameStatusTest} checks the state helpers used by the game
-    model.
-    \item \texttt{GameImplTest} covers move validation, game results,
-    snapshots, abandonment, callback behavior, and concurrent operations on one
-    match.
-    \item \texttt{LobbyImplTest} covers room creation, join behavior,
-    duplicate names, waiting-room listing, pruning, and concurrent lobby
-    requests.
-    \item \texttt{DtttRmiIntegrationTest} exercises the full
-    registry-server-client path with real RMI stubs.
+    \item \texttt{GameStatusTest} validates the helper predicates used by the
+    game-state model.
+    \item \texttt{GameImplTest} validates move legality, turn alternation, win
+    and draw detection, abandonment handling, snapshot consistency, and
+    concurrent operations on a single match.
+    \item \texttt{LobbyImplTest} validates room creation, room join, duplicate
+    names, waiting-room listing, pruning of terminal games, and concurrent
+    accesses to the lobby.
+    \item \texttt{DtttRmiIntegrationTest} validates the complete distributed
+    path through registry lookup, server binding, room creation, room join, and
+    callback-based state propagation.
 \end{itemize}
 
-This coverage is important because the project has \textbf{two different
-correctness dimensions}. The first is rule correctness: only legal moves are
-accepted, turns alternate correctly, and terminal states are detected exactly
-once. The second is distributed correctness: the right remote object must be
-discovered, the right game instance must receive the move, and clients must
-observe state changes through callbacks rather than through stale local data.
+This coverage targets the main risks of the architecture. The unit tests verify
+that the server remains the \textbf{single point of truth} for game rules and
+state transitions, while the integration test verifies that remote discovery,
+remote invocation, and client callbacks work together correctly in the actual
+RMI-based execution model.
 
-The integration test validates the \textbf{full execution path} used in the
-real system: registry lookup, server binding, room creation, room join, and
-callback-driven state propagation. Together with the unit tests, it provides
-confidence that the implementation is not only locally correct, but also
-correct as a distributed RMI application.
+The validation is therefore not limited to rule correctness. It also checks
+that requests are routed to the correct remote game instance, that independent
+matches remain isolated, and that callback-driven updates expose consistent
+\texttt{BoardState} snapshots to clients.
+
+The current validation scope is appropriate for the assignment: it demonstrates
+functional correctness, distributed interaction correctness, and concurrency
+control within the designed architecture. It does not aim to cover
+\textbf{persistence}, \textbf{replicated servers}, or large-scale
+\textbf{network-failure scenarios}, since these are outside the intended scope
+of the project.
