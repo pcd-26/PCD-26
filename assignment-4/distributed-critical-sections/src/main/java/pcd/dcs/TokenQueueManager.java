@@ -13,8 +13,8 @@ record TokenQueueManager(String tokenCirculationQueueName) {
     private static final String TOKEN_CIRCULATION_QUEUE_PREFIX = "cs_token_circulation_";
 
     // Prefix the logical critical-section name with the broker queue namespace.
-    TokenQueueManager(String queueName) {
-        this.tokenCirculationQueueName = TOKEN_CIRCULATION_QUEUE_PREFIX + queueName;
+    TokenQueueManager(String tokenCirculationQueueName) {
+        this.tokenCirculationQueueName = TOKEN_CIRCULATION_QUEUE_PREFIX + tokenCirculationQueueName;
     }
 
     // Create the token queue with the expected broker constraints.

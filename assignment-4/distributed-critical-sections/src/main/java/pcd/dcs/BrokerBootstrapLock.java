@@ -19,7 +19,7 @@ class BrokerBootstrapLock {
     // Operation executed while the temporary lock queue is owned.
     @FunctionalInterface
     interface Action {
-        void run(Channel lockChannel) throws IOException, InterruptedException;
+        void run(Channel tokenBootstrapGuardChannel) throws IOException, InterruptedException;
     }
 
     private final String tokenBootstrapGuardQueue;
@@ -46,11 +46,11 @@ class BrokerBootstrapLock {
                 throw new InterruptedException("Interrupted while acquiring bootstrap lock for '" + tokenBootstrapGuardQueue + "'");
             }
 
-            Channel lockChannel = connection.createChannel();
+            Channel tokenBootstrapGuardChannel = connection.createChannel();
             try {
                 try {
                     // The exclusive queue declaration succeeds for one process at a time.
-                    lockChannel.queueDeclare(tokenBootstrapGuardQueue, false, true, false, null);
+                    tokenBootstrapGuardChannel.queueDeclare(tokenBootstrapGuardQueue, false, true, false, null);
                 } catch (IOException lockFailure) {
                     if (System.nanoTime() >= deadlineNanos) {
                         throw new IOException(
@@ -64,11 +64,11 @@ class BrokerBootstrapLock {
 
                 try {
                     // Run the critical transition while the queue guarantees exclusive ownership.
-                    action.run(lockChannel);
+                    action.run(tokenBootstrapGuardChannel);
                 } finally {
                     try {
                         // Explicitly delete the lock queue instead of waiting for connection teardown.
-                        lockChannel.queueDelete(tokenBootstrapGuardQueue);
+                        tokenBootstrapGuardChannel.queueDelete(tokenBootstrapGuardQueue);
                     } catch (IOException cleanupFailure) {
                         logger.warn("Failed to delete bootstrap lock queue '{}'", tokenBootstrapGuardQueue, cleanupFailure);
                     }
@@ -76,9 +76,9 @@ class BrokerBootstrapLock {
                 return;
             } finally {
                 try {
-                    if (lockChannel.isOpen()) {
+                    if (tokenBootstrapGuardChannel.isOpen()) {
                         // Each acquisition attempt uses a short-lived channel.
-                        lockChannel.close();
+                        tokenBootstrapGuardChannel.close();
                     }
                 } catch (IOException | TimeoutException cleanupFailure) {
                     logger.warn("Failed to close bootstrap lock channel for '{}'", tokenBootstrapGuardQueue, cleanupFailure);
