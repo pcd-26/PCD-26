@@ -141,13 +141,14 @@ public final class Main {
     // Queries the control unit state through ask.
     private static AlarmState queryControlUnitState(ActorSystem<ControlUnitActor.Command> system) {
         try {
-            CompletionStage<ControlUnitActor.StateSnapshot> stage = AskPattern.ask(
+            CompletionStage<ControlUnitActor.StateSnapshot> stateSnapshotStage = AskPattern.ask(
                 system,
-                ControlUnitActor.QueryState::new,
+                replyTo -> new ControlUnitActor.QueryState(replyTo),
                 Duration.ofSeconds(2),
                 system.scheduler()
             );
-            return stage.toCompletableFuture().get().state();
+            ControlUnitActor.StateSnapshot stateSnapshot = stateSnapshotStage.toCompletableFuture().get();
+            return stateSnapshot.state();
         } catch (Exception e) {
             LOGGER.error("Failed to query state", e);
             return null;

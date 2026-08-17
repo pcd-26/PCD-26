@@ -130,12 +130,20 @@ public final class ControlUnitActor {
         Duration exitDelay,
         Duration entryDelay
     ) {
+        // The singleton API needs the current ActorSystem to interact with the cluster runtime.
         Objects.requireNonNull(system, "system");
 
+        // Restrict the singleton to nodes that have the control-unit cluster role.
         ClusterSingletonSettings settings = ClusterSingletonSettings.create(system).withRole(CLUSTER_ROLE);
+
+        // Describe the singleton actor: how to create it, which cluster-wide name it has,
+        // and which singleton settings Pekko must use to place it in the cluster.
         SingletonActor<Command> singleton = SingletonActor
             .of(create(correctPin, exitDelay, entryDelay), CLUSTER_SINGLETON_NAME)
             .withSettings(settings);
+
+        // Start the singleton if this cluster does not have it yet, or return a reference
+        // to the already existing singleton proxy if another eligible node is already hosting it.
         return ClusterSingleton.get(system).init(singleton);
     }
 
