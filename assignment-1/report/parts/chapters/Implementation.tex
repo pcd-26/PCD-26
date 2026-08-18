@@ -2,13 +2,12 @@
 \section{Implementation}
 
 This chapter maps the design decisions to the final Java implementation. It
-focuses on ownership, phase synchronization, and data exchange between the
-simulation and Swing. Details already captured by the architecture diagrams
-are not repeated.
+focuses on the main mechanisms that realize ownership, synchronization, and
+state publication.
 
-\subsection{Implementation map}
+\subsection{Runtime and View Integration}
 
-The final code is divided by responsibility:
+The code is divided by responsibility:
 
 \begin{center}
 \begin{tabular}{|>{\bfseries}p{3.2cm}|p{10.2cm}|}
@@ -33,12 +32,6 @@ The final code is divided by responsibility:
 \end{tabular}
 \end{center}
 
-All launchers use the same game and physics contracts. Board configurations
-remain replaceable through \texttt{BoardConf}; the playable launchers may
-select different workloads without changing the implementation interfaces.
-
-\subsection{Launchers and runtime loop}
-
 The sequential launcher owns the model directly and advances it in the same
 loop that updates the view. The concurrent launchers instead own a
 \texttt{GameRuntime}. Their rendering loops only submit commands and consume
@@ -62,35 +55,20 @@ thread. \texttt{TaskBasedGameRunner} schedules it at a fixed rate on a
 single-thread \texttt{ScheduledExecutorService}. In both cases,
 \textbf{only that controller execution advances \texttt{GameModel}}.
 
-The task-based runner also stores the first controller failure in an
-\texttt{AtomicReference}. Later API calls use \texttt{ensureHealthy()} to
-surface it instead of silently continuing with a stopped simulation.
-
-\subsection{Commands and snapshot publication}
-
 \texttt{CommandMailbox} is the monitor between asynchronous producers and the
 model owner. Swing and \texttt{BotAgent} submit a
-\texttt{Function<GameModel,T>} and receive a \texttt{Receipt<T>}. Submission
-only appends to a FIFO queue; execution occurs when \texttt{GameLoop} drains
-that queue at the beginning of the next tick.
-
-Each receipt is another monitor. Its \texttt{await(...)} method uses a guarded
-wait with a timeout and returns the command result or propagates its failure.
-Closing the mailbox rejects queued commands and makes future submissions
-complete immediately with their declared fallback result.
+\texttt{Function<GameModel,T>} and receive a \texttt{CompletableFuture<T>}.
+Submission only appends to a FIFO queue; execution occurs when
+\texttt{GameLoop} drains that queue at the beginning of the next tick.
 
 After commands and physics have completed, the loop creates the next published
 state. The resulting \texttt{RuntimeGameSnapshot} contains the immutable logical
 \texttt{GameSnapshot}, copied ball records, holes, and the bot preview vector.
-The synchronized publication method then calls \texttt{notifyAll()} so
-\texttt{awaitSnapshot(...)} readers can recheck their predicates.
 
 \begin{center}
 \textbf{FIFO commands} $\rightarrow$ \textbf{single model writer}
 $\rightarrow$ \textbf{copied runtime snapshot}
 \end{center}
-
-\subsection{View handoff and input callbacks}
 
 The concurrent launchers repeatedly read the latest
 \texttt{RuntimeGameSnapshot} and copy it into \texttt{ViewModel}. All
@@ -102,21 +80,17 @@ Mouse and keyboard listeners remain inside \texttt{ViewFrame}. They calculate
 the shot direction and intensity, then invoke the callback supplied by the
 launcher. In a concurrent version that callback calls
 \texttt{GameRuntime.shootHuman(...)}; the runtime places the request in
-\texttt{CommandMailbox}. Input validation and model mutation consequently
+\texttt{CommandMailbox}. Input validation and match progression consequently
 remain on the controller owner.
 
-Rendering uses a separate synchronization protocol. A launcher-side call to
-\texttt{render()} assigns a monotonically increasing frame identifier and
-requests \texttt{repaint()}. The Swing EDT draws one complete
-\texttt{ViewModel} state and reports the identifier through
-\texttt{RenderSynch}. The launcher waits in a guarded loop until that frame is
-confirmed, preserving frame order without running physics on the EDT.
+Rendering remains separated from simulation: Swing consumes the copied
+\texttt{ViewModel} state and never runs physics on the EDT.
 
-\subsection{Fixed-step physics entry point}
+\subsection{Physics Step Structure}
 
 All physics engines implement \texttt{PhysicsStepper}. A concurrent engine
-first validates the elapsed time, then holds the board monitor for the entire
-step. Long intervals are divided into bounded sub-steps:
+holds the board monitor for the entire step and divides long intervals into
+bounded sub-steps:
 
 \begin{lstlisting}[style=codestyle,caption={Serialized board ownership and bounded sub-steps, from \texttt{model.physics.threaded.ThreadedPhysicsEngine}},label={lst:physics-step-entry}]
 synchronized (board) {
@@ -130,15 +104,13 @@ synchronized (board) {
 \end{lstlisting}
 
 The board lock makes each sub-step atomic to external observers. Parallelism is
-internal to \texttt{stepOnce}: the coordinator crosses each phase barrier
-before opening the next phase.
-
-\subsection{Range partitioning}
+internal to \texttt{stepOnce}: workers may update disjoint portions of the
+board state, but only while that physics step owns the board.
 
 Independent collections are split into contiguous ranges. Unless a fast path
-selects one range, $R=\min(W,N)$ workers or tasks process $N$ items. Each range receives
-$\lfloor N/R \rfloor$ items and the first $N \bmod R$ ranges receive one
-additional item. This provides three useful properties:
+selects one range, $R=\min(W,N)$ workers or tasks process $N$ items. Each range
+receives $\lfloor N/R \rfloor$ items and the first $N \bmod R$ ranges receive
+one additional item. This guarantees:
 
 \begin{itemize}
     \item no item is processed twice or omitted;
@@ -147,21 +119,12 @@ additional item. This provides three useful properties:
 \end{itemize}
 
 The same calculation partitions active balls, occupied cells, and touched
-ball indexes. The coordinator performs dispatch and barriers together with all
-sequential phases: hole handling, deterministic merges, and contribution
-accumulation.
-
-\subsection{Platform-thread physics}
+ball indexes.
+\subsection{Threaded and Task-Based Execution}
 
 \texttt{ThreadedPhysicsEngine} owns a fixed array of long-lived
-\texttt{PhysicsWorker} objects. Each worker contains a platform thread and a
-single task slot protected by its monitor. \texttt{assign(...)} waits until the
-previous slot is clear, stores the next range operation, and wakes the worker.
-
-Every parallel phase creates a \texttt{WorkerCompletionMonitor} for its active
-workers. Success decrements its counter; failure records the first exception
-and also decrements it. The coordinator therefore waits for every assigned
-range and then rethrows any failure, without risking a blocked barrier.
+\texttt{PhysicsWorker} objects. Parallel phases are distributed to these
+workers and synchronized through explicit completion barriers.
 
 \begin{lstlisting}[style=codestyle,caption={Platform-thread dispatch and barrier, adapted from \texttt{model.physics.threaded.ThreadedPhysicsEngine}},label={lst:threaded-dispatch}]
 var completion = new WorkerCompletionMonitor(activeWorkerCount);
@@ -173,19 +136,9 @@ workers[workerIndex].assign(() -> {
 completion.await();
 \end{lstlisting}
 
-The snippet is schematic: dispatch occurs for every active worker before the
-single \texttt{await()} call.
-
-\subsection{Task-based physics}
-
 \texttt{TaskBasedPhysicsEngine} owns a fixed \texttt{ExecutorService}. A
-parallel phase submits one independent \texttt{Runnable} per range and stores
-the returned \texttt{Future<?>}. All tasks are submitted before
-\texttt{awaitAll(...)} calls \texttt{Future.get()} on them, so the loop over
-futures is a barrier and does not serialize task execution.
-
-\texttt{awaitAll(...)} restores the interruption flag and unwraps
-\texttt{ExecutionException}, preserving the original worker failure.
+parallel phase submits one independent \texttt{Runnable} per range, and
+\texttt{Future.get()} is used as the phase barrier.
 
 \begin{lstlisting}[style=codestyle,caption={Executor submission and Future barrier, adapted from \texttt{model.physics.taskbased.TaskBasedPhysicsEngine}},label={lst:task-dispatch}]
 futures.add(executor.submit(() -> {
@@ -196,43 +149,24 @@ futures.add(executor.submit(() -> {
 awaitAll(futures);
 \end{lstlisting}
 
-\subsection{Collision pipeline and deterministic merge}
+\subsection{Collision Pipeline}
 
-Each fixed sub-step executes the following implementation phases:
+Each fixed sub-step uses the same structure in both concurrent engines:
+parallel movement on disjoint ranges, sequential hole handling, parallel broad
+and narrow collision detection on private or disjoint data, deterministic merge
+of collision contributions, and final application of one accumulated correction
+per touched ball.
 
-\begin{enumerate}
-    \setlength{\itemsep}{0pt}
-    \item update disjoint ranges of active balls in parallel;
-    \item apply hole interactions sequentially and rebuild the active set;
-    \item build one private spatial grid per worker or task in parallel;
-    \item merge the grids and order occupied cells sequentially;
-    \item inspect disjoint cell ranges for candidate pairs in parallel;
-    \item merge and sort pairs, then compute and accumulate contributions sequentially;
-    \item apply accumulated deltas sequentially or, for large sets, over disjoint ranges.
-\end{enumerate}
-
-The uniform grid is the broad phase. Each owned cell checks itself and a fixed
-neighbourhood, so every pair has one owner. Workers collect candidates privately;
-the coordinator concatenates and sorts them by ball indexes before accumulation.
-
-Several contacts may affect one ball, so contributions enter a sparse
-accumulator before mutation. The apply phase gives each touched ball one final
-correction; large sets can be updated in parallel because indexes are disjoint.
+The uniform grid acts as the broad phase. Each worker builds private data,
+collects collision pairs, and leaves the coordinator responsible for the
+ordered merge and accumulation. The final apply phase may update the actual
+board state in parallel, but only over disjoint touched-ball ranges. This
+avoids conflicting writes while keeping the physics result aligned with the
+sequential semantics.
 
 \begin{center}
 \textbf{private detection, ordered accumulation, disjoint application}
 \end{center}
-
-\subsection{Adaptive fast paths}
-
-Both engines execute phases with at most one active range directly and apply
-fewer than 256 touched-ball deltas sequentially. The task-based engine also
-integrates fewer than 256 active balls on the caller thread. Grid construction
-and cell inspection instead depend only on available items and pool threads.
-The platform-thread engine parallelizes movement whenever multiple workers can
-be used.
-
-\subsection{Shutdown and delivery boundary}
 
 Shutdown follows resource ownership. A runner stops ticks and closes the
 mailbox. The threaded version joins controller and bot threads, then closes its
