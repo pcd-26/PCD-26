@@ -10,7 +10,7 @@ def find_report_root(start_dir: Path) -> Path | None:
     current = start_dir.resolve()
 
     for candidate in (current, *current.parents):
-        if (candidate / "Makefile").is_file() and (candidate / "Ass3OddsAndEvensGame.tex").is_file():
+        if (candidate / "Makefile").is_file() and (candidate / "main.tex").is_file():
             return candidate
 
     return None

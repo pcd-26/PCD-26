@@ -1,0 +1,72 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+
+% Helper macro to convert month numbers into English text
+\newcommand{\englishmonthname}[1]{%
+    \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
+}
+
+% UK format: DD Month YYYY (e.g., 14 August 2026)
+\newcommand{\todayFullUK}{%
+    \number\day\ \englishmonthname{\number\month} \number\year%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{220,220,220}
+\lstdefinestyle{reportcode}{
+    language=Go,
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    frameround=tttt,
+    xleftmargin=1em,
+    xrightmargin=0.5em,
+    framexleftmargin=0.8em,
+    framexrightmargin=0.8em,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    breaklines=true,
+    breakatwhitespace=true,
+    tabsize=4,
+    aboveskip=0.8em,
+    belowskip=0.8em
+}
+
+\title{Assignment 3 -- Odds and Evens Game}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
+
+\begin{document}
+
+\input{parts/front/TitlePage}
+
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+
+\input{parts/chapters/ProblemAnalysis}
+\newpage
+\input{parts/chapters/Design}
+\newpage
+\input{parts/chapters/ExecutionFlow}
+\newpage
+\input{parts/chapters/Validation}
+\newpage
+\input{parts/back/HowToRun}
+\newpage
+\input{parts/back/Conclusions}
+
+\end{document}

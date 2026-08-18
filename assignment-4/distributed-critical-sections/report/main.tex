@@ -1,12 +1,12 @@
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[margin=2.4cm]{geometry}
-\usepackage{graphicx}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
 \usepackage{array}
 \usepackage{xcolor}
 \usepackage{listings}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning, fit, petri}
 \usepackage[hidelinks]{hyperref}
 
 % Helper macro to convert month numbers into English text
@@ -14,19 +14,9 @@
     \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
 }
 
-% Format: DD/MM/YYYY
-\newcommand{\todayShortLittleEndian}{%
-    \number\day/\number\month/\number\year%
-}
-
 % UK format: DD Month YYYY (e.g., 5 August 2026)
 \newcommand{\todayFullUK}{%
     \number\day\ \englishmonthname{\number\month} \number\year%
-}
-
-% US format: Month DD, YYYY (e.g., August 5, 2026)
-\newcommand{\todayFullUS}{%
-    \englishmonthname{\number\month} \number\day, \number\year%
 }
 
 \setlength{\parindent}{0pt}
@@ -59,35 +49,30 @@
     keywordstyle=[2]\bfseries\color{codetype},
     commentstyle=\itshape\color{codecomment},
     stringstyle=\color{codestring},
-    emph={game,board,executor,completion,rangeTask,viewModel,gameRef,workers,snapshot,controllerExecutor,botExecutor,physicsEngine},
-    morekeywords=[2]{List,ArrayList,Future,RuntimeException,TimeUnit,Math,Objects,AtomicReference,Duration,V2d,Player,PhysicsDefaults,RuntimeGameSnapshot,CommandMailbox,GameLoop,ParallelPhysicsEngine,RangeScheduler,ThreadedPhysicsEngine,TaskBasedPhysicsEngine,ThreadedGameRunner,TaskBasedGameRunner,GameModel,Board,BoardConf},
+    emph={token,queue,broker,criticalSection,bootstrap,delivery,channel,connection},
+    morekeywords=[2]{Connection,Channel,DeliverCallback,CancelCallback,AMQP,IOException,TimeoutException,ConcurrentHashMap,CountDownLatch,AtomicBoolean,RabbitMqCriticalSectionMiddleware},
     emphstyle=\color{codeaccent},
     captionpos=b
 }
 
-\title{Assignment 1 -- Poool Game}
+\title{Assignment 4 -- Distributed Critical Sections with a Message-Oriented Middleware}
 \author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
-\date{PCD a.y. 2025/2026 -- \todayFullUS}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
 
 \begin{document}
 
-\input{front/TitlePage}
+\input{parts/front/TitlePage}
 
 \pagenumbering{roman}
 \tableofcontents
 \newpage
 \pagenumbering{arabic}
 
-\input{front/Introduction}
-
-\input{chapters/ProblemAnalysis}
-\input{chapters/Design}
-\input{chapters/Implementation}
-\input{chapters/VerificationAndTesting}
-\input{chapters/ResultsAndDiscussion}
-
-\input{back/Conclusions}
-\input{back/HowToRun}
-\input{back/References}
+\input{parts/front/Introduction}
+\input{parts/chapters/ProblemAnalysis}
+\input{parts/chapters/Design}
+\input{parts/chapters/Validation}
+\input{parts/back/Conclusions}
+\input{parts/back/HowToRun}
 
 \end{document}

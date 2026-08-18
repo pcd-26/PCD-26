@@ -4,7 +4,6 @@
 **/*.iml
 **/.codex-tmp/
 **/.cache/
-**/.junie/
 !assignment-3/smart-home-alarm-system/report/.vscode/
 !assignment-3/smart-home-alarm-system/report/.vscode/settings.json
 !assignment-3/odds-and-evens-game/report/.vscode/

@@ -15,7 +15,7 @@ make
 Alternatively, without `make`:
 
 ```bash
-pdflatex -interaction=nonstopmode -halt-on-error -jobname=report Ass3OddsAndEvensGame.tex
+pdflatex -interaction=nonstopmode -halt-on-error -jobname=report main.tex
 ```
 
 When the build succeeds, temporary LaTeX files such as `report.aux` and
