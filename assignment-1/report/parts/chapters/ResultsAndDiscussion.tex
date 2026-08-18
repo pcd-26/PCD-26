@@ -38,9 +38,9 @@ $S=T_{seq}/T_{parallel}$.
 
 Both concurrent engines outperform the sequential baseline. Speedup rises with
 the workload because useful parallel work increasingly amortizes dispatch and
-phase barriers. The executor is fastest at 1000 balls ($1.521\times$); from
-1500 balls onward, the threaded engine leads and reaches $2.342\times$ at 2500
-balls. Their relative overhead therefore depends on workload granularity.
+phase barriers. The executor is slightly better on the smallest workload; from
+1500 balls onward, the threaded engine is consistently faster and reaches
+$2.342\times$ at 2500 balls.
 
 \begin{figure}[htbp]
     \centering
@@ -95,6 +95,6 @@ threads and $2.123\times$ for the executor. Increasing the count to 16 or 17
 does not add useful speedup.
 
 Saturation follows from sequential phases, barriers, memory traffic, and finite
-independent work. At 17 workers the machine is also oversubscribed. Concurrency
-therefore gives a measurable gain on large workloads, but the best worker count is
-workload- and machine-dependent.
+independent work. At 17 workers the machine is also oversubscribed. The result
+is a clear but sublinear gain, with the best worker count depending on the
+workload and the machine.
