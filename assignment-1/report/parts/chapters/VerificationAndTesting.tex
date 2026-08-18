@@ -25,9 +25,19 @@ requires \texttt{no errors detected} without a \texttt{[SEVERE]} diagnostic.
 
 \subsection{Verified properties, results, and limits}
 
-The searches verify exclusive board ownership, command draining before snapshot
-publication, worker completion before commit, resource release, final
-termination, and absence of deadlock.
+The verification evidence is complementary. JUnit checks the implemented game
+and physics behaviour on the production code, while JPF explores a reduced
+concurrent protocol and establishes the corresponding synchronization
+properties. Within the explored model, JPF ensures exclusive board ownership
+during the physics step, command draining before snapshot publication, worker
+completion before state commit, proper resource release, final termination, and
+absence of deadlock.
+
+These results can be grouped into the usual concurrent properties:
+\textbf{safety}, because intermediate states are not published and commit does
+not occur before worker completion; \textbf{liveness}, because the explored
+protocol completes without deadlock; and \textbf{termination}, because owned
+resources are released and the model reaches its final state correctly.
 
 Both searches completed without deadlock or assertion failure:
 
@@ -50,4 +60,5 @@ earlier than the task created in the executor model.
 The result covers every schedule represented by these bounded harnesses. It
 does not prove numerical physics, full \texttt{ExecutorService} behavior,
 Swing responsiveness, performance, or arbitrary workloads; these aspects are
-covered separately by production tests and benchmarks.
+covered separately by production tests and benchmarks on the full
+implementation.

@@ -7,30 +7,11 @@ state publication.
 
 \subsection{Runtime and View Integration}
 
-The code is divided by responsibility:
-
-\begin{center}
-\begin{tabular}{|>{\bfseries}p{3.2cm}|p{10.2cm}|}
-    \hline
-    Package or class & Implementation responsibility \\
-    \hline
-    Playable launchers
-        & \texttt{SequentialPoool}, \texttt{ThreadedPoool}, and \texttt{TaskBasedPoool} assemble the selected model, runtime, and view; copy snapshots; handle restart and rendering. \\
-    \hline
-    \texttt{runtime}
-        & Serialize commands, execute controller ticks, publish snapshots, and run the bot. \\
-    \hline
-    \texttt{model.game}
-        & Enforce turns, shooting rules, score updates, and match termination. \\
-    \hline
-    \texttt{model.physics}
-        & Store the board and implement sequential, platform-thread, and task-based physics. \\
-    \hline
-    \texttt{view}
-        & Convert input into callbacks and render synchronized copies of the game state. \\
-    \hline
-\end{tabular}
-\end{center}
+The implementation is organized around a small set of responsibilities:
+launchers assemble the selected runtime and view, the \texttt{runtime} package
+serializes commands and publishes snapshots, \texttt{model.game} enforces
+match rules, \texttt{model.physics} stores and updates the board, and
+\texttt{view} converts user input into callbacks and renders copied state.
 
 The sequential launcher owns the model directly and advances it in the same
 loop that updates the view. The concurrent launchers instead own a
@@ -110,16 +91,8 @@ board state, but only while that physics step owns the board.
 Independent collections are split into contiguous ranges. Unless a fast path
 selects one range, $R=\min(W,N)$ workers or tasks process $N$ items. Each range
 receives $\lfloor N/R \rfloor$ items and the first $N \bmod R$ ranges receive
-one additional item. This guarantees:
-
-\begin{itemize}
-    \item no item is processed twice or omitted;
-    \item range sizes differ by at most one;
-    \item each worker writes only to its assigned slice or private result.
-\end{itemize}
-
-The same calculation partitions active balls, occupied cells, and touched
-ball indexes.
+one additional item. The same balanced partitioning is reused for active
+balls, occupied cells, and touched-ball indexes.
 \subsection{Threaded and Task-Based Execution}
 
 \texttt{ThreadedPhysicsEngine} owns a fixed array of long-lived
@@ -140,15 +113,6 @@ completion.await();
 parallel phase submits one independent \texttt{Runnable} per range, and
 \texttt{Future.get()} is used as the phase barrier.
 
-\begin{lstlisting}[style=codestyle,caption={Executor submission and Future barrier, adapted from \texttt{model.physics.taskbased.TaskBasedPhysicsEngine}},label={lst:task-dispatch}]
-futures.add(executor.submit(() -> {
-    for (int i = rangeStart; i < rangeEnd; i++) {
-        activeBalls.get(i).updateState(dt, bounds);
-    }
-}));
-awaitAll(futures);
-\end{lstlisting}
-
 \subsection{Collision Pipeline}
 
 Each fixed sub-step uses the same structure in both concurrent engines:
@@ -163,10 +127,6 @@ ordered merge and accumulation. The final apply phase may update the actual
 board state in parallel, but only over disjoint touched-ball ranges. This
 avoids conflicting writes while keeping the physics result aligned with the
 sequential semantics.
-
-\begin{center}
-\textbf{private detection, ordered accumulation, disjoint application}
-\end{center}
 
 Shutdown follows resource ownership. A runner stops ticks and closes the
 mailbox. The threaded version joins controller and bot threads, then closes its
