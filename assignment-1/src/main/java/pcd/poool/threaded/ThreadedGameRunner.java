@@ -66,6 +66,7 @@ public final class ThreadedGameRunner implements GameRuntime {
             botThread = new Thread(
                     new BotAgent(
                             loop::snapshot, // Reads the latest published game snapshot.
+                            loop::awaitSnapshot, // Waits for a ready-to-shoot state.
                             loop::shootBot, // Submits the bot shot command.
                             this::isRunning, // Stops the bot when the runtime is no longer active.
                             config.botThinkTimeMillis()), // Delay before the bot shoots.

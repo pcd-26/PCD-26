@@ -185,7 +185,7 @@ class TaskBasedGameRunnerTest {
     @Test
     @Timeout(3)
     void botAgentSubmitsShotsFromASeparateTask() throws InterruptedException {
-        var config = new GameRuntimeConfig(5, true, 0, GameModel.StartupCountdown.disabled());
+        var config = new GameRuntimeConfig(5, true, 25, GameModel.StartupCountdown.disabled());
         try (var runner = new TaskBasedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 

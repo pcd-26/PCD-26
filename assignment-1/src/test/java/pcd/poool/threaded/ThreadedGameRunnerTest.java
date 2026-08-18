@@ -129,7 +129,7 @@ class ThreadedGameRunnerTest {
     @Test
     @Timeout(3)
     void botAgentSubmitsShotsFromASeparateActiveComponent() throws InterruptedException {
-        var config = new GameRuntimeConfig(5, true, 0, GameModel.StartupCountdown.disabled());
+        var config = new GameRuntimeConfig(5, true, 25, GameModel.StartupCountdown.disabled());
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), config)) {
             runner.start();
 
