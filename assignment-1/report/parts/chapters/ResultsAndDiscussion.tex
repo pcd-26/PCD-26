@@ -4,13 +4,13 @@
 \subsection{Methodology}
 
 The benchmark ran on OpenJDK 17, Windows 11 amd64, with 16 visible processors.
-Each scenario uses two warmups and five measured runs.
-Only the simulation loop is timed, and the median limits the effect of isolated pauses.
-Seed 42 provides the same initial state, checked against the sequential baseline.
+Each scenario uses two warmups and five measured runs. Only the simulation loop
+is timed, and the median limits the effect of isolated pauses. Seed 42 provides
+the same initial state, checked against the sequential baseline.
 
-Workload scaling uses 1000--2500 balls, 600 steps, and 16 workers.
-Worker scaling uses 2500 balls, 1000 steps, and 1--17 workers.
-Speedup is $S=T_{seq}/T_{parallel}$.
+Workload scaling uses 1000--2500 balls, 600 steps, and 16 workers. Worker
+scaling uses 2500 balls, 1000 steps, and 1--17 workers. Speedup is
+$S=T_{seq}/T_{parallel}$.
 
 \subsection{Speedup as workload grows}
 
@@ -36,10 +36,11 @@ Speedup is $S=T_{seq}/T_{parallel}$.
     \label{tab:workload-speedup}
 \end{table}
 
-Both concurrent engines outperform the sequential baseline.
-Speedup rises with the workload because useful parallel work increasingly amortizes dispatch and phase barriers. 
-The executor is fastest at 1000 balls ($1.521\times$); from 1500 balls onward, the threaded engine leads and reaches $2.342\times$ at 2500 balls.
-Their relative overhead therefore depends on workload granularity.
+Both concurrent engines outperform the sequential baseline. Speedup rises with
+the workload because useful parallel work increasingly amortizes dispatch and
+phase barriers. The executor is fastest at 1000 balls ($1.521\times$); from
+1500 balls onward, the threaded engine leads and reaches $2.342\times$ at 2500
+balls. Their relative overhead therefore depends on workload granularity.
 
 \begin{figure}[htbp]
     \centering
@@ -50,8 +51,8 @@ Their relative overhead therefore depends on workload granularity.
 
 \subsection{Worker scaling and saturation}
 
-The sequential median for this experiment is 747.376 ms.
-Both concurrent engines use the same 2500-ball state and are compared against that value.
+The sequential median for this experiment is 747.376 ms. Both concurrent
+engines use the same 2500-ball state and are compared against that value.
 
 \begin{table}[htbp]
     \centering
@@ -88,10 +89,12 @@ Both concurrent engines use the same 2500-ball state and are compared against th
     \label{fig:speedup-workers}
 \end{figure}
 
-With one worker, coordination costs make both concurrent engines slower than the sequential version.
-Performance peaks at 8 workers: $2.347\times$ for threads and $2.123\times$ for the executor.
-Increasing the count to 16 or 17 does not add useful speedup.
+With one worker, coordination costs make both concurrent engines slower than
+the sequential version. Performance peaks at 8 workers: $2.347\times$ for
+threads and $2.123\times$ for the executor. Increasing the count to 16 or 17
+does not add useful speedup.
 
-Saturation follows from sequential phases, barriers, memory traffic, and finite independent work.
-At 17 workers the machine is also oversubscribed.
-Concurrency therefore gives a measurable gain on large workloads, but the best worker count is workload- and machine-dependent.
+Saturation follows from sequential phases, barriers, memory traffic, and finite
+independent work. At 17 workers the machine is also oversubscribed. Concurrency
+therefore gives a measurable gain on large workloads, but the best worker count is
+workload- and machine-dependent.

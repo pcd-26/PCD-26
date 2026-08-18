@@ -1,0 +1,15 @@
+\clearpage
+\section{Conclusions}
+
+Assignment 2 delivers an asynchronous filesystem statistics library
+with three distinct execution models. The main result is that the same report
+can be computed through three different concurrency models:
+task-oriented recursion with virtual threads, stream composition with RxJava,
+and callback-driven asynchronous I/O with Vert.x.
+
+The codebase keeps the report model and the filesystem logic separate from the
+execution strategy, which makes the three implementations directly comparable
+without sharing traversal logic. The optional interactive part is covered by
+the Swing GUI, and the validation suite confirms that the engines agree on
+deterministic datasets while remaining robust under common filesystem edge
+cases.
