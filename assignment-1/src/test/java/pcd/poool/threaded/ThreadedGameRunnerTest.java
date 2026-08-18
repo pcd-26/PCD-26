@@ -2,6 +2,7 @@ package pcd.poool.threaded;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -22,6 +23,7 @@ import pcd.poool.model.physics.common.Ball;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
+import pcd.poool.model.physics.common.PhysicsStepper;
 import pcd.poool.runtime.CommandMailbox;
 import pcd.poool.runtime.GameRuntimeConfig;
 
@@ -210,6 +212,22 @@ class ThreadedGameRunnerTest {
         }
     }
 
+    @Test
+    @Timeout(3)
+    void taskFailuresArePropagatedToTheCaller() throws InterruptedException {
+        try (var runner = new ThreadedGameRunner(
+                new DirectScoringConf(),
+                FAST_WITHOUT_BOT,
+                new FailingPhysicsEngine())) {
+            runner.start();
+
+            var failure = assertThrows(
+                    IllegalStateException.class,
+                    () -> runner.awaitSnapshot(state -> state.game().simulatedSteps() >= 1, SHORT_TIMEOUT));
+            assertTrue(failure.getMessage().contains("threaded game runner failed"));
+        }
+    }
+
     private static class DirectScoringConf implements BoardConf {
 
         @Override
@@ -237,6 +255,13 @@ class ThreadedGameRunnerTest {
         @Override
         public List<Hole> getHoles() {
             return List.of(new Hole(new P2d(0.85, 0), 0.12));
+        }
+    }
+
+    private static class FailingPhysicsEngine implements PhysicsStepper {
+        @Override
+        public void step(pcd.poool.model.physics.common.Board board, long elapsedMillis) {
+            throw new IllegalStateException("Injected threaded failure");
         }
     }
 }
