@@ -1,6 +1,7 @@
 package pcd.poool.threaded;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.common.BoardConf;
@@ -69,11 +70,11 @@ public final class ThreadedGameRunner implements GameRuntime {
     }
 
     @Override
-    public CommandMailbox.Receipt<Boolean> shootHuman(V2d velocity) {
+    public CompletableFuture<Boolean> shootHuman(V2d velocity) {
         return loop.shootHuman(velocity);
     }
 
-    public CommandMailbox.Receipt<Boolean> shootBot() {
+    public CompletableFuture<Boolean> shootBot() {
         return loop.shootBot();
     }
 

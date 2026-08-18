@@ -3,6 +3,7 @@ package pcd.poool.taskbased;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.function.Predicate;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -85,12 +86,12 @@ public final class TaskBasedGameRunner implements GameRuntime {
     }
 
     @Override
-    public CommandMailbox.Receipt<Boolean> shootHuman(V2d velocity) {
+    public CompletableFuture<Boolean> shootHuman(V2d velocity) {
         ensureHealthy();
         return loop.shootHuman(velocity);
     }
 
-    public CommandMailbox.Receipt<Boolean> shootBot() {
+    public CompletableFuture<Boolean> shootBot() {
         ensureHealthy();
         return loop.shootBot();
     }

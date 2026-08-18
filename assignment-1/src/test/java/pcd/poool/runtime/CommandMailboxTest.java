@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
 class CommandMailboxTest {
@@ -12,7 +15,7 @@ class CommandMailboxTest {
     private static final Duration TIMEOUT = Duration.ofMillis(100);
 
     @Test
-    void drainsCommandsInSubmissionOrderAndCompletesReceipts() throws InterruptedException {
+    void drainsCommandsInSubmissionOrderAndCompletesReceipts() throws Exception {
         var mailbox = new CommandMailbox();
         var order = new ArrayList<Integer>();
         var first = mailbox.submit(game -> {
@@ -26,20 +29,20 @@ class CommandMailboxTest {
 
         mailbox.drain(null);
 
-        assertEquals("first", first.await(TIMEOUT));
-        assertEquals("second", second.await(TIMEOUT));
+        assertEquals("first", await(first, TIMEOUT));
+        assertEquals("second", await(second, TIMEOUT));
         assertEquals(java.util.List.of(1, 2), order);
     }
 
     @Test
-    void closeRejectsPendingAndFutureCommands() throws InterruptedException {
+    void closeRejectsPendingAndFutureCommands() throws Exception {
         var mailbox = new CommandMailbox();
         var pending = mailbox.submit(game -> true, false);
 
         mailbox.close();
 
-        assertEquals(false, pending.await(TIMEOUT));
-        assertEquals(false, mailbox.submit(game -> true, false).await(TIMEOUT));
+        assertEquals(false, await(pending, TIMEOUT));
+        assertEquals(false, await(mailbox.submit(game -> true, false), TIMEOUT));
     }
 
     @Test
@@ -52,7 +55,8 @@ class CommandMailboxTest {
 
         mailbox.drain(null);
 
-        assertEquals(failure, assertThrows(IllegalStateException.class, () -> receipt.await(TIMEOUT)));
+        var thrown = assertThrows(ExecutionException.class, () -> await(receipt, TIMEOUT));
+        assertEquals(failure, thrown.getCause());
     }
 
     @Test
@@ -60,6 +64,11 @@ class CommandMailboxTest {
         var mailbox = new CommandMailbox();
         var receipt = mailbox.submit(game -> true, false);
 
-        assertThrows(IllegalStateException.class, () -> receipt.await(Duration.ofMillis(10)));
+        assertThrows(TimeoutException.class, () -> await(receipt, Duration.ofMillis(10)));
+    }
+
+    private static <T> T await(CompletableFuture<T> completion, Duration timeout)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        return completion.get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
     }
 }
