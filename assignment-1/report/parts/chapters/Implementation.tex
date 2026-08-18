@@ -112,7 +112,9 @@ completion.await();
 
 \texttt{TaskBasedPhysicsEngine} owns a fixed \texttt{ExecutorService}. A
 parallel phase submits one independent \texttt{Runnable} per range, and
-\texttt{Future.get()} is used as the phase barrier.
+stores the returned futures. The coordinator submits every task before waiting
+on the futures, so \texttt{Future.get()} acts as a phase barrier rather than
+serializing the range execution.
 
 \subsection{Collision Pipeline}
 
