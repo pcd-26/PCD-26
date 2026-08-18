@@ -1,96 +1,75 @@
 \documentclass[11pt,a4paper]{article}
-\usepackage{hyperref}
-\usepackage{listings}
+
+\usepackage[margin=2.4cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{array}
 \usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
 
-\title{Report PCD 2025-2026 \\ Distributed Tic-Tac-Toe with Java RMI (Assignment 4 - Exercise 2)}
-\author{Francesco}
-\date{\today}
-
-\lstset{
-  basicstyle=\ttfamily\small,
-  keywordstyle=\color{blue},
-  stringstyle=\color{red},
-  commentstyle=\color{green!60!black},
-  numbers=left,
-  numberstyle=\tiny,
-  frame=single,
-  breaklines=true
+\newcommand{\englishmonthname}[1]{%
+    \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
 }
+
+\newcommand{\todayFullUK}{%
+    \number\day\ \englishmonthname{\number\month} \number\year%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+
+\definecolor{codebg}{RGB}{249,250,252}
+\definecolor{codeframe}{RGB}{205,211,219}
+\definecolor{codekeyword}{RGB}{0,102,204}
+\definecolor{codetype}{RGB}{124,58,237}
+\definecolor{codecomment}{RGB}{92,104,120}
+\definecolor{codestring}{RGB}{196,52,43}
+\definecolor{codeaccent}{RGB}{0,145,145}
+
+\lstdefinestyle{codestyle}{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    rulecolor=\color{codeframe},
+    backgroundcolor=\color{codebg},
+    numbers=left,
+    numberstyle=\tiny,
+    numbersep=8pt,
+    breaklines=true,
+    columns=fullflexible,
+    showstringspaces=false,
+    tabsize=4,
+    language=Java,
+    keywordstyle=\bfseries\color{codekeyword},
+    keywordstyle=[2]\bfseries\color{codetype},
+    commentstyle=\itshape\color{codecomment},
+    stringstyle=\color{codestring},
+    emph={lobby,game,board,callback,registry,snapshot,client,server,room},
+    morekeywords=[2]{Remote,RemoteException,UnicastRemoteObject,ConcurrentHashMap,ExecutorService,CompletableFuture,BoardState,GameStatus,Lobby,Game,PlayerClient,LobbyImpl,GameImpl,GameControllerImpl},
+    emphstyle=\color{codeaccent},
+    captionpos=b
+}
+
+\title{Assignment 4 -- Distributed Tic-Tac-Toe with Java RMI}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUK}
 
 \begin{document}
 
-\maketitle
+\input{parts/front/TitlePage}
 
-\section{Introduction}
-This project implements a distributed Tic-Tac-Toe system using Java RMI.
-The goal is to let a player create a named game, wait for an opponent, and
-let another player join the same game from a different JVM process.
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
 
-\section{Analysis}
-The application has a small domain model, but the distributed setting adds
-important constraints:
-\begin{itemize}
-    \item \textbf{Shared state must stay on the server}: the game board, turn
-    order, and match status must have a single authoritative owner.
-    \item \textbf{Remote access must stay explicit}: clients should only see
-    remote interfaces and serializable snapshots, never concrete server
-    objects or mutable board instances.
-    \item \textbf{Concurrency must be controlled per game}: multiple clients may
-    connect at the same time, so game creation, joining, and moves must remain
-    race-free under concurrent remote calls.
-    \item \textbf{Callbacks and waiting must not block the whole server}: a
-    player can wait for an opponent without preventing other games from being
-    created or joined.
-\end{itemize}
-
-\section{Design}
-The implementation follows a classical RMI split:
-\begin{itemize}
-    \item \textbf{Registry process}: a dedicated JVM hosts the RMI registry.
-    \item \textbf{Server process}: the lobby is bound in the registry and owns
-    all game state.
-    \item \textbf{Client processes}: each client exports its own callback object
-    and communicates with the server through remote interfaces.
-\end{itemize}
-
-The main domain objects are:
-\begin{itemize}
-    \item \texttt{Lobby}, the matchmaking entry point;
-    \item \texttt{Game}, the remote match controller;
-    \item \texttt{BoardState}, an immutable snapshot of the board;
-    \item \texttt{PlayerClient}, the client-side callback interface.
-\end{itemize}
-
-The server creates a game atomically, rejects duplicate names, and allows at
-most two players per match. Each game synchronizes its own mutations so that
-concurrent moves cannot overwrite a cell or advance the turn incorrectly.
-
-Finished matches are kept on the server long enough to deliver final callbacks
-and are then pruned by the lobby. Remote cleanup closes exported objects and
-shuts down per-game executors.
-
-\section{Validation}
-Validation is covered by unit tests, concurrency tests, and an isolated RMI
-integration test:
-\begin{enumerate}
-    \item \textbf{Creation and joining}: verifies that a game can be created
-    and that exactly one opponent can join it.
-    \item \textbf{Failure cases}: checks duplicate game names, missing games,
-    third-player rejection, invalid moves, and turn violations.
-    \item \textbf{Game rules}: exercises horizontal, vertical, diagonal, and
-    draw conditions.
-    \item \textbf{Concurrency}: stresses concurrent creation, concurrent joins,
-    and simultaneous moves to confirm that invariants hold.
-    \item \textbf{RMI integration}: uses a local registry and real remote stubs
-    to validate the full distributed path.
-\end{enumerate}
-
-\section{Conclusions}
-The project demonstrates a clean RMI-based design in which the server owns the
-state, clients interact only through remote interfaces, and concurrency remains
-safe at the granularity of individual games. The resulting structure is simple
-enough for teaching purposes while still covering the main distributed systems
-concerns of naming, lookup, synchronization, and cleanup.
+\input{parts/front/Introduction}
+\input{parts/chapters/Design}
+\input{parts/chapters/Validation}
+\input{parts/back/Conclusions}
+\input{parts/back/HowToRun}
 
 \end{document}

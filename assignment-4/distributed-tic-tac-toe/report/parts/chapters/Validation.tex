@@ -1,0 +1,38 @@
+\clearpage
+\section{Validation}
+
+The validation strategy combines \textbf{unit tests} and an
+\textbf{end-to-end RMI integration test} so that both local correctness and
+distributed behavior are covered.
+
+\begin{itemize}
+    \item \texttt{GameStatusTest} validates the helper predicates used by the
+    game-state model.
+    \item \texttt{GameImplTest} validates move legality, turn alternation, win
+    and draw detection, abandonment handling, snapshot consistency, and
+    concurrent operations on a single match.
+    \item \texttt{LobbyImplTest} validates room creation, room join, duplicate
+    names, waiting-room listing, pruning of terminal games, and concurrent
+    accesses to the lobby.
+    \item \texttt{DtttRmiIntegrationTest} validates the complete distributed
+    path through registry lookup, server binding, room creation, room join, and
+    callback-based state propagation.
+\end{itemize}
+
+This coverage targets the main risks of the architecture. The unit tests verify
+that the server remains the \textbf{single point of truth} for game rules and
+state transitions, while the integration test verifies that remote discovery,
+remote invocation, and client callbacks work together correctly in the actual
+RMI-based execution model.
+
+The validation is therefore not limited to rule correctness. It also checks
+that requests are routed to the correct remote game instance, that independent
+matches remain isolated, and that callback-driven updates expose consistent
+\texttt{BoardState} snapshots to clients.
+
+The current validation scope is appropriate for the assignment: it demonstrates
+functional correctness, distributed interaction correctness, and concurrency
+control within the designed architecture. It does not aim to cover
+\textbf{persistence}, \textbf{replicated servers}, or large-scale
+\textbf{network-failure scenarios}, since these are outside the intended scope
+of the project.

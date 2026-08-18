@@ -1,0 +1,33 @@
+\clearpage
+\section{How to Run}
+
+The mutual-exclusion behaviour can be observed manually by starting a local
+RabbitMQ broker and then running two clients that target the same critical
+section.
+
+All commands below assume the current working directory is already
+\texttt{assignment-4/distributed-critical-sections}.
+
+\subsection{Broker startup}
+
+Start RabbitMQ with:
+
+\begin{lstlisting}[style=codestyle,language=bash,caption={Starting RabbitMQ from PowerShell}]
+docker compose -f docker-compose.rabbitmq.yml up -d
+\end{lstlisting}
+
+\subsection{ProcessApp demo}
+
+Open two PowerShell terminals and run the following commands:
+
+\begin{lstlisting}[style=codestyle,language=bash,caption={Two overlapping ProcessApp clients from PowerShell}]
+mvn exec:java "-Dexec.mainClass=pcd.dcs.demo.ProcessApp" "-Dexec.args=Process-A localhost 5672"
+mvn exec:java "-Dexec.mainClass=pcd.dcs.demo.ProcessApp" "-Dexec.args=Process-B localhost 5672"
+\end{lstlisting}
+
+Both clients target the same critical-section name, \texttt{demo-cs}. Each
+process performs multiple acquire/release cycles and keeps the token long
+enough for the overlap to be visible from the console logs. One process enters
+the critical section, while the other remains blocked in \texttt{enter()}
+until the token is requeued. The console output and the shared file
+\texttt{dcs\_shared.log} show alternating access without overlap.

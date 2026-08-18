@@ -3,7 +3,9 @@
         "assignment-1",
         "assignment-4",
         "assignment-2",
-        "assignment-3"
+        "assignment-3",
+        "ass-4-dttt",
+        "ass-4-dcs"
     ],
     "latex-workshop.latex.autoBuild.run": "onSave",
     "latex-workshop.latex.autoClean.run": "never",

@@ -1,0 +1,34 @@
+\clearpage
+\section{Introduction}
+
+This assignment extends the \textbf{Smart Home Alarm System} developed in
+\textbf{assignment 3} and turns it into a \textbf{distributed typed-actor system}
+based on \textbf{Apache Pekko Cluster}. The required alarm logic does not
+change: the same commands, delays, and alarm transitions must still hold.
+
+The central idea of the project is simple: \textbf{same alarm logic, different
+execution model}. Instead of one local actor system, the implementation uses
+multiple cluster nodes, each started with \textbf{one explicit role}. In the
+final solution this leads to a clear deployment choice: \textbf{one node, one
+main role}, so that control unit, keypad, and sensors can be started and
+observed independently.
+
+The most important architectural consequence is that the \textbf{Control Unit}
+can no longer be just a normal local actor. Since the alarm state must still
+have a \textbf{single logical owner}, the clustered version models it as a
+\textbf{cluster singleton}. This keeps the state authority unique even if
+multiple eligible nodes exist in the cluster.
+
+The clustered version therefore focuses on three technical aspects:
+\begin{itemize}
+    \item \textbf{node startup}, because each node instance must join the same cluster with the correct role;
+    \item \textbf{remote discovery}, because peripheral actors must find the control unit dynamically;
+    \item \textbf{safe recovery}, because a recreated control unit loses its in-memory state and must not assume a dangerous default.
+\end{itemize}
+
+The final project therefore preserves the original \textbf{alarm semantics} while
+making the execution \textbf{distributed}, \textbf{role-based}, and
+\textbf{failure-aware}. In particular, the implementation directly targets the
+assignment requirements of \textbf{at least three nodes}, \textbf{message-only
+communication}, and \textbf{safe recovery through}
+\texttt{STARTUP\_RECOVERY}.

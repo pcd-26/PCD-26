@@ -1,11 +1,14 @@
 \section{How to Run}
 
+From the \texttt{assignment-3/odds-and-evens-game/src} directory:
+
 \begin{itemize}
-  \item From the \texttt{src} directory, run the full test suite with \texttt{go test ./...}
-  \item To check concurrency safety, run the race detector with \texttt{go test -race ./...}
-  \item To start a tournament, run \texttt{go run . -players 8}
-  \item The \textbf{CLI} accepts only positive powers of two.
+  \item Test: \texttt{go test ./...}
+  \item Race detector: \texttt{go test -race ./...}
+  \item Run: \texttt{go run . -players 8}
 \end{itemize}
+
+The \textbf{CLI} accepts only positive powers of two for the number of players.
 
 The tests use \textbf{deterministic} toss functions, so the execution is reproducible while the concurrent scheduling of
 the round workers is still exercised.

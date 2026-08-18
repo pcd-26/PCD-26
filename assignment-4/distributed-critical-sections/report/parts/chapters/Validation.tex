@@ -1,0 +1,22 @@
+\clearpage
+\section{Validation}
+
+The validation strategy is based on focused JUnit tests that exercise the
+distributed protocol rather than only the local helper methods.
+\begin{itemize}
+    \item \texttt{DistributedCriticalSectionTest} validates concurrent
+    bootstrap, mutual exclusion, crash recovery, repeated acquire/release
+    cycles, invalid releases, and independence between distinct critical
+    section names.
+    \item \texttt{BrokerBootstrapLockTest} validates the temporary guard queue,
+    including exclusive ownership and timeout behaviour.
+    \item \texttt{TokenQueueManagerTest} validates the broker-side constraints
+    of the token queue and the fail-fast behaviour on incompatible queue
+    declarations.
+\end{itemize}
+
+This coverage is appropriate for the scope of the project because it targets
+the exact risks of the design: duplicate bootstrap, token loss, inconsistent
+release, and interference between unrelated critical sections. In other words,
+the tests do not only check functional correctness, but also the safety
+properties that justify the architecture itself.

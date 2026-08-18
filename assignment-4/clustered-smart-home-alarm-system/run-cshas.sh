@@ -1,7 +1,14 @@
 #!/bin/bash
-# Compile and run the Clustered Smart Home Alarm System (CSHAS) simulator, ignoring tests.
+# Compile and run one CSHAS node, or the distributed process demo, ignoring tests.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MAIN_CLASS="pcd.shas.Main"
+EXEC_ARGS="$*"
 
-# Compile and execute the main class pcd.shas.Main, skipping tests.
-mvn -f "$SCRIPT_DIR/pom.xml" compile exec:java -Dexec.mainClass="pcd.shas.Main" -DskipTests -Dexec.args="$*"
+if [[ "${1:-}" == "demo" ]]; then
+  MAIN_CLASS="pcd.shas.DemoMain"
+  shift
+  EXEC_ARGS="$*"
+fi
+
+mvn -f "$SCRIPT_DIR/pom.xml" compile exec:java -Dexec.mainClass="$MAIN_CLASS" -DskipTests -Dexec.args="$EXEC_ARGS"

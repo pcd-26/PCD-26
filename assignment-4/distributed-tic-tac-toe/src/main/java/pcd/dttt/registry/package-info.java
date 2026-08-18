@@ -1,4 +1,2 @@
-/**
- * Standalone RMI Registry launcher process for Distributed Tic-Tac-Toe.
- */
+// Standalone launcher for the RMI registry process.
 package pcd.dttt.registry;

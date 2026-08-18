@@ -13,412 +13,364 @@ import pcd.dttt.common.exceptions.InvalidMoveException;
 import pcd.dttt.common.exceptions.NotYourTurnException;
 import pcd.dttt.common.exceptions.GameFullException;
 
-/**
- * Implementation of the {@link Game} RMI remote interface.
- * Controls the state machine, turns, win conditions, and client callbacks for a single Tic-Tac-Toe match.
- * 
- * <p><strong>Concurrency Strategy:</strong></p>
- * <ul>
- *   <li><b>State Ownership:</b> All mutable game variables (the board grid, active turn, status, and client references)
- *       are owned by the {@code GameImpl} instance.</li>
- *   <li><b>Monitor Lock:</b> All actions mutating or inspecting the game state are synchronized on {@code this}
- *       (using {@code synchronized} methods or blocks) to enforce thread-safety across multiple RMI thread pool calls.</li>
- *   <li><b>Open Call Pattern:</b> To prevent deadlocks and ensure high responsiveness, RMI callbacks to client objects
- *       are dispatched <i>outside</i> of the synchronized blocks. This guarantees that if a remote client hangs or lags
- *       during a network callback, it will not block other players trying to call the server.</li>
- *   <li><b>Virtual Threads:</b> Asynchronous callbacks are submitted to an {@link ExecutorService} backed by Java 21
- *       Virtual Threads, allowing lightweight concurrent execution without consuming platform thread resources.</li>
- * </ul>
- */
+// Server-side authority for one distributed Tic-Tac-Toe match.
 public class GameImpl extends UnicastRemoteObject implements Game {
     private static final long serialVersionUID = 1L;
+    private static final int BOARD_SIZE = BoardState.BOARD_SIZE;
+    private static final char EMPTY_CELL = ' ';
 
-    /** The unique name identifying this game room. */
-    private final String name;
-
-    /** The 3x3 board grid, initialized with ' ' (empty space). */
-    private final char[][] grid;
-    
-    /** The nickname of Player X (the game creator). */
+    private final String gameName;
+    private final char[][] boardGrid;
     private final String playerXName;
-
-    /** The remote RMI stub reference for Player X's callback client. */
     private final PlayerClient playerXClient;
-    
-    /** The nickname of Player O (the opponent). Null until joined. */
     private String playerOName;
-
-    /** The remote RMI stub reference for Player O's callback client. Null until joined. */
     private PlayerClient playerOClient;
-    
-    /** The nickname of the player whose turn it is currently. Null if match has not started or ended. */
-    private String turnOf;
+    private String currentTurnPlayerName;
+    private GameStatus gameStatus;
+    private final transient ExecutorService callbackExecutorService = Executors.newVirtualThreadPerTaskExecutor();
+    private boolean isClosed;
 
-    /** The current status of the game match. */
-    private GameStatus status;
-
-    /** Virtual thread executor service used to perform non-blocking RMI callbacks to the clients. */
-    private final transient ExecutorService callbackExecutor = Executors.newVirtualThreadPerTaskExecutor();
-
-    /** True once the game has been explicitly closed and unexported. */
-    private boolean closed;
-
-    /**
-     * Constructs a new game room created by Player X.
-     * Starts in {@link GameStatus#WAITING} state, waiting for Player O to join.
-     *
-     * @param name the unique name of the game room
-     * @param creatorName the nickname of Player X
-     * @param creatorClient the callback stub for Player X
-     * @throws RemoteException if an RMI error occurs during export
-     */
-    public GameImpl(String name, String creatorName, PlayerClient creatorClient) throws RemoteException {
-        super(0); // Export on anonymous port
-        this.name = name;
-        this.playerXName = creatorName;
-        this.playerXClient = creatorClient;
-        this.status = GameStatus.WAITING;
-        this.grid = new char[3][3];
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                grid[r][c] = ' ';
+    // Creates a waiting room with player X already registered.
+    public GameImpl(String gameName, String playerXName, PlayerClient playerXClient) throws RemoteException {
+        super(0);
+        this.gameName = gameName;
+        this.playerXName = playerXName;
+        this.playerXClient = playerXClient;
+        this.gameStatus = GameStatus.WAITING;
+        this.boardGrid = new char[BOARD_SIZE][BOARD_SIZE];
+        for (int r = 0; r < BOARD_SIZE; r++) {
+            for (int c = 0; c < BOARD_SIZE; c++) {
+                boardGrid[r][c] = EMPTY_CELL;
             }
         }
     }
 
-    /**
-     * Gets the name of the game room.
-     *
-     * @return the game room name
-     * @throws RemoteException if an RMI error occurs
-     */
+    // Returns the room name.
     @Override
     public String getName() throws RemoteException {
-        return name;
+        return gameName;
     }
 
-    /**
-     * Joins the game room as Player O (the opponent).
-     * Automatically transitions the game to {@link GameStatus#ACTIVE}, starts the turn loop
-     * with Player X, and triggers the `gameStarted` callback to both players.
-     *
-     * @param joinerName the nickname of Player O joining the game
-     * @param joinerClient the callback stub for Player O
-     * @throws GameFullException if the game is already in progress or has finished
-     * @throws IllegalArgumentException if the joiner tries to use the same name as the creator
-     */
-    public synchronized void join(String joinerName, PlayerClient joinerClient) throws GameFullException {
+    // Registers player O and starts the match.
+    public synchronized void joinSecondPlayer(String joinerName, PlayerClient joinerClient) throws GameFullException {
         ensureOpen();
-        if (status != GameStatus.WAITING) {
-            throw new GameFullException("Game is not in WAITING state.");
-        }
-        if (joinerName.equals(playerXName)) {
-            throw new IllegalArgumentException("Opponent name cannot be identical to the creator's name.");
-        }
+        ensureWaiting();
+        ensureDistinctPlayers(joinerName);
+
         this.playerOName = joinerName;
         this.playerOClient = joinerClient;
-        this.status = GameStatus.ACTIVE;
-        this.turnOf = playerXName; // X always starts
+        this.gameStatus = GameStatus.ACTIVE;
+        this.currentTurnPlayerName = playerXName;
 
-        BoardState state = getBoardStateSnapshot();
-        notifyGameStarted(state);
+        BoardState startingBoardState = snapshotState();
+        notifyGameStarted(startingBoardState);
     }
 
-    /**
-     * Attempts to place a mark on the board.
-     * Validates coordinates, turn turns, and checks if this move results in a win or a draw.
-     * Pushes state updates to both clients using asynchronous callbacks.
-     *
-     * @param playerName the name of the player making the move
-     * @param row zero-indexed row (0, 1, or 2)
-     * @param col zero-indexed column (0, 1, or 2)
-     * @throws RemoteException if an RMI error occurs
-     * @throws NotYourTurnException if the turn belongs to the opponent
-     * @throws InvalidMoveException if the coordinates are out of bounds, cell is occupied, or game is not active
-     */
+    // Keeps compatibility with existing tests and callers.
+    public void join(String joinerName, PlayerClient joinerClient) throws GameFullException {
+        joinSecondPlayer(joinerName, joinerClient);
+    }
+
+    // Applies one validated move and broadcasts the new state.
     @Override
-    public void makeMove(String playerName, int row, int col) 
+    public void makeMove(String playerName, int row, int col)
             throws RemoteException, NotYourTurnException, InvalidMoveException {
-        
-        BoardState state;
+        BoardState updatedBoardState;
         synchronized (this) {
+            // Validate that the request is legal for the current match state.
             ensureOpen();
-            if (status != GameStatus.ACTIVE) {
-                throw new InvalidMoveException("Game is not active (current status: " + status + ").");
-            }
-            if (turnOf == null || !turnOf.equals(playerName)) {
-                throw new NotYourTurnException("It is not your turn.");
-            }
-            if (row < 0 || row >= 3 || col < 0 || col >= 3) {
-                throw new InvalidMoveException("Invalid coordinates: (" + row + ", " + col + ")");
-            }
-            if (grid[row][col] != ' ') {
-                throw new InvalidMoveException("Cell (" + row + ", " + col + ") is already occupied.");
-            }
+            ensureActive();
+            ensurePlayerTurn(playerName);
+            ensureMoveInBounds(row, col);
+            ensureCellEmpty(row, col);
 
-            // Place mark
-            char mark = playerName.equals(playerXName) ? 'X' : 'O';
-            grid[row][col] = mark;
+            // Apply the move and advance the state machine.
+            char playerMark = markFor(playerName);
+            boardGrid[row][col] = playerMark;
 
-            // Evaluate board status
-            if (checkWin(mark)) {
-                status = playerName.equals(playerXName) ? GameStatus.WON_X : GameStatus.WON_O;
-                turnOf = null;
-            } else if (isBoardFull()) {
-                status = GameStatus.DRAW;
-                turnOf = null;
-            } else {
-                // Switch turn
-                turnOf = playerName.equals(playerXName) ? playerOName : playerXName;
-            }
+            gameStatus = resolveStatusAfterMove(playerName, playerMark);
+            currentTurnPlayerName = gameStatus.isActive() ? opponentNameOf(playerName) : null;
 
-            state = getBoardStateSnapshot();
+            // Capture one immutable snapshot for the callbacks.
+            updatedBoardState = snapshotState();
         }
 
-        // Notify clients outside of the synchronized lock (Open Call pattern)
-        notifyGameUpdated(state);
+        notifyGameUpdated(updatedBoardState);
     }
 
-    /**
-     * Explicitly leaves the game room.
-     * Transitions the game status to {@link GameStatus#ABANDONED} and notifies the opponent.
-     *
-     * @param playerName the name of the player leaving
-     * @throws RemoteException if an RMI error occurs
-     */
+    // Abandons the match and informs the remaining player.
     @Override
     public void leaveGame(String playerName) throws RemoteException {
-        BoardState state;
+        BoardState finalBoardState;
         PlayerClient opponentClient;
-        String opponentName;
         PlayerClient leavingClient;
 
         synchronized (this) {
             ensureOpen();
-            if (status == GameStatus.WON_X || status == GameStatus.WON_O || 
-                status == GameStatus.DRAW || status == GameStatus.ABANDONED) {
-                return; // Already ended
+            if (gameStatus.isTerminal()) {
+                return;
             }
-            status = GameStatus.ABANDONED;
-            turnOf = null;
-            state = getBoardStateSnapshot();
 
-            if (playerName.equals(playerXName)) {
-                opponentClient = playerOClient;
-                opponentName = playerOName;
-                leavingClient = playerXClient;
-            } else {
-                opponentClient = playerXClient;
-                opponentName = playerXName;
-                leavingClient = playerOClient;
-            }
+            // Move the match to a terminal state before releasing the lock.
+            gameStatus = GameStatus.ABANDONED;
+            currentTurnPlayerName = null;
+            finalBoardState = snapshotState();
+
+            opponentClient = opponentClientOf(playerName);
+            leavingClient = clientOf(playerName);
         }
 
-        // Notify leaving client of the final abandoned state
-        if (leavingClient != null) {
-            callbackExecutor.submit(() -> {
-                try {
-                    leavingClient.gameUpdated(state);
-                } catch (RemoteException e) {
-                    // Ignore client disconnection on exit
-                }
-            });
-        }
+        // Send the final snapshot to the leaving player and notify the opponent.
+        notifyStateToClient(leavingClient, finalBoardState);
+        notifyOpponentLeftNow(opponentClient, playerName, finalBoardState);
 
-        // Notify opponent
-        if (opponentClient != null) {
-            callbackExecutor.submit(() -> {
-                try {
-                    opponentClient.opponentLeft(playerName);
-                    opponentClient.gameUpdated(state);
-                } catch (RemoteException e) {
-                    // Ignore
-                }
-            });
-        }
-        
-        shutdownExecutor();
+        shutdownCallbackExecutor();
     }
 
-    /**
-     * Retrieves the current board state snapshot.
-     *
-     * @return the current BoardState
-     * @throws RemoteException if an RMI error occurs
-     */
+    // Returns the latest immutable state snapshot.
     @Override
     public synchronized BoardState getBoardState() throws RemoteException {
         ensureOpen();
-        return getBoardStateSnapshot();
+        return snapshotState();
     }
 
-    /**
-     * Creates a {@link BoardState} snapshot of the current state.
-     * Assumes monitor lock on {@code this} is held by caller.
-     *
-     * @return the BoardState snapshot
-     */
-    private BoardState getBoardStateSnapshot() {
-        return new BoardState(grid, playerXName, playerOName, turnOf, status);
+    // Copies the current match state into an immutable value object.
+    private BoardState snapshotState() {
+        return new BoardState(boardGrid, playerXName, playerOName, currentTurnPlayerName, gameStatus);
     }
 
-    /**
-     * Checks if the last move completed a line (row, column, or diagonal) of the specified mark.
-     * Assumes monitor lock on {@code this} is held.
-     *
-     * @param mark the mark to check ('X' or 'O')
-     * @return true if the mark won, false otherwise
-     */
-    private boolean checkWin(char mark) {
-        // Rows
-        for (int r = 0; r < 3; r++) {
-            if (grid[r][0] == mark && grid[r][1] == mark && grid[r][2] == mark) return true;
+    // Checks whether one mark completed a winning line.
+    private boolean hasWinningLine(char mark) {
+        for (int row = 0; row < BOARD_SIZE; row++) {
+            if (lineMatches(boardGrid[row][0], boardGrid[row][1], boardGrid[row][2], mark)) {
+                return true;
+            }
         }
-        // Columns
-        for (int c = 0; c < 3; c++) {
-            if (grid[0][c] == mark && grid[1][c] == mark && grid[2][c] == mark) return true;
+        for (int column = 0; column < BOARD_SIZE; column++) {
+            if (lineMatches(boardGrid[0][column], boardGrid[1][column], boardGrid[2][column], mark)) {
+                return true;
+            }
         }
-        // Diagonals
-        if (grid[0][0] == mark && grid[1][1] == mark && grid[2][2] == mark) return true;
-        if (grid[0][2] == mark && grid[1][1] == mark && grid[2][0] == mark) return true;
-        return false;
+        return lineMatches(boardGrid[0][0], boardGrid[1][1], boardGrid[2][2], mark)
+            || lineMatches(boardGrid[0][BOARD_SIZE - 1], boardGrid[1][1], boardGrid[2][0], mark);
     }
 
-    /**
-     * Checks if there are no empty cells left on the board.
-     * Assumes monitor lock on {@code this} is held.
-     *
-     * @return true if board is full, false otherwise
-     */
+    // Checks whether no empty cell is left.
     private boolean isBoardFull() {
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                if (grid[r][c] == ' ') return false;
+        for (int row = 0; row < BOARD_SIZE; row++) {
+            for (int column = 0; column < BOARD_SIZE; column++) {
+                if (boardGrid[row][column] == EMPTY_CELL) {
+                    return false;
+                }
             }
         }
         return true;
     }
 
-    /**
-     * Submits a virtual thread task to notify both players that the game has started.
-     * Handles client disconnections dynamically.
-     *
-     * @param state the initial game board state
-     */
-    private void notifyGameStarted(BoardState state) {
-        callbackExecutor.submit(() -> {
-            try {
-                playerXClient.gameStarted(state);
-            } catch (RemoteException e) {
-                handleClientDisconnect(playerXName);
+    // Broadcasts the start event outside the game lock.
+    private void notifyGameStarted(BoardState startingBoardState) {
+        callbackExecutorService.submit(() -> {
+            if (!sendGameStartedCallback(playerXClient, playerXName, startingBoardState)) {
                 return;
             }
-
-            try {
-                playerOClient.gameStarted(state);
-            } catch (RemoteException e) {
-                handleClientDisconnect(playerOName);
-            }
+            sendGameStartedCallback(playerOClient, playerOName, startingBoardState);
         });
     }
 
-    /**
-     * Submits a virtual thread task to notify players that the board state has updated.
-     * If the state is terminal (victory, draw, or abandonment), shuts down the callback executor.
-     *
-     * @param state the updated board state
-     */
-    private void notifyGameUpdated(BoardState state) {
-        callbackExecutor.submit(() -> {
-            try {
-                playerXClient.gameUpdated(state);
-            } catch (RemoteException e) {
-                handleClientDisconnect(playerXName);
-            }
-
-            if (playerOClient != null) {
-                try {
-                    playerOClient.gameUpdated(state);
-                } catch (RemoteException e) {
-                    handleClientDisconnect(playerOName);
-                }
-            }
+    // Broadcasts a board update outside the game lock.
+    private void notifyGameUpdated(BoardState updatedBoardState) {
+        callbackExecutorService.submit(() -> {
+            sendGameUpdatedCallback(playerXClient, playerXName, updatedBoardState);
+            sendGameUpdatedCallback(playerOClient, playerOName, updatedBoardState);
         });
 
-        if (state.status() != GameStatus.ACTIVE && state.status() != GameStatus.WAITING) {
-            shutdownExecutor();
+        if (updatedBoardState.status().isTerminal()) {
+            shutdownCallbackExecutor();
         }
     }
 
-    /**
-     * Handles the case where a player becomes unreachable (disconnects) during RMI callbacks.
-     * Automatically transitions the game status to {@link GameStatus#ABANDONED} and alerts the remaining opponent.
-     *
-     * @param disconnectedPlayer the name of the player that is unreachable
-     */
+    // Converts a callback failure into a terminal abandoned game.
     private synchronized void handleClientDisconnect(String disconnectedPlayer) {
-        if (status == GameStatus.WON_X || status == GameStatus.WON_O || 
-            status == GameStatus.DRAW || status == GameStatus.ABANDONED) {
-            return; // Game has already terminated
+        if (gameStatus.isTerminal()) {
+            return;
         }
-        status = GameStatus.ABANDONED;
-        turnOf = null;
-        BoardState state = getBoardStateSnapshot();
+        gameStatus = GameStatus.ABANDONED;
+        currentTurnPlayerName = null;
+        BoardState abandonedBoardState = snapshotState();
 
-        String opponentName = disconnectedPlayer.equals(playerXName) ? playerOName : playerXName;
-        PlayerClient opponentClient = disconnectedPlayer.equals(playerXName) ? playerOClient : playerXClient;
+        PlayerClient opponentClient = opponentClientOf(disconnectedPlayer);
 
         if (opponentClient != null) {
-            callbackExecutor.submit(() -> {
+            callbackExecutorService.submit(() -> {
                 try {
                     opponentClient.opponentLeft(disconnectedPlayer);
-                    opponentClient.gameUpdated(state);
-                } catch (RemoteException e) {
-                    // Both players disconnected, ignore
+                    opponentClient.gameUpdated(abandonedBoardState);
+                } catch (RemoteException exception) {
+                    // Both players disconnected, ignore.
                 }
             });
         }
-        shutdownExecutor();
+        shutdownCallbackExecutor();
     }
 
-    /**
-     * Safely terminates the virtual thread callback executor.
-     */
-    private void shutdownExecutor() {
-        callbackExecutor.shutdown();
+    // Stops the callback executor after the match ends.
+    private void shutdownCallbackExecutor() {
+        callbackExecutorService.shutdown();
     }
 
-    /**
-     * Closes the game, shuts down the callback executor, and unexports the remote object.
-     * The method is idempotent so callers can use it during cleanup or pruning without
-     * worrying about double close attempts.
-     */
-    public synchronized void close() {
-        if (closed) {
+    // Ensures that player O can still join.
+    private void ensureWaiting() throws GameFullException {
+        if (!gameStatus.isWaiting()) {
+            throw new GameFullException("Game is not in WAITING state.");
+        }
+    }
+
+    // Rejects equal names for the two players.
+    private void ensureDistinctPlayers(String joinerName) {
+        if (joinerName.equals(playerXName)) {
+            throw new IllegalArgumentException("Opponent name cannot be identical to the creator's name.");
+        }
+    }
+
+    // Ensures that moves are still allowed.
+    private void ensureActive() throws InvalidMoveException {
+        if (!gameStatus.isActive()) {
+            throw new InvalidMoveException("Game is not active (current status: " + gameStatus + ").");
+        }
+    }
+
+    // Ensures that the caller owns the current turn.
+    private void ensurePlayerTurn(String playerName) throws NotYourTurnException {
+        if (currentTurnPlayerName == null || !currentTurnPlayerName.equals(playerName)) {
+            throw new NotYourTurnException("It is not your turn.");
+        }
+    }
+
+    // Ensures that the requested cell exists.
+    private void ensureMoveInBounds(int row, int col) throws InvalidMoveException {
+        if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
+            throw new InvalidMoveException("Invalid coordinates: (" + row + ", " + col + ")");
+        }
+    }
+
+    // Ensures that the selected cell is still free.
+    private void ensureCellEmpty(int row, int col) throws InvalidMoveException {
+        if (boardGrid[row][col] != EMPTY_CELL) {
+            throw new InvalidMoveException("Cell (" + row + ", " + col + ") is already occupied.");
+        }
+    }
+
+    // Maps a player name to its board mark.
+    private char markFor(String playerName) {
+        return playerName.equals(playerXName) ? 'X' : 'O';
+    }
+
+    // Resolves whether the move won, drew, or keeps the game active.
+    private GameStatus resolveStatusAfterMove(String playerName, char mark) {
+        if (hasWinningLine(mark)) {
+            return playerName.equals(playerXName) ? GameStatus.WON_X : GameStatus.WON_O;
+        }
+        if (isBoardFull()) {
+            return GameStatus.DRAW;
+        }
+        return GameStatus.ACTIVE;
+    }
+
+    // Returns the name of the other player.
+    private String opponentNameOf(String playerName) {
+        return playerName.equals(playerXName) ? playerOName : playerXName;
+    }
+
+    // Returns the callback client of the given player.
+    private PlayerClient clientOf(String playerName) {
+        return playerName.equals(playerXName) ? playerXClient : playerOClient;
+    }
+
+    // Returns the callback client of the other player.
+    private PlayerClient opponentClientOf(String playerName) {
+        return playerName.equals(playerXName) ? playerOClient : playerXClient;
+    }
+
+    // Returns true when three cells contain the same mark.
+    private boolean lineMatches(char first, char second, char third, char mark) {
+        return first == mark && second == mark && third == mark;
+    }
+
+    // Sends one game-start callback and handles disconnects.
+    private boolean sendGameStartedCallback(PlayerClient playerClient, String playerName, BoardState boardState) {
+        if (playerClient == null) {
+            return true;
+        }
+        try {
+            playerClient.gameStarted(boardState);
+            return true;
+        } catch (RemoteException exception) {
+            handleClientDisconnect(playerName);
+            return false;
+        }
+    }
+
+    // Sends one board-update callback and handles disconnects.
+    private void sendGameUpdatedCallback(PlayerClient playerClient, String playerName, BoardState boardState) {
+        if (playerClient == null) {
             return;
         }
-        closed = true;
-        shutdownExecutor();
+        try {
+            playerClient.gameUpdated(boardState);
+        } catch (RemoteException exception) {
+            handleClientDisconnect(playerName);
+        }
+    }
+
+    // Notifies the opponent synchronously during an explicit leave.
+    private void notifyOpponentLeftNow(PlayerClient playerClient, String playerName, BoardState boardState) {
+        if (playerClient == null) {
+            return;
+        }
+        try {
+            playerClient.opponentLeft(playerName);
+            playerClient.gameUpdated(boardState);
+        } catch (RemoteException exception) {
+            // Ignore disconnects during shutdown.
+        }
+    }
+
+    // Sends a final board snapshot to one client.
+    private void notifyStateToClient(PlayerClient playerClient, BoardState boardState) {
+        if (playerClient == null) {
+            return;
+        }
+        callbackExecutorService.submit(() -> {
+            try {
+                playerClient.gameUpdated(boardState);
+            } catch (RemoteException exception) {
+                // Ignore client disconnection on exit.
+            }
+        });
+    }
+
+    // Closes the room and unexports its remote object.
+    public synchronized void close() {
+        if (isClosed) {
+            return;
+        }
+        isClosed = true;
+        shutdownCallbackExecutor();
         try {
             UnicastRemoteObject.unexportObject(this, true);
-        } catch (NoSuchObjectException e) {
+        } catch (NoSuchObjectException exception) {
             // Already unexported; ignore.
         }
     }
 
-    /**
-     * Indicates whether the callback executor has been shut down.
-     * Package-private to keep the production API minimal while allowing focused tests.
-     */
+    // Exposes executor shutdown state for tests.
     boolean isCallbackExecutorShutdown() {
-        return callbackExecutor.isShutdown();
+        return callbackExecutorService.isShutdown();
     }
 
-    /**
-     * Fails fast if the game has been closed and unexported.
-     */
+    // Fails fast if the room has already been closed.
     private void ensureOpen() {
-        if (closed) {
+        if (isClosed) {
             throw new IllegalStateException("Game has been closed.");
         }
     }

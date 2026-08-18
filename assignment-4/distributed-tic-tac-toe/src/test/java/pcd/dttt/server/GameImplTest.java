@@ -194,6 +194,7 @@ public class GameImplTest {
         BoardState state = game.getBoardState();
         assertEquals(GameStatus.ABANDONED, state.status());
         assertNull(state.turnOf());
+        assertTrue(clientO.leftNotificationReceived);
     }
 
     @Test

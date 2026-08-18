@@ -133,7 +133,7 @@ public class LobbyImplTest {
             ready.countDown();
             try {
                 start.await();
-                lobby.createGame("SharedRoom", "Player-" + Thread.currentThread().getId(), new DummyPlayerClient());
+                lobby.createGame("SharedRoom", "Player-" + Thread.currentThread().threadId(), new DummyPlayerClient());
                 successes.incrementAndGet();
             } catch (Exception e) {
                 failures.add(e);

@@ -1,0 +1,124 @@
+\clearpage
+\section{Implementation}
+
+This chapter maps the design decisions to the \textbf{files that are actually
+delivered}. The goal is to show where the clustered behavior is implemented
+and what was added with respect to \textbf{assignment 3}.
+
+\subsection{Implementation map}
+
+\begin{center}
+{
+\small
+\begin{tabular}{|>{\raggedright\arraybackslash\bfseries}p{3.5cm}|>{\raggedright\arraybackslash}p{8.8cm}|}
+    \hline
+    Package or class & Implementation responsibility \\
+    \hline
+    \texttt{pcd.shas.Main}
+        & Clustered entry point: starts exactly one interactive node and selects the local actor startup from the CLI role. \\
+    \hline
+    \texttt{pcd.shas.DemoMain}
+        & Demonstration entry point: starts separate node processes and drives a visible distributed execution scenario. \\
+    \hline
+    \texttt{pcd.shas.runtime.}\newline\texttt{NodeStartup}
+        & Bootstrap helper: parses startup arguments and builds the Pekko Cluster configuration for host, port, seed nodes, and cluster role. \\
+    \hline
+    \texttt{pcd.shas.controlunit.}\newline\texttt{ControlUnitActor}
+        & Core distributed logic: alarm state machine, recovery behavior, receptionist integration, and cluster-singleton initialization. \\
+    \hline
+    \texttt{pcd.shas.keypad.}\newline\texttt{KeypadActor}
+        & Peripheral actor: collects user input, discovers the control unit, and forwards PIN or arming requests. \\
+    \hline
+    \texttt{pcd.shas.sensor.}\newline\texttt{SensorActor}
+        & Peripheral actor: represents one distributed sensor with a stable \texttt{sensorId} and forwards activations as typed messages. \\
+    \hline
+    \texttt{pcd.shas.siren.}\newline\texttt{SirenActor}
+        & Peripheral actor: implements the siren state, registers itself for discovery, and reacts to activation or deactivation commands. \\
+    \hline
+    \texttt{pcd.shas.common}
+        & Shared model: serializable messages, enums, and common data exchanged across cluster nodes. \\
+    \hline
+\end{tabular}
+}
+\end{center}
+
+\subsection{What changed from assignment 3}
+
+The main technical differences are concentrated in a small number of places:
+\begin{itemize}
+    \item \textbf{local startup} became \textbf{role-based cluster startup};
+    \item the local control unit became a \textbf{cluster singleton};
+    \item direct local references were replaced by \textbf{receptionist discovery};
+    \item the state machine gained the extra state \texttt{STARTUP\_RECOVERY};
+    \item exchanged messages were made explicitly \textbf{serializable}.
+\end{itemize}
+
+\subsection{Implementation structure}
+
+At implementation level, the delivered code is organized around four concerns:
+\begin{itemize}
+    \item \textbf{bootstrap}, handled by \texttt{Main}, \texttt{DemoMain}, and \texttt{NodeStartup};
+    \item \textbf{state ownership}, concentrated in \texttt{ControlUnitActor};
+    \item \textbf{peripheral interaction}, handled by keypad, sensor, and siren actors;
+    \item \textbf{shared remote messages}, concentrated in \texttt{pcd.shas.common}.
+\end{itemize}
+
+\subsection{Node startup and cluster roles}
+
+The entry point is \textbf{role-based}. \texttt{Main} accepts \texttt{control-unit},
+\texttt{keypad}, and \texttt{sensor} as startup roles and launches exactly one
+interactive node instance per started process. \texttt{NodeStartup} converts CLI arguments into a
+small node description and then builds the final Pekko configuration overlay.
+
+This keeps the \textbf{distributed deployment explicit}: each started node joins the same
+cluster, but each one hosts only the actors needed for its assigned role.
+The adopted deployment rule is:
+\textbf{one node, one main role}.
+
+\subsection{Control unit as cluster singleton}
+
+The alarm state must have a \textbf{single owner}. For this reason, the control unit is
+initialized as a Pekko \emph{cluster singleton}. Multiple nodes may have the
+\texttt{control-unit} cluster role, but only one active \texttt{ControlUnitActor}
+exists at a time.
+
+This is the most important architectural change with respect to assignment 3.
+The non-clustered version could rely on one local control actor by
+construction; the clustered version must enforce that property explicitly.
+If the hosting node fails, Pekko can recreate the singleton on another
+eligible node, and the recreated actor correctly returns to
+\texttt{STARTUP\_RECOVERY}.
+
+\subsection{Peripheral actors and discovery}
+
+Keypads and sensors do not hard-code an \texttt{ActorRef} to the control unit.
+Instead, they subscribe to the Pekko receptionist using the shared
+\texttt{CONTROL\_UNIT\_SERVICE\_KEY}. This keeps the deployment \textbf{decoupled} from
+specific node addresses and allows each peripheral actor to remain small.
+
+The siren uses the same pattern in the opposite direction: it is registered as
+a local service, and the control unit subscribes to siren updates so that it
+can activate or deactivate the available siren actor.
+
+\subsection{Recovery-oriented state machine}
+
+The cluster version preserves the same \textbf{alarm semantics} as assignment 3:
+\texttt{DISARMED}, \texttt{EXIT\_DELAY}, \texttt{ARMED},
+\texttt{ENTRY\_DELAY}, and \texttt{ALARM}. The only important extension is the
+safe startup state \texttt{STARTUP\_RECOVERY}.
+
+After creation or recreation, the control unit does not guess whether the
+system was previously armed or disarmed. It ignores or logs sensor events
+until a correct PIN is received. This \textbf{safe recovery behavior} is directly
+aligned with the failure-and-recovery requirement of the assignment.
+
+\subsection{Implementation summary}
+
+The \textbf{domain logic} remains close to assignment 3, while the clustered
+changes are concentrated in the places where distribution matters:
+\begin{itemize}
+    \item node bootstrap and cluster configuration;
+    \item singleton-based control-unit startup;
+    \item receptionist-based remote discovery;
+    \item recovery after control-unit recreation.
+\end{itemize}

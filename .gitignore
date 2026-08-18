@@ -23,6 +23,7 @@
 **/target/
 **/build/
 **/out/
+**/.m2repo/
 **/*.class
 **/*.jar
 **/*.war
