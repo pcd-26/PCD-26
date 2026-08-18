@@ -6,8 +6,14 @@ from shutil import which
 from pathlib import Path
 
 
-def find_report_root(start_dir: Path) -> Path | None:
-    current = start_dir.resolve()
+def find_report_root(target: Path) -> Path | None:
+    current = target.resolve()
+    if current.is_file():
+        if current.name == "main.tex":
+            report_root = current.parent
+            if (report_root / "Makefile").is_file():
+                return report_root
+        current = current.parent
 
     for candidate in (current, *current.parents):
         if (candidate / "Makefile").is_file() and (candidate / "main.tex").is_file():
@@ -18,11 +24,11 @@ def find_report_root(start_dir: Path) -> Path | None:
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print("Usage: build_latex_report.py <directory>", file=sys.stderr)
+        print("Usage: build_latex_report.py <file-or-directory>", file=sys.stderr)
         return 2
 
-    start_dir = Path(sys.argv[1])
-    report_root = find_report_root(start_dir)
+    target = Path(sys.argv[1])
+    report_root = find_report_root(target)
     if report_root is None:
         return 0
 
