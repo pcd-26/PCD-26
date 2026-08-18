@@ -93,6 +93,7 @@ selects one range, $R=\min(W,N)$ workers or tasks process $N$ items. Each range
 receives $\lfloor N/R \rfloor$ items and the first $N \bmod R$ ranges receive
 one additional item. The same balanced partitioning is reused for active
 balls, occupied cells, and touched-ball indexes.
+
 \subsection{Threaded and Task-Based Execution}
 
 \texttt{ThreadedPhysicsEngine} owns a fixed array of long-lived

@@ -14,9 +14,10 @@ and 0 errors}. Both JPF models were executed in Docker.
 \subsection{JPF verification}
 
 Two small harnesses model the coordination protocol without full physics,
-Swing, timers, or large collections. \texttt{ThreadedMiniHarness} represents
-the platform-thread design, while \texttt{TaskBasedMiniHarness} represents the
-executor-based one. Both use the shared \texttt{MinimalProtocolState}.
+Swing, timers, or large collections:
+\texttt{ThreadedMiniHarness} for the platform-thread design and
+\texttt{TaskBasedMiniHarness} for the executor-based one. Both rely on the
+shared minimal protocol state.
 
 The configurations use depth-first search, \texttt{JenkinsStateSet},
 partial-order reduction, and a depth limit of 40. They were executed with
