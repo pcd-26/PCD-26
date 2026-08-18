@@ -76,6 +76,6 @@ independent work to amortize these costs.
 The two concurrent versions solve the same problem through different execution
 models. Their evaluation therefore requires a \textbf{common sequential
 baseline}, equivalent workloads, and configurable parallelism. Elapsed time
-alone is not sufficient. Speedup, scalability, CPU utilization, and the
-saturation point are needed to explain whether the available cores are used
-effectively.
+alone is not sufficient. Speedup as the workload grows and speedup as the
+worker count changes are needed to explain whether the available cores are used
+effectively and where the implementation reaches saturation.

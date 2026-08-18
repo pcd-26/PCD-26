@@ -12,6 +12,11 @@ Workload scaling uses 1000--2500 balls, 600 steps, and 16 workers. Worker
 scaling uses 2500 balls, 1000 steps, and 1--17 workers. Speedup is
 $S=T_{seq}/T_{parallel}$.
 
+The worker-count experiment is the main evidence for core exploitation. It
+keeps the workload fixed and varies only the amount of parallelism, making the
+saturation point visible without relying on platform-specific CPU utilization
+sampling.
+
 \subsection{Speedup as workload grows}
 
 \begin{table}[htbp]
