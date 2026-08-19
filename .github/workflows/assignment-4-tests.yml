@@ -12,14 +12,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: assignment-04-ci-${{ github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   cshas:
     name: Test assignment-04 Clustered Smart Home Alarm System
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -47,7 +47,7 @@ jobs:
   dttt:
     name: Test assignment-04 Distributed Tic-Tac-Toe
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -75,7 +75,7 @@ jobs:
   dcs:
     name: Test assignment-04 Distributed Critical Sections
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
 
     services:
       rabbitmq:
@@ -136,7 +136,7 @@ jobs:
       - dttt
       - dcs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 25
+    timeout-minutes: 15
     permissions:
       contents: write
 
@@ -151,10 +151,20 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Cache APT archives for packaging tools
+        uses: actions/cache@v4
+        with:
+          path: .apt-cache/archives
+          key: ${{ runner.os }}-apt-assignment-4-packaging-v1
+
       - name: Install packaging tools
+        env:
+          APT_ARCHIVES: ${{ github.workspace }}/.apt-cache/archives
         run: |
+          mkdir -p "$APT_ARCHIVES/partial"
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
+          sudo apt-get -o dir::cache::archives="$APT_ARCHIVES" install -y \
+            texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
       - name: Build CSHAS report
         working-directory: assignment-4/clustered-smart-home-alarm-system/report
