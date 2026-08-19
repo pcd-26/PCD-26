@@ -9,14 +9,14 @@ from pathlib import Path
 def find_report_root(target: Path) -> Path | None:
     current = target.resolve()
     if current.is_file():
-        if current.name == "main.tex":
+        if current.name == "Ass3OddsAndEvensGame.tex":
             report_root = current.parent
             if (report_root / "Makefile").is_file():
                 return report_root
         current = current.parent
 
     for candidate in (current, *current.parents):
-        if (candidate / "Makefile").is_file() and (candidate / "main.tex").is_file():
+        if (candidate / "Makefile").is_file() and (candidate / "Ass3OddsAndEvensGame.tex").is_file():
             return candidate
 
     return None

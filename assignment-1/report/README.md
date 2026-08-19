@@ -21,7 +21,7 @@ correctly, then removes the temporary LaTeX files.
 Alternatively, without `make`:
 
 ```bash
-pdflatex -interaction=nonstopmode -halt-on-error -jobname=report main.tex
+pdflatex -interaction=nonstopmode -halt-on-error -jobname=report Ass1.tex
 ```
 
 When the build succeeds, temporary LaTeX files such as `report.aux` and
