@@ -1,6 +1,7 @@
 package pcd.poool.runtime;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import pcd.poool.model.common.math.V2d;
 
@@ -11,7 +12,7 @@ public interface GameRuntime extends AutoCloseable {
     void start();
 
     /** Queues a human shot. */
-    CommandMailbox.Receipt<Boolean> shootHuman(V2d velocity);
+    CompletableFuture<Boolean> shootHuman(V2d velocity);
 
     /** Returns the latest immutable state. */
     RuntimeGameSnapshot snapshot();

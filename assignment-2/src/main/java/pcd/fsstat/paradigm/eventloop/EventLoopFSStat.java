@@ -9,6 +9,7 @@ import pcd.fsstat.common.FSReportJob;
 import pcd.fsstat.common.FSReportListener;
 
 import java.io.File;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,6 +33,7 @@ public class EventLoopFSStat {
         private volatile boolean cancelled = false;
         final AtomicInteger pendingTaskCount = new AtomicInteger(0);
         final AtomicBoolean closed = new AtomicBoolean(false);
+        final AtomicBoolean terminalEventEmitted = new AtomicBoolean(false);
         final AtomicLong totalFileCount = new AtomicLong(0);
         final AtomicLong[] fileCountsPerBand;
         final Set<String> visitedDirectories = ConcurrentHashMap.newKeySet();
@@ -58,6 +60,15 @@ public class EventLoopFSStat {
 
     /** Starts an asynchronous filesystem scan using Vert.x callbacks. */
     public static FSReportJob getFSReport(String directory, long maximumFileSizeBytes, int numberOfBands, FSReportListener listener) {
+        Objects.requireNonNull(directory, "directory");
+        Objects.requireNonNull(listener, "listener");
+        if (maximumFileSizeBytes < 0) {
+            throw new IllegalArgumentException("maximumFileSizeBytes must be >= 0");
+        }
+        if (numberOfBands <= 0) {
+            throw new IllegalArgumentException("numberOfBands must be > 0");
+        }
+
         Vertx vertx = Vertx.vertx();
         FileSystem vertxFileSystem = vertx.fileSystem();
         EventLoopScanState scanState = new EventLoopScanState(numberOfBands);
@@ -65,7 +76,7 @@ public class EventLoopFSStat {
 
         // Publish progress snapshots on the event loop at a fixed interval.
         scanState.progressTimerId = vertx.setPeriodic(100, timerId -> {
-            if (scanState.cancelled() || scanState.closed.get()) {
+            if (scanState.cancelled() || scanState.closed.get() || scanState.terminalEventEmitted.get()) {
                 return;
             }
             listener.onUpdate(createReport(directory, maximumFileSizeBytes, numberOfBands, scanState, scanStartTime));
@@ -77,7 +88,7 @@ public class EventLoopFSStat {
                 if (scanState.progressTimerId != -1) {
                     vertx.cancelTimer(scanState.progressTimerId);
                 }
-                if (!scanState.cancelled()) {
+                if (!scanState.cancelled() && scanState.terminalEventEmitted.compareAndSet(false, true)) {
                     listener.onCompleted(createReport(directory, maximumFileSizeBytes, numberOfBands, scanState, scanStartTime));
                 }
                 vertx.close();
@@ -142,11 +153,7 @@ public class EventLoopFSStat {
             if (validationResult.failed()) {
                 // Only the root validation failure is reported as a terminal user error.
                 if (scanState.pendingTaskCount.get() == 1) {
-                    listener.onError(validationResult.cause());
-                    scanState.requestCancel();
-                    if (scanState.progressTimerId != -1) {
-                        vertx.cancelTimer(scanState.progressTimerId);
-                    }
+                    publishTerminalError(scanState, validationResult.cause(), listener, vertx);
                 }
                 markTaskCompleted(scanState, finishScanIfIdle);
                 return;
@@ -160,11 +167,7 @@ public class EventLoopFSStat {
             if (pathValidation.status() == PathValidationStatus.NOT_DIRECTORY) {
                 // Non-root unreadable/non-directory children are skipped silently.
                 if (scanState.pendingTaskCount.get() == 1) {
-                    listener.onError(new IllegalArgumentException("Target directory is not a readable directory: " + path));
-                    scanState.requestCancel();
-                    if (scanState.progressTimerId != -1) {
-                        vertx.cancelTimer(scanState.progressTimerId);
-                    }
+                    publishTerminalError(scanState, new IllegalArgumentException("Target directory is not a readable directory: " + path), listener, vertx);
                 }
                 markTaskCompleted(scanState, finishScanIfIdle);
                 return;
@@ -176,42 +179,48 @@ public class EventLoopFSStat {
                     return;
                 }
 
-                if (directoryReadResult.succeeded()) {
-                    // Each child stat is counted as one pending async task.
-                    for (String childPath : directoryReadResult.result()) {
-                        scanState.pendingTaskCount.incrementAndGet();
-                        vertxFileSystem.props(childPath).onComplete(filePropertiesResult -> {
-                            if (scanState.cancelled()) {
-                                markTaskCompleted(scanState, finishScanIfIdle);
-                                return;
-                            }
-
-                            if (filePropertiesResult.succeeded()) {
-                                FileProps fileProperties = filePropertiesResult.result();
-                                if (fileProperties.isDirectory()) {
-                                    // Directory traversal itself becomes another tracked async task.
-                                    scanState.pendingTaskCount.incrementAndGet();
-                                    scanDirectory(
-                                        childPath,
-                                        maximumFileSizeBytes,
-                                        numberOfBands,
-                                        vertxFileSystem,
-                                        scanState,
-                                        finishScanIfIdle,
-                                        vertx,
-                                        listener
-                                    );
-                                } else if (fileProperties.isRegularFile()) {
-                                    scanState.totalFileCount.incrementAndGet();
-                                    long fileSizeBytes = fileProperties.size();
-                                    int bandIndex = FSReport.getBandIndex(fileSizeBytes, maximumFileSizeBytes, numberOfBands);
-                                    scanState.fileCountsPerBand[bandIndex].incrementAndGet();
-                                }
-                            }
-
-                            markTaskCompleted(scanState, finishScanIfIdle);
-                        });
+                if (!directoryReadResult.succeeded()) {
+                    if (scanState.pendingTaskCount.get() == 1) {
+                        publishTerminalError(scanState, directoryReadResult.cause(), listener, vertx);
                     }
+                    markTaskCompleted(scanState, finishScanIfIdle);
+                    return;
+                }
+
+                // Each child stat is counted as one pending async task.
+                for (String childPath : directoryReadResult.result()) {
+                    scanState.pendingTaskCount.incrementAndGet();
+                    vertxFileSystem.props(childPath).onComplete(filePropertiesResult -> {
+                        if (scanState.cancelled()) {
+                            markTaskCompleted(scanState, finishScanIfIdle);
+                            return;
+                        }
+
+                        if (filePropertiesResult.succeeded()) {
+                            FileProps fileProperties = filePropertiesResult.result();
+                            if (fileProperties.isDirectory()) {
+                                // Directory traversal itself becomes another tracked async task.
+                                scanState.pendingTaskCount.incrementAndGet();
+                                scanDirectory(
+                                    childPath,
+                                    maximumFileSizeBytes,
+                                    numberOfBands,
+                                    vertxFileSystem,
+                                    scanState,
+                                    finishScanIfIdle,
+                                    vertx,
+                                    listener
+                                );
+                            } else if (fileProperties.isRegularFile()) {
+                                scanState.totalFileCount.incrementAndGet();
+                                long fileSizeBytes = fileProperties.size();
+                                int bandIndex = FSReport.getBandIndex(fileSizeBytes, maximumFileSizeBytes, numberOfBands);
+                                scanState.fileCountsPerBand[bandIndex].incrementAndGet();
+                            }
+                        }
+
+                        markTaskCompleted(scanState, finishScanIfIdle);
+                    });
                 }
 
                 markTaskCompleted(scanState, finishScanIfIdle);
@@ -260,6 +269,22 @@ public class EventLoopFSStat {
     private static void markTaskCompleted(EventLoopScanState scanState, Runnable finishScanIfIdle) {
         if (scanState.pendingTaskCount.decrementAndGet() == 0) {
             finishScanIfIdle.run();
+        }
+    }
+
+    /** Emits at most one terminal error and prevents completion from being published afterwards. */
+    private static void publishTerminalError(
+        EventLoopScanState scanState,
+        Throwable error,
+        FSReportListener listener,
+        Vertx vertx
+    ) {
+        scanState.requestCancel();
+        if (scanState.progressTimerId != -1) {
+            vertx.cancelTimer(scanState.progressTimerId);
+        }
+        if (scanState.terminalEventEmitted.compareAndSet(false, true)) {
+            listener.onError(error);
         }
     }
 }

@@ -1,30 +1,16 @@
 \clearpage
 \section{Conclusions}
 
-The project implements sequential, platform-thread, and task-based execution
-without duplicating game rules. The concurrent versions share the game loop,
-command protocol, and phased physics algorithm. They differ only in work
-scheduling: persistent workers or tasks submitted to a fixed executor.
+The project implements sequential, platform-thread, and task-based versions of
+\emph{Poool} without duplicating game rules. The key design choice is a
+single-writer controller that orders commands, advances the model, and
+publishes only completed snapshots, while the physics step may internally use
+parallel workers on disjoint board data under exclusive board ownership.
 
-All three versions are fully playable. The simulation advances correctly,
-accepts keyboard and mouse shots, controls the bot, updates scores, detects the
-end of the game, and supports restarting without relaunching the application.
-
-The design preserves a single-writer ownership rule. The controller owns mutable game
-state; workers process disjoint ranges or private accumulators. Phase barriers
-separate parallel computation from deterministic accumulation and snapshot
-publication. This keeps input and rendering responsive without exposing the
-model to concurrent mutation.
-
-Measurements confirm a \textbf{real but sublinear speedup}. With 2500 balls and
-16 workers, the threaded engine reaches $2.342\times$ and the task-based engine
-$2.109\times$. Worker scaling peaks at 8 workers, with $2.347\times$ and
-$2.123\times$ respectively. Beyond this point, sequential phases, barriers,
-memory traffic, and oversubscription outweigh additional parallelism.
-
-The evidence is complementary. JUnit validates game and physics behaviour; JPF
-explores the bounded synchronization protocols; benchmarks quantify performance
-on the complete implementation. The main limitation is that model checking
-does not cover numerical physics or arbitrary workloads. The
-results support the central design choice: parallelize independent physics work
-while keeping global state transitions explicit and deterministic.
+The benchmarks show a measurable but sublinear benefit from concurrency. On the
+largest tested workload, the threaded engine reaches $2.342\times$ speedup and
+the task-based engine reaches $2.109\times$; both saturate around 8 workers.
+JUnit tests validate the production code, while JPF verifies the reduced
+synchronization protocol. Together, these results support the adopted approach:
+parallelize independent physics work while keeping state transitions explicit
+and deterministic.

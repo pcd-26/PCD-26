@@ -30,8 +30,7 @@ java -cp target/classes pcd.poool.ThreadedPoool
 java -cp target/classes pcd.poool.TaskBasedPoool
 \end{verbatim}
 
-An optional positive argument selects the task-based physics worker count;
-otherwise the launcher uses one fewer than the available processors.
+A positive argument optionally selects the task-based physics worker count.
 \begin{verbatim}
 java -cp target/classes pcd.poool.TaskBasedPoool 8
 \end{verbatim}
@@ -39,9 +38,3 @@ java -cp target/classes pcd.poool.TaskBasedPoool 8
 The human shot can be aimed with the arrow keys or by dragging the mouse and is
 released automatically or on mouse release. Press \texttt{R} to restart; after
 game over, the \texttt{New Game} button provides the same action.
-
-Benchmark scripts, JPF configurations, report sources, and their instructions
-are development artifacts and are not included in the delivery. To regenerate
-performance results, execute the verification models, or rebuild this report,
-use the complete project at
-\href{https://github.com/pcd-26/PCD-26}{github.com/pcd-26/PCD-26}.

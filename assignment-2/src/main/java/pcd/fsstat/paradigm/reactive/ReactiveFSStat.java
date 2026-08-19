@@ -7,7 +7,10 @@ import pcd.fsstat.common.FSReport;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.HashSet;
+import java.util.Objects;
+import java.util.Deque;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -60,6 +63,14 @@ public class ReactiveFSStat {
 
     /** Builds a reactive report stream for the requested directory scan. */
     public static Observable<FSReport> getFSReport(String directory, long maximumFileSizeBytes, int numberOfBands) {
+        Objects.requireNonNull(directory, "directory");
+        if (maximumFileSizeBytes < 0) {
+            throw new IllegalArgumentException("maximumFileSizeBytes must be >= 0");
+        }
+        if (numberOfBands <= 0) {
+            throw new IllegalArgumentException("numberOfBands must be > 0");
+        }
+
         return Observable.defer(() -> { // defer: build the real pipeline only when a subscriber starts the scan.
             // Validate lazily so errors are delivered through the Observable contract.
             File rootDirectory = new File(directory);
@@ -88,10 +99,10 @@ public class ReactiveFSStat {
 
     /** Creates an Observable that emits every regular file under the root directory. */
     private static Observable<File> scanFiles(File rootDirectory) {
-        return Observable.create(emitter -> { // create: adapt the recursive filesystem walk into an Observable<File> source.
+        return Observable.create(emitter -> { // create: adapt the iterative filesystem walk into an Observable<File> source.
             try {
                 Set<String> visitedDirectories = new HashSet<>();
-                emitDirectoryContents(rootDirectory, emitter, visitedDirectories);
+                emitFilesIteratively(rootDirectory, emitter, visitedDirectories);
                 if (!emitter.isDisposed()) {
                     emitter.onComplete(); // onComplete: signal that no more files will be emitted.
                 }
@@ -103,35 +114,56 @@ public class ReactiveFSStat {
         });
     }
 
-    /** Walks directories recursively and emits regular files while respecting cancellation. */
-    private static void emitDirectoryContents(File directory, ObservableEmitter<File> emitter, Set<String> visitedDirectories) {
-        if (emitter.isDisposed()) {
-            return;
-        }
+    /** Walks directories iteratively and emits regular files while respecting cancellation. */
+    private static void emitFilesIteratively(
+        File rootDirectory,
+        ObservableEmitter<File> emitter,
+        Set<String> visitedDirectories
+    ) throws IOException {
+        Deque<File> pendingDirectories = new ArrayDeque<>();
+        pendingDirectories.push(rootDirectory);
 
-        // Canonical paths keep symbolic-link cycles from being traversed again.
-        try {
-            String canonicalPath = directory.getCanonicalPath();
-            if (!visitedDirectories.add(canonicalPath)) {
-                return;
-            }
-        } catch (IOException ignored) {
-            return;
-        }
-
-        File[] directoryChildren = directory.listFiles();
-        if (directoryChildren == null) {
-            return;
-        }
-        // Recurse into directories and emit only regular files.
-        for (File childFile : directoryChildren) {
+        while (!pendingDirectories.isEmpty()) {
             if (emitter.isDisposed()) {
                 return;
             }
-            if (childFile.isDirectory()) {
-                emitDirectoryContents(childFile, emitter, visitedDirectories);
-            } else if (childFile.isFile()) {
-                emitter.onNext(childFile); // onNext: push one discovered regular file to the downstream Rx pipeline.
+
+            File currentDirectory = pendingDirectories.pop();
+            boolean rootDirectoryNode = currentDirectory.equals(rootDirectory);
+
+            // Canonical paths keep symbolic-link cycles from being traversed again.
+            try {
+                String canonicalPath = currentDirectory.getCanonicalPath();
+                if (!visitedDirectories.add(canonicalPath)) {
+                    continue;
+                }
+            } catch (IOException e) {
+                if (rootDirectoryNode) {
+                    throw e;
+                }
+                continue;
+            }
+
+            File[] directoryChildren = currentDirectory.listFiles();
+            if (directoryChildren == null) {
+                if (rootDirectoryNode) {
+                    throw new IOException("Target directory is not readable: " + currentDirectory.getPath());
+                }
+                continue;
+            }
+
+            // Push directories explicitly instead of recursing on the JVM stack.
+            for (int childIndex = directoryChildren.length - 1; childIndex >= 0; childIndex--) {
+                if (emitter.isDisposed()) {
+                    return;
+                }
+
+                File childFile = directoryChildren[childIndex];
+                if (childFile.isDirectory()) {
+                    pendingDirectories.push(childFile);
+                } else if (childFile.isFile()) {
+                    emitter.onNext(childFile); // onNext: push one discovered regular file to the downstream Rx pipeline.
+                }
             }
         }
     }
