@@ -79,9 +79,10 @@ The report contains two logical results:
 The first \texttt{NB} counters represent the bands obtained by splitting
 \texttt{[0, MaxFS]}. The last counter is the \textbf{overflow band} and counts
 files larger than \texttt{MaxFS}. Boundary values are handled
-deterministically: a file exactly equal to \texttt{MaxFS} belongs to the
-\textbf{last regular band}, while a file larger than \texttt{MaxFS} belongs to
-the \textbf{overflow band}.
+deterministically through a discrete partition of the integer size domain:
+a file exactly equal to \texttt{MaxFS} belongs to the \textbf{last regular
+band}, while a file larger than \texttt{MaxFS} belongs to the
+\textbf{overflow band}.
 
 The implementation counts \textbf{regular files} and skips non-regular
 filesystem entries. This avoids treating directories, devices, or unsupported

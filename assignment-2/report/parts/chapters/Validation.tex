@@ -50,7 +50,8 @@ compared with the Reactive and Event-Loop results. The comparison checks:
 This is useful because the implementations have different control structures.
 If the imperative virtual-thread version, the RxJava stream version, and the
 Vert.x callback version agree on the same non-trivial tree, the risk of a
-paradigm-specific scheduling error is lower.
+paradigm-specific scheduling error is lower on the deterministic fixtures used
+by the comparative tests.
 
 The tests also validate the shared model directly: band boundaries, duration
 formatting, size-unit parsing, and formatted labels are checked independently

@@ -50,18 +50,7 @@ public record FSReport(
         if (numberOfBands <= 0) {
             return 0;
         }
-        double bandWidthBytes = (double) maximumFileSizeBytes / numberOfBands;
-        if (bandWidthBytes <= 0) {
-            return 0;
-        }
-        int bandIndex = (int) (fileSizeBytes / bandWidthBytes);
-        if (bandIndex >= numberOfBands) {
-            bandIndex = numberOfBands - 1;
-        }
-        if (bandIndex < 0) {
-            bandIndex = 0;
-        }
-        return bandIndex;
+        return computeRegularBandIndex(fileSizeBytes, maximumFileSizeBytes, numberOfBands);
     }
 
     /** Formats a band label in bytes. */
@@ -82,12 +71,30 @@ public record FSReport(
         if (index == numberOfBands) {
             return String.format("> %s", unit.format(maximumFileSizeBytes));
         }
-        double bandWidthBytes = (double) maximumFileSizeBytes / numberOfBands;
-        long minimumBandSizeBytes = Math.round(index * bandWidthBytes);
-        long maximumBandSizeBytes = Math.round((index + 1) * bandWidthBytes) - 1;
-        if (index == numberOfBands - 1) {
-            maximumBandSizeBytes = maximumFileSizeBytes;
-        }
+        long minimumBandSizeBytes = getRegularBandLowerBound(maximumFileSizeBytes, numberOfBands, index);
+        long maximumBandSizeBytes = getRegularBandUpperBound(maximumFileSizeBytes, numberOfBands, index);
         return String.format("[%s - %s]", unit.format(minimumBandSizeBytes), unit.format(maximumBandSizeBytes));
+    }
+
+    /** Computes the regular-band index using the same discrete partition used by the labels. */
+    private static int computeRegularBandIndex(long fileSizeBytes, long maximumFileSizeBytes, int numberOfBands) {
+        for (int bandIndex = 0; bandIndex < numberOfBands; bandIndex++) {
+            if (fileSizeBytes <= getRegularBandUpperBound(maximumFileSizeBytes, numberOfBands, bandIndex)) {
+                return bandIndex;
+            }
+        }
+        return numberOfBands - 1;
+    }
+
+    /** Returns the inclusive lower bound of a regular band. */
+    private static long getRegularBandLowerBound(long maximumFileSizeBytes, int numberOfBands, int index) {
+        long domainCardinality = maximumFileSizeBytes + 1;
+        return (index * domainCardinality) / numberOfBands;
+    }
+
+    /** Returns the inclusive upper bound of a regular band. */
+    private static long getRegularBandUpperBound(long maximumFileSizeBytes, int numberOfBands, int index) {
+        long domainCardinality = maximumFileSizeBytes + 1;
+        return (((long) index + 1) * domainCardinality) / numberOfBands - 1;
     }
 }

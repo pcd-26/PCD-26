@@ -7,29 +7,42 @@ The project combines JUnit tests on the production code with Java PathFinder
 \subsection{JUnit tests}
 
 The Maven suite checks deterministic physics, collisions, pocketing, FIFO
-commands, concurrent submissions, failures, snapshots, shutdown, view input,
-and benchmark tooling. Running \texttt{mvn test}
-completed with \textbf{158 tests, 0 failures, and 0 errors}. Both JPF models were executed in Docker.
+commands, concurrent submissions, failures, snapshots, shutdown, and view
+input. Running \texttt{mvn test} on the current Java 17 project completed with
+\textbf{159 tests, 0 failures, 0 errors, and 1 skipped test}. The skipped test
+is the JPF integration check, which requires a Java 11-compatible runtime or
+the dedicated Docker workflow.
 
 \subsection{JPF verification}
 
 Two small harnesses model the coordination protocol without full physics,
-Swing, timers, or large collections.
-\texttt{ThreadedMiniHarness} uses a producer, controller, and long-lived worker;
-\texttt{TaskBasedMiniHarness} creates and joins a short-lived task.
-
-Both use the shared \texttt{MinimalProtocolState}.
+Swing, timers, or large collections:
+\texttt{ThreadedMiniHarness} for the platform-thread design and
+\texttt{TaskBasedMiniHarness} for the executor-based one. Both rely on the
+shared minimal protocol state.
 
 The configurations use depth-first search, \texttt{JenkinsStateSet},
 partial-order reduction, and a depth limit of 40. They were executed with
 \texttt{run\_jpf.py --docker --model both}. The runner compiles for Java 11 and
 requires \texttt{no errors detected} without a \texttt{[SEVERE]} diagnostic.
+The Docker execution is therefore complementary to the Maven suite rather than
+part of the default \texttt{mvn test} run on Java 17.
 
 \subsection{Verified properties, results, and limits}
 
-The searches verify exclusive board ownership, command draining before
-snapshot publication, worker completion before commit, ownership release,
-final termination, and absence of deadlock.
+The verification evidence is complementary. JUnit checks the implemented game
+and physics behaviour on the production code, while JPF explores a reduced
+concurrent protocol and establishes the corresponding synchronization
+properties. Within the explored model, JPF ensures exclusive board ownership
+during the physics step, command draining before snapshot publication, worker
+completion before state commit, proper resource release, final termination, and
+absence of deadlock.
+
+These results can be grouped into the usual concurrent properties:
+\textbf{safety}, because intermediate states are not published and commit does
+not occur before worker completion; \textbf{liveness}, because the explored
+protocol completes without deadlock; and \textbf{termination}, because owned
+resources are released and the model reaches its final state correctly.
 
 Both searches completed without deadlock or assertion failure:
 
@@ -47,9 +60,10 @@ Both searches completed without deadlock or assertion failure:
 
 Both maximum depths remain below 40, so the bound did not truncate either
 search. The threaded state space is larger because its worker can interleave
-from the start; the task-based worker exists only after work is prepared.
+earlier than the task created in the executor model.
 
 The result covers every schedule represented by these bounded harnesses. It
 does not prove numerical physics, full \texttt{ExecutorService} behavior,
 Swing responsiveness, performance, or arbitrary workloads; these aspects are
-covered separately by production tests and benchmarks.
+covered separately by production tests and benchmarks on the full
+implementation.

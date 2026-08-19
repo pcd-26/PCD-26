@@ -90,12 +90,12 @@ running.
 The central ownership rule is: \textbf{GameModel has one writer}. In the
 concurrent versions, only the controller executing \texttt{GameLoop.tick(...)}
 may advance the match. Human input and the bot do not receive direct write
-access. They submit operations to \texttt{CommandMailbox}.
+access to the game model. They submit operations to \texttt{CommandMailbox}.
 
-The mailbox is a FIFO monitor. Each submitted command carries a receipt that
-is completed after the command is executed or rejected. At the start of a
-tick, the controller drains the queue. It then advances the game and publishes
-one new snapshot:
+The mailbox is a FIFO monitor. Each submitted command carries a
+\texttt{CompletableFuture} that is completed after the command is executed or
+rejected. At the start of a tick, the controller drains the queue. It then
+advances the game and publishes one new snapshot:
 
 \begin{center}
 \textbf{drain commands} $\rightarrow$ \textbf{advance model}
@@ -105,63 +105,36 @@ $\rightarrow$ \textbf{publish snapshot}
 This order gives each accepted input a clear position between simulation
 steps. It also prevents the view and bot from observing an intermediate state.
 
-\begin{center}
-\begin{tabular}{|>{\bfseries}p{3.1cm}|p{5.2cm}|p{5.2cm}|}
-    \hline
-    State & Writer & Readers or publication boundary \\
-    \hline
-    Game rules and scores & GameLoop controller through GameModel & RuntimeGameSnapshot \\
-    \hline
-    Balls and holes & Current physics step & Board snapshots after the step \\
-    \hline
-    Pending commands & CommandMailbox monitor & GameLoop during queue draining \\
-    \hline
-    Rendering state & Launcher through ViewModel & ViewFrame \\
-    \hline
-\end{tabular}
-\end{center}
+The ownership boundary is explicit. \texttt{GameLoop} is the only component
+allowed to trigger state advancement through \texttt{GameModel}; the board is
+mutated only inside the physics step, which owns it exclusively for the
+duration of the sub-step; pending requests remain inside
+\texttt{CommandMailbox} until they are drained; rendering uses copied data
+published through \texttt{RuntimeGameSnapshot} and \texttt{ViewModel}.
 
 \subsection{Execution strategies}
 
 The concurrent versions preserve the same control protocol but use different
 mechanisms to execute it.
 
-\begin{center}
-\begin{tabular}{|>{\bfseries}p{3.1cm}|p{5.2cm}|p{5.2cm}|}
-    \hline
-    Aspect & Platform-thread version & Task-based version \\
-    \hline
-    Controller & Dedicated platform thread & Single-thread ScheduledExecutorService \\
-    \hline
-    Bot & Dedicated platform thread & Task on a dedicated ExecutorService \\
-    \hline
-    Physics work & Long-lived PhysicsWorker threads & Tasks submitted to a fixed thread pool \\
-    \hline
-    Phase completion & WorkerCompletionMonitor & Future.get() barriers \\
-    \hline
-    Resource release & Workers are interrupted and joined & Executors are shut down and awaited \\
-    \hline
-\end{tabular}
-\end{center}
+In the platform-thread version, the control loop and bot run on dedicated
+threads, while physics work is executed by long-lived workers synchronized
+through explicit completion monitors. In the task-based version, the control
+loop is scheduled by a single-thread \texttt{ScheduledExecutorService}, the
+bot runs on its own executor, and physics phases are expressed as tasks
+submitted to a fixed pool and synchronized through
+\texttt{Future.get()} barriers.
 
-The two physics engines intentionally remain separate. This keeps the required
-programming models explicit: \texttt{ThreadedPhysicsEngine} directly owns and
-coordinates platform threads, while \texttt{TaskBasedPhysicsEngine} expresses
-the same work as executor tasks. Their phase structure and numerical rules are
-kept equivalent so performance comparisons remain meaningful.
-
-\paragraph{Lifecycle and shutdown.}
-Runners own their active resources. Shutdown reverses startup: \textbf{stop
-ticks, close the mailbox, publish the final snapshot, stop bot and controller,
-then close the physics engine}. This rejects new work and releases pending
-command receipts and snapshot waiters.
+The two physics engines remain separate so that the two programming models are
+explicit in the code. Their physics phases and numerical rules are equivalent,
+which keeps the comparison meaningful.
 
 \clearpage
 \subsection{Phased physics design}
 
-One call to \texttt{step(...)} holds the board as a single mutable unit. A long
-elapsed interval is divided into fixed sub-steps. Each sub-step follows ordered
-phases. The following parametric P/T net distinguishes sequential transitions
+One call to \texttt{step(...)} holds the board under exclusive ownership for
+the duration of the physics step. A long elapsed interval is divided into fixed
+sub-steps. Each sub-step follows ordered phases. The following Petri net distinguishes sequential transitions
 from parallel fork--join phases without modelling scheduler internals.
 
 \begin{center}
@@ -317,17 +290,8 @@ range operations. \textcolor{orange!75!black}{Orange transitions} are
 sequential coordinator operations. Dark transitions dispatch and join ranges.
 \end{center}
 
-Each parallel phase uses $R$ workers or tasks. The diagram shows only $W_1$ and
-$W_R$ for readability; the omitted workers follow the same private path. Their
-blue transitions can fire in any order or concurrently. Private input places
-ensure that each worker fires exactly once, while the join requires every
-completion token. The net is therefore 1-safe and prevents the next phase from
-starting early. Final delta application uses one sequential path for small sets
-and multiple workers for large touched-ball sets.
-
-The spatial grid is the broad phase. It inspects only the cell containing a
-ball and selected neighbours, avoiding every possible pair on sparse boards.
-Private grids and pair lists also remove parallel write contention.
+Each parallel phase uses $R$ workers or tasks. For readability, the net shows
+only $W_1$ and $W_R$; the omitted parallel branches follow the same pattern.
 
 \subsection{Deterministic accumulation and disjoint commit}
 
@@ -346,8 +310,7 @@ instead accumulate position and velocity corrections before applying them:
 
 The final delta application may become parallel again because each touched
 ball has one accumulated result and can be updated independently. For small
-sets it remains sequential, avoiding a barrier whose cost would exceed the
-available work.
+sets it remains sequential to avoid unnecessary synchronization overhead.
 
 \subsection{View boundary}
 
