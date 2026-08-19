@@ -9,10 +9,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import pcd.poool.model.common.math.P2d;
@@ -24,7 +27,6 @@ import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.common.Boundary;
 import pcd.poool.model.physics.common.Hole;
 import pcd.poool.model.physics.common.PhysicsStepper;
-import pcd.poool.runtime.CommandMailbox;
 import pcd.poool.runtime.GameRuntimeConfig;
 
 class ThreadedGameRunnerTest {
@@ -58,11 +60,11 @@ class ThreadedGameRunnerTest {
      */
     @Test
     @Timeout(3)
-    void humanShotIsExecutedAsAnAsynchronousCommand() throws InterruptedException {
+    void humanShotIsExecutedAsAnAsynchronousCommand() throws Exception {
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
-            var accepted = runner.shootHuman(new V2d(1.6, 0)).await(SHORT_TIMEOUT);
+            var accepted = await(runner.shootHuman(new V2d(1.6, 0)), SHORT_TIMEOUT);
             var snapshot = runner.awaitSnapshot(
                     state -> state.game().status() == GameStatus.BALLS_MOVING,
                     SHORT_TIMEOUT);
@@ -78,7 +80,7 @@ class ThreadedGameRunnerTest {
      */
     @Test
     @Timeout(5)
-    void concurrentHumanShotSubmissionsCompleteWithoutLostReceipts() throws InterruptedException {
+    void concurrentHumanShotSubmissionsCompleteWithoutLostReceipts() throws Exception {
         try (var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT)) {
             runner.start();
 
@@ -86,7 +88,7 @@ class ThreadedGameRunnerTest {
             int shotsPerProducer = 12;
             var startGate = new CountDownLatch(1);
             var readyGate = new CountDownLatch(producers);
-            var receipts = Collections.synchronizedList(new ArrayList<CommandMailbox.Receipt<Boolean>>());
+            var receipts = Collections.synchronizedList(new ArrayList<CompletableFuture<Boolean>>());
             ExecutorService executor = Executors.newFixedThreadPool(producers);
 
             try {
@@ -111,7 +113,7 @@ class ThreadedGameRunnerTest {
 
                 int completed = 0;
                 for (var receipt : receipts) {
-                    assertFalse(receipt.await(SHORT_TIMEOUT));
+                    assertFalse(await(receipt, SHORT_TIMEOUT));
                     completed++;
                 }
 
@@ -165,7 +167,7 @@ class ThreadedGameRunnerTest {
      */
     @Test
     @Timeout(3)
-    void rejectedCommandsCompleteAfterShutdown() throws InterruptedException {
+    void rejectedCommandsCompleteAfterShutdown() throws Exception {
         var runner = new ThreadedGameRunner(new DirectScoringConf(), FAST_WITHOUT_BOT);
         runner.start();
 
@@ -173,7 +175,7 @@ class ThreadedGameRunnerTest {
         int shotsPerProducer = 20;
         var startGate = new CountDownLatch(1);
         var readyGate = new CountDownLatch(producers);
-        var receipts = Collections.synchronizedList(new ArrayList<CommandMailbox.Receipt<Boolean>>());
+        var receipts = Collections.synchronizedList(new ArrayList<CompletableFuture<Boolean>>());
         ExecutorService executor = Executors.newFixedThreadPool(producers);
 
         try {
@@ -200,7 +202,7 @@ class ThreadedGameRunnerTest {
 
             int completed = 0;
             for (var receipt : receipts) {
-                assertFalse(receipt.await(SHORT_TIMEOUT));
+                assertFalse(await(receipt, SHORT_TIMEOUT));
                 completed++;
             }
 
@@ -263,5 +265,10 @@ class ThreadedGameRunnerTest {
         public void step(pcd.poool.model.physics.common.Board board, long elapsedMillis) {
             throw new IllegalStateException("Injected threaded failure");
         }
+    }
+
+    private static <T> T await(CompletableFuture<T> completion, Duration timeout)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        return completion.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 }
