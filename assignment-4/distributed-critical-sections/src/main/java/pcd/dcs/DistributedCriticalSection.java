@@ -226,19 +226,28 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
 
         logger.debug("Exiting critical section '{}'", csName);
+        releaseHeldToken();
+        logger.debug("Successfully exited critical section '{}'", csName);
+    }
+
+    // Release the currently held token while serializing the transition with bootstrap operations.
+    private void releaseHeldToken() throws IOException, InterruptedException {
+        Long heldDeliveryTag = currentCriticalSectionTokenDeliveryTag;
+        if (heldDeliveryTag == null) {
+            return;
+        }
 
         tokenCreationGuard.withLock(connection, tokenCreationGuardChannel -> {
             // Stop appearing as an active owner before returning the token to the queue.
             cancelCriticalSectionTokenConsumerQuietly();
             // Requeue the unacknowledged delivery instead of publishing a new token.
             criticalSectionTokenChannel.basicNack(
-                    currentCriticalSectionTokenDeliveryTag, // delivery tag of the token currently held
+                    heldDeliveryTag, // delivery tag of the token currently held
                     false, // reject only this delivery
                     true); // requeue the token so another process can receive it
         });
 
         currentCriticalSectionTokenDeliveryTag = null;
-        logger.debug("Successfully exited critical section '{}'", csName);
     }
 
     // Cancel the local consumer without turning cleanup problems into API failures.
@@ -257,10 +266,19 @@ public class DistributedCriticalSection implements AutoCloseable {
         }
     }
 
-    // Close local broker resources; RabbitMQ requeues any unacknowledged token on channel shutdown.
+    // Close local broker resources after explicitly releasing any held token.
     @Override
     public void close() {
-        cancelCriticalSectionTokenConsumerQuietly();
+        try {
+            releaseHeldToken();
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            logger.error("Failed to release held token while closing '{}'", csName, e);
+        } finally {
+            cancelCriticalSectionTokenConsumerQuietly();
+        }
 
         if (criticalSectionTokenChannel != null && criticalSectionTokenChannel.isOpen()) {
             try {

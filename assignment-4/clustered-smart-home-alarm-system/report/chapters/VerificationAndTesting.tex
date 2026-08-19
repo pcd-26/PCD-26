@@ -8,7 +8,7 @@ integration tests.
 
 \begin{itemize}
     \item \texttt{ControlUnitActorTest} checks the state machine, full and partial arming, timers, siren control, and recovery rules.
-    \item \texttt{SensorActorTest} and \texttt{KeypadActorTest} check message forwarding and behavior when the control unit is temporarily unavailable.
+    \item \texttt{SensorActorTest} and \texttt{KeypadActorTest} check message forwarding once receptionist-based discovery resolves the control unit.
     \item \texttt{ClusteredSystemTest} verifies three-node cluster formation, remote message exchange, and recreation of the control unit in recovery mode.
     \item \texttt{NodeStartupTest} validates CLI parsing and seed-node configuration generation.
 \end{itemize}
