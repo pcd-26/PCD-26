@@ -104,7 +104,12 @@ jobs:
         env:
           APT_ARCHIVES: ${{ github.workspace }}/.apt-cache/archives
         run: |
+          set -euo pipefail
+
           mkdir -p "$APT_ARCHIVES/partial"
+          sudo sed -i \
+            's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
           sudo apt-get -o dir::cache::archives="$APT_ARCHIVES" install -y \
             texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
