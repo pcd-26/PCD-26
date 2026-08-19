@@ -16,11 +16,15 @@ on:
         required: false
         default: ""
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-shas:
     name: Test assignment-03 SHAS
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -48,7 +52,7 @@ jobs:
   test-oeg:
     name: Test assignment-03 Odds and Evens Game
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -70,7 +74,7 @@ jobs:
       - test-shas
       - test-oeg
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 25
+    timeout-minutes: 15
     permissions:
       contents: write
 
@@ -90,10 +94,20 @@ jobs:
         with:
           go-version: "1.22"
 
+      - name: Cache APT archives for packaging tools
+        uses: actions/cache@v4
+        with:
+          path: .apt-cache/archives
+          key: ${{ runner.os }}-apt-assignment-3-packaging-v1
+
       - name: Install packaging tools
+        env:
+          APT_ARCHIVES: ${{ github.workspace }}/.apt-cache/archives
         run: |
+          mkdir -p "$APT_ARCHIVES/partial"
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
+          sudo apt-get -o dir::cache::archives="$APT_ARCHIVES" install -y \
+            texlive-latex-base texlive-latex-recommended texlive-latex-extra zip unzip
 
       - name: Build Smart Home Alarm System report
         working-directory: assignment-3/smart-home-alarm-system/report
