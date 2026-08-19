@@ -121,6 +121,8 @@ public final class ThreadedGameRunner implements GameRuntime {
     public void awaitTermination(Duration timeout) throws InterruptedException {
         join(controllerThread, timeout);
         join(botThread, timeout);
+        ensureStopped(controllerThread, "controller");
+        ensureStopped(botThread, "bot");
         closePhysics();
     }
 
@@ -168,6 +170,12 @@ public final class ThreadedGameRunner implements GameRuntime {
     private static void interrupt(Thread thread) {
         if (thread != null) {
             thread.interrupt();
+        }
+    }
+
+    private static void ensureStopped(Thread thread, String role) {
+        if (thread != null && thread.isAlive()) {
+            throw new IllegalStateException(role + " thread did not terminate before shutdown");
         }
     }
 

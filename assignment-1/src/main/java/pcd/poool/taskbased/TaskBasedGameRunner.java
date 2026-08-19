@@ -121,9 +121,15 @@ public final class TaskBasedGameRunner implements GameRuntime {
 
     // Waits for the controller, the bot, and the physics workers to finish.
     public void awaitTermination(Duration timeout) throws InterruptedException {
-        controller.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        boolean controllerStopped = controller.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        if (!controllerStopped) {
+            throw new IllegalStateException("controller executor did not terminate before shutdown");
+        }
         if (botExecutor != null) {
-            botExecutor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            boolean botStopped = botExecutor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!botStopped) {
+                throw new IllegalStateException("bot executor did not terminate before shutdown");
+            }
         }
         physics.close();
     }
