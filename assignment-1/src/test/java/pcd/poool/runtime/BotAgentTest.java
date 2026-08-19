@@ -21,6 +21,7 @@ class BotAgentTest {
             var shots = new AtomicInteger();
             var agent = new BotAgent(
                     () -> readySnapshot(),
+                    (condition, timeout) -> readySnapshot(),
                     () -> {
                         shots.incrementAndGet();
                         running.set(false);

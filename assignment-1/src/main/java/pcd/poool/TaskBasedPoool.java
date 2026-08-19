@@ -17,9 +17,7 @@ import pcd.poool.view.board.ViewModel;
  *
  * <p>This launcher uses the executor-based runtime, so the game loop is still
  * the same UI-facing shell but the physics step is delegated to a task-based
- * worker pool. The rest of the launcher is intentionally close to the
- * threaded one, which makes the comparison between execution strategies easy
- * to explain.
+ * worker pool.
  */
 public final class TaskBasedPoool {
 

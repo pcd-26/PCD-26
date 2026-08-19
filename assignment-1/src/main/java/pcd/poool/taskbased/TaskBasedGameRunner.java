@@ -2,17 +2,17 @@ package pcd.poool.taskbased;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.function.Predicate;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.physics.common.BoardConf;
 import pcd.poool.model.physics.taskbased.TaskBasedPhysicsEngine;
 import pcd.poool.runtime.BotAgent;
-import pcd.poool.runtime.CommandMailbox;
 import pcd.poool.runtime.GameLoop;
 import pcd.poool.runtime.GameRuntime;
 import pcd.poool.runtime.GameRuntimeConfig;
@@ -73,6 +73,7 @@ public final class TaskBasedGameRunner implements GameRuntime {
         if (botExecutor != null) {
             botExecutor.submit(new BotAgent(
                     loop::snapshot, // Reads the latest published game snapshot.
+                    loop::awaitSnapshot, // Waits for a ready-to-shoot state.
                     loop::shootBot, // Submits the bot shot command.
                     this::isRunning, // Stops the bot when the runtime is no longer active.
                     config.botThinkTimeMillis())); // Delay before the bot shoots.
@@ -85,12 +86,12 @@ public final class TaskBasedGameRunner implements GameRuntime {
     }
 
     @Override
-    public CommandMailbox.Receipt<Boolean> shootHuman(V2d velocity) {
+    public CompletableFuture<Boolean> shootHuman(V2d velocity) {
         ensureHealthy();
         return loop.shootHuman(velocity);
     }
 
-    public CommandMailbox.Receipt<Boolean> shootBot() {
+    public CompletableFuture<Boolean> shootBot() {
         ensureHealthy();
         return loop.shootBot();
     }
@@ -120,9 +121,15 @@ public final class TaskBasedGameRunner implements GameRuntime {
 
     // Waits for the controller, the bot, and the physics workers to finish.
     public void awaitTermination(Duration timeout) throws InterruptedException {
-        controller.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        boolean controllerStopped = controller.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        if (!controllerStopped) {
+            throw new IllegalStateException("controller executor did not terminate before shutdown");
+        }
         if (botExecutor != null) {
-            botExecutor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            boolean botStopped = botExecutor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!botStopped) {
+                throw new IllegalStateException("bot executor did not terminate before shutdown");
+            }
         }
         physics.close();
     }
