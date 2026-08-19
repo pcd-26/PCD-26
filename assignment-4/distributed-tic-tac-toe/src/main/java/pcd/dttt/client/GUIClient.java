@@ -98,6 +98,8 @@ public class GUIClient extends JFrame implements GameEventListener {
     private JLabel gameStatusLbl;
     // Opponent info label.
     private JLabel gameOpponentLbl;
+    // Latest server snapshot rendered by the GUI.
+    private BoardState latestBoardState;
 
     // Builds the main GUI frame.
     public GUIClient(GameController controller, String defaultHost, int defaultPort, String defaultServiceName) {
@@ -611,6 +613,7 @@ public class GUIClient extends JFrame implements GameEventListener {
             } finally {
                 SwingUtilities.invokeLater(() -> {
                     myMark = ' ';
+                    latestBoardState = null;
                     createGameBtn.setEnabled(true);
                     joinGameBtn.setEnabled(true);
                     cardLayout.show(mainPanel, "LOBBY");
@@ -629,11 +632,20 @@ public class GUIClient extends JFrame implements GameEventListener {
             try {
                 controller.makeMove(r, c);
             } catch (NotYourTurnException ex) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "It's not your turn!", "Move Rejected", JOptionPane.WARNING_MESSAGE));
+                SwingUtilities.invokeLater(() -> {
+                    restoreBoardAfterRejectedMove();
+                    JOptionPane.showMessageDialog(this, "It's not your turn!", "Move Rejected", JOptionPane.WARNING_MESSAGE);
+                });
             } catch (InvalidMoveException ex) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Invalid Move:\n" + ex.getMessage(), "Move Rejected", JOptionPane.WARNING_MESSAGE));
+                SwingUtilities.invokeLater(() -> {
+                    restoreBoardAfterRejectedMove();
+                    JOptionPane.showMessageDialog(this, "Invalid Move:\n" + ex.getMessage(), "Move Rejected", JOptionPane.WARNING_MESSAGE);
+                });
             } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Error during move submission:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE));
+                SwingUtilities.invokeLater(() -> {
+                    restoreBoardAfterRejectedMove();
+                    JOptionPane.showMessageDialog(this, "Error during move submission:\n" + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                });
             }
         }).start();
     }
@@ -642,6 +654,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
     // Resets the game screen while waiting for the opponent.
     private void setupGameUIForWait(String gameName) {
+        latestBoardState = null;
         gameStatusLbl.setText("Waiting for opponent...");
         gameOpponentLbl.setText("Room: " + gameName + " | You are: " + myMark);
         for (int r = 0; r < 3; r++) {
@@ -654,6 +667,8 @@ public class GUIClient extends JFrame implements GameEventListener {
 
     // Redraws the board and updates labels.
     private void updateBoardState(BoardState state) {
+        latestBoardState = state;
+
         // Redraw every board cell from the latest snapshot.
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
@@ -695,14 +710,18 @@ public class GUIClient extends JFrame implements GameEventListener {
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
                 JButton btn = boardButtons[r][c];
-                if (!btn.getText().isEmpty()) {
-                    // Keep occupied cells visually strong.
-                    btn.setEnabled(true);
-                } else {
-                    // Empty cells depend on the local turn.
-                    btn.setEnabled(enabled);
-                }
+                // Only empty cells can be played on the local turn.
+                btn.setEnabled(enabled && btn.getText().isEmpty());
             }
+        }
+    }
+
+    // Restores the last known board so the GUI does not remain frozen after a rejected move.
+    private void restoreBoardAfterRejectedMove() {
+        if (latestBoardState != null) {
+            updateBoardState(latestBoardState);
+        } else {
+            setBoardEnabled(false);
         }
     }
 
@@ -737,6 +756,7 @@ public class GUIClient extends JFrame implements GameEventListener {
 
         // Reset local state and return to the lobby.
         myMark = ' ';
+        latestBoardState = null;
         createGameBtn.setEnabled(true);
         joinGameBtn.setEnabled(true);
         cardLayout.show(mainPanel, "LOBBY");
