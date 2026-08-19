@@ -53,6 +53,9 @@ sensor CLI triggers one activation on ENTER and stops on \texttt{exit}.
 To observe a minimal three-node execution, start one control-unit node, one
 keypad node, and one sensor node with the commands above. Then submit a
 correct PIN from the keypad, arm the system, wait for the exit delay to
-expire, and trigger the sensor from its CLI. The expected state evolution is
+expire, trigger the sensor from its CLI, and then submit the correct PIN
+during the entry delay. The expected state evolution is
 \texttt{STARTUP\_RECOVERY $\rightarrow$ DISARMED $\rightarrow$ EXIT\_DELAY
-$\rightarrow$ ARMED $\rightarrow$ ENTRY\_DELAY $\rightarrow$ DISARMED}.
+$\rightarrow$ ARMED $\rightarrow$ ENTRY\_DELAY $\rightarrow$ DISARMED}. If no
+correct PIN is entered during \texttt{ENTRY\_DELAY}, the system transitions to
+\texttt{ALARM}.
