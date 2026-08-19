@@ -130,8 +130,8 @@ Key points:
 Notes for maintainers:
 
 - the stream is intentionally functional and does not share mutable counters;
-- `scanFiles()` performs the recursive directory walk and stops when the
-  subscriber is disposed;
+- `scanFiles()` performs a sequential iterative directory walk and stops when
+  the subscriber is disposed;
 - if you change the state structure, make sure the accumulator copy logic in
   `ScanState(ScanState previous, File file)` stays cheap and correct.
 

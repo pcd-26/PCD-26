@@ -86,7 +86,6 @@ Each implementation has different runtime behaviors, scalability constraints, an
   - Built-in sampling and backpressure helpers.
 - **Limitations**:
   - **Single-Threaded Directory Walker**: Unlike the virtual-thread implementation which walks subdirectories in parallel, the RxJava walk loop sequentially emits files on `Schedulers.io()`. This makes it slower for large directory trees.
-  - **Stack Overflow Risk**: The sequential traversal uses stack recursion (`walkRecursive`). Extremely deep directory nesting (thousands of levels) will trigger a JVM `StackOverflowError`.
   - **Single Subscription Completion**: The completion signal is derived from the final emitted report, so listener code must keep track of the last report if it needs it after completion.
 
 ### 3.3. Event-Loop / Vert.x (loop)

@@ -99,7 +99,7 @@ public class ReactiveFSStat {
 
     /** Creates an Observable that emits every regular file under the root directory. */
     private static Observable<File> scanFiles(File rootDirectory) {
-        return Observable.create(emitter -> { // create: adapt the recursive filesystem walk into an Observable<File> source.
+        return Observable.create(emitter -> { // create: adapt the iterative filesystem walk into an Observable<File> source.
             try {
                 Set<String> visitedDirectories = new HashSet<>();
                 emitFilesIteratively(rootDirectory, emitter, visitedDirectories);
