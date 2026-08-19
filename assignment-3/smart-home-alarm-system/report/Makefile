@@ -1,7 +1,7 @@
 .RECIPEPREFIX := >
 
 PDF = report.pdf
-SOURCE = main.tex
+SOURCE = Ass3SmartHomeAlarmSystem.tex
 PDFLATEX_FLAGS = -interaction=nonstopmode -halt-on-error -jobname=report
 TEMP_FILES = report.aux report.log report.out report.toc report.fls report.fdb_latexmk
 ifeq ($(OS),Windows_NT)
