@@ -2,6 +2,7 @@ package pcd.poool.runtime;
 
 import java.util.Objects;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameModel;
@@ -45,11 +46,11 @@ public final class GameLoop {
         publishSnapshot();
     }
 
-    public CommandMailbox.Receipt<Boolean> shootHuman(V2d velocity) {
+    public CompletableFuture<Boolean> shootHuman(V2d velocity) {
         return commands.submit(model -> model.shootHuman(velocity), false);
     }
 
-    public CommandMailbox.Receipt<Boolean> shootBot() {
+    public CompletableFuture<Boolean> shootBot() {
         return commands.submit(GameModel::shootBot, false);
     }
 

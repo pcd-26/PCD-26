@@ -1,28 +1,28 @@
 package pcd.poool.runtime;
 
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import pcd.poool.model.game.GameModel;
 
-/** Monitor that queues model commands and completes their receipts. */
+/** Monitor that queues model commands and completes their asynchronous result. */
 public final class CommandMailbox {
 
     private final Queue<Command<?>> commands = new ArrayDeque<>();
     private boolean closed;
 
     /** Queues one operation or immediately rejects it after shutdown. */
-    public <T> Receipt<T> submit(Function<GameModel, T> operation, T rejectedResult) {
-        var receipt = new Receipt<T>();
+    public <T> CompletableFuture<T> submit(Function<GameModel, T> operation, T rejectedResult) {
+        var completion = new CompletableFuture<T>();
         synchronized (this) {
             if (closed) {
-                receipt.complete(rejectedResult);
+                completion.complete(rejectedResult);
             } else {
-                commands.add(new Command<>(operation, receipt, rejectedResult));
+                commands.add(new Command<>(operation, completion, rejectedResult));
             }
         }
-        return receipt;
+        return completion;
     }
 
     /** Executes every pending operation on the controller-owned model. */
@@ -49,59 +49,19 @@ public final class CommandMailbox {
 
     private record Command<T>(
             Function<GameModel, T> operation,
-            Receipt<T> receipt,
+            CompletableFuture<T> completion,
             T rejectedResult) {
 
         private void execute(GameModel game) {
             try {
-                receipt.complete(operation.apply(game));
+                completion.complete(operation.apply(game));
             } catch (RuntimeException ex) {
-                receipt.fail(ex);
+                completion.completeExceptionally(ex);
             }
         }
 
         private void reject() {
-            receipt.complete(rejectedResult);
-        }
-    }
-
-    /** Completion handle returned to an asynchronous command producer. */
-    public static final class Receipt<T> {
-
-        private boolean completed;
-        private T result;
-        private RuntimeException failure;
-
-        private synchronized void complete(T result) {
-            if (!completed) {
-                this.result = result;
-                completed = true;
-                notifyAll();
-            }
-        }
-
-        private synchronized void fail(RuntimeException failure) {
-            if (!completed) {
-                this.failure = failure;
-                completed = true;
-                notifyAll();
-            }
-        }
-
-        /** Waits for completion or throws when the timeout expires. */
-        public synchronized T await(Duration timeout) throws InterruptedException {
-            long deadline = System.currentTimeMillis() + timeout.toMillis();
-            while (!completed) {
-                long remaining = deadline - System.currentTimeMillis();
-                if (remaining <= 0) {
-                    throw new IllegalStateException("command did not complete before timeout");
-                }
-                wait(remaining);
-            }
-            if (failure != null) {
-                throw failure;
-            }
-            return result;
+            completion.complete(rejectedResult);
         }
     }
 }

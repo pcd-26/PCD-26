@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import pcd.poool.model.common.math.V2d;
 import pcd.poool.model.game.GameModel;
@@ -15,7 +19,7 @@ class GameLoopTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(1);
 
     @Test
-    void oneTickExecutesCommandsAdvancesTheGameAndPublishesState() throws InterruptedException {
+    void oneTickExecutesCommandsAdvancesTheGameAndPublishesState() throws Exception {
         var loop = new GameLoop(
                 new StandardGameBoardConf(),
                 new SequentialPhysicsEngine(),
@@ -24,12 +28,12 @@ class GameLoopTest {
 
         loop.tick(5);
 
-        assertTrue(shot.await(TIMEOUT));
+        assertTrue(await(shot, TIMEOUT));
         assertTrue(loop.snapshot().game().simulatedSteps() > 0);
     }
 
     @Test
-    void closingTheLoopRejectsNewCommands() throws InterruptedException {
+    void closingTheLoopRejectsNewCommands() throws Exception {
         var loop = new GameLoop(
                 new StandardGameBoardConf(),
                 new SequentialPhysicsEngine(),
@@ -37,6 +41,11 @@ class GameLoopTest {
 
         loop.close();
 
-        assertFalse(loop.shootHuman(new V2d(1, 0)).await(TIMEOUT));
+        assertFalse(await(loop.shootHuman(new V2d(1, 0)), TIMEOUT));
+    }
+
+    private static <T> T await(CompletableFuture<T> completion, Duration timeout)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        return completion.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 }

@@ -38,6 +38,18 @@ public class FSStatTest {
         assertEquals(4, FSReport.getBandIndex(101, 100, 4));
     }
 
+    /** Non-divisible thresholds keep labels and classification aligned. */
+    @Test
+    public void testBandIndexAndLabelsRemainAlignedWhenThresholdIsNotDivisible() {
+        assertEquals(0, FSReport.getBandIndex(2, 10, 3));
+        assertEquals(1, FSReport.getBandIndex(3, 10, 3));
+        assertEquals(1, FSReport.getBandIndex(6, 10, 3));
+        assertEquals(2, FSReport.getBandIndex(7, 10, 3));
+        assertEquals("[0 B - 2 B]", FSReport.formatBandLabel(10, 3, 0, SizeUnit.BYTES));
+        assertEquals("[3 B - 6 B]", FSReport.formatBandLabel(10, 3, 1, SizeUnit.BYTES));
+        assertEquals("[7 B - 10 B]", FSReport.formatBandLabel(10, 3, 2, SizeUnit.BYTES));
+    }
+
     /** Durations are formatted for display. */
     @Test
     public void testDurationFormatting() {
