@@ -13,6 +13,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Swing interface for interactive FSStat scans. */
 public class FSStatGUI extends JFrame {
@@ -37,6 +38,7 @@ public class FSStatGUI extends JFrame {
     private FSReportJob currentScanJob;             // Handle for imperative backends (Virtual Threads, Event Loop)
     private Disposable reactiveSubscription;        // Handle for reactive backend (RxJava)
     private boolean scanInProgress = false;
+    private final AtomicLong scanGenerationCounter = new AtomicLong(0);
 
     /** Builds the full Swing interface and wires the user actions. */
     public FSStatGUI() {
@@ -204,7 +206,8 @@ public class FSStatGUI extends JFrame {
         prepareScanUi(selectedParadigm, maximumFileSizeBytes, numberOfBands, sizeUnit);
 
         // Start the selected backend only after the UI is in running state.
-        launchScanForParadigm(directoryPath, maximumFileSizeBytes, numberOfBands, selectedParadigm, sizeUnit);
+        long scanGeneration = scanGenerationCounter.incrementAndGet();
+        launchScanForParadigm(directoryPath, maximumFileSizeBytes, numberOfBands, selectedParadigm, sizeUnit, scanGeneration);
     }
 
     /** Cancels the currently running scan and restores the idle UI state. */
@@ -224,6 +227,7 @@ public class FSStatGUI extends JFrame {
         }
 
         // Return the UI to an idle state immediately after the user cancels.
+        scanGenerationCounter.incrementAndGet();
         scanProgressBar.setIndeterminate(false);
         statusMessageLabel.setText(" Scan cancelled.");
         setScanInProgress(false);
@@ -296,18 +300,26 @@ public class FSStatGUI extends JFrame {
     }
 
     /** Creates a listener that safely forwards scan callbacks onto the Swing EDT. */
-    private FSReportListener createGuiListener(SizeUnit sizeUnit) {
+    private FSReportListener createGuiListener(SizeUnit sizeUnit, long scanGeneration) {
         return new FSReportListener() {
             @Override
             public void onUpdate(FSReport report) {
                 // Swing components must be updated on the Event Dispatch Thread.
-                SwingUtilities.invokeLater(() -> updateResultsView(report, sizeUnit));
+                SwingUtilities.invokeLater(() -> {
+                    if (scanGenerationCounter.get() != scanGeneration) {
+                        return;
+                    }
+                    updateResultsView(report, sizeUnit);
+                });
             }
 
             @Override
             public void onCompleted(FSReport report) {
                 // Apply the final snapshot before marking the scan complete.
                 SwingUtilities.invokeLater(() -> {
+                    if (scanGenerationCounter.get() != scanGeneration) {
+                        return;
+                    }
                     updateResultsView(report, sizeUnit);
                     finishScan("Scan completed in " + report.formatDuration() + ".");
                 });
@@ -316,40 +328,80 @@ public class FSStatGUI extends JFrame {
             @Override
             public void onError(Throwable error) {
                 // Surface backend failures through the common GUI error path.
-                SwingUtilities.invokeLater(() -> failScan(error.getMessage()));
+                SwingUtilities.invokeLater(() -> {
+                    if (scanGenerationCounter.get() != scanGeneration) {
+                        return;
+                    }
+                    failScan(error.getMessage());
+                });
             }
         };
     }
 
     /** Routes the GUI scan request to the selected backend. */
-    private void launchScanForParadigm(String directoryPath, long maximumFileSizeBytes, int numberOfBands, String paradigm, SizeUnit sizeUnit) {
+    private void launchScanForParadigm(
+        String directoryPath,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        String paradigm,
+        SizeUnit sizeUnit,
+        long scanGeneration
+    ) {
         // The displayed combo-box labels are mapped to their concrete implementations here.
         if (PARADIGM_VT.equals(paradigm)) {
-            launchVirtualThreadsScan(directoryPath, maximumFileSizeBytes, numberOfBands, sizeUnit);
+            launchVirtualThreadsScan(directoryPath, maximumFileSizeBytes, numberOfBands, sizeUnit, scanGeneration);
             return;
         }
         if (PARADIGM_LOOP.equals(paradigm)) {
-            launchEventLoopScan(directoryPath, maximumFileSizeBytes, numberOfBands, sizeUnit);
+            launchEventLoopScan(directoryPath, maximumFileSizeBytes, numberOfBands, sizeUnit, scanGeneration);
             return;
         }
         if (PARADIGM_RX.equals(paradigm)) {
-            launchReactiveScan(directoryPath, maximumFileSizeBytes, numberOfBands, sizeUnit);
+            launchReactiveScan(directoryPath, maximumFileSizeBytes, numberOfBands, sizeUnit, scanGeneration);
         }
     }
 
     /** Starts a virtual-thread scan from the GUI. */
-    private void launchVirtualThreadsScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
-        currentScanJob = VirtualThreadsFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, createGuiListener(sizeUnit));
+    private void launchVirtualThreadsScan(
+        String directoryPath,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        SizeUnit sizeUnit,
+        long scanGeneration
+    ) {
+        currentScanJob = VirtualThreadsFSStat.getFSReport(
+            directoryPath,
+            maximumFileSizeBytes,
+            numberOfBands,
+            createGuiListener(sizeUnit, scanGeneration)
+        );
     }
 
     /** Starts a Vert.x event-loop scan from the GUI. */
-    private void launchEventLoopScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
-        currentScanJob = EventLoopFSStat.getFSReport(directoryPath, maximumFileSizeBytes, numberOfBands, createGuiListener(sizeUnit));
+    private void launchEventLoopScan(
+        String directoryPath,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        SizeUnit sizeUnit,
+        long scanGeneration
+    ) {
+        currentScanJob = EventLoopFSStat.getFSReport(
+            directoryPath,
+            maximumFileSizeBytes,
+            numberOfBands,
+            createGuiListener(sizeUnit, scanGeneration)
+        );
     }
 
     /** Starts an RxJava scan from the GUI and keeps its subscription for cancellation. */
-    private void launchReactiveScan(String directoryPath, long maximumFileSizeBytes, int numberOfBands, SizeUnit sizeUnit) {
-        FSReportListener reportListener = createGuiListener(sizeUnit);
+    private void launchReactiveScan(
+        String directoryPath,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        SizeUnit sizeUnit,
+        long scanGeneration
+    ) {
+        FSReportListener reportListener = createGuiListener(sizeUnit, scanGeneration);
 
         // Store the latest update because Rx completion has no report argument.
         final FSReport[] latestReport = new FSReport[1];
@@ -367,7 +419,12 @@ public class FSStatGUI extends JFrame {
                     if (latestReport[0] != null) {
                         reportListener.onCompleted(latestReport[0]);
                     } else {
-                        SwingUtilities.invokeLater(() -> finishScan("Scan completed."));
+                        SwingUtilities.invokeLater(() -> {
+                            if (scanGenerationCounter.get() != scanGeneration) {
+                                return;
+                            }
+                            finishScan("Scan completed.");
+                        });
                     }
                 }
             );

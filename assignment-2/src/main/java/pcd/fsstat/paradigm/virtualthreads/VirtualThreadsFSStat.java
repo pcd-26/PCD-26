@@ -6,11 +6,14 @@ import pcd.fsstat.common.FSReportListener;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -19,11 +22,32 @@ public class VirtualThreadsFSStat {
 
     /** Holds the cancellation flag shared by all virtual-thread tasks. */
     private static class VirtualThreadsScanState {
-        volatile boolean isCancelled = false;
+        final AtomicBoolean cancelled = new AtomicBoolean(false);
+        final AtomicBoolean terminalEventEmitted = new AtomicBoolean(false);
+        final AtomicBoolean completionReleased = new AtomicBoolean(false);
+
+        /** Marks the scan as cancelled. */
+        void requestCancel() {
+            cancelled.set(true);
+        }
+
+        /** Returns whether the scan has been cancelled. */
+        boolean isCancelled() {
+            return cancelled.get();
+        }
     }
 
     /** Starts an asynchronous filesystem scan backed by virtual threads. */
     public static FSReportJob getFSReport(String directory, long maximumFileSizeBytes, int numberOfBands, FSReportListener listener) {
+        Objects.requireNonNull(directory, "directory");
+        Objects.requireNonNull(listener, "listener");
+        if (maximumFileSizeBytes < 0) {
+            throw new IllegalArgumentException("maximumFileSizeBytes must be >= 0");
+        }
+        if (numberOfBands <= 0) {
+            throw new IllegalArgumentException("numberOfBands must be > 0");
+        }
+
         // Initialize shared counters and lifecycle coordination.
         VirtualThreadsScanState scanState = new VirtualThreadsScanState();
         CountDownLatch completionSignal = new CountDownLatch(1);
@@ -44,16 +68,18 @@ public class VirtualThreadsFSStat {
         // Emit periodic snapshots while worker tasks are running.
         Thread progressReporterThread = Thread.ofVirtual().start(() -> {
             try {
-                while (!scanState.isCancelled && !Thread.currentThread().isInterrupted()) {
+                while (!scanState.isCancelled() && !scanState.terminalEventEmitted.get() && !Thread.currentThread().isInterrupted()) {
                     Thread.sleep(100);
-                    listener.onUpdate(createReport(
-                        directory,
-                        maximumFileSizeBytes,
-                        numberOfBands,
-                        fileCountsPerBand,
-                        totalFileCount,
-                        scanStartTime
-                    ));
+                    if (!scanState.isCancelled() && !scanState.terminalEventEmitted.get()) {
+                        listener.onUpdate(createReport(
+                            directory,
+                            maximumFileSizeBytes,
+                            numberOfBands,
+                            fileCountsPerBand,
+                            totalFileCount,
+                            scanStartTime
+                        ));
+                    }
                 }
             } catch (InterruptedException ignored) {
             }
@@ -68,36 +94,27 @@ public class VirtualThreadsFSStat {
                 }
 
                 // Submit the root as the first counted task.
-                activeTaskCount.incrementAndGet();
-                virtualThreadExecutor.submit(() -> {
-                    try {
-                        scanDirectoryRecursively(
-                            rootDirectory,
-                            maximumFileSizeBytes,
-                            numberOfBands,
-                            virtualThreadExecutor,
-                            activeTaskCount,
-                            totalFileCount,
-                            fileCountsPerBand,
-                            scanState,
-                            completionSignal,
-                            visitedDirectories
-                        );
-                    } catch (Exception e) {
-                        listener.onError(e);
-                        progressReporterThread.interrupt();
-                        virtualThreadExecutor.shutdownNow();
-                        completionSignal.countDown();
-                    } finally {
-                        markTaskCompleted(activeTaskCount, completionSignal);
-                    }
-                });
+                submitDirectoryTask(
+                    rootDirectory,
+                    true,
+                    maximumFileSizeBytes,
+                    numberOfBands,
+                    virtualThreadExecutor,
+                    activeTaskCount,
+                    totalFileCount,
+                    fileCountsPerBand,
+                    scanState,
+                    completionSignal,
+                    visitedDirectories,
+                    progressReporterThread,
+                    listener
+                );
 
                 completionSignal.await();
                 progressReporterThread.interrupt();
                 virtualThreadExecutor.shutdown();
 
-                if (!scanState.isCancelled) {
+                if (!scanState.isCancelled() && scanState.terminalEventEmitted.compareAndSet(false, true)) {
                     listener.onCompleted(createReport(
                         directory,
                         maximumFileSizeBytes,
@@ -108,9 +125,7 @@ public class VirtualThreadsFSStat {
                     ));
                 }
             } catch (Throwable t) {
-                listener.onError(t);
-                progressReporterThread.interrupt();
-                virtualThreadExecutor.shutdownNow();
+                publishTerminalError(scanState, completionSignal, progressReporterThread, virtualThreadExecutor, listener, t);
             }
         });
 
@@ -118,16 +133,16 @@ public class VirtualThreadsFSStat {
             /** Requests cancellation and interrupts active scan infrastructure. */
             @Override
             public void cancel() {
-                scanState.isCancelled = true;
+                scanState.requestCancel();
                 progressReporterThread.interrupt();
                 virtualThreadExecutor.shutdownNow();
-                completionSignal.countDown();
+                releaseCompletion(completionSignal, scanState);
             }
 
             /** Reports whether this scan has been cancelled. */
             @Override
             public boolean isCancelled() {
-                return scanState.isCancelled;
+                return scanState.isCancelled();
             }
         };
     }
@@ -145,7 +160,7 @@ public class VirtualThreadsFSStat {
         CountDownLatch completionSignal,
         Set<String> visitedDirectories
     ) {
-        if (scanState.isCancelled) {
+        if (scanState.isCancelled()) {
             return;
         }
 
@@ -166,30 +181,22 @@ public class VirtualThreadsFSStat {
 
         // Count files immediately and fan out directories as independent tasks.
         for (File child : children) {
-            if (scanState.isCancelled) {
+            if (scanState.isCancelled()) {
                 return;
             }
             if (child.isDirectory()) {
-                activeTaskCount.incrementAndGet();
-                virtualThreadExecutor.submit(() -> {
-                    try {
-                        scanDirectoryRecursively(
-                            child,
-                            maximumFileSizeBytes,
-                            numberOfBands,
-                            virtualThreadExecutor,
-                            activeTaskCount,
-                            totalFileCount,
-                            fileCountsPerBand,
-                            scanState,
-                            completionSignal,
-                            visitedDirectories
-                        );
-                    } catch (Exception ignored) {
-                    } finally {
-                        markTaskCompleted(activeTaskCount, completionSignal);
-                    }
-                });
+                submitChildDirectoryTask(
+                    child,
+                    maximumFileSizeBytes,
+                    numberOfBands,
+                    virtualThreadExecutor,
+                    activeTaskCount,
+                    totalFileCount,
+                    fileCountsPerBand,
+                    scanState,
+                    completionSignal,
+                    visitedDirectories
+                );
             } else if (child.isFile()) {
                 totalFileCount.increment();
                 long fileSizeBytes = child.length();
@@ -225,6 +232,118 @@ public class VirtualThreadsFSStat {
     /** Decrements the active-task counter and releases the waiter when the scan is idle. */
     private static void markTaskCompleted(AtomicInteger activeTaskCount, CountDownLatch completionSignal) {
         if (activeTaskCount.decrementAndGet() == 0) {
+            completionSignal.countDown();
+        }
+    }
+
+    /** Submits the root directory task and treats submission failures as terminal errors. */
+    private static void submitDirectoryTask(
+        File directory,
+        boolean rootTask,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        ExecutorService virtualThreadExecutor,
+        AtomicInteger activeTaskCount,
+        LongAdder totalFileCount,
+        LongAdder[] fileCountsPerBand,
+        VirtualThreadsScanState scanState,
+        CountDownLatch completionSignal,
+        Set<String> visitedDirectories,
+        Thread progressReporterThread,
+        FSReportListener listener
+    ) {
+        activeTaskCount.incrementAndGet();
+        try {
+            virtualThreadExecutor.submit(() -> {
+                try {
+                    scanDirectoryRecursively(
+                        directory,
+                        maximumFileSizeBytes,
+                        numberOfBands,
+                        virtualThreadExecutor,
+                        activeTaskCount,
+                        totalFileCount,
+                        fileCountsPerBand,
+                        scanState,
+                        completionSignal,
+                        visitedDirectories
+                    );
+                    if (rootTask && !scanState.isCancelled() && directory.listFiles() == null) {
+                        throw new IOException("Target directory is not readable: " + directory.getPath());
+                    }
+                } catch (Throwable error) {
+                    publishTerminalError(scanState, completionSignal, progressReporterThread, virtualThreadExecutor, listener, error);
+                } finally {
+                    markTaskCompleted(activeTaskCount, completionSignal);
+                }
+            });
+        } catch (RejectedExecutionException error) {
+            markTaskCompleted(activeTaskCount, completionSignal);
+            if (!scanState.isCancelled()) {
+                publishTerminalError(scanState, completionSignal, progressReporterThread, virtualThreadExecutor, listener, error);
+            }
+        }
+    }
+
+    /** Submits child directory work while keeping task accounting coherent during cancellation races. */
+    private static void submitChildDirectoryTask(
+        File directory,
+        long maximumFileSizeBytes,
+        int numberOfBands,
+        ExecutorService virtualThreadExecutor,
+        AtomicInteger activeTaskCount,
+        LongAdder totalFileCount,
+        LongAdder[] fileCountsPerBand,
+        VirtualThreadsScanState scanState,
+        CountDownLatch completionSignal,
+        Set<String> visitedDirectories
+    ) {
+        activeTaskCount.incrementAndGet();
+        try {
+            virtualThreadExecutor.submit(() -> {
+                try {
+                    scanDirectoryRecursively(
+                        directory,
+                        maximumFileSizeBytes,
+                        numberOfBands,
+                        virtualThreadExecutor,
+                        activeTaskCount,
+                        totalFileCount,
+                        fileCountsPerBand,
+                        scanState,
+                        completionSignal,
+                        visitedDirectories
+                    );
+                } finally {
+                    markTaskCompleted(activeTaskCount, completionSignal);
+                }
+            });
+        } catch (RejectedExecutionException ignored) {
+            markTaskCompleted(activeTaskCount, completionSignal);
+        }
+    }
+
+    /** Emits a single terminal error, then stops the active infrastructure. */
+    private static void publishTerminalError(
+        VirtualThreadsScanState scanState,
+        CountDownLatch completionSignal,
+        Thread progressReporterThread,
+        ExecutorService virtualThreadExecutor,
+        FSReportListener listener,
+        Throwable error
+    ) {
+        scanState.requestCancel();
+        progressReporterThread.interrupt();
+        virtualThreadExecutor.shutdownNow();
+        releaseCompletion(completionSignal, scanState);
+        if (scanState.terminalEventEmitted.compareAndSet(false, true)) {
+            listener.onError(error);
+        }
+    }
+
+    /** Releases the completion waiter exactly once. */
+    private static void releaseCompletion(CountDownLatch completionSignal, VirtualThreadsScanState scanState) {
+        if (scanState.completionReleased.compareAndSet(false, true)) {
             completionSignal.countDown();
         }
     }

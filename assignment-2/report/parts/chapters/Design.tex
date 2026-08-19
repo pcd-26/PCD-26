@@ -90,6 +90,8 @@ The strategy is based on:
 \begin{itemize}
   \item \textbf{scheduling}: the blocking walk is subscribed on
   \texttt{Schedulers.io()};
+  \item \textbf{traversal}: a sequential iterative directory walk inside the
+  observable generator;
   \item \textbf{state}: an immutable \texttt{ReactiveScanState} accumulator;
   \item \textbf{accumulation}: \texttt{scan(initial, ...)} creates a new state
   after each emitted file;
