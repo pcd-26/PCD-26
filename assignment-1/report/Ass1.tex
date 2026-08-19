@@ -1,0 +1,35 @@
+\documentclass[11pt,a4paper]{article}
+
+\input{../../scripts/Setup}
+
+\lstset{
+  style=codestyle,
+  emph={game,board,executor,completion,rangeTask,viewModel,gameRef,workers,snapshot,controllerExecutor,botExecutor,physicsEngine},
+  morekeywords=[2]{List,ArrayList,Future,RuntimeException,TimeUnit,Math,Objects,AtomicReference,Duration,V2d,Player,PhysicsDefaults,RuntimeGameSnapshot,CommandMailbox,GameLoop,ParallelPhysicsEngine,RangeScheduler,ThreadedPhysicsEngine,TaskBasedPhysicsEngine,ThreadedGameRunner,TaskBasedGameRunner,GameModel,Board,BoardConf},
+}
+
+\title{Assignment 1 -- Poool Game}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUS}
+
+\begin{document}
+
+  \input{front/TitlePage}
+
+  \pagenumbering{roman}
+  \tableofcontents
+  \newpage
+  \pagenumbering{arabic}
+
+  \input{front/Introduction}
+
+  \input{chapters/ProblemAnalysis}
+  \input{chapters/Design}
+  \input{chapters/Implementation}
+  \input{chapters/VerificationAndTesting}
+  \input{chapters/ResultsAndDiscussion}
+
+  \input{back/Conclusions}
+  \input{back/HowToRun}
+
+\end{document}

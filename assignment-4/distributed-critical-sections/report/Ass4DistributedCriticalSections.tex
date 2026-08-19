@@ -1,0 +1,31 @@
+\documentclass[11pt,a4paper]{article}
+
+\input{../../../scripts/Setup}
+
+\lstset{
+  style=codestyle,
+  emph={token,queue,broker,criticalSection,bootstrap,delivery,channel,connection},
+  morekeywords=[2]{Connection,Channel,DeliverCallback,CancelCallback,AMQP,IOException,TimeoutException,ConcurrentHashMap,CountDownLatch,AtomicBoolean,RabbitMqCriticalSectionMiddleware},
+}
+
+\title{Assignment 4 -- Distributed Critical Sections with a Message-Oriented Middleware}
+\author{\href{https://github.com/AlexSantini10}{Alex Santini} \\ \href{https://github.com/Val0rous}{Francesco Valentini}}
+\date{PCD a.y. 2025/2026 -- \todayFullUS}
+
+\begin{document}
+
+  \input{front/TitlePage}
+
+  \pagenumbering{roman}
+  \tableofcontents
+  \newpage
+  \pagenumbering{arabic}
+
+  \input{front/Introduction}
+  \input{chapters/ProblemAnalysis}
+  \input{chapters/Design}
+  \input{chapters/Validation}
+  \input{back/Conclusions}
+  \input{back/HowToRun}
+
+\end{document}

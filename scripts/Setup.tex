@@ -1,0 +1,105 @@
+% 1. Frequent Imports
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{listings}
+\usepackage{lmodern}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{tikz}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\usetikzlibrary{arrows.meta, positioning, fit, petri}
+
+% 2. Custom Date Macros
+% Helper macro to convert month numbers into English text
+\newcommand{\englishmonthname}[1]{%
+  \ifcase#1\or January\or February\or March\or April\or May\or June\or July\or August\or September\or October\or November\or December\fi%
+}
+
+% Format: DD/MM/YYYY
+\newcommand{\todayShortLittleEndian}{%
+  \number\day/\number\month/\number\year%
+}
+
+% UK format: DD Month YYYY (e.g., 5 August 2026)
+\newcommand{\todayFullUK}{%
+  \number\day\ \englishmonthname{\number\month} \number\year%
+}
+
+% US format: Month DD, YYYY (e.g., August 5, 2026)
+\newcommand{\todayFullUS}{%
+  \englishmonthname{\number\month} \number\day, \number\year%
+}
+
+% 3. Custom Colors
+\definecolor{codebg}{RGB}{249,250,252}
+\definecolor{codeframe}{RGB}{205,211,219}
+\definecolor{codekeyword}{RGB}{0,102,204}
+\definecolor{codetype}{RGB}{124,58,237}
+\definecolor{codecomment}{RGB}{92,104,120}
+\definecolor{codestring}{RGB}{196,52,43}
+\definecolor{codeaccent}{RGB}{0,145,145}
+\definecolor{reportcodebg}{RGB}{248,248,248}
+\definecolor{reportcodeframe}{RGB}{220,220,220}
+
+% 4. Common Page Formatting
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.12}
+
+% 5. Code Styles (Java as default)
+\lstdefinestyle{codestyle}{
+  language=Java,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  rulecolor=\color{codeframe},
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  numbersep=8pt,
+  breaklines=true,
+  columns=fullflexible,
+  showstringspaces=false,
+  tabsize=4,
+  keywordstyle=\bfseries\color{codekeyword},
+  keywordstyle=[2]\bfseries\color{codetype},
+  commentstyle=\itshape\color{codecomment},
+  stringstyle=\color{codestring},
+  emphstyle=\color{codeaccent},
+  captionpos=b
+}
+\lstdefinestyle{reportcode}{
+  language=Java,
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{reportcodebg},
+  rulecolor=\color{reportcodeframe},
+  frame=single,
+  frameround=tttt,
+  xleftmargin=1em,
+  xrightmargin=0.5em,
+  framexleftmargin=0.8em,
+  framexrightmargin=0.8em,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=4,
+  aboveskip=0.8em,
+  belowskip=0.8em
+}
+\lstdefinestyle{terminalstyle}{
+  basicstyle=\ttfamily\footnotesize,
+  frame=single,
+  rulecolor=\color{codeframe},
+  backgroundcolor=\color{codebg},
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=2
+}
