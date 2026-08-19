@@ -8,16 +8,13 @@ from pathlib import Path
 
 def find_report_root(target: Path) -> Path | None:
     current = target.resolve()
-    # 1. If the target is a file, check if it's a .tex file
+    # Start from the containing directory when a file is saved.
     if current.is_file():
-        if current.suffix == ".tex":
-            report_root = current.parent
-            if (report_root / "Makefile").is_file():
-                return report_root
         current = current.parent
-    # 2. Traverse upwards looking for a Makefile alongside any .tex file
+
+    # Traverse upwards to find a report root with a Makefile and an Ass*.tex entrypoint.
     for candidate in (current, *current.parents):
-        if (candidate / "Makefile").is_file() and any(candidate.glob(".tex")):
+        if (candidate / "Makefile").is_file() and any(candidate.glob("Ass*.tex")):
             return candidate
 
     return None
