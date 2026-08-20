@@ -7,11 +7,11 @@ import (
 	"odds-and-evens-game/championship/round"
 )
 
-// PlayChampionship resolves a full heads-or-tails championship.
-func PlayChampionship(players []domain.Player, toss func() domain.CoinSide) (domain.ChampionshipResult, error) {
-	// The championship needs a coin toss function to resolve each round.
-	if toss == nil {
-		return domain.ChampionshipResult{}, fmt.Errorf("coin toss function must not be nil")
+// PlayChampionship resolves a full odds-and-evens championship.
+func PlayChampionship(players []domain.Player, decideWinnerParity func() domain.Parity) (domain.ChampionshipResult, error) {
+	// The championship needs a parity function to resolve each round.
+	if decideWinnerParity == nil {
+		return domain.ChampionshipResult{}, fmt.Errorf("parity function must not be nil")
 	}
 	if len(players) == 0 {
 		return domain.ChampionshipResult{}, fmt.Errorf("championship must contain at least one player")
@@ -32,7 +32,7 @@ func PlayChampionship(players []domain.Player, toss func() domain.CoinSide) (dom
 	roundNumber := 1
 
 	for len(currentPlayers) > 1 {
-		winners, matches, err := round.PlayRound(roundNumber, currentPlayers, toss)
+		winners, matches, err := round.PlayRound(roundNumber, currentPlayers, decideWinnerParity)
 		if err != nil {
 			return domain.ChampionshipResult{}, err
 		}

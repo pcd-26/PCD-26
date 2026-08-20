@@ -1,7 +1,7 @@
 \section{Design}
 
 The solution uses one \textbf{goroutine} per \textbf{match} and one \textbf{coordinator} per \textbf{round}.
-Each match receives exactly two players and one \textbf{toss function}, then sends one result message back to the round coordinator.
+Each match receives exactly two players and one \textbf{parity function}, then sends one result message back to the round coordinator.
 The coordinator collects all results, preserves match order, and builds the \textbf{winner list} for the next round.
 The championship coordinator repeats this process until only one player remains.
 
@@ -13,7 +13,7 @@ The implementation is split into three layers:
 \end{itemize}
 
 The data model stores the tournament outcome explicitly.
-Each \textbf{match} stores its round number, match number, the two participants, the winner, and the tossed side.
+Each \textbf{match} stores its round number, match number, the two participants, the winner, and the resulting parity.
 Each \textbf{round} stores the ordered list of match results together with the promoted winners.
 The \textbf{championship result} stores the final champion and the full sequence of rounds.
 Rendering and tests read the stored tournament history instead of recomputing it from the final champion alone.

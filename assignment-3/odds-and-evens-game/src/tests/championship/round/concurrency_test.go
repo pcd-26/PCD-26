@@ -25,16 +25,16 @@ func TestPlayRoundStartsEachMatchOnceAndWaitsForAllResults(t *testing.T) {
 	turns <- 1
 	turns <- 2
 
-	toss := func() domain.CoinSide {
+	decideWinnerParity := func() domain.Parity {
 		call := <-turns
 		started <- call
 		<-release
 		done <- call
-		return domain.Heads
+		return domain.Odd
 	}
 
 	go func() {
-		winners, results, err := round.PlayRound(1, players, toss)
+		winners, results, err := round.PlayRound(1, players, decideWinnerParity)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
@@ -81,21 +81,21 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 	turns <- 1
 	turns <- 2
 
-	toss := func() domain.CoinSide {
+	decideWinnerParity := func() domain.Parity {
 		call := <-turns
 		started <- call
 		if call == 1 {
 			<-release1
 			done <- 1
-			return domain.Heads
+			return domain.Odd
 		}
 		<-release2
 		done <- 2
-		return domain.Heads
+		return domain.Odd
 	}
 
 	go func() {
-		winners, results, err := round.PlayRound(2, players, toss)
+		winners, results, err := round.PlayRound(2, players, decideWinnerParity)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
@@ -105,12 +105,12 @@ func TestPlayRoundPreservesOrderingWhenResultsCompleteOutOfOrder(t *testing.T) {
 
 	close(release2)
 	if got := <-done; got != 2 {
-		t.Fatalf("expected second toss to complete first, got %d", got)
+		t.Fatalf("expected second parity draw to complete first, got %d", got)
 	}
 
 	close(release1)
 	if got := <-done; got != 1 {
-		t.Fatalf("expected first toss to complete second, got %d", got)
+		t.Fatalf("expected first parity draw to complete second, got %d", got)
 	}
 
 	execution := <-resultCh
@@ -133,21 +133,21 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 	turns <- 1
 	turns <- 2
 
-	toss := func() domain.CoinSide {
+	decideWinnerParity := func() domain.Parity {
 		call := <-turns
 		started <- call
 		if call == 1 {
 			<-release1
 			done <- 1
-			return domain.CoinSide("edge")
+			return domain.Parity("edge")
 		}
 		<-release2
 		done <- 2
-		return domain.Heads
+		return domain.Odd
 	}
 
 	go func() {
-		winners, results, err := round.PlayRound(3, players, toss)
+		winners, results, err := round.PlayRound(3, players, decideWinnerParity)
 		resultCh <- roundExecution{winners: winners, results: results, err: err}
 	}()
 
@@ -160,7 +160,7 @@ func TestPlayRoundPropagatesErrorWithoutBlockingGoroutines(t *testing.T) {
 
 	execution := <-resultCh
 	if execution.err == nil {
-		t.Fatal("expected error from invalid toss result")
+		t.Fatal("expected error from invalid parity result")
 	}
 
 	for i := 0; i < 2; i++ {

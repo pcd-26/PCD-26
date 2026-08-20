@@ -30,7 +30,7 @@ The architecture is split into:
 - championship coordinator, which runs the full elimination;
 - round coordinator, which manages one round and waits for all match outcomes;
 - match workers, which execute a single match;
-- `CoinTosser` abstraction, which hides the coin-toss source;
+- `ParityDecider` abstraction, which hides the parity source;
 - result message type, which carries either a `MatchResult` or an error;
 - explicit channel ownership, where each sender writes to its own protocol channel and the coordinator performs aggregation.
 
@@ -51,7 +51,7 @@ The implementation enforces the following properties:
 The test suite includes:
 
 - deterministic unit tests for the domain model and match engine;
-- controlled concurrency tests that use fake tossers and channels;
+- controlled concurrency tests that use fake parity functions and channels;
 - repeated tests suitable for `go test -count=100 ./...`;
 - race-detector runs with `go test -race ./...`;
 - invalid input tests for players, rounds, and championship startup.

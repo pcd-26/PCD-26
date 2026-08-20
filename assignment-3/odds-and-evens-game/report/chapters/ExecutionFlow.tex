@@ -11,9 +11,9 @@ The championship progresses sequentially from round to round, while the matches 
     \item The winners returned by the round become the input of the next round.
 \end{enumerate}
 
-The worker logic calls the toss function exactly once, maps \texttt{Heads} to the first player and \texttt{Tails} to the
+The worker logic calls the parity function exactly once, maps \texttt{Odd} to the first player and \texttt{Even} to the
 second player, and returns a
-\texttt{MatchResult} with the round number, match number, participants, winner, and tossed side.
+\texttt{MatchResult} with the round number, match number, participants, winner, and resulting parity.
 
 The round coordinator is the \textbf{synchronization point}.
 It does not poll or guess completion; it waits for exactly one result per started match.
@@ -29,7 +29,7 @@ for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
     secondPlayer := players[matchIndex*2+1]
 
     go func(matchIndex, matchNumber int, firstPlayer, secondPlayer domain.Player) {
-        result, err := match.PlayMatch(roundNumber, matchNumber, toss, firstPlayer, secondPlayer)
+        result, err := match.PlayMatch(roundNumber, matchNumber, drawParity, firstPlayer, secondPlayer)
         outcomes <- matchOutcome{matchIndex: matchIndex, result: result, err: err}
     }(matchIndex, matchNumber, firstPlayer, secondPlayer)
 }
@@ -38,7 +38,7 @@ for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
 \noindent\textbf{Round orchestration in \texttt{src/championship/tournament/championship.go}}
 \begin{lstlisting}[style=reportcode]
 for len(currentPlayers) > 1 {
-    winners, matches, err := round.PlayRound(roundNumber, currentPlayers, toss)
+    winners, matches, err := round.PlayRound(roundNumber, currentPlayers, drawParity)
     if err != nil {
         return domain.ChampionshipResult{}, err
     }

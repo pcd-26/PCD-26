@@ -9,19 +9,19 @@ type MatchResult struct {
 	firstPlayer  Player
 	secondPlayer Player
 	winner       Player
-	tossedSide   CoinSide
+	parity       Parity
 }
 
 // NewMatchResult creates a validated match result.
-func NewMatchResult(roundNumber, matchNumber int, firstPlayer, secondPlayer, winner Player, tossedSide CoinSide) (MatchResult, error) {
+func NewMatchResult(roundNumber, matchNumber int, firstPlayer, secondPlayer, winner Player, parity Parity) (MatchResult, error) {
 	if roundNumber <= 0 {
 		return MatchResult{}, fmt.Errorf("round number must be positive: %d", roundNumber)
 	}
 	if matchNumber <= 0 {
 		return MatchResult{}, fmt.Errorf("match number must be positive: %d", matchNumber)
 	}
-	if tossedSide != Heads && tossedSide != Tails {
-		return MatchResult{}, fmt.Errorf("invalid coin side: %q", tossedSide)
+	if parity != Odd && parity != Even {
+		return MatchResult{}, fmt.Errorf("invalid parity: %q", parity)
 	}
 	if winner.ID() != firstPlayer.ID() && winner.ID() != secondPlayer.ID() {
 		return MatchResult{}, fmt.Errorf("winner must be one of the match players")
@@ -33,7 +33,7 @@ func NewMatchResult(roundNumber, matchNumber int, firstPlayer, secondPlayer, win
 		firstPlayer:  firstPlayer,
 		secondPlayer: secondPlayer,
 		winner:       winner,
-		tossedSide:   tossedSide,
+		parity:       parity,
 	}, nil
 }
 
@@ -62,7 +62,7 @@ func (m MatchResult) Winner() Player {
 	return m.winner
 }
 
-// TossedSide returns the coin side tossed for the match.
-func (m MatchResult) TossedSide() CoinSide {
-	return m.tossedSide
+// Parity returns the winning parity produced by the match.
+func (m MatchResult) Parity() Parity {
+	return m.parity
 }
