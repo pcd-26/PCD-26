@@ -7,53 +7,53 @@ import (
 	"odds-and-evens-game/championship/match"
 )
 
-// The match engine should return heads when the toss says heads.
-func TestPlayMatchHeadsResult(t *testing.T) {
+// The match engine should return odd when the parity draw says odd.
+func TestPlayMatchOddResult(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
 
-	result, err := match.PlayMatch(3, 7, func() domain.CoinSide { return domain.Heads }, firstPlayer, secondPlayer)
+	result, err := match.PlayMatch(3, 7, func() domain.Parity { return domain.Odd }, firstPlayer, secondPlayer)
 	if err != nil {
 		t.Fatalf("expected match to succeed, got error: %v", err)
 	}
-	if result.TossedSide() != domain.Heads {
-		t.Fatalf("unexpected tossed side: %q", result.TossedSide())
+	if result.Parity() != domain.Odd {
+		t.Fatalf("unexpected parity: %q", result.Parity())
 	}
 }
 
-// The match engine should return tails when the toss says tails.
-func TestPlayMatchTailsResult(t *testing.T) {
+// The match engine should return even when the parity draw says even.
+func TestPlayMatchEvenResult(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
 
-	result, err := match.PlayMatch(3, 7, func() domain.CoinSide { return domain.Tails }, firstPlayer, secondPlayer)
+	result, err := match.PlayMatch(3, 7, func() domain.Parity { return domain.Even }, firstPlayer, secondPlayer)
 	if err != nil {
 		t.Fatalf("expected match to succeed, got error: %v", err)
 	}
-	if result.TossedSide() != domain.Tails {
-		t.Fatalf("unexpected tossed side: %q", result.TossedSide())
+	if result.Parity() != domain.Even {
+		t.Fatalf("unexpected parity: %q", result.Parity())
 	}
 }
 
-// Winner selection depends only on the toss result.
+// Winner selection depends only on the parity result.
 func TestPlayMatchCorrectWinner(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
 
-	headsResult, err := match.PlayMatch(3, 7, func() domain.CoinSide { return domain.Heads }, firstPlayer, secondPlayer)
+	oddResult, err := match.PlayMatch(3, 7, func() domain.Parity { return domain.Odd }, firstPlayer, secondPlayer)
 	if err != nil {
 		t.Fatalf("expected match to succeed, got error: %v", err)
 	}
-	if headsResult.Winner().ID() != firstPlayer.ID() {
-		t.Fatalf("unexpected winner for heads: got %d want %d", headsResult.Winner().ID(), firstPlayer.ID())
+	if oddResult.Winner().ID() != firstPlayer.ID() {
+		t.Fatalf("unexpected winner for odd: got %d want %d", oddResult.Winner().ID(), firstPlayer.ID())
 	}
 
-	tailsResult, err := match.PlayMatch(3, 7, func() domain.CoinSide { return domain.Tails }, firstPlayer, secondPlayer)
+	evenResult, err := match.PlayMatch(3, 7, func() domain.Parity { return domain.Even }, firstPlayer, secondPlayer)
 	if err != nil {
 		t.Fatalf("expected match to succeed, got error: %v", err)
 	}
-	if tailsResult.Winner().ID() != secondPlayer.ID() {
-		t.Fatalf("unexpected winner for tails: got %d want %d", tailsResult.Winner().ID(), secondPlayer.ID())
+	if evenResult.Winner().ID() != secondPlayer.ID() {
+		t.Fatalf("unexpected winner for even: got %d want %d", evenResult.Winner().ID(), secondPlayer.ID())
 	}
 }
 
@@ -62,7 +62,7 @@ func TestPlayMatchRoundMetadata(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
 
-	result, err := match.PlayMatch(4, 9, func() domain.CoinSide { return domain.Heads }, firstPlayer, secondPlayer)
+	result, err := match.PlayMatch(4, 9, func() domain.Parity { return domain.Odd }, firstPlayer, secondPlayer)
 	if err != nil {
 		t.Fatalf("expected match to succeed, got error: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestPlayMatchMatchMetadata(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
 
-	result, err := match.PlayMatch(4, 9, func() domain.CoinSide { return domain.Heads }, firstPlayer, secondPlayer)
+	result, err := match.PlayMatch(4, 9, func() domain.Parity { return domain.Odd }, firstPlayer, secondPlayer)
 	if err != nil {
 		t.Fatalf("expected match to succeed, got error: %v", err)
 	}
@@ -85,22 +85,22 @@ func TestPlayMatchMatchMetadata(t *testing.T) {
 	}
 }
 
-// Invalid toss values must be rejected.
-func TestPlayMatchInvalidTossResult(t *testing.T) {
+// Invalid parity values must be rejected.
+func TestPlayMatchInvalidParityResult(t *testing.T) {
 	firstPlayer := mustPlayer(t, 1, "Alice")
 	secondPlayer := mustPlayer(t, 2, "Bob")
 
-	_, err := match.PlayMatch(4, 9, func() domain.CoinSide { return domain.CoinSide("edge") }, firstPlayer, secondPlayer)
+	_, err := match.PlayMatch(4, 9, func() domain.Parity { return domain.Parity("edge") }, firstPlayer, secondPlayer)
 	if err == nil {
-		t.Fatal("expected error for invalid toss result")
+		t.Fatal("expected error for invalid parity result")
 	}
 }
 
-// Invalid players must be rejected before the toss is used.
+// Invalid players must be rejected before the parity function is used.
 func TestPlayMatchInvalidPlayer(t *testing.T) {
 	validPlayer := mustPlayer(t, 2, "Bob")
 
-	_, err := match.PlayMatch(4, 9, func() domain.CoinSide { return domain.Heads }, domain.Player{}, validPlayer)
+	_, err := match.PlayMatch(4, 9, func() domain.Parity { return domain.Odd }, domain.Player{}, validPlayer)
 	if err == nil {
 		t.Fatal("expected error for invalid player")
 	}

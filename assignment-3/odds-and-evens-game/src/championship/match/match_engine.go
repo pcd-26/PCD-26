@@ -8,9 +8,9 @@ import (
 )
 
 // PlayMatch resolves a single match between exactly two players.
-func PlayMatch(roundNumber, matchNumber int, toss func() domain.CoinSide, firstPlayer, secondPlayer domain.Player) (domain.MatchResult, error) {
-	if toss == nil {
-		return domain.MatchResult{}, fmt.Errorf("coin toss function must not be nil")
+func PlayMatch(roundNumber, matchNumber int, decideWinnerParity func() domain.Parity, firstPlayer, secondPlayer domain.Player) (domain.MatchResult, error) {
+	if decideWinnerParity == nil {
+		return domain.MatchResult{}, fmt.Errorf("parity function must not be nil")
 	}
 	if err := validatePlayer(firstPlayer); err != nil {
 		return domain.MatchResult{}, fmt.Errorf("first player is invalid: %w", err)
@@ -19,23 +19,23 @@ func PlayMatch(roundNumber, matchNumber int, toss func() domain.CoinSide, firstP
 		return domain.MatchResult{}, fmt.Errorf("second player is invalid: %w", err)
 	}
 
-	tossedSide := toss()
-	switch tossedSide {
-	case domain.Heads:
-		return domain.NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, firstPlayer, tossedSide)
-	case domain.Tails:
-		return domain.NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, secondPlayer, tossedSide)
+	parity := decideWinnerParity()
+	switch parity {
+	case domain.Odd:
+		return domain.NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, firstPlayer, parity)
+	case domain.Even:
+		return domain.NewMatchResult(roundNumber, matchNumber, firstPlayer, secondPlayer, secondPlayer, parity)
 	default:
-		return domain.MatchResult{}, fmt.Errorf("invalid toss result: %q", tossedSide)
+		return domain.MatchResult{}, fmt.Errorf("invalid parity result: %q", parity)
 	}
 }
 
-// RandomTossSide returns a random coin side.
-func RandomTossSide() domain.CoinSide {
+// RandomWinnerParity returns a random winning parity.
+func RandomWinnerParity() domain.Parity {
 	if rand.Intn(2) == 0 {
-		return domain.Heads
+		return domain.Odd
 	}
-	return domain.Tails
+	return domain.Even
 }
 
 // validatePlayer keeps the match-level validation local to this package.

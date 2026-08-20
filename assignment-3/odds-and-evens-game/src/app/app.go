@@ -12,7 +12,7 @@ import (
 )
 
 // Run executes the CLI.
-func Run(args []string, stdout, stderr io.Writer, toss func() domain.CoinSide) int {
+func Run(args []string, stdout, stderr io.Writer, decideWinnerParity func() domain.Parity) int {
 	playersCount, err := ParsePlayersCount(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -25,11 +25,11 @@ func Run(args []string, stdout, stderr io.Writer, toss func() domain.CoinSide) i
 		return 1
 	}
 
-	if toss == nil {
-		toss = match.RandomTossSide
+	if decideWinnerParity == nil {
+		decideWinnerParity = match.RandomWinnerParity
 	}
 
-	result, err := tournament.PlayChampionship(players, toss)
+	result, err := tournament.PlayChampionship(players, decideWinnerParity)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -101,13 +101,13 @@ func RenderChampionship(out io.Writer, result domain.ChampionshipResult) error {
 				"Match %d: %s [%s] vs %s [%s]\n",
 				match.MatchNumber(),
 				match.FirstPlayer().Name(),
-				domain.Heads,
+				domain.Odd,
 				match.SecondPlayer().Name(),
-				domain.Tails,
+				domain.Even,
 			); err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintf(out, "Toss: %s\n", match.TossedSide()); err != nil {
+			if _, err := fmt.Fprintf(out, "Parity: %s\n", match.Parity()); err != nil {
 				return err
 			}
 			if _, err := fmt.Fprintf(out, "Winner: %s\n\n", match.Winner().Name()); err != nil {

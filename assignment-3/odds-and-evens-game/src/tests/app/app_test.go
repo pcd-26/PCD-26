@@ -36,12 +36,12 @@ func TestParsePlayersCountRejectsNonPowerOfTwo(t *testing.T) {
 	}
 }
 
-// This verifies the full CLI flow with a deterministic toss hook.
+// This verifies the full CLI flow with a deterministic parity hook.
 func TestRunFormatsEightPlayerChampionship(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := app.Run([]string{"-players", "8"}, stdout, stderr, func() domain.CoinSide { return domain.Heads })
+	exitCode := app.Run([]string{"-players", "8"}, stdout, stderr, func() domain.Parity { return domain.Odd })
 	if exitCode != 0 {
 		t.Fatalf("expected zero exit code, got %d, stderr=%s", exitCode, stderr.String())
 	}
@@ -56,6 +56,9 @@ func TestRunFormatsEightPlayerChampionship(t *testing.T) {
 	if strings.Count(output, "Winner:") != 7 {
 		t.Fatalf("expected seven winners in output, got:\n%s", output)
 	}
+	if strings.Count(output, "Parity: odd") != 7 {
+		t.Fatalf("expected odd parity output for every match, got:\n%s", output)
+	}
 	if !strings.Contains(output, "Champion:") {
 		t.Fatalf("expected champion line in output, got:\n%s", output)
 	}
@@ -66,7 +69,7 @@ func TestRunRejectsInvalidInput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	exitCode := app.Run([]string{"-players", "3"}, stdout, stderr, func() domain.CoinSide { return domain.Heads })
+	exitCode := app.Run([]string{"-players", "3"}, stdout, stderr, func() domain.Parity { return domain.Odd })
 	if exitCode == 0 {
 		t.Fatal("expected non-zero exit code")
 	}

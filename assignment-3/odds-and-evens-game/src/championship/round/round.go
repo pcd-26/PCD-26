@@ -14,10 +14,10 @@ type matchOutcome struct {
 }
 
 // PlayRound resolves one championship round concurrently.
-func PlayRound(roundNumber int, players []domain.Player, toss func() domain.CoinSide) ([]domain.Player, []domain.MatchResult, error) {
-	// The round needs a coin toss function to resolve each match.
-	if toss == nil {
-		return nil, nil, fmt.Errorf("coin toss function must not be nil")
+func PlayRound(roundNumber int, players []domain.Player, decideWinnerParity func() domain.Parity) ([]domain.Player, []domain.MatchResult, error) {
+	// The round needs a parity function to resolve each match.
+	if decideWinnerParity == nil {
+		return nil, nil, fmt.Errorf("parity function must not be nil")
 	}
 	// A round cannot run without players.
 	if len(players) == 0 {
@@ -46,7 +46,7 @@ func PlayRound(roundNumber int, players []domain.Player, toss func() domain.Coin
 		// Capture the loop values so each goroutine works on the right pair.
 		go func(matchIndex, matchNumber int, firstPlayer, secondPlayer domain.Player) {
 			// Resolve one match and send its outcome back to the coordinator.
-			result, err := match.PlayMatch(roundNumber, matchNumber, toss, firstPlayer, secondPlayer)
+			result, err := match.PlayMatch(roundNumber, matchNumber, decideWinnerParity, firstPlayer, secondPlayer)
 			outcomes <- matchOutcome{matchIndex: matchIndex, result: result, err: err}
 		}(matchIndex, matchNumber, firstPlayer, secondPlayer)
 	}
