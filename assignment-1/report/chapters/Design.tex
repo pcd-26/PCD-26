@@ -178,14 +178,14 @@ wlabel/.style={font=\tiny}
 \draw[flow] (positionsUpdated) -- (holes);
 \draw[flow] (holes) -- (holesProcessed);
 
-\node[state, below=1.5mm of ready] {tick ready};
+\node[state, below=1.5mm of ready] {sub-step ready};
 \node[phase] at (3.6,0) {$\vdots$};
 \node[wlabel, above left=0.5mm and 1.5mm of moveOne] {$W_1$};
 \node[wlabel, below left=0.5mm and 1.5mm of moveLast] {$W_R$};
-\node[phase, above=7mm of moveOne] {Update disjoint active-ball ranges in parallel};
-\node[state, below=1.5mm of positionsUpdated] {positions updated};
-\node[phase, above=1.5mm of holes] {Resolve hole interactions\\sequentially};
-\node[state, below=1.5mm of holesProcessed] {holes resolved};
+\node[phase, above=7mm of moveOne] {Update disjoint active-ball positions};
+\node[state, below=1.5mm of positionsUpdated] {active-ball positions updated};
+\node[phase, above=1.5mm of holes] {Resolve hole interactions};
+\node[state, below=1.5mm of holesProcessed] {active-ball set updated};
 
 % Parallel private-grid construction, followed by deterministic merge.
 \node[transition] (gridFork) at (8.8,-3.4) {};
@@ -216,10 +216,10 @@ wlabel/.style={font=\tiny}
 \node[phase] at (6.4,-3.4) {$\vdots$};
 \node[wlabel, above left=0.5mm and 1.5mm of gridOne] {$W_1$};
 \node[wlabel, below left=0.5mm and 1.5mm of gridLast] {$W_R$};
-\node[phase, above=7mm of gridOne] {Build one private spatial grid per range in parallel};
-\node[state, below=1.5mm of privateGridsBuilt] {local grids built};
-\node[phase, above=1.5mm of mergeGrid] {Merge grids and order\\occupied cells sequentially};
-\node[state, below=1.5mm of orderedGridReady] {grid merged and ordered};
+\node[phase, above=7mm of gridOne] {Group balls into spatial cells};
+\node[state, below=1.5mm of privateGridsBuilt] {local cell groups ready};
+\node[phase, above=1.5mm of mergeGrid] {Merge and order\\the spatial index};
+\node[state, below=1.5mm of orderedGridReady] {ordered spatial index ready};
 
 % Parallel cell inspection, followed by sequential contribution accumulation.
 \node[transition] (pairFork) at (1.5,-6.8) {};
@@ -250,10 +250,10 @@ wlabel/.style={font=\tiny}
 \node[phase] at (4,-6.8) {$\vdots$};
 \node[wlabel, above left=0.5mm and 1.5mm of pairOne] {$W_1$};
 \node[wlabel, below left=0.5mm and 1.5mm of pairLast] {$W_R$};
-\node[phase, above=7mm of pairOne] {Inspect disjoint occupied-cell ranges in parallel};
-\node[state, below=1.5mm of pairsCollected] {collision pairs collected};
-\node[phase, above=1.5mm of computeDeltas] {Compute and accumulate collision\\contributions sequentially};
-\node[state, below=1.5mm of deltasAccumulated] {collision deltas accumulated};
+\node[phase, above=7mm of pairOne] {Find collisions in nearby ball groups};
+\node[state, below=1.5mm of pairsCollected] {overlapping pairs identified};
+\node[phase, above=1.5mm of computeDeltas] {Accumulate collision\\corrections};
+\node[state, below=1.5mm of deltasAccumulated] {per-ball corrections ready};
 
 % R=1 gives sequential apply; R>1 enables concurrent branches.
 \node[transition] (applyFork) at (8.8,-10.2) {};
@@ -280,13 +280,13 @@ wlabel/.style={font=\tiny}
 \node[phase] at (6.4,-10.2) {$\vdots$};
 \node[wlabel, above left=0.5mm and 1.5mm of applyOne] {$W_1$};
 \node[wlabel, below left=0.5mm and 1.5mm of applyLast] {$W_R$};
-\node[phase, above=7mm of applyOne] {Apply final deltas: $R=1$ sequential, $R>1$ parallel};
-\node[state, below=1.5mm of complete] {complete};
+\node[phase, above=7mm of applyOne] {Commit disjoint per-ball corrections};
+\node[state, below=1.5mm of complete] {sub-step committed};
 
 \end{tikzpicture}
 
 \small \textcolor{blue!55!black}{Blue transitions} are concurrently enabled
-range operations. \textcolor{orange!75!black}{Orange transitions} are
+disjoint-set operations. \textcolor{orange!75!black}{Orange transitions} are
 sequential coordinator operations. Dark transitions dispatch and join ranges.
 \end{center}
 
