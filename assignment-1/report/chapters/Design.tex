@@ -305,7 +305,7 @@ competing writes and schedule-dependent floating-point results. The engines
 instead accumulate position and velocity corrections before applying them:
 
 \begin{center}
-\textbf{parallel computation, deterministic accumulation, disjoint commit}
+\textbf{parallel collision detection, deterministic correction accumulation, independent per-ball updates}
 \end{center}
 
 The final delta application may become parallel again because each touched
