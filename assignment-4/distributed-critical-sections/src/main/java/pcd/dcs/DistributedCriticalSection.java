@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeoutException;
 public class DistributedCriticalSection implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(DistributedCriticalSection.class);
-    private static final byte[] EMPTY_BODY = new byte[0];
+    private static final byte[] TOKEN_BODY = "TOKEN".getBytes(StandardCharsets.UTF_8);
     private static final int TOKEN_BOOTSTRAP_CONFIRM_TIMEOUT_MILLIS = 2000;
 
     // Test hook executed only during the bootstrap publish path.
@@ -121,7 +122,7 @@ public class DistributedCriticalSection implements AutoCloseable {
                 "", // default exchange
                 criticalSectionTokenQueueName, // destination queue that stores the shared token
                 MessageProperties.PERSISTENT_TEXT_PLAIN, // durable message metadata
-                EMPTY_BODY); // token payload
+                TOKEN_BODY); // token payload
         try {
             if (!tokenCreationGuardChannel.waitForConfirms(TOKEN_BOOTSTRAP_CONFIRM_TIMEOUT_MILLIS)) {
                 throw new IOException("Failed to confirm token bootstrap for critical section '" + csName + "'");
