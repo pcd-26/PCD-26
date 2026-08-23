@@ -208,6 +208,7 @@ jobs:
           cp assignment-4/distributed-tic-tac-toe/report/report.pdf package/Assignment-04/distributed-tic-tac-toe/doc/report.pdf
           cp assignment-4/distributed-critical-sections/pom.xml package/Assignment-04/distributed-critical-sections/pom.xml
           cp -R assignment-4/distributed-critical-sections/src package/Assignment-04/distributed-critical-sections/src
+          cp assignment-4/distributed-critical-sections/docker-compose.rabbitmq.yml package/Assignment-04/distributed-critical-sections/docker-compose.rabbitmq.yml
           cp assignment-4/distributed-critical-sections/report/report.pdf package/Assignment-04/distributed-critical-sections/doc/report.pdf
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-04)
@@ -231,6 +232,7 @@ jobs:
           test -f package/Assignment-04/distributed-critical-sections/pom.xml
           test -d package/Assignment-04/distributed-critical-sections/src/main
           test -d package/Assignment-04/distributed-critical-sections/src/test
+          test -f package/Assignment-04/distributed-critical-sections/docker-compose.rabbitmq.yml
           test -f package/Assignment-04/distributed-critical-sections/doc/report.pdf
           test ! -e package/Assignment-04/report
           test ! -e package/Assignment-04/docs
