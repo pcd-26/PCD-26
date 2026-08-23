@@ -3,15 +3,17 @@
 
 This section describes a minimal \textbf{Windows PowerShell} execution
 scenario with \textbf{1 registry}, \textbf{1 server}, and \textbf{2 clients}.
-All commands assume the current directory is
-\texttt{assignment-4/distributed-tic-tac-toe}.
+All commands assume the current directory is the
+\texttt{distributed-tic-tac-toe} project directory, which contains
+\texttt{pom.xml}. The entry point is implemented in
+\texttt{src/main/java/pcd/dttt/Main.java}.
 
 \subsection{Build}
 
 Compile the project sources:
 
 \begin{lstlisting}[style=codestyle]
-mvn clean compile
+mvn -f pom.xml clean compile
 \end{lstlisting}
 
 \subsection{Terminal 1: Registry}
@@ -19,7 +21,7 @@ mvn clean compile
 Start the RMI registry on the default port:
 
 \begin{lstlisting}[style=codestyle]
-mvn exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=registry 1099"
+mvn -f pom.xml exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=registry 1099"
 \end{lstlisting}
 
 \subsection{Terminal 2: Server}
@@ -28,7 +30,7 @@ Start the server and bind the lobby service under the default name
 \texttt{Lobby}:
 
 \begin{lstlisting}[style=codestyle]
-mvn exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=server localhost 1099 Lobby"
+mvn -f pom.xml exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=server localhost 1099 Lobby"
 \end{lstlisting}
 
 \subsection{Terminal 3: Client 1}
@@ -36,13 +38,13 @@ mvn exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=server localhost 109
 Start the first client. This player can create a room.
 
 \begin{lstlisting}[style=codestyle]
-mvn exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=client localhost 1099 Lobby"
+mvn -f pom.xml exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=client localhost 1099 Lobby"
 \end{lstlisting}
 
 If a command-line client is preferred, use:
 
 \begin{lstlisting}[style=codestyle]
-mvn exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=client localhost 1099 Lobby --cli"
+mvn -f pom.xml exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=client localhost 1099 Lobby --cli"
 \end{lstlisting}
 
 \subsection{Terminal 4: Client 2}
@@ -50,7 +52,7 @@ mvn exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=client localhost 109
 Start the second client with the same registry host, port, and service name:
 
 \begin{lstlisting}[style=codestyle]
-mvn exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=client localhost 1099 Lobby"
+mvn -f pom.xml exec:java "-Dexec.mainClass=pcd.dttt.Main" "-Dexec.args=client localhost 1099 Lobby"
 \end{lstlisting}
 
 \subsection{Minimal execution flow}

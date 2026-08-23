@@ -1,14 +1,19 @@
 \clearpage
 \section{How to Run}
 
-From the \texttt{assignment-4/clustered-smart-home-alarm-system} directory:
+From the \texttt{clustered-smart-home-alarm-system} project directory, which
+contains \texttt{pom.xml}:
 
 \begin{itemize}
-  \item Build: \texttt{mvn compile}
-  \item Test: \texttt{mvn test}
-  \item Distributed demo: \texttt{mvn exec:java} with main class \texttt{pcd.shas.DemoMain}
-  \item Cluster node: \texttt{mvn exec:java} with main class \texttt{pcd.shas.Main}
+  \item Build: \texttt{mvn -f pom.xml compile}
+  \item Test: \texttt{mvn -f pom.xml test}
+  \item Distributed demo: \texttt{mvn -f pom.xml exec:java} with main class \texttt{pcd.shas.DemoMain}
+  \item Cluster node: \texttt{mvn -f pom.xml exec:java} with main class \texttt{pcd.shas.Main}
 \end{itemize}
+
+The demo entry point is implemented in
+\texttt{src/main/java/pcd/shas/DemoMain.java}; the clustered-node entry point
+is in \texttt{src/main/java/pcd/shas/Main.java}.
 
 The clustered entry point \texttt{pcd.shas.Main} starts one node at a time.
 The accepted roles are \texttt{control-unit}, \texttt{keypad}, and
@@ -17,22 +22,22 @@ The accepted roles are \texttt{control-unit}, \texttt{keypad}, and
 
 \textbf{Distributed demo}
 \begin{lstlisting}[style=terminalstyle]
-mvn compile exec:java "-Dexec.mainClass=pcd.shas.DemoMain"
+mvn -f pom.xml compile exec:java "-Dexec.mainClass=pcd.shas.DemoMain"
 \end{lstlisting}
 
 \textbf{Control-unit node}
 \begin{lstlisting}[style=terminalstyle]
-mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+mvn -f pom.xml compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=control-unit --host 127.0.0.1 --port 2551 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
 \end{lstlisting}
 
 \textbf{Keypad node}
 \begin{lstlisting}[style=terminalstyle]
-mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=keypad --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+mvn -f pom.xml compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=keypad --host 127.0.0.1 --port 2552 --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
 \end{lstlisting}
 
 \textbf{Sensor node}
 \begin{lstlisting}[style=terminalstyle]
-mvn compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=sensor --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
+mvn -f pom.xml compile exec:java "-Dexec.mainClass=pcd.shas.Main" "-Dexec.args=sensor --host 127.0.0.1 --port 2553 --sensor-id front_door --sensor-type DOOR_WINDOW --zone PERIMETER --seed-nodes 127.0.0.1:2551,127.0.0.1:2552,127.0.0.1:2553"
 \end{lstlisting}
 
 The control-unit CLI accepts \texttt{status}, \texttt{help}, and \texttt{exit}.
