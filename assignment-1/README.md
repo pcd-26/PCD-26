@@ -57,6 +57,9 @@ The deliverable must be a zipped folder `Assignment-01`, to be submitted on the 
 - `pom.xml` with the Maven build configuration
 - `src` directory with sources
 - `doc` directory with the report in PDF (`report.pdf`). 
+- `verification` directory with the JPF harnesses and configurations used for
+  bounded concurrency verification. These artifacts are included for
+  inspection; executing JPF is not required to run the application.
 
 
 

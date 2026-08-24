@@ -116,6 +116,9 @@ jobs:
           cp -R assignment-1/src package/Assignment-01/src
           find package/Assignment-01/src -type d -name benchmark -prune -exec rm -rf {} +
           cp assignment-1/report/report.pdf package/Assignment-01/doc/report.pdf
+          mkdir -p package/Assignment-01/verification/jpf
+          cp -R assignment-1/verification/jpf/src package/Assignment-01/verification/jpf/src
+          cp assignment-1/verification/jpf/*.jpf package/Assignment-01/verification/jpf/
 
           (cd package && zip -r "../$DELIVERY_ZIP" Assignment-01)
 
@@ -133,13 +136,24 @@ jobs:
           test -d package/Assignment-01/src/test
           test ! -d package/Assignment-01/src/main/java/pcd/poool/benchmark
           test ! -d package/Assignment-01/src/test/java/pcd/poool/benchmark
+          test -f package/Assignment-01/verification/jpf/threaded-minimal.jpf
+          test -f package/Assignment-01/verification/jpf/taskbased-minimal.jpf
+          test -f package/Assignment-01/verification/jpf/threaded-physics-workers.jpf
+          test -f package/Assignment-01/verification/jpf/taskbased-physics-batch.jpf
+          test -f package/Assignment-01/verification/jpf/src/pcd/poool/verification/jpf/ThreadedMiniHarness.java
+          test -f package/Assignment-01/verification/jpf/src/pcd/poool/model/physics/threaded/PhysicsWorkersJpfHarness.java
+          test ! -e package/Assignment-01/verification/jpf/.jpf-core
+          test ! -e package/Assignment-01/verification/README.md
+          test ! -e package/Assignment-01/verification/jpf/README.md
+          test ! -e package/Assignment-01/verification/jpf/bootstrap_jpf.py
+          test ! -e package/Assignment-01/verification/jpf/run_jpf.py
+          test ! -e package/Assignment-01/verification/jpf/logs
           test ! -e package/Assignment-01/docs
           test ! -e package/Assignment-01/report
           test ! -e package/Assignment-01/target
           test ! -e package/Assignment-01/reference
           test ! -e package/Assignment-01/benchmarks
           test ! -e package/Assignment-01/scripts
-          test ! -e package/Assignment-01/verification
           test ! -e package/Assignment-01/README.md
           test ! -e package/Assignment-01/board.png
           test ! -e package/Assignment-01/run.sh
