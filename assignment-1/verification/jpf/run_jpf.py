@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--model",
-        choices=("threaded", "taskbased", "both"),
+        choices=("threaded", "taskbased", "physics", "taskphysics", "both", "all"),
         required=True,
         help="Which minimal model to run.",
     )
@@ -68,7 +68,12 @@ def compile_minimal_harnesses(repo_root: Path) -> None:
     source_root = repo_root / "assignment-1" / "verification" / "jpf" / "src"
     output_root = repo_root / "assignment-1" / "target" / "jpf-classes"
     sources = sorted(source_root.rglob("*.java"))
-    if not sources:
+    production_root = repo_root / "assignment-1" / "src" / "main" / "java"
+    sources.extend([
+        production_root / "pcd" / "poool" / "model" / "physics" / "threaded" / "PhysicsWorker.java",
+        production_root / "pcd" / "poool" / "model" / "physics" / "threaded" / "WorkerCompletionMonitor.java",
+    ])
+    if not all(source.is_file() for source in sources):
         raise SystemExit(f"No JPF harness sources found under {source_root}")
 
     shutil.rmtree(output_root, ignore_errors=True)
@@ -194,7 +199,7 @@ def main() -> int:
                 "or run ./gradlew build inside .jpf-core first."
             )
 
-    if args.model in {"threaded", "both"}:
+    if args.model in {"threaded", "both", "all"}:
         config_file = verification_dir / "threaded-minimal.jpf"
         if use_docker:
             run_model_in_docker(jpf_root, repo_root, config_file.relative_to(repo_root))
@@ -204,8 +209,28 @@ def main() -> int:
                 repo_root / "assignment-1",
                 config_file.relative_to(repo_root / "assignment-1"),
             )
-    if args.model in {"taskbased", "both"}:
+    if args.model in {"taskbased", "both", "all"}:
         config_file = verification_dir / "taskbased-minimal.jpf"
+        if use_docker:
+            run_model_in_docker(jpf_root, repo_root, config_file.relative_to(repo_root))
+        else:
+            run_model(
+                jpf_root,
+                repo_root / "assignment-1",
+                config_file.relative_to(repo_root / "assignment-1"),
+            )
+    if args.model in {"physics", "all"}:
+        config_file = verification_dir / "threaded-physics-workers.jpf"
+        if use_docker:
+            run_model_in_docker(jpf_root, repo_root, config_file.relative_to(repo_root))
+        else:
+            run_model(
+                jpf_root,
+                repo_root / "assignment-1",
+                config_file.relative_to(repo_root / "assignment-1"),
+            )
+    if args.model in {"taskphysics", "all"}:
+        config_file = verification_dir / "taskbased-physics-batch.jpf"
         if use_docker:
             run_model_in_docker(jpf_root, repo_root, config_file.relative_to(repo_root))
         else:

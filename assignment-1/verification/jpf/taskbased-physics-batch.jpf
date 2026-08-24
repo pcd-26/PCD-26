@@ -1,4 +1,4 @@
-target=pcd.poool.verification.jpf.ThreadedMiniHarness
+target=pcd.poool.verification.jpf.TaskBasedPhysicsBatchHarness
 classpath=target/jpf-classes
 search.class=gov.nasa.jpf.search.DFSearch
 vm.storage.class=gov.nasa.jpf.vm.JenkinsStateSet

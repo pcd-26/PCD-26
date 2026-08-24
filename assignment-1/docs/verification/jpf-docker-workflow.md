@@ -68,8 +68,7 @@ The harnesses live under:
 
 - `assignment-1/verification/jpf/src/pcd/poool/verification/jpf`
 
-They are compiled by `run_jpf.py` (and independently by the JUnit integration
-test) into:
+They are compiled by `run_jpf.py` into:
 
 - `assignment-1/target/jpf-classes`
 
@@ -104,29 +103,27 @@ The run should target:
 As with the threaded model, the goal is to verify the protocol around command
 draining, work completion, and snapshot publication.
 
-## 5. Run The JUnit Integration Test
+## 5. Run All Models
 
-The actual JPF-backed check is performed by the JUnit test:
+The helper script compiles the harnesses and runs all JPF configurations:
 
-- `pcd.poool.verification.JpfVerificationArtifactsTest`
-
-The test compiles the harnesses and then runs both JPF configs:
-
-- `threaded-minimal.jpf`
-- `taskbased-minimal.jpf`
+- `threaded-minimal.jpf`;
+- `taskbased-minimal.jpf`.
+- `threaded-physics-workers.jpf`;
+- `taskbased-physics-batch.jpf`.
 
 Recommended Docker invocation:
 
 PowerShell:
 
 ```powershell
-python assignment-1/verification/jpf/run_jpf.py --docker --model both
+python assignment-1/verification/jpf/run_jpf.py --docker --model all
 ```
 
 POSIX shell:
 
 ```bash
-python assignment-1/verification/jpf/run_jpf.py --docker --model both
+python assignment-1/verification/jpf/run_jpf.py --docker --model all
 ```
 
 The Docker helper normalizes the Gradle wrapper line endings inside the
@@ -141,6 +138,8 @@ PowerShell:
 ```powershell
 java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/threaded-minimal.jpf
 java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/taskbased-minimal.jpf
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/threaded-physics-workers.jpf
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/taskbased-physics-batch.jpf
 ```
 
 POSIX shell:
@@ -149,6 +148,8 @@ POSIX shell:
 java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/threaded-minimal.jpf
 
 java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/taskbased-minimal.jpf
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/threaded-physics-workers.jpf
+java -ea -jar verification/jpf/.jpf-core/build/RunJPF.jar verification/jpf/taskbased-physics-batch.jpf
 ```
 
 If you want to run them from the local helper script after cloning and
@@ -157,13 +158,13 @@ building `jpf-core`, use:
 PowerShell:
 
 ```powershell
-python assignment-1/verification/jpf/run_jpf.py --model both
+python assignment-1/verification/jpf/run_jpf.py --model all
 ```
 
 POSIX shell:
 
 ```bash
-python assignment-1/verification/jpf/run_jpf.py --model both
+python assignment-1/verification/jpf/run_jpf.py --model all
 ```
 
 ## 6. What To Record

@@ -1,84 +1,99 @@
 # JPF Minimal Models
 
-This note explains the two minimal harnesses used for model checking with JPF
-and the exact properties they are meant to cover.
+This note describes the reduced concurrent models checked with Java
+PathFinder. They retain the synchronization boundaries of the game runtime
+without importing physics, Swing, or the production executor implementation.
 
-## Shared Design
+## Shared design
 
-Both models use the same tiny shared state:
+Both models contain two independently scheduled command producers and track
+each command from submission to exact-once execution. The controller owns the
+board for a tick, drains the commands visible at that point, dispatches one
+generation of two work units, waits at a two-worker completion barrier, and
+only then publishes a snapshot.
 
-- a command counter;
-- a board ownership flag;
-- a work-ready flag;
-- a worker completion flag;
-- a snapshot-published flag;
-- a finished flag.
+The state stores a small mailbox counter, command submission/execution flags,
+a board-ownership flag, generation and worker-completion flags, a publication
+counter, and a shutdown flag. A command that arrives while a physics phase is
+running remains pending for the following tick; this mirrors the mailbox
+boundary in the production runtime.
 
-This is enough to capture the concurrency protocol without pulling in the full
-physics engine or the GUI.
-
-## Thread-Based Model
+## Thread-based model
 
 Target:
 
 - `pcd.poool.verification.jpf.ThreadedMiniHarness`
 
-Intended scenario:
+The model uses two long-lived workers. Each waits for a new generation, checks
+that the controller owns the board, completes its assigned generation once,
+and returns to waiting. After all submitted commands have been executed, the
+controller signals shutdown and joins both workers.
 
-- one producer submits a command;
-- the controller waits for the command, owns the board, drains the queue, and
-  starts the work phase;
-- one worker waits for the work signal, completes the work, and notifies the
-  controller;
-- the controller publishes the snapshot only after the worker completion.
-
-Properties checked:
-
-- the board cannot be owned by two actors at once;
-- the worker cannot complete work before ownership is established;
-- commands are drained before publish;
-- the final state is clean and finished.
-
-## Task-Based Model
+## Task-based model
 
 Target:
 
 - `pcd.poool.verification.jpf.TaskBasedMiniHarness`
 
-Intended scenario:
+For each tick the controller creates two short-lived task threads. They
+complete the same two-worker barrier, then the controller publishes the
+snapshot and joins both task threads. This models task submission plus a
+completion barrier without depending on the full `ExecutorService` state
+space.
 
-- one producer submits a command;
-- the controller waits for the command, owns the board, drains the queue, and
-  creates a short-lived task;
-- the task waits for work availability and completes the work;
-- the controller joins the task and then publishes the snapshot.
+## Direct threaded-physics verification
 
-Properties checked:
+Target:
 
-- command draining still happens before publication;
-- the task model keeps the same single-writer rule;
-- the completion path is bounded and terminates cleanly;
-- the final state is clean and finished.
+- `pcd.poool.model.physics.threaded.PhysicsWorkersJpfHarness`
 
-## Why These Models Are Useful
+This harness directly instantiates the production `PhysicsWorker` and
+`WorkerCompletionMonitor` classes. It creates two long-lived workers and
+assigns each of them one chunk in two consecutive phases. JPF explores the
+interleavings among assignment, worker wake-up, execution, barrier completion,
+commit, reuse, and shutdown.
 
-The models are intentionally small, but they still exercise the most important
-concurrent invariants from the production runners:
+The harness asserts that a worker executes exactly one chunk per phase and
+that the coordinator can commit a phase only after both chunks have completed.
+The chunk body records a bounded observable effect rather than running the full
+collision algorithm, keeping the state space finite. It therefore verifies the
+actual worker/barrier implementation, but not numerical physics.
 
-- the controller is the only component allowed to mutate the authoritative
-  state;
-- workers/tasks only perform bounded auxiliary work;
-- publication happens after commit, not before;
-- shutdown can be reasoned about as a terminal state.
+## Task-based physics validation model
 
-## What They Do Not Prove
+Target:
 
-These models do not prove:
+- `pcd.poool.verification.jpf.TaskBasedPhysicsBatchHarness`
 
-- numerical correctness of the physics;
-- collision determinism under large workloads;
-- GUI responsiveness;
-- throughput or performance scaling;
-- bot intelligence.
+This verification-only harness recreates the scheduling boundary of
+`TaskBasedPhysicsEngine`: a fixed `ExecutorService` receives every chunk of a
+phase before the coordinator waits for the batch barrier. It submits two chunks
+for each of two phases.
 
-They are only a model-checking proof of the control protocol.
+JPF checks that each task executes once in each phase, that commit happens only
+after the whole batch has completed, and that the pool is reused and then
+closed. The task body is bounded, so this validates task submission and the
+barrier protocol rather than the production engine or numerical physics.
+
+## Properties checked
+
+Both models assert that:
+
+- the board cannot be acquired twice for one tick;
+- a worker/task cannot complete without controller ownership or for the wrong
+  generation;
+- a worker/task cannot complete one generation twice;
+- publication waits for two distinct work completions and for command draining;
+- both submitted commands are executed exactly once;
+- completion releases board ownership, leaves no pending command, and reaches
+  a stopped state.
+
+JPF also reports whether the finite model contains a deadlock. The current
+models are exhaustive finite protocol checks, not proofs of the full game.
+
+## Scope limits
+
+These models do not verify numerical physics, collision determinism under
+large workloads, Swing responsiveness, throughput, or the implementation of
+`ExecutorService`. Production JUnit tests and benchmarks cover those separate
+concerns.

@@ -2,68 +2,53 @@
 \section{Verification and Testing}
 
 The project combines JUnit tests on the production code with Java PathFinder
-(JPF) exploration of a reduced synchronization protocol.
+(JPF) exploration of concurrent synchronization protocols.
 
 \subsection{JUnit tests}
 
 The Maven suite checks deterministic physics, collisions, pocketing, FIFO
 commands, concurrent submissions, failures, snapshots, shutdown, and view
-input. Running \texttt{mvn test} on the current Java 17 project completed with
-\textbf{159 tests, 0 failures, 0 errors, and 1 skipped test}. The skipped test
-is the JPF integration check, which requires a Java 11-compatible runtime or
-the dedicated Docker workflow.
+input. JPF uses a Java 11-compatible runtime or the dedicated Docker workflow,
+so it is executed separately from the default Java 17 Maven build.
 
 \subsection{JPF verification}
 
-Two small harnesses model the coordination protocol without full physics,
-Swing, timers, or large collections:
-\texttt{ThreadedMiniHarness} for the platform-thread design and
-\texttt{TaskBasedMiniHarness} for the executor-based one. Both rely on the
-shared minimal protocol state.
+JPF exhaustively explores the schedules of four bounded validation harnesses:
 
-The configurations use depth-first search, \texttt{JenkinsStateSet},
-partial-order reduction, and a depth limit of 40. They were executed with
-\texttt{run\_jpf.py --docker --model both}. The runner compiles for Java 11 and
-requires \texttt{no errors detected} without a \texttt{[SEVERE]} diagnostic.
-The Docker execution is therefore complementary to the Maven suite rather than
-part of the default \texttt{mvn test} run on Java 17.
-
-\subsection{Verified properties, results, and limits}
-
-The verification evidence is complementary. JUnit checks the implemented game
-and physics behaviour on the production code, while JPF explores a reduced
-concurrent protocol and establishes the corresponding synchronization
-properties. Within the explored model, JPF ensures exclusive board ownership
-during the physics step, command draining before snapshot publication, worker
-completion before state commit, proper resource release, final termination, and
-absence of deadlock.
-
-These results can be grouped into the usual concurrent properties:
-\textbf{safety}, because intermediate states are not published and commit does
-not occur before worker completion; \textbf{liveness}, because the explored
-protocol completes without deadlock; and \textbf{termination}, because owned
-resources are released and the model reaches its final state correctly.
-
-Both searches completed without deadlock or assertion failure:
+\begin{itemize}
+    \item \textbf{\texttt{ThreadedMiniHarness}:} a reduced game-loop model.
+    It checks exclusive logical board ownership, exact-once command execution,
+    and snapshot publication only after command draining and two worker
+    completions.
+    \item \textbf{\texttt{TaskBasedMiniHarness}:} the same reduced game-loop
+    protocol, with two short-lived task threads instead of long-lived workers.
+    \item \textbf{\texttt{PhysicsWorkersJpfHarness}:} directly exercises the
+    production \texttt{PhysicsWorker} and \texttt{WorkerCompletionMonitor}.
+    It checks that both workers complete before commit, are reused for a second
+    phase, and then terminate.
+    \item \textbf{\texttt{TaskBasedPhysicsBatchHarness}:} a validation-only
+    model of the task-based physics phase. It checks submit-all, wait-all, and
+    commit-after-completion for two tasks, including pool reuse and shutdown.
+\end{itemize}
 
 \begin{center}
-\begin{tabular}{|>{\bfseries}p{2.4cm}|r|r|r|r|r|r|}
+\small
+\begin{tabular}{|>{\bfseries}p{3.2cm}|r|r|}
     \hline
-    Model & New & Visited & Backtracked & End & Depth & Instructions \\
+    Model & New states & Max. depth \\
     \hline
-    Threaded & 774 & 1117 & 1891 & 4 & 35 & 22411 \\
+    Threaded loop & 173\,825 & 206 \\
     \hline
-    Task-based & 249 & 288 & 537 & 3 & 34 & 16409 \\
+    Task-based loop & 49\,377 & 155 \\
+    \hline
+    Threaded physics & 13\,153 & 144 \\
+    \hline
+    Task-based physics & 20\,945 & 103 \\
     \hline
 \end{tabular}
 \end{center}
 
-Both maximum depths remain below 40, so the bound did not truncate either
-search. The threaded state space is larger because its worker can interleave
-earlier than the task created in the executor model.
-
-The result covers every schedule represented by these bounded harnesses. It
-does not prove numerical physics, full \texttt{ExecutorService} behavior,
-Swing responsiveness, performance, or arbitrary workloads; these aspects are
-covered separately by production tests and benchmarks on the full
-implementation.
+All four searches completed with \texttt{no errors detected}: no assertion
+failure or deadlock was found in the represented finite scenarios. The result
+does not prove numerical physics, full \texttt{ExecutorService} behavior, or
+arbitrary workloads; these are covered by production tests and benchmarks.

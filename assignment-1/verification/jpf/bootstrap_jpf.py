@@ -42,7 +42,7 @@ def clone_repository(repository: str, destination: Path) -> None:
     print("Next steps:")
     print("  1. Open the jpf-core checkout or its Docker container.")
     print("  2. Build jpf-core so build/RunJPF.jar exists.")
-    print("  3. Run the JUnit integration test with -Djpf.runjpfJar or JPF_RUNJPF_JAR.")
+    print("  3. Run run_jpf.py to execute the selected verification harness.")
 
 
 def main() -> int:
