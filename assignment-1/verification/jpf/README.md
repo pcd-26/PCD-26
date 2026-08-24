@@ -15,7 +15,7 @@ to stay small, Java 11-friendly, and focused on synchronization behavior.
 - `src/pcd/poool/verification/jpf/ThreadedMiniHarness.java`
 - `src/pcd/poool/verification/jpf/TaskBasedMiniHarness.java`
 - `src/pcd/poool/model/physics/threaded/PhysicsWorkersJpfHarness.java`
-- `src/pcd/poool/verification/jpf/TaskBasedPhysicsBatchHarness.java`
+- `src/pcd/poool/model/physics/taskbased/TaskBasedPhysicsBatchHarness.java`
 - `threaded-minimal.jpf`
 - `taskbased-minimal.jpf`
 - `threaded-physics-workers.jpf`

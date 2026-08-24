@@ -1,4 +1,4 @@
-target=pcd.poool.verification.jpf.TaskBasedPhysicsBatchHarness
+target=pcd.poool.model.physics.taskbased.TaskBasedPhysicsBatchHarness
 classpath=target/jpf-classes
 search.class=gov.nasa.jpf.search.DFSearch
 vm.storage.class=gov.nasa.jpf.vm.JenkinsStateSet

@@ -63,7 +63,7 @@ actual worker/barrier implementation, but not numerical physics.
 
 Target:
 
-- `pcd.poool.verification.jpf.TaskBasedPhysicsBatchHarness`
+- `pcd.poool.model.physics.taskbased.TaskBasedPhysicsBatchHarness`
 
 This verification-only harness recreates the scheduling boundary of
 `TaskBasedPhysicsEngine`: a fixed `ExecutorService` receives every chunk of a

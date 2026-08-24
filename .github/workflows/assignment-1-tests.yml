@@ -141,7 +141,9 @@ jobs:
           test -f package/Assignment-01/verification/jpf/threaded-physics-workers.jpf
           test -f package/Assignment-01/verification/jpf/taskbased-physics-batch.jpf
           test -f package/Assignment-01/verification/jpf/src/pcd/poool/verification/jpf/ThreadedMiniHarness.java
+          test -f package/Assignment-01/verification/jpf/src/pcd/poool/verification/jpf/TaskBasedMiniHarness.java
           test -f package/Assignment-01/verification/jpf/src/pcd/poool/model/physics/threaded/PhysicsWorkersJpfHarness.java
+          test -f package/Assignment-01/verification/jpf/src/pcd/poool/model/physics/taskbased/TaskBasedPhysicsBatchHarness.java
           test ! -e package/Assignment-01/verification/jpf/.jpf-core
           test ! -e package/Assignment-01/verification/README.md
           test ! -e package/Assignment-01/verification/jpf/README.md
